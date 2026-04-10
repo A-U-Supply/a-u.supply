@@ -1,18 +1,831 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>a-u.supply</title>
-    <link rel="stylesheet" href="/static/style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/static/favicon.png">
+<title>A-U.SUPPLY — Company Profile & Product Catalog</title>
+<style>
+  @page {
+    size: letter;
+    margin: 1in 1in 1.2in 1in;
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 9pt;
+      color: #666;
+    }
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 10pt;
+    line-height: 1.5;
+    color: #1a1a1a;
+    background: #fff;
+  }
+
+  .page {
+    page-break-after: always;
+    min-height: 100vh;
+    padding: 0;
+    position: relative;
+  }
+
+  .page:last-child {
+    page-break-after: avoid;
+  }
+
+  .page-header {
+    text-align: right;
+    font-size: 8pt;
+    color: #666;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 4pt;
+    margin-bottom: 24pt;
+    letter-spacing: 0.5pt;
+  }
+
+  h1 {
+    font-size: 18pt;
+    font-weight: bold;
+    letter-spacing: 3pt;
+    text-transform: uppercase;
+    margin-bottom: 6pt;
+  }
+
+  h2 {
+    font-size: 12pt;
+    font-weight: bold;
+    letter-spacing: 2pt;
+    text-transform: uppercase;
+    margin-top: 24pt;
+    margin-bottom: 12pt;
+    border-bottom: 2px solid #1a1a1a;
+    padding-bottom: 4pt;
+  }
+
+  h3 {
+    font-size: 10pt;
+    font-weight: bold;
+    letter-spacing: 1pt;
+    text-transform: uppercase;
+    margin-top: 18pt;
+    margin-bottom: 8pt;
+  }
+
+  p {
+    margin-bottom: 10pt;
+  }
+
+  .subtitle {
+    font-size: 11pt;
+    letter-spacing: 1pt;
+    color: #444;
+    margin-bottom: 4pt;
+  }
+
+  .doc-info {
+    margin-top: 24pt;
+    font-size: 9pt;
+    color: #666;
+    line-height: 1.8;
+  }
+
+  .doc-info span.label {
+    display: inline-block;
+    width: 160pt;
+    color: #666;
+  }
+
+  .cover-center {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 80vh;
+    text-align: center;
+  }
+
+  .cover-logo {
+    max-width: 400pt;
+    margin-bottom: 36pt;
+  }
+
+  .classification {
+    margin-top: 48pt;
+    font-size: 9pt;
+    letter-spacing: 2pt;
+    color: #666;
+    text-transform: uppercase;
+  }
+
+  .stamp {
+    display: inline-block;
+    font-size: 11pt;
+    font-weight: bold;
+    color: #b8860b;
+    border: 2px solid #b8860b;
+    padding: 3pt 10pt;
+    transform: rotate(-3deg);
+    letter-spacing: 2pt;
+    text-transform: uppercase;
+    margin: 12pt 0;
+  }
+
+  .field-row {
+    display: flex;
+    border-bottom: 1px dotted #ccc;
+    padding: 4pt 0;
+    margin-bottom: 2pt;
+  }
+
+  .field-label {
+    width: 180pt;
+    flex-shrink: 0;
+    font-size: 9pt;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+
+  .field-value {
+    flex: 1;
+    font-size: 10pt;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12pt 0;
+    font-size: 9pt;
+  }
+
+  th {
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    font-size: 8pt;
+    padding: 6pt 8pt;
+    border-bottom: 2px solid #1a1a1a;
+    color: #444;
+  }
+
+  td {
+    padding: 5pt 8pt;
+    border-bottom: 1px solid #ddd;
+    vertical-align: top;
+  }
+
+  tr:last-child td {
+    border-bottom: 2px solid #1a1a1a;
+  }
+
+  .personnel-block {
+    border: 1px solid #ccc;
+    padding: 12pt 16pt;
+    margin-bottom: 12pt;
+  }
+
+  .personnel-block .dept {
+    font-size: 8pt;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    margin-bottom: 2pt;
+  }
+
+  .personnel-block .name {
+    font-size: 12pt;
+    font-weight: bold;
+    margin-bottom: 4pt;
+  }
+
+  .personnel-block .role {
+    font-size: 9pt;
+    color: #444;
+    margin-bottom: 6pt;
+  }
+
+  .personnel-block .remarks {
+    font-size: 9pt;
+    font-style: italic;
+    color: #555;
+    border-left: 2px solid #ccc;
+    padding-left: 10pt;
+    margin-top: 6pt;
+  }
+
+  .product-image {
+    text-align: center;
+    margin: 16pt 0;
+  }
+
+  .product-image img {
+    max-width: 200pt;
+    max-height: 200pt;
+    border: 1px solid #ddd;
+  }
+
+  .product-image .caption {
+    font-size: 8pt;
+    color: #666;
+    margin-top: 4pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+
+  .image-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16pt;
+    justify-content: center;
+    margin: 16pt 0;
+  }
+
+  .image-grid .product-image {
+    margin: 0;
+  }
+
+  .image-grid .product-image img {
+    max-width: 140pt;
+    max-height: 140pt;
+  }
+
+  .line-item {
+    border: 1px solid #ccc;
+    padding: 10pt 14pt;
+    margin-bottom: 8pt;
+  }
+
+  .line-item .line-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4pt;
+  }
+
+  .line-item .line-id {
+    font-size: 8pt;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+  }
+
+  .line-item .line-name {
+    font-weight: bold;
+    font-size: 10pt;
+  }
+
+  .line-item .line-desc {
+    font-size: 9pt;
+    color: #444;
+    margin-top: 4pt;
+  }
+
+  .line-item .line-specs {
+    font-size: 8pt;
+    color: #666;
+    margin-top: 4pt;
+  }
+
+  .back-cover {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-height: 80vh;
+    text-align: center;
+  }
+
+  .back-cover .exit-quote {
+    font-size: 9pt;
+    color: #666;
+    margin-top: 48pt;
+    font-style: italic;
+  }
+
+  .notice {
+    font-size: 8pt;
+    color: #666;
+    border: 1px solid #ccc;
+    padding: 8pt 12pt;
+    margin: 16pt 0;
+  }
+
+  .double-rule {
+    border: none;
+    border-top: 3px double #1a1a1a;
+    margin: 24pt 0;
+  }
+
+  .section-note {
+    font-size: 8pt;
+    color: #888;
+    margin-top: 8pt;
+  }
+</style>
 </head>
 <body>
-    <main>
-        <h1>a-u.supply</h1>
-        <p>Welcome. The API is running.</p>
-        <nav>
-            <a href="/docs">API Docs</a>
-        </nav>
-    </main>
+
+<!-- ==================== COVER PAGE ==================== -->
+<div class="page">
+  <div class="cover-center">
+    <img src="/static/assets/logo.png" alt="A-U.Supply" class="cover-logo">
+    <h1>A-U.SUPPLY</h1>
+    <div class="subtitle">Audio Units Division</div>
+    <hr class="double-rule" style="width: 200pt;">
+    <div class="subtitle" style="margin-top: 12pt;">Company Profile &amp; Product Catalog</div>
+
+    <div class="doc-info">
+      <div><span class="label">Document No:</span> AU-REF-2026-001</div>
+      <div><span class="label">Revision:</span> 01</div>
+      <div><span class="label">Date of Issue:</span> 2026-03-23</div>
+      <div><span class="label">Prepared by:</span> Purchasing &amp; Documentation Dept.</div>
+    </div>
+
+    <div class="classification">Classification: General Distribution</div>
+  </div>
+</div>
+
+<!-- ==================== COMPANY PROFILE ==================== -->
+<div class="page">
+  <div class="page-header">A-U.SUPPLY — AUDIO UNITS DIVISION &nbsp;&nbsp; AU-REF-2026-001</div>
+
+  <h2>1. Company Profile</h2>
+
+  <div class="field-row">
+    <div class="field-label">Registered Name</div>
+    <div class="field-value">Audio Units Supply</div>
+  </div>
+  <div class="field-row">
+    <div class="field-label">Operating As</div>
+    <div class="field-value">A-U.Supply / A-U / AU</div>
+  </div>
+  <div class="field-row">
+    <div class="field-label">Established</div>
+    <div class="field-value">Under review. Earliest facility records: 2009. First production run: 2015. Initial catalog issued: April 15, 2020.</div>
+  </div>
+  <div class="field-row">
+    <div class="field-label">Facilities</div>
+    <div class="field-value">Minneapolis, MN; San Francisco / Oakland, CA; Canadian heartland</div>
+  </div>
+  <div class="field-row">
+    <div class="field-label">Contact</div>
+    <div class="field-value">ausupply000@gmail.com</div>
+  </div>
+  <div class="field-row">
+    <div class="field-label">Web Catalog</div>
+    <div class="field-value">https://a-u.supply</div>
+  </div>
+  <div class="field-row">
+    <div class="field-label">Bandcamp Warehouse</div>
+    <div class="field-value">https://ausupply.bandcamp.com</div>
+  </div>
+  <div class="field-row">
+    <div class="field-label">SoundCloud Archive</div>
+    <div class="field-value">https://soundcloud.com/ustom-ecordings</div>
+  </div>
+  <div class="field-row">
+    <div class="field-label">YouTube Channel</div>
+    <div class="field-value">https://www.youtube.com/@a-u.supply674</div>
+  </div>
+  <div class="field-row">
+    <div class="field-label">Source Repository</div>
+    <div class="field-value">https://github.com/A-U-Supply</div>
+  </div>
+  <div class="field-row">
+    <div class="field-label">Quality Assurance Motto</div>
+    <div class="field-value">"Floating in a mire of semantical truzzles, so you don't have to."</div>
+  </div>
+
+  <p style="margin-top: 18pt;">
+    Audio Units Supply manufactures and distributes audio products across multiple formats and channels. Operations span collage assembly, vocal processing, MIDI generation, title filtration, and prompt synthesis. All production lines run daily via automated systems. Output is distributed through four primary warehouses (Bandcamp, Archive.org, SoundCloud, YouTube) and one web-based catalog. The facility also maintains an internal supply chain supporting six automated production lines and an archive of approximately 60 auxiliary audio units dating to 2014.
+  </p>
+
+  <div class="notice">
+    NOTE: Establishment date is subject to ongoing internal review. Some records indicate facility planning as early as 399 BCE. Other documentation projects initial operations no earlier than 2046. The discrepancy has not been resolved.
+  </div>
+</div>
+
+<!-- ==================== PERSONNEL ==================== -->
+<div class="page">
+  <div class="page-header">A-U.SUPPLY — AUDIO UNITS DIVISION &nbsp;&nbsp; AU-REF-2026-001</div>
+
+  <h2>2. Personnel Directory</h2>
+
+  <div class="personnel-block">
+    <div class="dept">Department: Final Assembly</div>
+    <div class="name">number 4</div>
+    <div class="role">Superintendent — Production &amp; Final Assembly</div>
+    <p style="font-size: 9pt;">Oversees all production. Responsible for final assembly of all audio units prior to distribution. All material passes through this station before release. Quality threshold determination is at the sole discretion of the Superintendent.</p>
+    <div class="remarks">"The final mix is just the last thing that happened to it. Before that it was something else. Before that, something else. You go back far enough and it's just air."</div>
+  </div>
+
+  <div class="personnel-block">
+    <div class="dept">Department: Automation &amp; Signal Processing</div>
+    <div class="name">NoNameSteak</div>
+    <div class="role">Automation &amp; Signal Processing Lead</div>
+    <p style="font-size: 9pt;">Manages the modular synthesizer array, texture generation equipment, and all AI-assisted production processes. Also responsible for signal derailment — the controlled introduction of deviation into otherwise stable production lines. May also operate under designations "Tube" and/or "Jake Japan." Designation policy: rotating.</p>
+    <div class="remarks">"The machines have preferences. I don't override them. Most of what comes out of the rack is unusable — that's correct. You run enough signal through enough tubes and eventually something happens that nobody asked for. That's the product. My job is just to make sure it gets lost at least twice before it reaches number 4."</div>
+  </div>
+
+  <div class="personnel-block">
+    <div class="dept">Department: Vocal Supply</div>
+    <div class="name">Ancients</div>
+    <div class="role">Chief Vocal Supply</div>
+    <p style="font-size: 9pt;">Primary source of vocal material for all product lines. Recorded output is segmented, cataloged, and routed to assembly as needed. Archive of vocal material is maintained and indexed by the Final Assembly department.</p>
+    <div class="remarks">"Every syllable I've ever recorded is in a database somewhere. NoNameSteak has them sorted by vowel shape. number 4 decides which ones ship."</div>
+  </div>
+
+  <div class="personnel-block">
+    <div class="dept">Department: Philosophy &amp; Signal</div>
+    <div class="name">MCA</div>
+    <div class="role">Director — Philosophy, Singer-Songwriter, Guitar</div>
+    <p style="font-size: 9pt;">Provides conceptual framework and original song material. Guitar, vocal, and lyrical contributions enter the production pipeline and are processed through standard channels. Also produces independently (see product catalog: <em>Pathos for Bathos</em>).</p>
+    <div class="remarks">"I write songs the normal way. Guitar, words, feelings. Then the others put it through the tubes and it comes out as something I don't recognize but somehow agree with."</div>
+  </div>
+
+  <div class="notice" style="margin-top: 18pt;">
+    PERSONNEL NOTE: Total headcount is 4 (official). Extended personnel and subcontractor relationships are unconfirmed. Alias rotation is in effect across all departments. Additional designations may be active at any time. See also: §5, Associated Entities.
+  </div>
+</div>
+
+<!-- ==================== PRODUCT CATALOG ==================== -->
+<div class="page">
+  <div class="page-header">A-U.SUPPLY — AUDIO UNITS DIVISION &nbsp;&nbsp; AU-REF-2026-001</div>
+
+  <h2>3. Product Catalog</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Item</th>
+        <th>Product Code</th>
+        <th>Product Name</th>
+        <th>Manufacturer</th>
+        <th>Date</th>
+        <th>Units</th>
+        <th>Channel</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>A-U# 0</td>
+        <td><em>~~Immelerria~~</em></td>
+        <td>Level Navi</td>
+        <td>2020-04-15</td>
+        <td>10</td>
+        <td>Archive.org</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>A-U# 01</td>
+        <td><em>Erkind NOS</em></td>
+        <td>Eonnot</td>
+        <td>2020-04-15</td>
+        <td>4</td>
+        <td>Archive.org</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>A-U# M5497.H37</td>
+        <td><em>How How Things are Made are Made</em></td>
+        <td>Complete Rx</td>
+        <td>2020-04-15</td>
+        <td>13</td>
+        <td>Archive.org</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>AU-2021-001</td>
+        <td><em>A Deper[ ]alized Ratio</em></td>
+        <td>Unreliable Metrics / Current Occupant / A-XYZ</td>
+        <td>2021-11-06</td>
+        <td>3</td>
+        <td>Bandcamp</td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td>AU-2022-001</td>
+        <td><em>Em</em></td>
+        <td>Complete</td>
+        <td>2022-05-21</td>
+        <td>11</td>
+        <td>Bandcamp</td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td>AU-2022-002</td>
+        <td><em>Tea Shirt</em></td>
+        <td>BDO</td>
+        <td>2022-05-22</td>
+        <td>7</td>
+        <td>Bandcamp</td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td>AU-2023-001</td>
+        <td><em>Semi-Truck Driver</em></td>
+        <td>—</td>
+        <td>2023-08-12</td>
+        <td>1</td>
+        <td>YouTube</td>
+      </tr>
+      <tr>
+        <td>8</td>
+        <td>AU-2024-001</td>
+        <td><em>Navi_17-19</em></td>
+        <td>Level Navi</td>
+        <td>2024-02-05</td>
+        <td>1</td>
+        <td>YouTube</td>
+      </tr>
+      <tr>
+        <td>9</td>
+        <td>AU-2024-002</td>
+        <td><em>Pathos for Bathos</em></td>
+        <td>MCA</td>
+        <td>2024-11-12</td>
+        <td>1</td>
+        <td>YouTube</td>
+      </tr>
+      <tr>
+        <td>10</td>
+        <td>AU-2024-MIX</td>
+        <td><em>A-U Quality Track Supply</em></td>
+        <td>Various</td>
+        <td>2024-12-08</td>
+        <td>27</td>
+        <td>YouTube</td>
+      </tr>
+      <tr>
+        <td>11</td>
+        <td>AU-2026-DA-001</td>
+        <td><em>Law Bale Straw Wonder / Tomato Sink Cloud Tag</em></td>
+        <td>Complete</td>
+        <td>2026-03-22</td>
+        <td>24</td>
+        <td>YouTube</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="section-note">
+    Format specifications: Bandcamp releases available at 24-bit/44.1kHz (FLAC, MP3, WAV, others). Archive.org releases distributed as VBR MP3 archives. YouTube releases as audiovisual units. Approximately 60 additional auxiliary units are maintained in the SoundCloud archive (2014–present), classified as session material, tests, and sketches. These are not assigned formal product codes.
+  </p>
+
+  <div class="stamp" style="float: right; margin-top: 8pt;">Catalog Current as of 2026-03-23</div>
+  <div style="clear: both;"></div>
+</div>
+
+<!-- ==================== PRODUCT PHOTOGRAPHY ==================== -->
+<div class="page">
+  <div class="page-header">A-U.SUPPLY — AUDIO UNITS DIVISION &nbsp;&nbsp; AU-REF-2026-001</div>
+
+  <h2>3a. Product Photography</h2>
+
+  <div class="image-grid">
+    <div class="product-image">
+      <img src="/static/assets/immelerria.jpg" alt="Immelerria">
+      <div class="caption">A-U# 0 — ~~Immelerria~~<br>Level Navi (2020)</div>
+    </div>
+    <div class="product-image">
+      <img src="/static/assets/erkind-nos.jpg" alt="Erkind NOS">
+      <div class="caption">A-U# 01 — Erkind NOS<br>Eonnot (2020)</div>
+    </div>
+    <div class="product-image">
+      <img src="/static/assets/how-how-things-are-made-are-made.jpg" alt="How How Things are Made are Made">
+      <div class="caption">A-U# M5497.H37<br>Complete Rx (2020)</div>
+    </div>
+    <div class="product-image">
+      <img src="/static/assets/depersonalized-ratio.jpg" alt="A Depersonalized Ratio">
+      <div class="caption">AU-2021-001<br>A Deper[ ]alized Ratio (2021)</div>
+    </div>
+    <div class="product-image">
+      <img src="/static/assets/em.jpg" alt="Em">
+      <div class="caption">AU-2022-001 — Em<br>Complete (2022)</div>
+    </div>
+    <div class="product-image">
+      <img src="/static/assets/tea-shirt.jpg" alt="Tea Shirt">
+      <div class="caption">AU-2022-002 — Tea Shirt<br>BDO (2022) — Merch unit</div>
+    </div>
+  </div>
+
+  <div class="image-grid" style="margin-top: 24pt;">
+    <div class="product-image">
+      <img src="/static/assets/lbsw.jpg" alt="Law Bale Straw Wonder">
+      <div class="caption">AU-2026-DA-001 Disc 1<br>Law Bale Straw Wonder<br>Complete (2026)</div>
+    </div>
+    <div class="product-image">
+      <img src="/static/assets/tsct.jpg" alt="Tomato Sink Cloud Tag">
+      <div class="caption">AU-2026-DA-001 Disc 2<br>Tomato Sink Cloud Tag<br>Complete (2026)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== PRODUCTION INFRASTRUCTURE ==================== -->
+<div class="page">
+  <div class="page-header">A-U.SUPPLY — AUDIO UNITS DIVISION &nbsp;&nbsp; AU-REF-2026-001</div>
+
+  <h2>4. Production Infrastructure</h2>
+
+  <p>All production lines operate on automated daily cycles. Input materials are sourced from internal channels. Output is routed to distribution or recirculated into the supply chain as feedstock. Throughput is measured in units per cycle. Calibration is ongoing.</p>
+
+  <div class="line-item">
+    <div class="line-header">
+      <span class="line-id">Line 1 — Thermal Sequence Generation</span>
+      <span class="line-specs">Cycle: daily | Throughput: 4 units | Tube gauge: 18</span>
+    </div>
+    <div class="line-name">TSG-400 Series</div>
+    <div class="line-desc">Four-channel output per cycle. Each channel is driven through a separate neural tube (ImprovRNN, DrumsRNN, programmatic bass, programmatic chord) before convergence at the output stage. Scale calibration library covers Maqam, Raga, Blues, Gamelan, Klezmer, and Pelog tolerances. Input parameters are derived from current environmental conditions. Units are deposited into the #midieval holding bay.</div>
+  </div>
+
+  <div class="line-item">
+    <div class="line-header">
+      <span class="line-id">Line 2 — Glottal Segmentation</span>
+      <span class="line-specs">Cycle: daily | Throughput: 1 unit | Tube gauge: variable</span>
+    </div>
+    <div class="line-name">GD-7 Syllable Mill</div>
+    <div class="line-desc">Raw vocal material is fed through the segmentation tube where it is broken at syllable boundaries by acoustic pressure analysis. Resulting fragments are stored in indexed bins. Reassembly occurs downstream per batch configuration. Mill is maintained as a standalone module (ref: GD-7 technical manual, rev. 215).</div>
+  </div>
+
+  <div class="line-item">
+    <div class="line-header">
+      <span class="line-id">Line 3 — Contour Mapping</span>
+      <span class="line-specs">Cycle: daily | Throughput: 1 unit | Requires Line 1 + Line 2 output</span>
+    </div>
+    <div class="line-name">HYM-N Extension Module</div>
+    <div class="line-desc">Accepts output from Line 1 (thermal sequence) and extends it through a secondary neural tube before mapping it onto vocal fragments from the Line 2 archive. Output contour is determined by melodic pressure gradient. Final assembly is automatic.</div>
+  </div>
+
+  <div class="line-item">
+    <div class="line-header">
+      <span class="line-id">Line 4 — Prompt Extrusion</span>
+      <span class="line-specs">Cycle: daily | Throughput: 1 unit | Input: 8-source blend</span>
+    </div>
+    <div class="line-name">SPB-8 Surrealist Extruder</div>
+    <div class="line-desc">Eight raw headline streams are blended with an inspiration compound (movements, techniques, historical artist residues) and fed through a large language tube at high temperature. Output is a single extruded prompt, deposited into the #drawma receiving bay. Extrusion temperature is not user-adjustable.</div>
+  </div>
+
+  <div class="line-item">
+    <div class="line-header">
+      <span class="line-id">Line 5 — Intake &amp; Sequencing</span>
+      <span class="line-specs">Cycle: daily | Capacity: ~190 inserts | Rollover threshold: 5,000</span>
+    </div>
+    <div class="line-name">MZK Accumulator</div>
+    <div class="line-desc">Incoming material from the #muzzik channel is classified, queued, and inserted into the accumulator at a rate determined by upstream quota constraints. When the accumulator reaches 5,000 units it is sealed and a new accumulator is initialized. Classification is automatic. Rejected material is not returned.</div>
+  </div>
+
+  <div class="line-item">
+    <div class="line-header">
+      <span class="line-id">Line 6 — Title Filtration</span>
+      <span class="line-specs">Cycle: daily | Rejection rate: variable | Output: catalog page</span>
+    </div>
+    <div class="line-name">ST-QA Filtration Stack</div>
+    <div class="line-desc">Raw title material from the #song-titles channel is passed through the filtration stack where it is evaluated against inference-grade quality thresholds. Titles that pass are stored with metadata and deposited into the interactive catalog. Titles that fail are discarded. The threshold is proprietary.</div>
+  </div>
+
+  <h3>Standalone Equipment</h3>
+
+  <div class="line-item">
+    <div class="line-header">
+      <span class="line-id">BTV-1</span>
+      <span class="line-specs">Type: Portable unit | Language: Rust | Dependencies: None</span>
+    </div>
+    <div class="line-name">Broadcast Reclamation Tool</div>
+    <div class="line-desc">Accepts a phrase. Searches the TV News word archive per token. Extracts aligned audio at word-level precision via whisper-grade alignment. Applies normalization, compression, equalization, and reverb in sequence. Output: single stitched unit (WAV). Fully self-contained. No external tube connections required.</div>
+  </div>
+
+  <div class="line-item">
+    <div class="line-header">
+      <span class="line-id">YBB-4</span>
+      <span class="line-specs">Type: Portable unit | Language: Rust | Model: HTDemucs</span>
+    </div>
+    <div class="line-name">Source Separation Press</div>
+    <div class="line-desc">Accepts a single audiovisual input. Separates the audio layer into four stems (vocals, drums, bass, other) via hydraulic neural press (Meta HTDemucs). Output: four isolated channels. Input is not returned.</div>
+  </div>
+</div>
+
+<!-- ==================== DISTRIBUTION & ENTITIES ==================== -->
+<div class="page">
+  <div class="page-header">A-U.SUPPLY — AUDIO UNITS DIVISION &nbsp;&nbsp; AU-REF-2026-001</div>
+
+  <h2>5. Distribution Network</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Warehouse</th>
+        <th>Address</th>
+        <th>Inventory Type</th>
+        <th>Format</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Bandcamp</td>
+        <td>ausupply.bandcamp.com</td>
+        <td>Current releases (2021–2022)</td>
+        <td>FLAC, MP3, WAV, others (24-bit/44.1kHz)</td>
+      </tr>
+      <tr>
+        <td>Archive.org</td>
+        <td>archive.org/search?query=a-u.supply</td>
+        <td>Initial catalog (2020)</td>
+        <td>VBR MP3 ZIP</td>
+      </tr>
+      <tr>
+        <td>SoundCloud</td>
+        <td>soundcloud.com/ustom-ecordings</td>
+        <td>Auxiliary archive (~60 units, 2014–present)</td>
+        <td>Streaming</td>
+      </tr>
+      <tr>
+        <td>YouTube</td>
+        <td>youtube.com/@a-u.supply674</td>
+        <td>Singles, compilations, double album (2023–2026)</td>
+        <td>Audiovisual</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>6. Associated Entities</h2>
+
+  <p>The following entities have appeared on A-U.Supply products. Relationships between entities, and between entities and personnel, are not documented.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Entity</th>
+        <th>Product Association</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Complete</td><td><em>Em</em>, <em>LBSW/TSCT</em>, <em>A-U Quality Track Supply</em></td><td>Primary manufacturer</td></tr>
+      <tr><td>Complete Rx</td><td><em>How How Things are Made are Made</em>, <em>A-U Quality Track Supply</em></td><td>Variant designation</td></tr>
+      <tr><td>BDO</td><td><em>Tea Shirt</em>, <em>A-U Quality Track Supply</em></td><td>See purchasing dept.</td></tr>
+      <tr><td>Eonnot</td><td><em>Erkind NOS</em></td><td>See purchasing dept.</td></tr>
+      <tr><td>Level Navi / Navi</td><td><em>~~Immelerria~~</em>, <em>Navi_17-19</em>, <em>A-U Quality Track Supply</em></td><td>See purchasing dept.</td></tr>
+      <tr><td>Unreliable Metrics</td><td><em>A Deper[ ]alized Ratio</em></td><td>See purchasing dept.</td></tr>
+      <tr><td>Current Occupant</td><td><em>A Deper[ ]alized Ratio</em></td><td>See purchasing dept.</td></tr>
+      <tr><td>A-XYZ</td><td><em>A Deper[ ]alized Ratio</em></td><td>See purchasing dept.</td></tr>
+      <tr><td>MCA</td><td><em>Pathos for Bathos</em>, <em>A-U Quality Track Supply</em></td><td>Also: personnel (§2)</td></tr>
+      <tr><td>Tube</td><td><em>A-U Quality Track Supply</em></td><td>See purchasing dept.</td></tr>
+      <tr><td>Saturnalia</td><td><em>A-U Quality Track Supply</em>, <em>LBSW/TSCT</em></td><td>See purchasing dept.</td></tr>
+      <tr><td>Group Feed Scroll</td><td><em>A-U Quality Track Supply</em></td><td>See purchasing dept.</td></tr>
+      <tr><td>Aico.bot</td><td>Liner notes (2020 catalog)</td><td>AI entity</td></tr>
+      <tr><td>bngels89</td><td><em>~~Immelerria~~</em> (text credit)</td><td>See purchasing dept.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>7. External Partnerships</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Partner</th>
+        <th>Relationship</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Vintage Computer Festival Midwest</td><td>Participant</td></tr>
+      <tr><td>Sunny Flea Market</td><td>Participant</td></tr>
+      <tr><td>ECCC</td><td>Participant</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ==================== BACK COVER ==================== -->
+<div class="page">
+  <div class="page-header">A-U.SUPPLY — AUDIO UNITS DIVISION &nbsp;&nbsp; AU-REF-2026-001</div>
+
+  <div class="back-cover">
+    <div>
+      <img src="/static/assets/aedas.jpg" alt="A-U.Supply" style="max-width: 240pt; max-height: 240pt; border: 1px solid #ddd;">
+    </div>
+
+    <div style="margin-top: 36pt;">
+      <h1 style="font-size: 14pt; letter-spacing: 2pt;">A-U.SUPPLY</h1>
+      <div class="subtitle">Audio Units Division</div>
+    </div>
+
+    <div style="margin-top: 18pt; font-size: 9pt; line-height: 2;">
+      ausupply000@gmail.com<br>
+      https://a-u.supply
+    </div>
+
+    <div class="exit-quote">
+      "Your only choice will be between a goat's ass and the face of god."
+    </div>
+
+    <div style="margin-top: 36pt; font-size: 8pt; color: #999;">
+      Document No: AU-REF-2026-001 &nbsp;|&nbsp; Revision 01 &nbsp;|&nbsp; 2026-03-23
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
