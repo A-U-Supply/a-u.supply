@@ -559,10 +559,10 @@ import Admin from '../../../layouts/Admin.astro';
   let releaseStatus = 'draft';
 
   // ---- Init ----
-  document.body.addEventListener('auth-ready', (async () => {
+  (window as any).__authReady.then(async () => {
     await loadEntities();
     await loadRelease();
-  }) as EventListener, { once: true });
+  });
 
   // ---- Collapsible sections ----
   document.querySelectorAll('.collapsible__heading').forEach(heading => {

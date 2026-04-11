@@ -230,9 +230,7 @@ import Admin from '../../../layouts/Admin.astro';
     let currentFilter = 'all';
     let deleteTarget: string | null = null;
 
-    document.body.addEventListener('auth-ready', (() => {
-      loadReleases();
-    }) as EventListener, { once: true });
+    (window as any).__authReady.then(() => loadReleases());
 
     // Tab switching
     document.getElementById('status-tabs')?.addEventListener('click', (e) => {

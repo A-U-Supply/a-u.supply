@@ -8,12 +8,11 @@ import Admin from '../../layouts/Admin.astro';
 </Admin>
 
 <script>
-  document.addEventListener('astro:page-load', () => {
+  document.addEventListener('astro:page-load', async () => {
     const el = document.getElementById('welcome');
     if (!el) return;
     el.innerHTML = '<span class="loading-dots">Loading</span>';
-    document.body.addEventListener('auth-ready', ((e: CustomEvent) => {
-      el.textContent = `Welcome back, ${e.detail.name}.`;
-    }) as EventListener, { once: true });
+    const user = await (window as any).__authReady;
+    if (user) el.textContent = `Welcome back, ${user.name}.`;
   });
 </script>
