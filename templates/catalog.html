@@ -236,10 +236,10 @@
 <div class="catalog-grid" id="catalog-grid">
     {% if releases %}
         {% for release in releases %}
-        <a href="/catalog/{{ release.product_code }}" class="release-card">
+        <a href="/catalog/{{ release.product_code | urlencode }}" class="release-card">
             <div class="release-card__cover">
                 {% if release.cover_art_path %}
-                <img src="/api/releases/{{ release.product_code }}/cover?size=thumb"
+                <img src="/api/releases/{{ release.product_code | urlencode }}/cover?size=thumb"
                      alt="{{ release.title }} cover art"
                      loading="lazy"
                      width="400" height="400">
@@ -311,7 +311,7 @@
         var trackInfo = r.track_count + ' trk' + (r.track_count !== 1 ? 's' : '');
         if (dur) trackInfo += ' / ' + dur;
 
-        return '<a href="/catalog/' + r.product_code + '" class="release-card">' +
+        return '<a href="/catalog/' + encodeURIComponent(r.product_code) + '" class="release-card">' +
             '<div class="release-card__cover">' + coverHtml + '</div>' +
             '<div class="release-card__body">' +
                 '<div class="release-card__code">' + r.product_code + '</div>' +

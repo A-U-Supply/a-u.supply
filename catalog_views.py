@@ -8,6 +8,8 @@ Wire into main.py:
 Place this BEFORE the Astro static mount but AFTER the API routers.
 """
 
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
@@ -62,7 +64,7 @@ def _release_summary_dict(release: Release) -> dict:
         "title": release.title,
         "entities": [{"id": e.id, "name": e.name, "slug": e.slug} for e in release.entities],
         "release_date": release.release_date.isoformat() if release.release_date else None,
-        "cover_art_url": f"/api/releases/{release.product_code}/cover" if release.cover_art_path else None,
+        "cover_art_url": f"/api/releases/{quote(release.product_code, safe='')}/cover" if release.cover_art_path else None,
         "status": release.status,
         "track_count": len(release.tracks),
         "total_duration_seconds": sum(t.duration_seconds or 0 for t in release.tracks),
@@ -81,7 +83,7 @@ def _release_detail_dict(release: Release) -> dict:
             "track_number": t.track_number,
             "title": t.title,
             "duration_seconds": t.duration_seconds,
-            "stream_url": f"/api/releases/{release.product_code}/tracks/{t.id}/stream",
+            "stream_url": f"/api/releases/{quote(release.product_code, safe='')}/tracks/{t.id}/stream",
         }
         for t in release.tracks
     ]

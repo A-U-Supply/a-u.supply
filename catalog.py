@@ -8,6 +8,7 @@ import subprocess
 from datetime import date
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from PIL import Image
@@ -111,7 +112,7 @@ def _track_response(track: Track, release_code: str) -> dict:
         "track_number": track.track_number,
         "title": track.title,
         "duration_seconds": track.duration_seconds,
-        "stream_url": f"/api/releases/{release_code}/tracks/{track.id}/stream",
+        "stream_url": f"/api/releases/{quote(release_code, safe='')}/tracks/{track.id}/stream",
     }
 
 
@@ -121,7 +122,7 @@ def _release_summary(release: Release) -> dict:
         "title": release.title,
         "entities": [{"id": e.id, "name": e.name, "slug": e.slug} for e in release.entities],
         "release_date": release.release_date.isoformat() if release.release_date else None,
-        "cover_art_url": f"/api/releases/{release.product_code}/cover" if release.cover_art_path else None,
+        "cover_art_url": f"/api/releases/{quote(release.product_code, safe='')}/cover" if release.cover_art_path else None,
         "status": release.status,
         "track_count": len(release.tracks),
         "total_duration_seconds": sum(t.duration_seconds or 0 for t in release.tracks),
