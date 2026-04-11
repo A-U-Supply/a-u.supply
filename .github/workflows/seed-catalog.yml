@@ -16,4 +16,4 @@ jobs:
 
       - name: Run seed script
         run: |
-          ssh dokku@204.168.201.89 run au-supply .venv/bin/python seed_catalog.py
+          ssh dokku@204.168.201.89 enter au-supply web .venv/bin/python seed_catalog.py

@@ -258,7 +258,7 @@
                 <div class="release-card__meta">
                     <span>{{ release.release_date.isoformat() if release.release_date else 'TBD' }}</span>
                     <span>{{ release.tracks | length }} trk{% if release.tracks | length != 1 %}s{% endif %}
-                        {%- set total_secs = release.tracks | sum(attribute='duration_seconds', default=0) -%}
+                        {%- set total_secs = release.tracks | map(attribute='duration_seconds') | select('number') | sum -%}
                         {%- if total_secs > 0 %} / {{ '%d:%02d' | format(total_secs // 60, total_secs % 60) }}{% endif -%}
                     </span>
                 </div>

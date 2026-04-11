@@ -365,7 +365,7 @@
                 {% endfor %}
             </tbody>
         </table>
-        {% set total_secs = release.tracks | sum(attribute='duration_seconds', default=0) %}
+        {% set total_secs = release.tracks | map(attribute='duration_seconds') | select('number') | sum %}
         {% if total_secs > 0 %}
         <p class="track-total">
             Total: {{ '%d:%02d' | format(total_secs // 60, total_secs % 60) }}
