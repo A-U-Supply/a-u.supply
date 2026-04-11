@@ -535,6 +535,9 @@ import Admin from '../../../layouts/Admin.astro';
 </style>
 
 <script>
+  document.addEventListener('astro:page-load', () => {
+  if (!document.getElementById('entity-select')) return;
+
   // ---- State ----
   let entities: any[] = [];
   let selectedEntities: any[] = [];
@@ -549,7 +552,7 @@ import Admin from '../../../layouts/Admin.astro';
     renderLinks();
     renderFreeform();
     updateReview();
-  }) as EventListener);
+  }) as EventListener, { once: true });
 
   // ---- Collapsible sections ----
   document.querySelectorAll('.collapsible__heading').forEach(heading => {
@@ -1039,4 +1042,5 @@ import Admin from '../../../layouts/Admin.astro';
       publishBtn.disabled = false;
     }
   }
+  });
 </script>

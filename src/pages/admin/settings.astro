@@ -116,111 +116,114 @@ import Admin from '../../layouts/Admin.astro';
 </style>
 
 <script>
-  let currentUserId: number;
+  document.addEventListener('astro:page-load', () => {
+    if (!document.getElementById('password-form')) return;
 
-  document.body.addEventListener('auth-ready', ((e: CustomEvent) => {
-    currentUserId = e.detail.id;
-    if (e.detail.role === 'admin') {
-      document.getElementById('user-management')!.style.display = 'block';
+    let currentUserId: number;
+
+    document.body.addEventListener('auth-ready', ((e: CustomEvent) => {
+      currentUserId = e.detail.id;
+      if (e.detail.role === 'admin') {
+        document.getElementById('user-management')!.style.display = 'block';
+        loadUsers();
+      } else {
+        document.getElementById('no-admin')!.style.display = 'block';
+      }
+    }) as EventListener, { once: true });
+
+    async function loadUsers() {
+      const res = await fetch('/api/admin/users', { credentials: 'include' });
+      if (!res.ok) return;
+      const users = await res.json();
+      const tbody = document.getElementById('user-tbody')!;
+      tbody.innerHTML = users.map((u: any) => `
+        <tr>
+          <td>${u.name}</td>
+          <td>${u.email}</td>
+          <td>${u.role}</td>
+          <td>${u.id !== currentUserId ? `<button onclick="deleteUser(${u.id})">Delete</button>` : ''}</td>
+        </tr>
+      `).join('');
+    }
+
+    (window as any).deleteUser = async (id: number) => {
+      if (!confirm('Delete this user?')) return;
+      const res = await fetch(`/api/admin/users/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (res.ok) loadUsers();
+    };
+
+    document.getElementById('password-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.target as HTMLFormElement;
+      const data = Object.fromEntries(new FormData(form));
+      const errorEl = document.getElementById('pw-error')!;
+      const successEl = document.getElementById('pw-success')!;
+      errorEl.style.display = 'none';
+      successEl.style.display = 'none';
+
+      let csrf_token = '';
+      try {
+        const csrfRes = await fetch('/api/csrf');
+        const csrfData = await csrfRes.json();
+        csrf_token = csrfData.csrf_token;
+      } catch { /* continue */ }
+
+      const res = await fetch('/api/me/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ ...data, csrf_token }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        errorEl.textContent = err.detail || 'Failed to change password';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      form.reset();
+      successEl.textContent = 'Password updated';
+      successEl.style.display = 'block';
+    });
+
+    document.getElementById('invite-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.target as HTMLFormElement;
+      const data = Object.fromEntries(new FormData(form));
+      const errorEl = document.getElementById('invite-error')!;
+      const successEl = document.getElementById('invite-success')!;
+      errorEl.style.display = 'none';
+      successEl.style.display = 'none';
+
+      let csrf_token = '';
+      try {
+        const csrfRes = await fetch('/api/csrf');
+        const csrfData = await csrfRes.json();
+        csrf_token = csrfData.csrf_token;
+      } catch { /* continue */ }
+
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ ...data, csrf_token }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        errorEl.textContent = err.detail || 'Failed to create user';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      form.reset();
+      successEl.textContent = `Invited ${data.name}`;
+      successEl.style.display = 'block';
       loadUsers();
-    } else {
-      document.getElementById('no-admin')!.style.display = 'block';
-    }
-  }) as EventListener);
-
-  async function loadUsers() {
-    const res = await fetch('/api/admin/users', { credentials: 'include' });
-    if (!res.ok) return;
-    const users = await res.json();
-    const tbody = document.getElementById('user-tbody')!;
-    tbody.innerHTML = users.map((u: any) => `
-      <tr>
-        <td>${u.name}</td>
-        <td>${u.email}</td>
-        <td>${u.role}</td>
-        <td>${u.id !== currentUserId ? `<button onclick="deleteUser(${u.id})">Delete</button>` : ''}</td>
-      </tr>
-    `).join('');
-  }
-
-  (window as any).deleteUser = async (id: number) => {
-    if (!confirm('Delete this user?')) return;
-    const res = await fetch(`/api/admin/users/${id}`, {
-      method: 'DELETE',
-      credentials: 'include',
     });
-    if (res.ok) loadUsers();
-  };
-
-  document.getElementById('password-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const form = e.target as HTMLFormElement;
-    const data = Object.fromEntries(new FormData(form));
-    const errorEl = document.getElementById('pw-error')!;
-    const successEl = document.getElementById('pw-success')!;
-    errorEl.style.display = 'none';
-    successEl.style.display = 'none';
-
-    let csrf_token = '';
-    try {
-      const csrfRes = await fetch('/api/csrf');
-      const csrfData = await csrfRes.json();
-      csrf_token = csrfData.csrf_token;
-    } catch { /* continue */ }
-
-    const res = await fetch('/api/me/password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ ...data, csrf_token }),
-    });
-
-    if (!res.ok) {
-      const err = await res.json();
-      errorEl.textContent = err.detail || 'Failed to change password';
-      errorEl.style.display = 'block';
-      return;
-    }
-
-    form.reset();
-    successEl.textContent = 'Password updated';
-    successEl.style.display = 'block';
-  });
-
-  document.getElementById('invite-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const form = e.target as HTMLFormElement;
-    const data = Object.fromEntries(new FormData(form));
-    const errorEl = document.getElementById('invite-error')!;
-    const successEl = document.getElementById('invite-success')!;
-    errorEl.style.display = 'none';
-    successEl.style.display = 'none';
-
-    // Fetch a CSRF token
-    let csrf_token = '';
-    try {
-      const csrfRes = await fetch('/api/csrf');
-      const csrfData = await csrfRes.json();
-      csrf_token = csrfData.csrf_token;
-    } catch { /* continue */ }
-
-    const res = await fetch('/api/admin/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ ...data, csrf_token }),
-    });
-
-    if (!res.ok) {
-      const err = await res.json();
-      errorEl.textContent = err.detail || 'Failed to create user';
-      errorEl.style.display = 'block';
-      return;
-    }
-
-    form.reset();
-    successEl.textContent = `Invited ${data.name}`;
-    successEl.style.display = 'block';
-    loadUsers();
   });
 </script>

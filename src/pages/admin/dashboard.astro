@@ -4,12 +4,16 @@ import Admin from '../../layouts/Admin.astro';
 
 <Admin title="Dashboard" current="dashboard">
   <h1>Dashboard</h1>
-  <p id="welcome">Loading...</p>
+  <p id="welcome"><span class="loading-dots">Loading</span></p>
 </Admin>
 
 <script>
-  document.body.addEventListener('auth-ready', ((e: CustomEvent) => {
+  document.addEventListener('astro:page-load', () => {
     const el = document.getElementById('welcome');
-    if (el) el.textContent = `Welcome back, ${e.detail.name}.`;
-  }) as EventListener);
+    if (!el) return;
+    el.innerHTML = '<span class="loading-dots">Loading</span>';
+    document.body.addEventListener('auth-ready', ((e: CustomEvent) => {
+      el.textContent = `Welcome back, ${e.detail.name}.`;
+    }) as EventListener, { once: true });
+  });
 </script>

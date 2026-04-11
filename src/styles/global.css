@@ -271,3 +271,18 @@ img {
     flex-direction: column;
   }
 }
+
+/* Animated loading dots */
+.loading-dots::after {
+  content: '...';
+  display: inline-block;
+  width: 0;
+  overflow: hidden;
+  vertical-align: bottom;
+  animation: dots 1.5s steps(4, end) infinite;
+}
+
+@keyframes dots {
+  0% { width: 0; }
+  100% { width: 1.2em; }
+}
