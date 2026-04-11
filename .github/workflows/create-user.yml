@@ -14,15 +14,8 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H 204.168.201.89 >> ~/.ssh/known_hosts
 
-      - name: Reset users table and create admin
-        run: |
-          ssh dokku@204.168.201.89 run au-supply .venv/bin/python -c "
-          from models import Base, engine
-          from sqlalchemy import text
-          with engine.connect() as c:
-              c.execute(text('DROP TABLE IF EXISTS users'))
-              c.commit()
-          Base.metadata.create_all(bind=engine)
-          print('Table recreated')
-          "
-          ssh dokku@204.168.201.89 run au-supply .venv/bin/python cli.py create-user --email REDACTED@example.com --name tube --password REDACTED --role admin
+      - name: Reset DB schema
+        run: ssh dokku@204.168.201.89 run au-supply .venv/bin/python reset_db.py
+
+      - name: Create admin user
+        run: ssh dokku@204.168.201.89 run au-supply .venv/bin/python cli.py create-user --email REDACTED@example.com --name tube --password REDACTED --role admin
