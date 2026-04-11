@@ -18,6 +18,8 @@
 ## Deployment (Dokku)
 
 - **Server**: 204.168.201.89
+- **Domain**: `a-u.supply` (DNS points to the server IP)
+- **SSL**: Let's Encrypt via `dokku-letsencrypt` plugin, auto-renews via cron. HTTP redirects to HTTPS.
 - **App name**: au-supply
 - **Deploy method**: `git push dokku master:main` via GitHub Actions (`.github/workflows/deploy.yml`)
 - **SSH key**: `DOKKU_SSH_KEY` GitHub secret, connects as `dokku@204.168.201.89`
@@ -25,6 +27,7 @@
 - **Legacy site storage**: `/var/lib/dokku/data/storage/au-supply-legacy:/srv/legacy-site`
 - **Run commands on server**: `ssh dokku@204.168.201.89 enter au-supply web <command>` (use `enter`, not `run` — `run` creates a disposable container)
 - **ffmpeg** is installed in the Docker image for audio duration extraction
+- **No Caddy/external proxy**: Dokku's built-in nginx handles reverse proxying and SSL termination
 
 ## File Layout
 
