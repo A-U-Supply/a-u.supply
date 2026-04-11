@@ -130,7 +130,7 @@ def login(request: Request, body: LoginRequest, db: Session = Depends(get_db)):
         httponly=True,
         secure=IS_PRODUCTION,
         samesite="lax",
-        max_age=60 * 60 * 24,  # 24 hours
+        max_age=60 * 60 * 24 * 365,  # 1 year
         path="/",
     )
     return response

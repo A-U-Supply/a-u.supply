@@ -17,6 +17,7 @@ const { title } = Astro.props;
   <ViewTransitions />
 </head>
 <body>
+  <div class="nav-progress" id="nav-progress"></div>
   <header class="header">
     <div class="header__inner">
       <a href="/" class="header__logo">
@@ -117,6 +118,29 @@ const { title } = Astro.props;
     margin: 0 0.3em;
   }
 
+  .nav-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 2px;
+    background: var(--color-accent);
+    z-index: 9999;
+    width: 0;
+    opacity: 0;
+    transition: width 0.3s ease, opacity 0.2s;
+  }
+
+  .nav-progress.active {
+    opacity: 1;
+    animation: progress-grow 2s ease-out forwards;
+  }
+
+  @keyframes progress-grow {
+    0% { width: 0; }
+    50% { width: 60%; }
+    100% { width: 90%; }
+  }
+
   @media (max-width: 640px) {
     .header__logo img {
       height: 36px;
@@ -129,3 +153,24 @@ const { title } = Astro.props;
     }
   }
 </style>
+
+<script>
+  document.addEventListener('astro:before-preparation', () => {
+    const bar = document.getElementById('nav-progress');
+    if (bar) {
+      bar.style.width = '0';
+      bar.classList.add('active');
+    }
+  });
+
+  document.addEventListener('astro:page-load', () => {
+    const bar = document.getElementById('nav-progress');
+    if (bar) {
+      bar.style.width = '100%';
+      setTimeout(() => {
+        bar.classList.remove('active');
+        bar.style.width = '0';
+      }, 200);
+    }
+  });
+</script>

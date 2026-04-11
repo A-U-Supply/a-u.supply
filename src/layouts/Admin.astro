@@ -42,6 +42,9 @@ const { title, current } = Astro.props;
     </aside>
 
     <main class="admin-main">
+      <div class="page-loading" id="page-loading" style="display:none;">
+        <span class="loading-dots">Loading</span>
+      </div>
       <slot />
     </main>
   </div>
@@ -57,48 +60,59 @@ const { title, current } = Astro.props;
 </style>
 
 <script>
-  // Auth check — redirect to login if not authenticated
-  async function checkAuth() {
-    try {
-      const res = await fetch('/api/me', { credentials: 'include' });
-      if (!res.ok) {
+  // Show loading indicator during ViewTransition navigations
+  document.addEventListener('astro:before-preparation', () => {
+    const loader = document.getElementById('page-loading');
+    if (loader) loader.style.display = 'block';
+  });
+
+  document.addEventListener('astro:page-load', () => {
+    const loader = document.getElementById('page-loading');
+    if (loader) loader.style.display = 'none';
+
+    // Auth check — redirect to login if not authenticated
+    async function checkAuth() {
+      try {
+        const res = await fetch('/api/me', { credentials: 'include' });
+        if (!res.ok) {
+          window.location.href = '/login';
+          return;
+        }
+        const user = await res.json();
+        const userEl = document.getElementById('sidebar-user');
+        if (userEl) userEl.textContent = user.name;
+
+        // Store user data for page scripts
+        document.body.dataset.userName = user.name;
+        document.body.dataset.userRole = user.role;
+        document.body.dataset.userEmail = user.email;
+        document.body.dispatchEvent(new CustomEvent('auth-ready', { detail: user }));
+      } catch {
         window.location.href = '/login';
-        return;
       }
-      const user = await res.json();
-      const userEl = document.getElementById('sidebar-user');
-      if (userEl) userEl.textContent = user.name;
+    }
+    checkAuth();
 
-      // Store user data for page scripts
-      document.body.dataset.userName = user.name;
-      document.body.dataset.userRole = user.role;
-      document.body.dataset.userEmail = user.email;
-      document.body.dispatchEvent(new CustomEvent('auth-ready', { detail: user }));
-    } catch {
+    // Logout
+    document.getElementById('logout-btn')?.addEventListener('click', async () => {
+      await fetch('/api/logout', { method: 'POST', credentials: 'include' });
       window.location.href = '/login';
-    }
-  }
-  checkAuth();
+    });
 
-  // Logout
-  document.getElementById('logout-btn')?.addEventListener('click', async () => {
-    await fetch('/api/logout', { method: 'POST', credentials: 'include' });
-    window.location.href = '/login';
-  });
+    // Mobile sidebar toggle
+    document.getElementById('sidebar-toggle')?.addEventListener('click', () => {
+      document.getElementById('sidebar')?.classList.toggle('open');
+    });
 
-  // Mobile sidebar toggle
-  document.getElementById('sidebar-toggle')?.addEventListener('click', () => {
-    document.getElementById('sidebar')?.classList.toggle('open');
-  });
-
-  // Close sidebar when clicking outside on mobile
-  document.addEventListener('click', (e) => {
-    const sidebar = document.getElementById('sidebar');
-    const toggle = document.getElementById('sidebar-toggle');
-    if (sidebar?.classList.contains('open') &&
-        !sidebar.contains(e.target as Node) &&
-        !toggle?.contains(e.target as Node)) {
-      sidebar.classList.remove('open');
-    }
+    // Close sidebar when clicking outside on mobile
+    document.addEventListener('click', (e) => {
+      const sidebar = document.getElementById('sidebar');
+      const toggle = document.getElementById('sidebar-toggle');
+      if (sidebar?.classList.contains('open') &&
+          !sidebar.contains(e.target as Node) &&
+          !toggle?.contains(e.target as Node)) {
+        sidebar.classList.remove('open');
+      }
+    });
   });
 </script>
