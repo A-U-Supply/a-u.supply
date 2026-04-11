@@ -7,6 +7,10 @@ wheels/
 *.egg-info
 .venv/
 
+# Node / Astro
+node_modules/
+.astro/
+
 # App data
 data/*.db
 data/*.db-wal
