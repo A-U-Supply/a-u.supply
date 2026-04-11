@@ -15,17 +15,14 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H 204.168.201.89 >> ~/.ssh/known_hosts
 
-      - name: Mount persistent storage
+      - name: Verify storage is mounted
         run: |
-          ssh dokku@204.168.201.89 storage:ensure-directory au-supply
-          ssh dokku@204.168.201.89 storage:mount au-supply /var/lib/dokku/data/storage/au-supply:/app/data || true
           ssh dokku@204.168.201.89 storage:list au-supply
 
-      - name: Restart app with storage
+      - name: Rebuild app to pick up storage mount
         run: |
-          ssh dokku@204.168.201.89 ps:restart au-supply
+          ssh -o ServerAliveInterval=60 dokku@204.168.201.89 ps:rebuild au-supply
 
       - name: Run seed script
         run: |
-          sleep 10
           ssh -o ServerAliveInterval=30 dokku@204.168.201.89 enter au-supply web .venv/bin/python seed_catalog.py
