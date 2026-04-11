@@ -29,6 +29,23 @@ def create_user(email: str, password: str, name: str, role: str = "member"):
     db.close()
 
 
+def set_role(email: str, role: str):
+    db = SessionLocal()
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        print(f"ERROR: {email} not found")
+        db.close()
+        sys.exit(1)
+    if role not in ("admin", "member"):
+        print("ERROR: role must be admin or member")
+        db.close()
+        sys.exit(1)
+    user.role = role
+    db.commit()
+    print(f"{user.name} ({user.email}) is now {user.role}")
+    db.close()
+
+
 def list_users():
     db = SessionLocal()
     users = db.query(User).all()
@@ -50,6 +67,12 @@ if __name__ == "__main__":
             sys.exit(1)
         role = sys.argv[5] if len(sys.argv) > 5 else "member"
         create_user(sys.argv[2], sys.argv[3], sys.argv[4], role)
+
+    elif cmd == "set-role":
+        if len(sys.argv) < 4:
+            print("Usage: manage.py set-role <email> <role>")
+            sys.exit(1)
+        set_role(sys.argv[2], sys.argv[3])
 
     elif cmd == "list-users":
         list_users()
