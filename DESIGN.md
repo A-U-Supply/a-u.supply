@@ -52,13 +52,13 @@ All new work extends this stack. No new frameworks.
 ### 2.1 Entity-Relationship Diagram (text)
 
 ```
-Entity 1---* Release 1---* Track
+Entity *---* Release 1---* Track
                 |
                 |---* DistributionLink
                 |---* ReleaseMetadata
 ```
 
-A release belongs to one entity (the manufacturer). An entity can have many releases. A release has many tracks, distribution links, and freeform metadata pairs.
+A release has one or more entities (manufacturers) via a join table. An entity can appear on many releases. A release has many tracks, distribution links, and freeform metadata pairs.
 
 ### 2.2 Tables
 
@@ -83,7 +83,6 @@ The artist/manufacturer/project names. These are created on the fly during relea
 | id             | INTEGER      | PK, autoincrement                |       |
 | product_code   | TEXT         | NOT NULL, UNIQUE, indexed        | Auto-generated, editable. See §3. |
 | title          | TEXT         | NOT NULL                         |       |
-| entity_id      | INTEGER      | FK → entities.id, NOT NULL       | The manufacturer |
 | release_date   | DATE         | NULLABLE                         | Date of manufacture. Null for drafts without a date yet. |
 | cover_art_path | TEXT         | NULLABLE                         | Relative path under media dir |
 | status         | TEXT         | NOT NULL, default "draft"        | "draft" or "published" |
@@ -94,6 +93,21 @@ The artist/manufacturer/project names. These are created on the fly during relea
 | updated_at     | DATETIME     | NOT NULL, default now(utc), onupdate now(utc) |   |
 
 **Access rule**: Any admin can edit any release regardless of who created it. `created_by` is for attribution/audit, not access control.
+
+#### `release_entities` (join table)
+
+Many-to-many relationship between releases and entities. A release can have multiple artists/manufacturers, and an entity can appear on multiple releases.
+
+| Column       | Type         | Constraints                      | Notes |
+|-------------|-------------|----------------------------------|-------|
+| release_id  | INTEGER      | FK → releases.id, NOT NULL, ON DELETE CASCADE | Composite PK |
+| entity_id   | INTEGER      | FK → entities.id, NOT NULL, ON DELETE RESTRICT | Composite PK |
+| position    | INTEGER      | NOT NULL, default 0              | Ordering — first-listed artist = 0 |
+| role        | TEXT         | NULLABLE                         | Optional: "primary", "featuring", "with", etc. Null = unlabeled credit. |
+
+**Primary key**: (release_id, entity_id)
+
+**Display order**: Entities on a release are ordered by `position`. "Unreliable Metrics, Current Occupant, A-XYZ" would be positions 0, 1, 2 with no role labels. "Houston stray [with Saturnalia]" would be Complete at position 0 (role: null) and Saturnalia at position 1 (role: "with").
 
 #### `tracks`
 
@@ -140,15 +154,25 @@ Freeform key-value pairs for anything that doesn't fit the schema.
 New models go in `models.py` alongside the existing `User` model. Relationships:
 
 ```python
+# Association table for many-to-many
+release_entities = Table(
+    "release_entities", Base.metadata,
+    Column("release_id", Integer, ForeignKey("releases.id", ondelete="CASCADE"), primary_key=True),
+    Column("entity_id", Integer, ForeignKey("entities.id", ondelete="RESTRICT"), primary_key=True),
+    Column("position", Integer, nullable=False, default=0),
+    Column("role", String, nullable=True),
+)
+
 class Entity(Base):
     __tablename__ = "entities"
     # ... columns ...
-    releases = relationship("Release", back_populates="entity")
+    releases = relationship("Release", secondary=release_entities, back_populates="entities")
 
 class Release(Base):
     __tablename__ = "releases"
     # ... columns ...
-    entity = relationship("Entity", back_populates="releases")
+    entities = relationship("Entity", secondary=release_entities, back_populates="releases",
+                            order_by=release_entities.c.position)
     tracks = relationship("Track", back_populates="release", order_by="Track.track_number", cascade="all, delete-orphan")
     distribution_links = relationship("DistributionLink", back_populates="release", cascade="all, delete-orphan")
     metadata_pairs = relationship("ReleaseMetadata", back_populates="release", cascade="all, delete-orphan")
@@ -256,7 +280,7 @@ Create a new release (draft by default).
 ```json
 {
   "title": "Law Bale Straw Wonder / Tomato Sink Cloud Tag",
-  "entity_id": 1,
+  "entity_ids": [1],
   "product_code": null,
   "release_date": "2026-03-22",
   "description": "Double album. Disc 1: Law Bale Straw Wonder...",
@@ -296,7 +320,7 @@ List releases with filtering.
     {
       "product_code": "AU-2026-DA-001",
       "title": "Law Bale Straw Wonder / Tomato Sink Cloud Tag",
-      "entity": {"id": 1, "name": "Complete", "slug": "complete"},
+      "entities": [{"id": 1, "name": "Complete", "slug": "complete"}],
       "release_date": "2026-03-22",
       "cover_art_url": "/api/releases/AU-2026-DA-001/cover",
       "status": "published",
@@ -321,7 +345,7 @@ Get full release detail.
 {
   "product_code": "AU-2026-DA-001",
   "title": "Law Bale Straw Wonder / Tomato Sink Cloud Tag",
-  "entity": {"id": 1, "name": "Complete", "slug": "complete"},
+  "entities": [{"id": 1, "name": "Complete", "slug": "complete"}],
   "release_date": "2026-03-22",
   "cover_art_url": "/api/releases/AU-2026-DA-001/cover",
   "status": "published",
@@ -349,7 +373,7 @@ Get full release detail.
 ```
 
 #### `PUT /api/releases/{product_code}`
-Update release metadata (title, description, entity, date, format_specs, product_code, distribution links, freeform metadata).
+Update release metadata (title, description, entities, date, format_specs, product_code, distribution links, freeform metadata).
 
 **Auth**: Required (any admin).
 
@@ -584,9 +608,12 @@ The creation form is a single page with collapsible sections, not a wizard with 
 
 **Step 1 — Metadata**
 - Title (text input)
-- Entity (searchable dropdown with "Create new..." option at the bottom)
+- Entities (multi-select: add one or more artists/manufacturers)
+  - Searchable dropdown with "Create new..." option at the bottom
   - Selecting "Create new..." opens an inline form: name + optional description
-  - On save, the new entity is created via API and selected
+  - On save, the new entity is created via API and added to the list
+  - Each added entity shows as a tag/chip with a remove button
+  - Drag to reorder (position in join table); optional role label per entity (e.g., "with", "featuring")
 - Release date (date picker, optional for drafts)
 - Format specs (text input, freeform)
 - Product code (auto-populated via `/api/releases/next-code`, editable text input)
@@ -674,7 +701,7 @@ These are public, no auth required.
 - Cover art (square, with fallback placeholder if none)
 - Product code (monospace, small, above the title)
 - Title
-- Entity/manufacturer name
+- Artist(s) / manufacturer name(s) — formatted with roles where applicable (e.g., "Complete with Saturnalia")
 - Release date (formatted as industrial date: "2026-03-22")
 - Track count and total duration
 
@@ -705,7 +732,7 @@ PRODUCT SPECIFICATION
 
 Product Code:  AU-2026-DA-001
 Product Name:  Law Bale Straw Wonder / Tomato Sink Cloud Tag
-Manufacturer:  Complete
+Manufacturer:  Complete (or comma-separated for multi-entity, with roles)
 Date:          2026-03-22
 Format:        Digital (YouTube)
 ```
@@ -837,33 +864,17 @@ The player should also be available in the admin layout, so admins can preview t
 
 ## 9. Open Questions
 
-### Q1: Multi-Entity Releases
+### Q1: Multi-Entity Releases — RESOLVED
 
-*A Deper[ ]alized Ratio* is credited to "Unreliable Metrics, Current Occupant, A-XYZ" — three separate project names on one release. *A-U Quality Track Supply* is credited to "Various."
+**Decision**: Many-to-many via `release_entities` join table with `position` and `role` columns. Each entity on a release is a separate row, ordered by position. The `role` field handles credits like "with Saturnalia" (role="with") vs. unlabeled co-credits (role=null).
 
-**Options**:
-- (a) **Single entity_id**: Store compound credits as a single entity name: "Unreliable Metrics, Current Occupant, A-XYZ". Simple. The entity table has weird entries but that matches the catalog's aesthetic.
-- (b) **Many-to-many**: A join table `release_entities` linking releases to multiple entities. More correct, but adds complexity for a case that's rare in this catalog.
-- (c) **Primary entity + freeform credit**: `entity_id` points to the primary/first entity, and a freeform metadata field "additional_artists" holds the rest.
+### Q2: Historical Catalog Import — RESOLVED
 
-**Current recommendation**: Option (a). The entity names are already semi-fictional aliases — a compound name like "Unreliable Metrics, Current Occupant, A-XYZ" is no weirder than "Complete Rx" or "Semi-Truck Driver." Keep it simple.
+**Decision**: Seed the Archive.org releases (the three 2020 releases) programmatically as initial data. Remaining historical releases will be uploaded manually through the UI.
 
-### Q2: Historical Catalog Import
+### Q3: Audio File Source for Historical Releases — RESOLVED
 
-The existing catalog (11 releases from 2020-2026) should be importable. Two options:
-- (a) **Manual entry**: Admin uploads each one through the UI. Good for testing the upload flow.
-- (b) **Seed script**: A Python script that reads the reference doc data and creates releases via the API or direct DB inserts.
-
-Should we build a seed script, or just import them manually through the UI once it's built?
-
-### Q3: Audio File Source for Historical Releases
-
-The 2020 releases are on Archive.org, the 2022-2024 ones on Bandcamp and YouTube. Do we:
-- (a) Download and store the audio files locally on the server?
-- (b) Just store distribution links and skip local audio for historical releases?
-- (c) Allow releases with no local audio (tracks with null audio_file_path) that link out to external platforms instead?
-
-Option (c) seems most flexible — a release can exist in the catalog with full metadata but point to external platforms for actual playback. The player would only work for releases with local audio.
+**Decision**: Audio files are not required but highly recommended. Tracks can exist with `audio_file_path = NULL` — they'll show in the track listing but won't be playable in the site player. The release can still link to external platforms via distribution links. Historical releases will have their audio uploaded manually over time.
 
 ### Q4: Image Handling
 
