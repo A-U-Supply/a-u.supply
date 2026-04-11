@@ -1,22 +1,21 @@
-FROM python:3.12-slim
-
+# Stage 1: Build Astro frontend
+FROM node:22-slim AS frontend
 WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY astro.config.mjs tsconfig.json ./
+COPY src/ ./src/
+COPY public/ ./public/
+RUN npm run build
 
-# Install uv
+# Stage 2: Python app
+FROM python:3.12-slim
+WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-
-# Copy dependency files first for layer caching
 COPY pyproject.toml uv.lock ./
-
-# Install dependencies (no dev deps, system python)
 RUN uv sync --frozen --no-dev --no-install-project
-
-# Copy application code
 COPY . .
-
-# Ensure data directory exists (will be overridden by Dokku storage mount)
+COPY --from=frontend /app/dist ./dist/
 RUN mkdir -p /app/data
-
 EXPOSE 5000
-
 CMD [".venv/bin/uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]

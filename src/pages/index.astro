@@ -1,0 +1,141 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="A-U.SUPPLY — Company Profile & Product Catalog">
+  <main class="cover">
+    <div class="cover__banner">
+      <img src="/assets/logo.png" alt="A-U.Supply" />
+    </div>
+
+    <h1 class="cover__title">A-U.SUPPLY</h1>
+    <p class="cover__subtitle">Audio Units Division</p>
+
+    <hr class="cover__rule" />
+
+    <p class="cover__subtitle">Company Profile &amp; Product Catalog</p>
+
+    <dl class="cover__doc-info">
+      <div><dt>Document No:</dt><dd>AU-REF-2026-001</dd></div>
+      <div><dt>Revision:</dt><dd>01</dd></div>
+      <div><dt>Date of Issue:</dt><dd>2026-03-23</dd></div>
+      <div><dt>Prepared by:</dt><dd>Purchasing &amp; Documentation Dept.</dd></div>
+    </dl>
+
+    <p class="cover__classification">Classification: General Distribution</p>
+  </main>
+
+  <footer class="footer">
+    <span class="footer__doc">AU-REF-2026-001 &middot; Rev 01 &middot; 2026-03-23</span>
+    <span class="footer__contact">ausupply000@gmail.com</span>
+    <span class="footer__site">a-u.supply</span>
+  </footer>
+</Base>
+
+<style>
+  .cover {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 4rem);
+    text-align: center;
+    padding: var(--space-md);
+  }
+
+  .cover__banner {
+    width: 100%;
+    max-width: 400px;
+    margin-bottom: var(--space-lg);
+  }
+
+  .cover__banner img {
+    width: 100%;
+    height: auto;
+  }
+
+  .cover__title {
+    font-size: var(--text-2xl);
+    font-weight: bold;
+    letter-spacing: 3pt;
+    text-transform: uppercase;
+    margin-bottom: var(--space-xs);
+  }
+
+  .cover__subtitle {
+    font-size: var(--text-lg);
+    letter-spacing: 1pt;
+    color: var(--color-muted);
+    margin-bottom: var(--space-xs);
+  }
+
+  .cover__rule {
+    border: none;
+    border-top: 3px double var(--color-text);
+    width: min(200pt, 80%);
+    margin: var(--space-md) 0;
+  }
+
+  .cover__doc-info {
+    margin-top: var(--space-md);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    line-height: 1.8;
+  }
+
+  .cover__doc-info div {
+    display: flex;
+    justify-content: center;
+    gap: 0.5ch;
+  }
+
+  .cover__doc-info dt {
+    min-width: 12ch;
+    text-align: right;
+  }
+
+  .cover__doc-info dd {
+    text-align: left;
+  }
+
+  .cover__classification {
+    margin-top: var(--space-lg);
+    font-size: var(--text-sm);
+    letter-spacing: 2pt;
+    color: var(--color-muted);
+    text-transform: uppercase;
+  }
+
+  /* Footer */
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) var(--space-md);
+    border-top: 1px solid var(--color-border);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+
+  @media (max-width: 640px) {
+    .cover__doc-info div {
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .cover__doc-info dt {
+      text-align: center;
+    }
+
+    .cover__doc-info dd {
+      text-align: center;
+      margin-bottom: var(--space-xs);
+    }
+
+    .footer {
+      flex-direction: column;
+      text-align: center;
+      gap: var(--space-xs);
+    }
+  }
+</style>
