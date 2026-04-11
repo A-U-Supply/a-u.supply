@@ -922,7 +922,8 @@ import Admin from '../../../layouts/Admin.astro';
       renderExistingTracks();
     }
 
-    // Remove completed items from queue
+    // Keep done items visible briefly, then clear
+    await new Promise(r => setTimeout(r, 1500));
     uploadQueue = uploadQueue.filter(t => t.status !== 'done');
     renderUploadQueue();
     uploadRunning = false;
