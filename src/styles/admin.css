@@ -159,17 +159,7 @@
   letter-spacing: 1pt;
 }
 
-.loading-dots::after {
-  content: '';
-  animation: dots 1.5s steps(4, end) infinite;
-}
-
-@keyframes dots {
-  0% { content: ''; }
-  25% { content: '.'; }
-  50% { content: '..'; }
-  75% { content: '...'; }
-}
+/* loading-dots animation is in global.css */
 
 /* Login page */
 .login-page {

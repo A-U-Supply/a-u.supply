@@ -8,7 +8,7 @@ import Admin from '../../../layouts/Admin.astro';
     <a href="/admin/catalog" class="back-link">&larr; Back to Catalog</a>
   </div>
 
-  <div id="loading" style="color: var(--color-muted);">Loading release...</div>
+  <div id="loading" style="color: var(--color-muted);"><span class="loading-dots">Loading release</span></div>
   <div id="page-error" class="login-error" style="display:none;"></div>
 
   <div id="edit-form" style="display:none;">
@@ -542,6 +542,9 @@ import Admin from '../../../layouts/Admin.astro';
 </style>
 
 <script>
+  document.addEventListener('astro:page-load', () => {
+  if (!document.getElementById('edit-form')) return;
+
   const releaseCode = new URLSearchParams(window.location.search).get('code') || '';
 
   // ---- State ----
@@ -558,7 +561,7 @@ import Admin from '../../../layouts/Admin.astro';
   document.body.addEventListener('auth-ready', (async () => {
     await loadEntities();
     await loadRelease();
-  }) as EventListener);
+  }) as EventListener, { once: true });
 
   // ---- Collapsible sections ----
   document.querySelectorAll('.collapsible__heading').forEach(heading => {
@@ -1144,4 +1147,5 @@ import Admin from '../../../layouts/Admin.astro';
       toggleBtn.disabled = false;
     }
   }
+  });
 </script>
