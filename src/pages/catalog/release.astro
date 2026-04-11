@@ -1,0 +1,589 @@
+---
+import Base from '../../layouts/Base.astro';
+---
+
+<Base title="A-U.SUPPLY — Release">
+  <main class="release">
+    <div id="loading" class="release__status">Loading product specification...</div>
+    <div id="error" class="release__status release__status--error" style="display:none;"></div>
+    <div id="content" style="display:none;">
+
+      <header class="release__header">
+        <a href="/catalog" class="release__back">&larr; Catalog</a>
+        <div class="release__masthead">
+          <p class="release__org">A-U.SUPPLY &mdash; Audio Units Division</p>
+          <h1 class="release__spec-title">Product Specification</h1>
+        </div>
+      </header>
+
+      <div class="release__layout">
+        <div class="release__cover-wrap">
+          <img id="cover-img" class="release__cover" src="" alt="" />
+          <div id="cover-empty" class="release__cover release__cover--empty" style="display:none;">NO COVER ART</div>
+        </div>
+
+        <div class="release__info">
+          <dl class="release__spec-table" id="spec-table"></dl>
+
+          <div class="release__actions">
+            <button class="btn-play-all" id="play-all">&#9654; Play All</button>
+          </div>
+        </div>
+      </div>
+
+      <section class="release__section">
+        <h2 class="release__section-title">Track Listing</h2>
+        <table class="track-table">
+          <thead>
+            <tr>
+              <th class="track-table__num">No.</th>
+              <th class="track-table__play"></th>
+              <th>Part Name</th>
+              <th class="track-table__dur">Duration</th>
+            </tr>
+          </thead>
+          <tbody id="track-tbody"></tbody>
+        </table>
+      </section>
+
+      <section class="release__section" id="dist-section" style="display:none;">
+        <h2 class="release__section-title">Distribution</h2>
+        <table class="dist-table">
+          <thead>
+            <tr>
+              <th>Platform</th>
+              <th>Link</th>
+            </tr>
+          </thead>
+          <tbody id="dist-tbody"></tbody>
+        </table>
+      </section>
+
+      <section class="release__section" id="meta-section" style="display:none;">
+        <h2 class="release__section-title">Metadata</h2>
+        <dl class="meta-table" id="meta-table"></dl>
+      </section>
+
+      <section class="release__section" id="desc-section" style="display:none;">
+        <h2 class="release__section-title">Description</h2>
+        <div class="release__description" id="description"></div>
+      </section>
+
+    </div>
+  </main>
+
+  <footer class="footer">
+    <span class="footer__doc">A-U.SUPPLY</span>
+    <span class="footer__contact">ausupply000@gmail.com</span>
+    <span class="footer__site">a-u.supply</span>
+  </footer>
+</Base>
+
+<style>
+  .release {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: var(--space-md);
+    min-height: calc(100vh - 4rem);
+  }
+
+  .release__status {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    padding: var(--space-xl) 0;
+    text-align: center;
+  }
+  .release__status--error {
+    color: #c00;
+  }
+
+  .release__header {
+    margin-bottom: var(--space-lg);
+  }
+
+  .release__back {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+  }
+  .release__back:hover {
+    color: var(--color-accent);
+  }
+
+  .release__masthead {
+    margin-top: var(--space-sm);
+    padding-bottom: var(--space-sm);
+    border-bottom: 3px double var(--color-text);
+  }
+
+  .release__org {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    letter-spacing: 1pt;
+    text-transform: uppercase;
+  }
+
+  .release__spec-title {
+    font-size: var(--text-xl);
+    font-weight: bold;
+    letter-spacing: 2pt;
+    text-transform: uppercase;
+  }
+
+  .release__layout {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: var(--space-lg);
+    margin-bottom: var(--space-lg);
+  }
+
+  .release__cover-wrap {
+    width: 100%;
+  }
+
+  .release__cover {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border: 1px solid var(--color-border);
+  }
+  .release__cover--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f5f5f5;
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    letter-spacing: 1pt;
+  }
+
+  .release__info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+  }
+
+  .release__spec-table {
+    font-size: var(--text-sm);
+    line-height: 1.8;
+  }
+  .release__spec-table dt {
+    display: inline;
+    color: var(--color-muted);
+    min-width: 14ch;
+  }
+  .release__spec-table dt::after {
+    content: '';
+  }
+  .release__spec-table dd {
+    display: inline;
+    margin-left: 0;
+  }
+  .release__spec-table .spec-row {
+    display: flex;
+    gap: 1ch;
+  }
+  .release__spec-table .spec-row dt {
+    min-width: 14ch;
+    flex-shrink: 0;
+  }
+
+  .release__actions {
+    margin-top: var(--space-xs);
+  }
+
+  .btn-play-all {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    padding: var(--space-xs) var(--space-md);
+    background: var(--color-text);
+    color: var(--color-bg);
+    border: none;
+    cursor: pointer;
+  }
+  .btn-play-all:hover {
+    background: var(--color-accent);
+  }
+
+  .release__section {
+    margin-bottom: var(--space-lg);
+  }
+
+  .release__section-title {
+    font-size: var(--text-lg);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    padding-bottom: var(--space-xs);
+    border-bottom: 2px solid var(--color-text);
+    margin-bottom: var(--space-sm);
+  }
+
+  .track-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+  .track-table th {
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    font-size: 0.65rem;
+    padding: var(--space-xs) var(--space-sm);
+    border-bottom: 2px solid var(--color-text);
+    color: var(--color-muted);
+  }
+  .track-table td {
+    padding: var(--space-xs) var(--space-sm);
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+  .track-table__num {
+    width: 4ch;
+  }
+  .track-table__play {
+    width: 4ch;
+  }
+  .track-table__dur {
+    width: 8ch;
+    text-align: right;
+  }
+  .track-table td:last-child {
+    text-align: right;
+  }
+
+  .btn-track-play {
+    background: none;
+    border: 1px solid var(--color-border);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    cursor: pointer;
+    color: var(--color-text);
+  }
+  .btn-track-play:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  .dist-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+  .dist-table th {
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    font-size: 0.65rem;
+    padding: var(--space-xs) var(--space-sm);
+    border-bottom: 2px solid var(--color-text);
+    color: var(--color-muted);
+  }
+  .dist-table td {
+    padding: var(--space-xs) var(--space-sm);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .dist-table a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+  .dist-table a:hover {
+    text-decoration: underline;
+  }
+
+  .meta-table {
+    font-size: var(--text-sm);
+    border: 1px solid var(--color-border);
+  }
+  .meta-table .meta-row {
+    display: flex;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .meta-table .meta-row:last-child {
+    border-bottom: none;
+  }
+  .meta-table dt {
+    min-width: 14ch;
+    flex-shrink: 0;
+    padding: var(--space-xs) var(--space-sm);
+    background: #f9f9f9;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    font-size: 0.65rem;
+    letter-spacing: 0.5pt;
+    display: flex;
+    align-items: center;
+  }
+  .meta-table dd {
+    padding: var(--space-xs) var(--space-sm);
+    flex: 1;
+  }
+
+  .release__description {
+    font-size: var(--text-sm);
+    line-height: 1.7;
+    color: var(--color-muted);
+    white-space: pre-wrap;
+  }
+
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) var(--space-md);
+    border-top: 1px solid var(--color-border);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  @media (max-width: 640px) {
+    .release__layout {
+      grid-template-columns: 1fr;
+    }
+    .release__cover-wrap {
+      max-width: 300px;
+    }
+    .footer {
+      flex-direction: column;
+      text-align: center;
+      gap: var(--space-xs);
+    }
+  }
+</style>
+
+<script>
+  interface Track {
+    id: number;
+    track_number: number;
+    title: string;
+    duration_seconds: number | null;
+    stream_url: string;
+  }
+
+  interface ReleaseData {
+    product_code: string;
+    title: string;
+    entities: { id: number; name: string; slug: string }[];
+    release_date: string | null;
+    cover_art_url: string | null;
+    status: string;
+    track_count: number;
+    total_duration_seconds: number;
+    description: string | null;
+    format_specs: string | null;
+    tracks: Track[];
+    distribution_links: { id: number; platform: string; url: string; label: string | null }[];
+    metadata: { id: number; key: string; value: string; sort_order: number }[];
+  }
+
+  function formatDuration(totalSeconds: number | null): string {
+    if (!totalSeconds) return '--:--';
+    const m = Math.floor(totalSeconds / 60);
+    const s = Math.floor(totalSeconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  function escapeHtml(str: string): string {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  async function init() {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+
+    if (!code) {
+      showError('No product code specified.');
+      return;
+    }
+
+    const loadingEl = document.getElementById('loading')!;
+    const errorEl = document.getElementById('error')!;
+    const contentEl = document.getElementById('content')!;
+
+    try {
+      const encoded = encodeURIComponent(code);
+      const res = await fetch(`/api/releases/${encoded}`);
+      if (!res.ok) {
+        if (res.status === 404) throw new Error('Release not found.');
+        throw new Error('Failed to load release.');
+      }
+      const data: ReleaseData = await res.json();
+
+      loadingEl.style.display = 'none';
+      contentEl.style.display = 'block';
+
+      document.title = `${data.product_code} — ${data.title || 'Release'} — A-U.SUPPLY`;
+
+      renderRelease(data);
+      injectJsonLd(data);
+    } catch (err: any) {
+      showError(err.message);
+    }
+  }
+
+  function showError(msg: string) {
+    document.getElementById('loading')!.style.display = 'none';
+    const errorEl = document.getElementById('error')!;
+    errorEl.textContent = msg;
+    errorEl.style.display = 'block';
+  }
+
+  function renderRelease(r: ReleaseData) {
+    const encoded = encodeURIComponent(r.product_code);
+    const entities = r.entities.map(e => e.name).join(', ') || 'Unknown';
+
+    // Cover
+    const coverImg = document.getElementById('cover-img') as HTMLImageElement;
+    const coverEmpty = document.getElementById('cover-empty')!;
+    if (r.cover_art_url) {
+      coverImg.src = `/api/releases/${encoded}/cover`;
+      coverImg.alt = r.title || r.product_code;
+      coverImg.style.display = 'block';
+      coverEmpty.style.display = 'none';
+    } else {
+      coverImg.style.display = 'none';
+      coverEmpty.style.display = 'flex';
+    }
+
+    // Spec table
+    const specTable = document.getElementById('spec-table')!;
+    const specs: [string, string][] = [
+      ['Product Code', r.product_code],
+      ['Product Name', r.title || '(untitled)'],
+      ['Manufacturer', entities],
+      ['Date', r.release_date || '----'],
+    ];
+    if (r.format_specs) {
+      specs.push(['Format', r.format_specs]);
+    }
+    specs.push(['Tracks', `${r.track_count} items, ${formatDuration(r.total_duration_seconds)} total`]);
+
+    specTable.innerHTML = specs.map(([label, val]) =>
+      `<div class="spec-row"><dt>${escapeHtml(label)}:</dt><dd>${escapeHtml(val)}</dd></div>`
+    ).join('');
+
+    // Track table
+    const trackTbody = document.getElementById('track-tbody')!;
+    if (r.tracks.length === 0) {
+      trackTbody.innerHTML = '<tr><td colspan="4" style="color:var(--color-muted);">No tracks.</td></tr>';
+    } else {
+      trackTbody.innerHTML = r.tracks.map((t, i) => `<tr>
+        <td>${t.track_number || (i + 1)}</td>
+        <td><button class="btn-track-play" data-index="${i}" title="Play">&#9654;</button></td>
+        <td>${escapeHtml(t.title || `Track ${i + 1}`)}</td>
+        <td>${formatDuration(t.duration_seconds)}</td>
+      </tr>`).join('');
+    }
+
+    // Play All button
+    document.getElementById('play-all')?.addEventListener('click', () => {
+      dispatchQueue(r, 0);
+    });
+
+    // Individual track play buttons
+    trackTbody.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('.btn-track-play') as HTMLElement | null;
+      if (!btn) return;
+      const index = parseInt(btn.dataset.index || '0', 10);
+      dispatchQueue(r, index);
+    });
+
+    // Distribution links
+    if (r.distribution_links.length > 0) {
+      const distSection = document.getElementById('dist-section')!;
+      distSection.style.display = 'block';
+      const distTbody = document.getElementById('dist-tbody')!;
+      distTbody.innerHTML = r.distribution_links.map(dl =>
+        `<tr>
+          <td>${escapeHtml(dl.platform)}</td>
+          <td><a href="${escapeHtml(dl.url)}" target="_blank" rel="noopener">${escapeHtml(dl.label || dl.url)}</a></td>
+        </tr>`
+      ).join('');
+    }
+
+    // Metadata
+    if (r.metadata.length > 0) {
+      const metaSection = document.getElementById('meta-section')!;
+      metaSection.style.display = 'block';
+      const metaTable = document.getElementById('meta-table')!;
+      metaTable.innerHTML = r.metadata.map(m =>
+        `<div class="meta-row"><dt>${escapeHtml(m.key)}</dt><dd>${escapeHtml(m.value)}</dd></div>`
+      ).join('');
+    }
+
+    // Description
+    if (r.description) {
+      const descSection = document.getElementById('desc-section')!;
+      descSection.style.display = 'block';
+      document.getElementById('description')!.textContent = r.description;
+    }
+  }
+
+  function dispatchQueue(r: ReleaseData, startIndex: number) {
+    const encoded = encodeURIComponent(r.product_code);
+    const entities = r.entities.map(e => e.name).join(', ') || 'Unknown';
+
+    const tracks = r.tracks.map(t => ({
+      track_id: t.id,
+      title: t.title,
+      release_title: r.title,
+      release_code: r.product_code,
+      stream_url: t.stream_url,
+      cover_url: r.cover_art_url ? `/api/releases/${encoded}/cover?size=thumb` : null,
+      duration: t.duration_seconds,
+      entity_name: entities,
+    }));
+
+    document.dispatchEvent(new CustomEvent('player:queue', {
+      detail: { tracks, startIndex }
+    }));
+  }
+
+  function injectJsonLd(r: ReleaseData) {
+    const encoded = encodeURIComponent(r.product_code);
+    const entities = r.entities.map(e => e.name).join(', ') || 'Unknown';
+
+    const jsonLd: any = {
+      '@context': 'https://schema.org',
+      '@type': 'MusicRelease',
+      'name': r.title || r.product_code,
+      'catalogNumber': r.product_code,
+      'byArtist': r.entities.map(e => ({
+        '@type': 'MusicGroup',
+        'name': e.name,
+      })),
+      'datePublished': r.release_date || undefined,
+      'numTracks': r.track_count,
+    };
+
+    if (r.cover_art_url) {
+      jsonLd.image = `${window.location.origin}/api/releases/${encoded}/cover`;
+    }
+
+    if (r.tracks.length > 0) {
+      jsonLd.track = r.tracks.map((t, i) => ({
+        '@type': 'MusicRecording',
+        'name': t.title,
+        'position': t.track_number || (i + 1),
+        'duration': t.duration_seconds ? `PT${Math.floor(t.duration_seconds / 60)}M${Math.floor(t.duration_seconds % 60)}S` : undefined,
+      }));
+    }
+
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.textContent = JSON.stringify(jsonLd);
+    document.head.appendChild(script);
+  }
+
+  init();
+</script>

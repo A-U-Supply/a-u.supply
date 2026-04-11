@@ -25,7 +25,6 @@ from auth import (
     verify_password,
 )
 from catalog import router as catalog_router
-from catalog_views import router as catalog_views_router
 from models import Base, User, engine
 
 # Ensure data directory exists
@@ -273,10 +272,6 @@ async def webhook_deploy(request: Request):
         )
         return {"ok": True, "action": "deploy script triggered"}
     return {"ok": True, "action": "webhook received (no DEPLOY_SCRIPT configured)"}
-
-
-# --- SSR Catalog pages ---
-app.include_router(catalog_views_router)
 
 
 # --- Static files ---
