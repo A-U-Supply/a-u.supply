@@ -275,17 +275,34 @@ async def webhook_deploy(request: Request):
     return {"ok": True, "action": "webhook received (no DEPLOY_SCRIPT configured)"}
 
 
-# --- SSR Catalog pages (must come before static mount) ---
+# --- SSR Catalog pages ---
 app.include_router(catalog_views_router)
 
 
-# --- Static / homepage ---
+# --- Static files ---
+# Serve Astro build output as middleware rather than a mount, so it
+# doesn't swallow routes like /catalog that are handled by FastAPI.
+
+DIST_DIR = Path("dist")
+
+
+@app.middleware("http")
+async def static_files(request: Request, call_next):
+    """Serve static files from dist/ only when the file actually exists."""
+    response = await call_next(request)
+    if response.status_code == 404 and DIST_DIR.is_dir():
+        url_path = request.url.path.lstrip("/")
+        # Try exact file
+        candidate = (DIST_DIR / url_path).resolve()
+        if candidate.is_file() and candidate.is_relative_to(DIST_DIR.resolve()):
+            return FileResponse(candidate)
+        # Try as directory with index.html (html=True behavior)
+        index = (DIST_DIR / url_path / "index.html").resolve()
+        if index.is_file() and index.is_relative_to(DIST_DIR.resolve()):
+            return FileResponse(index)
+    return response
 
 
 @app.get("/")
 def index():
     return FileResponse("dist/index.html")
-
-
-# Serve Astro build output — must come after all API routes
-app.mount("/", StaticFiles(directory="dist", html=True), name="static")
