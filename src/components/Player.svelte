@@ -101,6 +101,16 @@
   }
 
   let handler = null;
+  let playerEl = $state(undefined);
+
+  $effect(() => {
+    if (visible && playerEl) {
+      const h = playerEl.offsetHeight;
+      document.body.style.paddingBottom = h + 'px';
+    } else {
+      document.body.style.paddingBottom = '';
+    }
+  });
 
   onMount(() => {
     handler = (e) => onQueue(e);
@@ -109,11 +119,12 @@
 
   onDestroy(() => {
     if (handler) document.removeEventListener('player:queue', handler);
+    document.body.style.paddingBottom = '';
   });
 </script>
 
 {#if visible}
-<div class="player">
+<div class="player" bind:this={playerEl}>
   <audio
     bind:this={audioEl}
     bind:currentTime

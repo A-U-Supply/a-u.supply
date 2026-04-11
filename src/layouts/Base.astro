@@ -46,7 +46,9 @@ const { title } = Astro.props;
       <a href="/login">AUP-1</a>
     </nav>
   </footer>
-  <Player client:load transition:persist="audio-player" />
+  <div class="player-slot" transition:persist="audio-player">
+    <Player client:only="svelte" />
+  </div>
 </body>
 </html>
 
