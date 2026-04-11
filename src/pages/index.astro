@@ -2,7 +2,7 @@
 import Base from '../layouts/Base.astro';
 ---
 
-<Base title="A-U.SUPPLY — Company Profile & Product Catalog" hideNav>
+<Base title="A-U.SUPPLY — Company Profile & Product Catalog">
   <main class="cover">
     <div class="cover__banner">
       <img src="/assets/logo.png" alt="A-U.Supply" />
@@ -21,6 +21,10 @@ import Base from '../layouts/Base.astro';
       <div><dt>Date of Issue:</dt><dd>2026-03-23</dd></div>
       <div><dt>Prepared by:</dt><dd>Purchasing &amp; Documentation Dept.</dd></div>
     </dl>
+
+    <nav class="cover__nav">
+      <a href="/catalog" class="cover__nav-link">Product Catalog &rarr;</a>
+    </nav>
 
     <p class="cover__classification">Classification: General Distribution</p>
   </main>
@@ -96,6 +100,24 @@ import Base from '../layouts/Base.astro';
 
   .cover__doc-info dd {
     text-align: left;
+  }
+
+  .cover__nav {
+    margin-top: var(--space-md);
+  }
+
+  .cover__nav-link {
+    font-size: var(--text-base);
+    letter-spacing: 1pt;
+    text-transform: uppercase;
+    color: var(--color-accent);
+    text-decoration: none;
+    border: 1px solid var(--color-accent);
+    padding: var(--space-xs) var(--space-md);
+  }
+  .cover__nav-link:hover {
+    background: var(--color-accent);
+    color: var(--color-bg);
   }
 
   .cover__classification {
