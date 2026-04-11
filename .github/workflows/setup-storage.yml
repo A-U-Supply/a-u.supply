@@ -24,6 +24,7 @@ jobs:
 
       - name: Rebuild app
         run: |
+          ssh dokku@204.168.201.89 apps:unlock au-supply || true
           ssh -o ServerAliveInterval=60 dokku@204.168.201.89 ps:rebuild au-supply
 
       - name: Run seed script
