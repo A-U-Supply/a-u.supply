@@ -1,0 +1,95 @@
+---
+interface Props {
+  title: string;
+  current?: string;
+}
+const { title, current } = Astro.props;
+---
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/jpeg" href="/favicon.jpg">
+  <title>{title} — A-U.SUPPLY Admin</title>
+</head>
+<body>
+  <button class="sidebar__toggle" id="sidebar-toggle">|||</button>
+
+  <div class="admin-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar__brand">
+        <a href="/">A-U.SUPPLY</a>
+      </div>
+
+      <div class="sidebar__section">Navigation</div>
+      <ul class="sidebar__nav">
+        <li><a href="/admin/dashboard" aria-current={current === 'dashboard' ? 'page' : undefined}>Dashboard</a></li>
+        <li><a href="/admin/files" aria-current={current === 'files' ? 'page' : undefined}>Files</a></li>
+        <li><a href="/admin/settings" aria-current={current === 'settings' ? 'page' : undefined}>Settings</a></li>
+      </ul>
+
+      <div class="sidebar__footer">
+        <div class="sidebar__user" id="sidebar-user"></div>
+        <button class="sidebar__logout" id="logout-btn">Log Out</button>
+      </div>
+    </aside>
+
+    <main class="admin-main">
+      <slot />
+    </main>
+  </div>
+</body>
+</html>
+
+<style is:global>
+  @import '../styles/global.css';
+  @import '../styles/admin.css';
+</style>
+
+<script>
+  // Auth check — redirect to login if not authenticated
+  async function checkAuth() {
+    try {
+      const res = await fetch('/api/me', { credentials: 'include' });
+      if (!res.ok) {
+        window.location.href = '/login';
+        return;
+      }
+      const user = await res.json();
+      const userEl = document.getElementById('sidebar-user');
+      if (userEl) userEl.textContent = user.name;
+
+      // Store user data for page scripts
+      document.body.dataset.userName = user.name;
+      document.body.dataset.userRole = user.role;
+      document.body.dataset.userEmail = user.email;
+      document.body.dispatchEvent(new CustomEvent('auth-ready', { detail: user }));
+    } catch {
+      window.location.href = '/login';
+    }
+  }
+  checkAuth();
+
+  // Logout
+  document.getElementById('logout-btn')?.addEventListener('click', async () => {
+    await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+    window.location.href = '/login';
+  });
+
+  // Mobile sidebar toggle
+  document.getElementById('sidebar-toggle')?.addEventListener('click', () => {
+    document.getElementById('sidebar')?.classList.toggle('open');
+  });
+
+  // Close sidebar when clicking outside on mobile
+  document.addEventListener('click', (e) => {
+    const sidebar = document.getElementById('sidebar');
+    const toggle = document.getElementById('sidebar-toggle');
+    if (sidebar?.classList.contains('open') &&
+        !sidebar.contains(e.target as Node) &&
+        !toggle?.contains(e.target as Node)) {
+      sidebar.classList.remove('open');
+    }
+  });
+</script>
