@@ -902,11 +902,9 @@ The player UI is the most interactive component. Options:
 
 **Current recommendation**: Vanilla JS. The player's interactivity is well-bounded (play/pause, next/prev, scrubber, volume) and doesn't need a component framework. It's a single persistent DOM element, not a tree of components.
 
-### Q7: Existing Product Images
+### Q7: Existing Product Images — RESOLVED
 
-The `public/assets/` directory already has cover art images (lbsw.jpg, tsct.jpg, erkind-nos.jpg, etc.) used somewhere in the old site. When we import historical releases, should these images be moved into the new media directory structure, or left where they are?
-
-**Recommendation**: Copy them into `/srv/media/releases/{code}/cover.{ext}` as part of the import. The old paths can stay for backward compatibility with the legacy site.
+**Decision**: Copy existing cover art from `public/assets/` into `/srv/media/releases/{code}/cover.{ext}` during import. The media directory is the single source of truth for all catalog assets — one big dir, easy to archive/backup as a unit. Old paths in `public/assets/` can remain for legacy site backward compatibility but are not authoritative.
 
 ---
 
