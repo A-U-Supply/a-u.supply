@@ -1000,10 +1000,10 @@ import Admin from '../../../layouts/Admin.astro';
       if (audioFiles.length > 0) {
         progressText.textContent = 'Uploading audio files...';
         const trackForm = new FormData();
-        audioFiles.forEach((t, i) => {
+        audioFiles.forEach((t) => {
           trackForm.append('files', t.file);
-          trackForm.append('titles', t.title);
         });
+        trackForm.append('titles', JSON.stringify(audioFiles.map(t => t.title)));
         const trackRes = await fetch(`/api/releases/${code}/tracks`, {
           method: 'POST',
           credentials: 'include',
@@ -1031,7 +1031,7 @@ import Admin from '../../../layouts/Admin.astro';
 
       // Redirect after brief delay
       setTimeout(() => {
-        window.location.href = `/admin/catalog/${code}`;
+        window.location.href = `/admin/catalog/edit?code=${encodeURIComponent(code)}`;
       }, 1200);
 
     } catch (err: any) {

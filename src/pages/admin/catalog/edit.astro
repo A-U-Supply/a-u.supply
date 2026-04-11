@@ -1082,8 +1082,8 @@ import Admin from '../../../layouts/Admin.astro';
         const trackForm = new FormData();
         newAudioFiles.forEach((t) => {
           trackForm.append('files', t.file);
-          trackForm.append('titles', t.title);
         });
+        trackForm.append('titles', JSON.stringify(newAudioFiles.map(t => t.title)));
         const trackRes = await fetch(`/api/releases/${releaseCode}/tracks`, {
           method: 'POST',
           credentials: 'include',
