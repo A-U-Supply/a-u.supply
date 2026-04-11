@@ -1,0 +1,471 @@
+{% extends "base.html" %}
+
+{% block title %}{{ release.product_code }} — {{ release.title }} — A-U.SUPPLY{% endblock %}
+
+{% block head %}
+<meta name="description" content="{{ release.title }} by {{ artist_names }}. Product Code: {{ release.product_code }}. Released {{ release.release_date.isoformat() if release.release_date else 'TBD' }}.">
+<link rel="canonical" href="https://a-u.supply/catalog/{{ release.product_code }}">
+
+{% if release.cover_art_path %}
+<meta property="og:image" content="https://a-u.supply/api/releases/{{ release.product_code }}/cover">
+{% endif %}
+<meta property="og:title" content="{{ release.product_code }} — {{ release.title }}">
+<meta property="og:description" content="{{ release.title }} by {{ artist_names }}">
+<meta property="og:type" content="music.album">
+<meta property="og:url" content="https://a-u.supply/catalog/{{ release.product_code }}">
+
+<script type="application/ld+json">{{ json_ld | tojson }}</script>
+{% endblock %}
+
+{% block styles %}
+<style>
+    /* --- Release Detail Page --- */
+
+    .spec-sheet {
+        max-width: 900px;
+    }
+
+    /* Document header */
+    .spec-header {
+        border-bottom: 2px solid var(--color-text);
+        padding-bottom: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .spec-header__org {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        color: var(--color-muted);
+        margin-bottom: 0.5rem;
+    }
+
+    .spec-header__type {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.15em;
+        font-weight: normal;
+        margin-bottom: 1.5rem;
+    }
+
+    .spec-header__table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .spec-header__table td {
+        padding: 0.15rem 0;
+        font-size: 0.85rem;
+        vertical-align: top;
+    }
+
+    .spec-header__table td:first-child {
+        width: 140px;
+        color: var(--color-muted);
+        text-transform: uppercase;
+        font-size: 0.7rem;
+        letter-spacing: 0.1em;
+        padding-top: 0.3rem;
+    }
+
+    /* Cover art */
+    .spec-cover {
+        margin-bottom: 2.5rem;
+    }
+
+    .spec-cover__image {
+        border: 1px solid var(--color-border);
+        max-width: 500px;
+        width: 100%;
+    }
+
+    .spec-cover__image img {
+        display: block;
+        width: 100%;
+        height: auto;
+    }
+
+    .spec-cover__caption {
+        font-size: 0.65rem;
+        color: var(--color-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-top: 0.5rem;
+    }
+
+    /* Section headings */
+    .spec-section {
+        margin-bottom: 2.5rem;
+    }
+
+    .spec-section__heading {
+        font-size: 0.7rem;
+        font-weight: normal;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        color: var(--color-muted);
+        border-bottom: 1px solid var(--color-border);
+        padding-bottom: 0.4rem;
+        margin-bottom: 1rem;
+    }
+
+    /* Track listing */
+    .track-controls {
+        margin-bottom: 1rem;
+    }
+
+    .btn-play-all {
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--color-accent);
+        background: transparent;
+        color: var(--color-accent);
+        cursor: pointer;
+        transition: background 0.15s, color 0.15s;
+    }
+
+    .btn-play-all:hover {
+        background: var(--color-accent);
+        color: var(--color-bg);
+    }
+
+    .track-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .track-table th {
+        font-size: 0.6rem;
+        font-weight: normal;
+        text-transform: uppercase;
+        letter-spacing: 0.15em;
+        color: var(--color-muted);
+        text-align: left;
+        padding: 0.4rem 0.5rem;
+        border-bottom: 1px solid var(--color-border);
+    }
+
+    .track-table th:last-child,
+    .track-table td:last-child {
+        text-align: right;
+    }
+
+    .track-table td {
+        padding: 0.6rem 0.5rem;
+        font-size: 0.85rem;
+        border-bottom: 1px solid #eee;
+        vertical-align: middle;
+    }
+
+    .track-table tr:last-child td {
+        border-bottom: 1px solid var(--color-border);
+    }
+
+    .track-table__num {
+        width: 50px;
+        color: var(--color-muted);
+        font-size: 0.75rem;
+    }
+
+    .track-table__play {
+        width: 40px;
+        text-align: center !important;
+    }
+
+    .track-table__duration {
+        width: 80px;
+        color: var(--color-muted);
+        font-size: 0.8rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .track-total {
+        text-align: right;
+        font-size: 0.75rem;
+        color: var(--color-muted);
+        padding-top: 0.5rem;
+    }
+
+    .btn-track-play {
+        font-family: var(--font-mono);
+        font-size: 0.9rem;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--color-muted);
+        padding: 0.2rem;
+        line-height: 1;
+        transition: color 0.15s;
+    }
+
+    .btn-track-play:hover {
+        color: var(--color-accent);
+    }
+
+    /* Description */
+    .spec-description {
+        font-size: 0.85rem;
+        line-height: 1.7;
+        white-space: pre-wrap;
+    }
+
+    /* Distribution / metadata tables */
+    .spec-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .spec-table td {
+        padding: 0.5rem 0.5rem;
+        font-size: 0.85rem;
+        border-bottom: 1px solid #eee;
+        vertical-align: top;
+    }
+
+    .spec-table tr:last-child td {
+        border-bottom: 1px solid var(--color-border);
+    }
+
+    .spec-table td:first-child {
+        width: 160px;
+        color: var(--color-muted);
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .spec-table a {
+        word-break: break-all;
+    }
+
+    /* Document footer */
+    .spec-footer {
+        margin-top: 3rem;
+        padding-top: 1rem;
+        border-top: 2px solid var(--color-text);
+        font-size: 0.65rem;
+        color: var(--color-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        display: flex;
+        justify-content: space-between;
+    }
+
+    /* Back link */
+    .spec-back {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 2rem;
+        display: inline-block;
+    }
+
+    @media (max-width: 640px) {
+        .spec-header__table td:first-child {
+            width: 110px;
+        }
+
+        .spec-cover__image {
+            max-width: 100%;
+        }
+
+        .spec-footer {
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="spec-sheet">
+    <a href="/catalog" class="spec-back">&larr; Back to Catalog</a>
+
+    <div class="spec-header">
+        <p class="spec-header__org">A-U.Supply &mdash; Audio Units Division</p>
+        <h1 class="spec-header__type">Product Specification</h1>
+        <table class="spec-header__table">
+            <tr>
+                <td>Product Code:</td>
+                <td>{{ release.product_code }}</td>
+            </tr>
+            <tr>
+                <td>Product Name:</td>
+                <td>{{ release.title }}</td>
+            </tr>
+            <tr>
+                <td>Manufacturer:</td>
+                <td>{{ artist_names }}</td>
+            </tr>
+            <tr>
+                <td>Date:</td>
+                <td>{{ release.release_date.isoformat() if release.release_date else 'TBD' }}</td>
+            </tr>
+            {% if release.format_specs %}
+            <tr>
+                <td>Format:</td>
+                <td>{{ release.format_specs }}</td>
+            </tr>
+            {% endif %}
+            <tr>
+                <td>Status:</td>
+                <td>{{ release.status | upper }}</td>
+            </tr>
+        </table>
+    </div>
+
+    {% if release.cover_art_path %}
+    <div class="spec-section spec-cover">
+        <div class="spec-cover__image">
+            <img src="/api/releases/{{ release.product_code }}/cover"
+                 alt="{{ release.title }} cover art"
+                 width="800" height="800">
+        </div>
+        <p class="spec-cover__caption">{{ release.product_code }} &mdash; Cover Art</p>
+    </div>
+    {% endif %}
+
+    {% if release.tracks %}
+    <div class="spec-section">
+        <h2 class="spec-section__heading">Track Listing</h2>
+        <div class="track-controls">
+            <button class="btn-play-all" id="btn-play-all" type="button">&#9654; Play All</button>
+        </div>
+        <table class="track-table">
+            <thead>
+                <tr>
+                    <th>Item No.</th>
+                    <th></th>
+                    <th>Part Name</th>
+                    <th>Duration</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for track in release.tracks %}
+                <tr>
+                    <td class="track-table__num">{{ '%02d' | format(track.track_number) }}</td>
+                    <td class="track-table__play">
+                        <button class="btn-track-play"
+                                type="button"
+                                data-track-index="{{ loop.index0 }}"
+                                title="Play {{ track.title }}">&#9654;</button>
+                    </td>
+                    <td>{{ track.title }}</td>
+                    <td class="track-table__duration">
+                        {%- if track.duration_seconds -%}
+                            {{ '%d:%02d' | format(track.duration_seconds // 60, track.duration_seconds % 60) }}
+                        {%- else -%}
+                            &mdash;
+                        {%- endif -%}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% set total_secs = release.tracks | sum(attribute='duration_seconds', default=0) %}
+        {% if total_secs > 0 %}
+        <p class="track-total">
+            Total: {{ '%d:%02d' | format(total_secs // 60, total_secs % 60) }}
+        </p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if release.description %}
+    <div class="spec-section">
+        <h2 class="spec-section__heading">Description</h2>
+        <div class="spec-description">{{ release.description }}</div>
+    </div>
+    {% endif %}
+
+    {% if release.distribution_links %}
+    <div class="spec-section">
+        <h2 class="spec-section__heading">Distribution Network</h2>
+        <table class="spec-table">
+            {% for link in release.distribution_links %}
+            <tr>
+                <td>{{ link.platform }}</td>
+                <td><a href="{{ link.url }}" target="_blank" rel="noopener">{{ link.label or link.url }}</a></td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% endif %}
+
+    {% if release.metadata_pairs %}
+    <div class="spec-section">
+        <h2 class="spec-section__heading">Additional Specifications</h2>
+        <table class="spec-table">
+            {% for meta in release.metadata_pairs | sort(attribute='sort_order') %}
+            <tr>
+                <td>{{ meta.key }}</td>
+                <td>{{ meta.value }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% endif %}
+
+    <div class="spec-footer">
+        <span>Doc. {{ release.product_code }}-SPEC</span>
+        <span>Issued {{ release.release_date.isoformat() if release.release_date else 'N/A' }}</span>
+        <span>A-U.Supply</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    'use strict';
+
+    var data = window.__INITIAL_DATA__ || {};
+    var release = data.release || {};
+    var tracks = release.tracks || [];
+
+    function buildQueue(startIndex) {
+        return {
+            tracks: tracks.map(function(t) {
+                return {
+                    track_id: t.id,
+                    title: t.title,
+                    entity_name: release.artist_names || '',
+                    stream_url: t.stream_url,
+                    duration: t.duration_seconds,
+                    cover_url: release.cover_art_url ? release.cover_art_url + '?size=thumb' : null,
+                    release_code: release.product_code,
+                    release_title: release.title
+                };
+            }),
+            startIndex: startIndex || 0
+        };
+    }
+
+    function dispatchQueue(startIndex) {
+        document.dispatchEvent(new CustomEvent('player:queue', {
+            detail: buildQueue(startIndex)
+        }));
+    }
+
+    // Play All button
+    var btnPlayAll = document.getElementById('btn-play-all');
+    if (btnPlayAll) {
+        btnPlayAll.addEventListener('click', function() {
+            dispatchQueue(0);
+        });
+    }
+
+    // Individual track play buttons
+    var trackButtons = document.querySelectorAll('.btn-track-play');
+    trackButtons.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var index = parseInt(this.getAttribute('data-track-index'), 10);
+            dispatchQueue(index);
+        });
+    });
+})();
+</script>
+{% endblock %}

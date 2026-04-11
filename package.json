@@ -8,7 +8,7 @@
     "preview": "astro preview"
   },
   "dependencies": {
-    "@astrojs/svelte": "^8.0.4",
+    "@astrojs/svelte": "^7.2.5",
     "astro": "^5.7.10",
     "sortablejs": "^1.15.7",
     "svelte": "^5.55.3"

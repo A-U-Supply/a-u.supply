@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}A-U.SUPPLY{% endblock %}</title>
+    {% block head %}{% endblock %}
+    <style>
+        :root {
+            --color-bg: #fff;
+            --color-text: #1a1a1a;
+            --color-muted: #666;
+            --color-accent: #b8860b;
+            --color-border: #ccc;
+            --font-mono: 'Courier New', monospace;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            font-size: 16px;
+            -webkit-text-size-adjust: 100%;
+        }
+
+        body {
+            font-family: var(--font-mono);
+            background: var(--color-bg);
+            color: var(--color-text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        a {
+            color: var(--color-accent);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .site-header {
+            border-bottom: 1px solid var(--color-border);
+            padding: 1.5rem 2rem;
+        }
+
+        .site-header__inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .site-header__brand {
+            font-size: 0.75rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--color-text);
+            text-decoration: none;
+        }
+
+        .site-header__brand:hover {
+            text-decoration: none;
+            color: var(--color-accent);
+        }
+
+        .site-header__nav {
+            font-size: 0.75rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .site-header__nav a {
+            color: var(--color-muted);
+            margin-left: 1.5rem;
+        }
+
+        .site-header__nav a:hover {
+            color: var(--color-accent);
+        }
+
+        .site-main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .site-footer {
+            border-top: 1px solid var(--color-border);
+            padding: 1.5rem 2rem;
+            margin-top: 4rem;
+        }
+
+        .site-footer__inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            font-size: 0.7rem;
+            color: var(--color-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        /* Utility */
+        .mono { font-family: var(--font-mono); }
+        .muted { color: var(--color-muted); }
+        .accent { color: var(--color-accent); }
+        .uppercase { text-transform: uppercase; }
+        .small { font-size: 0.8rem; }
+        .xsmall { font-size: 0.7rem; }
+
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        /* Player mount point */
+        #player-mount {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+        }
+
+        @media (max-width: 640px) {
+            .site-header { padding: 1rem; }
+            .site-main { padding: 1rem; }
+            .site-footer { padding: 1rem; }
+        }
+    </style>
+    {% block styles %}{% endblock %}
+</head>
+<body>
+    <header class="site-header">
+        <div class="site-header__inner">
+            <a href="/" class="site-header__brand">A-U.Supply &mdash; Audio Units Division</a>
+            <nav class="site-header__nav">
+                <a href="/catalog">Catalog</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="site-main">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+        <div class="site-footer__inner">
+            {% block footer %}
+            <span>&copy; A-U.Supply. All rights reserved.</span>
+            {% endblock %}
+        </div>
+    </footer>
+
+    <div id="player-mount"></div>
+
+    <script>
+        window.__INITIAL_DATA__ = {{ initial_data | tojson }};
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
