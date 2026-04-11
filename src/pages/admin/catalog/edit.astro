@@ -545,7 +545,8 @@ import Admin from '../../../layouts/Admin.astro';
   document.addEventListener('astro:page-load', () => {
   if (!document.getElementById('edit-form')) return;
 
-  const releaseCode = new URLSearchParams(window.location.search).get('code') || '';
+  const releaseCodeRaw = new URLSearchParams(window.location.search).get('code') || '';
+  const releaseCode = encodeURIComponent(releaseCodeRaw);
 
   // ---- State ----
   let entities: any[] = [];
