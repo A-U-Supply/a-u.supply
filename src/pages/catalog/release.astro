@@ -563,5 +563,9 @@ import Base from '../../layouts/Base.astro';
     document.head.appendChild(script);
   }
 
-  document.addEventListener('astro:page-load', () => init());
+  // Guard: only run when we're on the release detail page,
+  // because astro:page-load listeners persist across ViewTransition navigations.
+  document.addEventListener('astro:page-load', () => {
+    if (document.getElementById('spec-table')) init();
+  });
 </script>
