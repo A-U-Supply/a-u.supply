@@ -1,0 +1,15 @@
+---
+import Admin from '../../layouts/Admin.astro';
+---
+
+<Admin title="Dashboard" current="dashboard">
+  <h1>Dashboard</h1>
+  <p id="welcome">Loading...</p>
+</Admin>
+
+<script>
+  document.body.addEventListener('auth-ready', ((e: CustomEvent) => {
+    const el = document.getElementById('welcome');
+    if (el) el.textContent = `Welcome back, ${e.detail.name}.`;
+  }) as EventListener);
+</script>
