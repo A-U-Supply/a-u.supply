@@ -26,52 +26,56 @@ import Base from '../layouts/Base.astro';
 </style>
 
 <script>
-  // Fetch CSRF token on load
-  async function init() {
-    try {
-      const res = await fetch('/api/csrf');
-      const data = await res.json();
-      (document.getElementById('csrf_token') as HTMLInputElement).value = data.csrf_token;
-    } catch {
-      // non-critical, form will still work
-    }
-  }
-  init();
+  function initLogin() {
+    const form = document.getElementById('login-form');
+    if (!form) return;
 
-  document.getElementById('login-form')!.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const form = e.target as HTMLFormElement;
-    const btn = form.querySelector('button')!;
-    const errorEl = document.getElementById('login-error')!;
+    // Fetch CSRF token
+    fetch('/api/csrf')
+      .then(res => res.json())
+      .then(data => {
+        const el = document.getElementById('csrf_token') as HTMLInputElement | null;
+        if (el) el.value = data.csrf_token;
+      })
+      .catch(() => {});
 
-    btn.disabled = true;
-    errorEl.style.display = 'none';
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = form.querySelector('button')!;
+      const errorEl = document.getElementById('login-error')!;
 
-    const email = (document.getElementById('email') as HTMLInputElement).value;
-    const password = (document.getElementById('password') as HTMLInputElement).value;
-    const csrf_token = (document.getElementById('csrf_token') as HTMLInputElement).value;
+      btn.disabled = true;
+      errorEl.style.display = 'none';
 
-    try {
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ email, password, csrf_token }),
-      });
+      const email = (document.getElementById('email') as HTMLInputElement).value;
+      const password = (document.getElementById('password') as HTMLInputElement).value;
+      const csrf_token = (document.getElementById('csrf_token') as HTMLInputElement).value;
 
-      if (!res.ok) {
-        const data = await res.json();
-        errorEl.textContent = data.detail || 'Login failed';
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ email, password, csrf_token }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          errorEl.textContent = data.detail || 'Login failed';
+          errorEl.style.display = 'block';
+          btn.disabled = false;
+          return;
+        }
+
+        window.location.href = '/admin/dashboard';
+      } catch {
+        errorEl.textContent = 'Connection error';
         errorEl.style.display = 'block';
         btn.disabled = false;
-        return;
       }
+    });
+  }
 
-      window.location.href = '/admin/dashboard';
-    } catch {
-      errorEl.textContent = 'Connection error';
-      errorEl.style.display = 'block';
-      btn.disabled = false;
-    }
-  });
+  // Re-run on every ViewTransition navigation
+  document.addEventListener('astro:page-load', () => initLogin());
 </script>
