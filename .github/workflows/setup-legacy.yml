@@ -16,5 +16,4 @@ jobs:
 
       - name: Clone legacy repo into storage
         run: |
-          ssh dokku@204.168.201.89 run au-supply bash -c \
-            "if [ -d /srv/legacy-site/.git ]; then git -C /srv/legacy-site pull --ff-only; else git clone https://github.com/A-U-Supply/ausupply.github.io.git /srv/legacy-site; fi"
+          ssh dokku@204.168.201.89 run au-supply git clone https://github.com/A-U-Supply/ausupply.github.io.git /srv/legacy-site
