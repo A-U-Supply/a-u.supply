@@ -7,4 +7,4 @@ if [ $# -lt 3 ]; then
   exit 1
 fi
 
-ssh dokku run au-supply python3 manage.py create-user "$@"
+ssh dokku run au-supply .venv/bin/python manage.py create-user "$@"
