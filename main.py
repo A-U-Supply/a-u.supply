@@ -24,6 +24,7 @@ from auth import (
     require_admin,
     verify_password,
 )
+from catalog import router as catalog_router
 from models import Base, User, engine
 
 # Ensure data directory exists
@@ -52,6 +53,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(catalog_router)
 
 IS_PRODUCTION = os.environ.get("PRODUCTION", "").lower() in ("1", "true", "yes")
 

@@ -24,6 +24,8 @@ const { title, current } = Astro.props;
 
       <div class="sidebar__section">Navigation</div>
       <ul class="sidebar__nav">
+        <li><a href="/admin/catalog" aria-current={current === 'catalog' ? 'page' : undefined}>Catalog</a></li>
+        <li><a href="/admin/catalog/new" aria-current={current === 'catalog-new' ? 'page' : undefined}>New Release</a></li>
         <li><a href="/admin/dashboard" aria-current={current === 'dashboard' ? 'page' : undefined}>Dashboard</a></li>
         <li><a href="/admin/files" aria-current={current === 'files' ? 'page' : undefined}>Files</a></li>
         <li><a href="/admin/settings" aria-current={current === 'settings' ? 'page' : undefined}>Settings</a></li>
