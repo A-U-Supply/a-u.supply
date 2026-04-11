@@ -3,7 +3,7 @@ name: Deploy to Dokku
 on:
   push:
     branches:
-      - main
+      - master
 
 jobs:
   deploy:
@@ -23,4 +23,4 @@ jobs:
       - name: Deploy to Dokku
         run: |
           git remote add dokku dokku@204.168.201.89:au-supply
-          git push dokku main --force
+          git push dokku master:main --force
