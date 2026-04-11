@@ -5,9 +5,7 @@ export default defineConfig({
   vite: {
     server: {
       proxy: {
-        '/register': 'http://localhost:5000',
-        '/login': 'http://localhost:5000',
-        '/me': 'http://localhost:5000',
+        '/api': 'http://localhost:5000',
       },
     },
   },
