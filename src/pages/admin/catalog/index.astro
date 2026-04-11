@@ -301,8 +301,8 @@ import Admin from '../../../layouts/Admin.astro';
           <td>${trackCount}</td>
           <td>${createdBy}</td>
           <td style="white-space:nowrap;">
-            <a class="action-btn" href="/admin/catalog/edit?code=${r.product_code}">Edit</a>
-            <a class="action-btn" href="/catalog/${r.product_code}" target="_blank">Preview</a>
+            <a class="action-btn" href="/admin/catalog/edit?code=${encodeURIComponent(r.product_code)}">Edit</a>
+            <a class="action-btn" href="/catalog/release?code=${encodeURIComponent(r.product_code)}" target="_blank">Preview</a>
             ${toggleBtn}
             <button class="action-btn action-btn--danger" data-action="delete" data-code="${r.product_code}">Delete</button>
           </td>
@@ -321,7 +321,7 @@ import Admin from '../../../layouts/Admin.astro';
 
       if (action === 'publish' || action === 'unpublish') {
         try {
-          const res = await fetch(`/api/releases/${code}/${action}`, {
+          const res = await fetch(`/api/releases/${encodeURIComponent(code)}/${action}`, {
             method: 'POST',
             credentials: 'include',
           });
@@ -356,7 +356,7 @@ import Admin from '../../../layouts/Admin.astro';
       btn.textContent = 'Deleting...';
 
       try {
-        const res = await fetch(`/api/releases/${deleteTarget}`, {
+        const res = await fetch(`/api/releases/${encodeURIComponent(deleteTarget)}`, {
           method: 'DELETE',
           credentials: 'include',
         });
