@@ -1,12 +1,10 @@
-import os
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from starlette.requests import Request
 
 from auth import (
     create_access_token,
@@ -23,9 +21,6 @@ Path("data").mkdir(exist_ok=True)
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="a-u.supply")
-
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
 
 
 # --- Schemas ---
@@ -57,8 +52,8 @@ class UserResponse(BaseModel):
 
 
 @app.get("/")
-def index(request: Request):
-    return templates.TemplateResponse(request, "index.html")
+def index():
+    return FileResponse("dist/index.html")
 
 
 @app.post("/register", response_model=TokenResponse)
@@ -98,3 +93,7 @@ def me(current_user: User = Depends(get_current_user)):
         username=current_user.username,
         email=current_user.email,
     )
+
+
+# Serve Astro build output — must come after all API routes
+app.mount("/", StaticFiles(directory="dist", html=True), name="static")
