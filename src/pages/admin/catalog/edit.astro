@@ -439,6 +439,26 @@ import Admin from '../../../layouts/Admin.astro';
   }
   .track-item__remove:hover { background: #c00; color: #fff; }
 
+  .track-item--queued {
+    border-left: 3px solid var(--color-muted, #999);
+    opacity: 0.8;
+  }
+  .track-item--uploading {
+    border-left: 3px solid var(--color-accent, #888);
+    animation: pulse-bg 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse-bg {
+    0%, 100% { background: transparent; }
+    50% { background: rgba(128, 128, 128, 0.1); }
+  }
+  .track-item--done {
+    border-left: 3px solid #2a2;
+  }
+  .track-item--failed {
+    border-left: 3px solid #c00;
+    background: rgba(200, 0, 0, 0.05);
+  }
+
   /* Link rows */
   .link-row {
     display: flex;
@@ -552,7 +572,8 @@ import Admin from '../../../layouts/Admin.astro';
   let entities: any[] = [];
   let selectedEntities: any[] = [];
   let coverFile: File | null = null;
-  let newAudioFiles: { file: File; title: string }[] = [];
+  let uploadQueue: { file: File; title: string; status: 'queued' | 'uploading' | 'done' | 'failed'; error?: string }[] = [];
+  let uploadRunning = false;
   let existingTracks: any[] = [];
   let links: { platform: string; url: string; label: string }[] = [];
   let freeformFields: { key: string; value: string }[] = [];
@@ -627,10 +648,10 @@ import Admin from '../../../layouts/Admin.astro';
       }
 
       // Cover art
-      if (release.cover_url) {
+      if (release.cover_art_url) {
         const existingCover = document.getElementById('existing-cover')!;
         const existingImg = document.getElementById('existing-cover-img') as HTMLImageElement;
-        existingImg.src = release.cover_url;
+        existingImg.src = release.cover_art_url;
         existingCover.style.display = 'block';
       }
 
@@ -796,7 +817,7 @@ import Admin from '../../../layouts/Admin.astro';
       return;
     }
     container.innerHTML = existingTracks.map((t: any, i: number) => {
-      const duration = t.duration ? formatDuration(t.duration) : '';
+      const duration = t.duration_seconds ? formatDuration(t.duration_seconds) : '';
       return `<div class="track-item" data-track-id="${t.id || ''}">
         <span class="track-item__num">${i + 1}.</span>
         <input class="track-item__title" type="text" value="${t.title || ''}" data-existing-idx="${i}" />
@@ -857,41 +878,107 @@ import Admin from '../../../layouts/Admin.astro';
   function addAudioFiles(files: File[]) {
     files.forEach(f => {
       const name = f.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
-      newAudioFiles.push({ file: f, title: name });
+      uploadQueue.push({ file: f, title: name, status: 'queued' });
     });
-    renderNewTracks();
+    renderUploadQueue();
+    processUploadQueue();
   }
 
-  function renderNewTracks() {
+  async function processUploadQueue() {
+    if (uploadRunning) return;
+    uploadRunning = true;
+
+    while (true) {
+      const idx = uploadQueue.findIndex(t => t.status === 'queued');
+      if (idx === -1) break;
+
+      const item = uploadQueue[idx];
+      item.status = 'uploading';
+      renderUploadQueue();
+
+      try {
+        const trackForm = new FormData();
+        trackForm.append('files', item.file);
+        trackForm.append('titles', JSON.stringify([item.title]));
+        const res = await fetch(`/api/releases/${releaseCode}/tracks`, {
+          method: 'POST',
+          credentials: 'include',
+          body: trackForm,
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: 'Upload failed' }));
+          throw new Error(err.detail || 'Upload failed');
+        }
+        const created = await res.json();
+        if (created.length > 0) {
+          existingTracks.push(created[0]);
+        }
+        item.status = 'done';
+      } catch (err: any) {
+        item.status = 'failed';
+        item.error = err.message;
+      }
+      renderUploadQueue();
+      renderExistingTracks();
+    }
+
+    // Remove completed items from queue
+    uploadQueue = uploadQueue.filter(t => t.status !== 'done');
+    renderUploadQueue();
+    uploadRunning = false;
+  }
+
+  function renderUploadQueue() {
     const container = document.getElementById('new-track-list')!;
-    if (newAudioFiles.length === 0) {
+    const active = uploadQueue.filter(t => t.status !== 'done');
+    if (active.length === 0) {
       container.innerHTML = '';
       return;
     }
     const offset = existingTracks.length;
-    container.innerHTML = '<p style="font-size: var(--text-sm); color: var(--color-muted); padding: var(--space-xs) var(--space-sm); margin-top: var(--space-xs);">New tracks to upload:</p>' +
-      newAudioFiles.map((t, i) => `
-      <div class="track-item" data-new-idx="${i}">
-        <span class="track-item__num">${offset + i + 1}.</span>
-        <input class="track-item__title" type="text" value="${t.title}" data-new-idx="${i}" />
-        <span class="track-item__duration">${formatSize(t.file.size)}</span>
-        <button class="track-item__remove" data-remove-new="${i}">&times;</button>
+    const statusIcon = (s: string) => s === 'uploading' ? '↑' : s === 'failed' ? '✗' : '…';
+    container.innerHTML = '<p style="font-size: var(--text-sm); color: var(--color-muted); padding: var(--space-xs) var(--space-sm); margin-top: var(--space-xs);">Uploading tracks:</p>' +
+      active.map((t, i) => `
+      <div class="track-item track-item--${t.status}" data-queue-idx="${i}">
+        <span class="track-item__num">${statusIcon(t.status)}</span>
+        <input class="track-item__title" type="text" value="${t.title}" data-queue-idx="${i}" ${t.status === 'uploading' ? 'readonly' : ''} />
+        <span class="track-item__duration">${formatSize(t.file.size)}${t.error ? ' — ' + t.error : ''}</span>
+        ${t.status === 'failed' ? `<button class="btn-sm" data-retry-idx="${i}" style="font-size:var(--text-xs);">Retry</button>` : ''}
+        ${t.status !== 'uploading' ? `<button class="track-item__remove" data-remove-queue="${i}">&times;</button>` : ''}
       </div>
     `).join('');
   }
 
   document.getElementById('new-track-list')!.addEventListener('input', (e) => {
     const input = e.target as HTMLInputElement;
-    if (input.dataset.newIdx !== undefined) {
-      newAudioFiles[parseInt(input.dataset.newIdx)].title = input.value;
+    if (input.dataset.queueIdx !== undefined) {
+      const active = uploadQueue.filter(t => t.status !== 'done');
+      const item = active[parseInt(input.dataset.queueIdx)];
+      if (item) item.title = input.value;
     }
   });
 
   document.getElementById('new-track-list')!.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement).closest('[data-remove-new]') as HTMLElement | null;
-    if (!btn || btn.dataset.removeNew === undefined) return;
-    newAudioFiles.splice(parseInt(btn.dataset.removeNew), 1);
-    renderNewTracks();
+    const active = uploadQueue.filter(t => t.status !== 'done');
+    const removeBtn = (e.target as HTMLElement).closest('[data-remove-queue]') as HTMLElement | null;
+    if (removeBtn && removeBtn.dataset.removeQueue !== undefined) {
+      const item = active[parseInt(removeBtn.dataset.removeQueue)];
+      if (item) {
+        uploadQueue = uploadQueue.filter(t => t !== item);
+        renderUploadQueue();
+      }
+      return;
+    }
+    const retryBtn = (e.target as HTMLElement).closest('[data-retry-idx]') as HTMLElement | null;
+    if (retryBtn && retryBtn.dataset.retryIdx !== undefined) {
+      const item = active[parseInt(retryBtn.dataset.retryIdx)];
+      if (item) {
+        item.status = 'queued';
+        item.error = undefined;
+        renderUploadQueue();
+        processUploadQueue();
+      }
+    }
   });
 
   // ---- Distribution Links ----
@@ -1076,22 +1163,17 @@ import Admin from '../../../layouts/Admin.astro';
       }
       progressFill.style.width = '60%';
 
-      // Step 3: Upload new audio files
-      if (newAudioFiles.length > 0) {
-        progressText.textContent = 'Uploading new audio files...';
-        const trackForm = new FormData();
-        newAudioFiles.forEach((t) => {
-          trackForm.append('files', t.file);
-        });
-        trackForm.append('titles', JSON.stringify(newAudioFiles.map(t => t.title)));
-        const trackRes = await fetch(`/api/releases/${releaseCode}/tracks`, {
-          method: 'POST',
-          credentials: 'include',
-          body: trackForm,
-        });
-        if (!trackRes.ok) {
-          console.warn('Track upload failed');
+      // Step 3: Wait for any in-progress track uploads
+      const pending = uploadQueue.filter(t => t.status === 'queued' || t.status === 'uploading');
+      if (pending.length > 0) {
+        progressText.textContent = 'Waiting for track uploads to finish...';
+        while (uploadQueue.some(t => t.status === 'queued' || t.status === 'uploading')) {
+          await new Promise(r => setTimeout(r, 300));
         }
+      }
+      const failed = uploadQueue.filter(t => t.status === 'failed');
+      if (failed.length > 0) {
+        throw new Error(`${failed.length} track(s) failed to upload. Retry or remove them before saving.`);
       }
       progressFill.style.width = '85%';
 
