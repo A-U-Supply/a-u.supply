@@ -1,4 +1,7 @@
+import hashlib
+import hmac
 import os
+import subprocess
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -51,6 +54,22 @@ app.add_middleware(
 )
 
 IS_PRODUCTION = os.environ.get("PRODUCTION", "").lower() in ("1", "true", "yes")
+
+LEGACY_DIR = Path(os.environ.get("LEGACY_SITE_DIR", "/srv/legacy-site"))
+WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
+
+
+@app.middleware("http")
+async def legacy_fallback(request: Request, call_next):
+    """Serve legacy site files as fallback when Astro returns 404."""
+    response = await call_next(request)
+    if response.status_code == 404 and LEGACY_DIR.is_dir():
+        path = request.url.path.lstrip("/")
+        if path:
+            legacy_file = (LEGACY_DIR / path).resolve()
+            if legacy_file.is_file() and legacy_file.is_relative_to(LEGACY_DIR.resolve()):
+                return FileResponse(legacy_file)
+    return response
 
 
 # --- Schemas ---
@@ -187,6 +206,69 @@ def delete_user(user_id: int, admin: User = Depends(require_admin), db: Session 
     db.delete(user)
     db.commit()
     return {"ok": True}
+
+
+# --- Legacy site ---
+
+
+@app.get("/the-expenditure")
+def legacy_home():
+    """Serve the old site's homepage at /the-expenditure."""
+    index = LEGACY_DIR / "index.html"
+    if not index.is_file():
+        raise HTTPException(status_code=404, detail="Legacy site not found")
+    return FileResponse(index)
+
+
+# --- Webhooks ---
+
+
+def _verify_webhook(body: bytes, signature: str) -> bool:
+    if not WEBHOOK_SECRET:
+        return False
+    expected = "sha256=" + hmac.new(
+        WEBHOOK_SECRET.encode(), body, hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(signature, expected)
+
+
+@app.post("/hooks/legacy")
+async def webhook_legacy(request: Request):
+    """GitHub webhook: pull latest legacy site on push."""
+    body = await request.body()
+    signature = request.headers.get("X-Hub-Signature-256", "")
+    if not _verify_webhook(body, signature):
+        raise HTTPException(status_code=403, detail="Invalid signature")
+    if not LEGACY_DIR.is_dir():
+        raise HTTPException(status_code=503, detail="Legacy site directory not found")
+    subprocess.Popen(
+        ["git", "-C", str(LEGACY_DIR), "pull", "--ff-only"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return {"ok": True, "action": "pulling legacy site"}
+
+
+@app.post("/hooks/deploy")
+async def webhook_deploy(request: Request):
+    """GitHub webhook: trigger a redeploy of the main app.
+
+    Runs DEPLOY_SCRIPT if configured, otherwise acknowledges the webhook
+    without action (Dokku rebuilds automatically on git push).
+    """
+    body = await request.body()
+    signature = request.headers.get("X-Hub-Signature-256", "")
+    if not _verify_webhook(body, signature):
+        raise HTTPException(status_code=403, detail="Invalid signature")
+    deploy_script = os.environ.get("DEPLOY_SCRIPT", "")
+    if deploy_script:
+        subprocess.Popen(
+            deploy_script.split(),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return {"ok": True, "action": "deploy script triggered"}
+    return {"ok": True, "action": "webhook received (no DEPLOY_SCRIPT configured)"}
 
 
 # --- Static / homepage ---
