@@ -9,7 +9,7 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from PIL import Image
 from pydantic import BaseModel
 from sqlalchemy import func, insert
@@ -201,6 +201,30 @@ class TrackReorder(BaseModel):
     track_ids: list[int]
 
 
+# --- Auth helper ---
+
+
+def optional_user(request: Request):
+    """Return the current user or None if not authenticated."""
+    from auth import COOKIE_NAME, SECRET_KEY, ALGORITHM
+    from jose import JWTError, jwt as jose_jwt
+    token = request.cookies.get(COOKIE_NAME)
+    if not token:
+        return None
+    try:
+        payload = jose_jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+        if not email:
+            return None
+    except JWTError:
+        return None
+    db = next(get_db())
+    try:
+        return db.query(User).filter(User.email == email).first()
+    finally:
+        db.close()
+
+
 # --- Entity endpoints ---
 
 
@@ -337,7 +361,7 @@ def list_releases(
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
-    user: User | None = Depends(lambda request: _optional_user(request)),
+    user: User | None = Depends(optional_user),
 ):
     q = db.query(Release).options(joinedload(Release.entities), joinedload(Release.tracks))
 
@@ -385,29 +409,8 @@ def list_releases(
     }
 
 
-def _optional_user(request):
-    """Return the current user or None if not authenticated."""
-    from auth import COOKIE_NAME, SECRET_KEY, ALGORITHM
-    from jose import JWTError, jwt as jose_jwt
-    token = request.cookies.get(COOKIE_NAME)
-    if not token:
-        return None
-    try:
-        payload = jose_jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email = payload.get("sub")
-        if not email:
-            return None
-    except JWTError:
-        return None
-    db = next(get_db())
-    try:
-        return db.query(User).filter(User.email == email).first()
-    finally:
-        db.close()
-
-
 @router.get("/releases/{code}")
-def get_release(code: str, db: Session = Depends(get_db), user: User | None = Depends(lambda request: _optional_user(request))):
+def get_release(code: str, db: Session = Depends(get_db), user: User | None = Depends(optional_user)):
     release = _get_release_or_404(db, code, user)
     return _release_detail(release)
 
@@ -600,7 +603,7 @@ def reorder_tracks(code: str, body: TrackReorder, admin: User = Depends(require_
 
 
 @router.get("/releases/{code}/tracks/{track_id}/stream")
-def stream_track(code: str, track_id: int, db: Session = Depends(get_db), user: User | None = Depends(lambda request: _optional_user(request))):
+def stream_track(code: str, track_id: int, db: Session = Depends(get_db), user: User | None = Depends(optional_user)):
     release = db.query(Release).filter(Release.product_code == code).first()
     if not release:
         raise HTTPException(status_code=404, detail="Release not found")
@@ -660,7 +663,7 @@ def serve_cover(
     code: str,
     size: str | None = Query(None),
     db: Session = Depends(get_db),
-    user: User | None = Depends(lambda request: _optional_user(request)),
+    user: User | None = Depends(optional_user),
 ):
     release = db.query(Release).filter(Release.product_code == code).first()
     if not release:

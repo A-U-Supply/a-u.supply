@@ -201,8 +201,7 @@ def catalog_page(request: Request, db: Session = Depends(get_db)):
         "years": years,
     }
 
-    return templates.TemplateResponse("catalog.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "catalog.html", context={
         "releases": releases,
         "entities": entities,
         "years": years,
@@ -242,8 +241,7 @@ def release_page(code: str, request: Request, db: Session = Depends(get_db)):
         "release": detail_data,
     }
 
-    return templates.TemplateResponse("release.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "release.html", context={
         "release": release,
         "artist_names": artist_names,
         "json_ld": json_ld,
