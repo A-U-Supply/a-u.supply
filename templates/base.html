@@ -70,8 +70,9 @@
         }
 
         .site-header__logo {
-            height: 40px;
-            width: auto;
+            max-width: 200px;
+            width: 100%;
+            height: auto;
         }
 
         .site-header__nav {
@@ -142,8 +143,11 @@
 
         @media (max-width: 640px) {
             .site-header { padding: 1rem; }
+            .site-header__inner { flex-direction: column; align-items: center; text-align: center; }
+            .site-header__nav a { margin-left: 0; margin: 0 0.75rem; }
             .site-main { padding: 1rem; }
             .site-footer { padding: 1rem; }
+            .site-footer__inner { flex-direction: column; text-align: center; gap: 0.25rem; }
         }
     </style>
     {% block styles %}{% endblock %}
