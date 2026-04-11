@@ -22,18 +22,42 @@ const { title } = Astro.props;
       <a href="/" class="header__logo">
         <img src="/assets/logo.png" alt="A-U.Supply" />
       </a>
-      <nav class="header__nav">
-        <a href="/catalog">Catalog</a>
-      </nav>
     </div>
   </header>
-  <slot />
+  <div class="content-wrap">
+    <slot />
+  </div>
+  <footer class="site-footer">
+    <nav class="site-footer__nav">
+      <a href="/catalog">AU-CAT</a>
+      <span class="site-footer__dot">&middot;</span>
+      <a href="/profile">AU-CP</a>
+      <span class="site-footer__dot">&middot;</span>
+      <a href="/personnel">AU-PD</a>
+      <span class="site-footer__dot">&middot;</span>
+      <a href="/channels">AU-DC</a>
+      <span class="site-footer__dot">&middot;</span>
+      <a href="/entities">AU-AE</a>
+      <span class="site-footer__dot">&middot;</span>
+      <a href="/infrastructure">AU-PI</a>
+      <span class="site-footer__dot">&middot;</span>
+      <a href="/the-expenditure">AU-EXP</a>
+      <span class="site-footer__dot">&middot;</span>
+      <a href="/login">AUP-1</a>
+    </nav>
+  </footer>
   <Player client:load transition:persist="audio-player" />
 </body>
 </html>
 
 <style is:global>
   @import '../styles/global.css';
+
+  body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
 
   .header {
     border-bottom: 1px solid var(--color-border);
@@ -45,7 +69,7 @@ const { title } = Astro.props;
     margin: 0 auto;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
   }
 
   .header__logo {
@@ -58,25 +82,48 @@ const { title } = Astro.props;
     width: auto;
   }
 
-  .header__nav {
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    text-transform: uppercase;
-    letter-spacing: 1pt;
+  .content-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
   }
 
-  .header__nav a {
+  .site-footer {
+    border-top: 1px solid var(--color-border);
+    padding: var(--space-sm) var(--space-md);
+    text-align: center;
+  }
+
+  .site-footer__nav {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5pt;
+  }
+
+  .site-footer__nav a {
     color: var(--color-muted);
     text-decoration: none;
   }
 
-  .header__nav a:hover {
+  .site-footer__nav a:hover {
     color: var(--color-accent);
+  }
+
+  .site-footer__dot {
+    color: var(--color-border);
+    margin: 0 0.3em;
   }
 
   @media (max-width: 640px) {
     .header__logo img {
       height: 36px;
+    }
+
+    .site-footer__nav {
+      font-size: 0.5rem;
+      letter-spacing: 1pt;
+      line-height: 2;
     }
   }
 </style>
