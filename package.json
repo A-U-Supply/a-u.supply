@@ -1,0 +1,13 @@
+{
+  "name": "au-supply",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "dev:api": "uvicorn main:app --reload --port 5000",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "astro": "^5.7.10"
+  }
+}
