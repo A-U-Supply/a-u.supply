@@ -30,6 +30,11 @@ import Base from '../layouts/Base.astro';
     const form = document.getElementById('login-form');
     if (!form) return;
 
+    // If already logged in, skip to dashboard
+    fetch('/api/me', { credentials: 'include' })
+      .then(res => { if (res.ok) window.location.href = '/admin/dashboard'; })
+      .catch(() => {});
+
     // Fetch CSRF token
     fetch('/api/csrf')
       .then(res => res.json())
