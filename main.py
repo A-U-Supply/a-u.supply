@@ -69,6 +69,12 @@ class UserResponse(BaseModel):
     role: str
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+    csrf_token: str
+
+
 class InviteRequest(BaseModel):
     email: str
     name: str
@@ -123,6 +129,21 @@ def me(current_user: User = Depends(get_current_user)):
         name=current_user.name,
         role=current_user.role,
     )
+
+
+@app.post("/api/me/password")
+def change_password(
+    body: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not verify_password(body.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if len(body.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    current_user.password_hash = hash_password(body.new_password)
+    db.commit()
+    return {"ok": True}
 
 
 # --- Admin routes ---

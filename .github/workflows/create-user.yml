@@ -2,6 +2,20 @@ name: Create admin user
 
 on:
   workflow_dispatch:
+    inputs:
+      email:
+        description: 'User email'
+        required: true
+      name:
+        description: 'User display name'
+        required: true
+      password:
+        description: 'Initial password'
+        required: true
+      role:
+        description: 'Role (admin or member)'
+        required: true
+        default: 'member'
 
 jobs:
   create-user:
@@ -14,8 +28,10 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H 204.168.201.89 >> ~/.ssh/known_hosts
 
-      - name: Reset DB schema
-        run: ssh dokku@204.168.201.89 run au-supply .venv/bin/python reset_db.py
-
-      - name: Create admin user
-        run: ssh dokku@204.168.201.89 run au-supply .venv/bin/python cli.py create-user --email REDACTED@example.com --name tube --password REDACTED --role admin
+      - name: Create user
+        run: |
+          ssh dokku@204.168.201.89 run au-supply .venv/bin/python cli.py create-user \
+            --email '${{ github.event.inputs.email }}' \
+            --name '${{ github.event.inputs.name }}' \
+            --password '${{ github.event.inputs.password }}' \
+            --role '${{ github.event.inputs.role }}'
