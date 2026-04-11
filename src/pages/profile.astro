@@ -1,0 +1,162 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Company Profile — A-U.SUPPLY">
+  <main class="page-content">
+    <!-- Cover header (moved from old homepage) -->
+    <div class="cover-header">
+      <h1 class="cover-header__title">A-U.SUPPLY</h1>
+      <p class="cover-header__subtitle">Audio Units Division</p>
+      <hr class="cover-header__rule" />
+      <p class="cover-header__subtitle">Company Profile &amp; Product Catalog</p>
+      <dl class="cover-header__doc-info">
+        <div><dt>Document No:</dt><dd>AU-REF-2026-001</dd></div>
+        <div><dt>Revision:</dt><dd>01</dd></div>
+        <div><dt>Date of Issue:</dt><dd>2026-03-23</dd></div>
+        <div><dt>Prepared by:</dt><dd>Purchasing &amp; Documentation Dept.</dd></div>
+      </dl>
+      <p class="cover-header__classification">Classification: General Distribution</p>
+    </div>
+
+    <div class="page-doc-header">A-U.SUPPLY — Audio Units Division &nbsp;&nbsp; AU-REF-2026-001</div>
+
+    <h2 class="section-title">1. Company Profile</h2>
+
+    <div class="field-row">
+      <div class="field-label">Registered Name</div>
+      <div class="field-value">Audio Units Supply</div>
+    </div>
+    <div class="field-row">
+      <div class="field-label">Operating As</div>
+      <div class="field-value">A-U.Supply / A-U / AU</div>
+    </div>
+    <div class="field-row">
+      <div class="field-label">Established</div>
+      <div class="field-value">Under review. Earliest facility records: 2009. First production run: 2015. Initial catalog issued: April 15, 2020.</div>
+    </div>
+    <div class="field-row">
+      <div class="field-label">Facilities</div>
+      <div class="field-value">Minneapolis, MN; San Francisco / Oakland, CA; Canadian heartland</div>
+    </div>
+    <div class="field-row">
+      <div class="field-label">Contact</div>
+      <div class="field-value">ausupply000@gmail.com</div>
+    </div>
+    <div class="field-row">
+      <div class="field-label">Web Catalog</div>
+      <div class="field-value">https://a-u.supply</div>
+    </div>
+    <div class="field-row">
+      <div class="field-label">Bandcamp Warehouse</div>
+      <div class="field-value">https://ausupply.bandcamp.com</div>
+    </div>
+    <div class="field-row">
+      <div class="field-label">SoundCloud Archive</div>
+      <div class="field-value">https://soundcloud.com/ustom-ecordings</div>
+    </div>
+    <div class="field-row">
+      <div class="field-label">YouTube Channel</div>
+      <div class="field-value">https://www.youtube.com/@a-u.supply674</div>
+    </div>
+    <div class="field-row">
+      <div class="field-label">Source Repository</div>
+      <div class="field-value">https://github.com/A-U-Supply</div>
+    </div>
+    <div class="field-row">
+      <div class="field-label">Quality Assurance Motto</div>
+      <div class="field-value">"Floating in a mire of semantical truzzles, so you don't have to."</div>
+    </div>
+
+    <p class="profile-description">
+      Audio Units Supply manufactures and distributes audio products across multiple formats and channels. Operations span collage assembly, vocal processing, MIDI generation, title filtration, and prompt synthesis. All production lines run daily via automated systems. Output is distributed through four primary warehouses (Bandcamp, Archive.org, SoundCloud, YouTube) and one web-based catalog. The facility also maintains an internal supply chain supporting six automated production lines and an archive of approximately 60 auxiliary audio units dating to 2014.
+    </p>
+
+    <div class="notice-box">
+      NOTE: Establishment date is subject to ongoing internal review. Some records indicate facility planning as early as 399 BCE. Other documentation projects initial operations no earlier than 2046. The discrepancy has not been resolved.
+    </div>
+  </main>
+</Base>
+
+<style>
+  .cover-header {
+    text-align: center;
+    padding: var(--space-lg) 0;
+    margin-bottom: var(--space-lg);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .cover-header__title {
+    font-size: var(--text-2xl);
+    font-weight: bold;
+    letter-spacing: 3pt;
+    text-transform: uppercase;
+    margin-bottom: var(--space-xs);
+  }
+
+  .cover-header__subtitle {
+    font-size: var(--text-lg);
+    letter-spacing: 1pt;
+    color: var(--color-muted);
+    margin-bottom: var(--space-xs);
+  }
+
+  .cover-header__rule {
+    border: none;
+    border-top: 3px double var(--color-text);
+    width: min(200pt, 80%);
+    margin: var(--space-md) auto;
+  }
+
+  .cover-header__doc-info {
+    margin-top: var(--space-md);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    line-height: 1.8;
+  }
+
+  .cover-header__doc-info div {
+    display: flex;
+    justify-content: center;
+    gap: 0.5ch;
+  }
+
+  .cover-header__doc-info dt {
+    min-width: 12ch;
+    text-align: right;
+  }
+
+  .cover-header__doc-info dd {
+    text-align: left;
+  }
+
+  .cover-header__classification {
+    margin-top: var(--space-lg);
+    font-size: var(--text-sm);
+    letter-spacing: 2pt;
+    color: var(--color-muted);
+    text-transform: uppercase;
+  }
+
+  .profile-description {
+    margin-top: var(--space-md);
+    font-size: var(--text-sm);
+    line-height: 1.7;
+  }
+
+  @media (max-width: 640px) {
+    .cover-header__doc-info div {
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .cover-header__doc-info dt {
+      text-align: center;
+    }
+
+    .cover-header__doc-info dd {
+      text-align: center;
+      margin-bottom: var(--space-xs);
+    }
+  }
+</style>

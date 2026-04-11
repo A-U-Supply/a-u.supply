@@ -1,0 +1,147 @@
+---
+import Base from '../layouts/Base.astro';
+import { encrypt } from '../lib/encrypt';
+
+const redactedEntity = JSON.stringify({
+  entity: "MCA",
+  product_association: "Pathos for Bathos, A-U Quality Track Supply",
+  status: "Also: personnel (§2)"
+});
+
+const ciphertext = encrypt(redactedEntity, 'pathos4bathos');
+---
+
+<Base title="Associated Entities — A-U.SUPPLY">
+  <main class="page-content">
+    <div class="page-doc-header">A-U.SUPPLY — Audio Units Division &nbsp;&nbsp; AU-REF-2026-001</div>
+
+    <h2 class="section-title">6. Associated Entities</h2>
+
+    <p class="entities-intro">The following entities have appeared on A-U.Supply products. Relationships between entities, and between entities and personnel, are not documented.</p>
+
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Entity</th>
+          <th>Product Association</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Complete</td>
+          <td><em>Em</em>, <em>LBSW/TSCT</em>, <em>A-U Quality Track Supply</em></td>
+          <td>Primary manufacturer</td>
+        </tr>
+        <tr>
+          <td>Complete Rx</td>
+          <td><em>How How Things are Made are Made</em>, <em>A-U Quality Track Supply</em></td>
+          <td>Variant designation</td>
+        </tr>
+        <tr>
+          <td>BDO</td>
+          <td><em>Tea Shirt</em>, <em>A-U Quality Track Supply</em></td>
+          <td>See purchasing dept.</td>
+        </tr>
+        <tr>
+          <td>Eonnot</td>
+          <td><em>Erkind NOS</em></td>
+          <td>See purchasing dept.</td>
+        </tr>
+        <tr>
+          <td>Level Navi / Navi</td>
+          <td><em>~~Immelerria~~</em>, <em>Navi_17-19</em>, <em>A-U Quality Track Supply</em></td>
+          <td>See purchasing dept.</td>
+        </tr>
+        <tr>
+          <td>Unreliable Metrics</td>
+          <td><em>A Deper[ ]alized Ratio</em></td>
+          <td>See purchasing dept.</td>
+        </tr>
+        <tr>
+          <td>Current Occupant</td>
+          <td><em>A Deper[ ]alized Ratio</em></td>
+          <td>See purchasing dept.</td>
+        </tr>
+        <tr>
+          <td>A-XYZ</td>
+          <td><em>A Deper[ ]alized Ratio</em></td>
+          <td>See purchasing dept.</td>
+        </tr>
+        <tr class="redacted-row">
+          <td><code class="encrypted-block" set:text={ciphertext.slice(0, 24) + '...'} /></td>
+          <td><code class="encrypted-block" set:text={ciphertext.slice(24, 56) + '...'} /></td>
+          <td><code class="encrypted-block" set:text={ciphertext.slice(56, 80) + '...'} /></td>
+        </tr>
+        <tr>
+          <td>Tube</td>
+          <td><em>A-U Quality Track Supply</em></td>
+          <td>See purchasing dept.</td>
+        </tr>
+        <tr>
+          <td>Saturnalia</td>
+          <td><em>A-U Quality Track Supply</em>, <em>LBSW/TSCT</em></td>
+          <td>See purchasing dept.</td>
+        </tr>
+        <tr>
+          <td>Group Feed Scroll</td>
+          <td><em>A-U Quality Track Supply</em></td>
+          <td>See purchasing dept.</td>
+        </tr>
+        <tr>
+          <td>Aico.bot</td>
+          <td>Liner notes (2020 catalog)</td>
+          <td>AI entity</td>
+        </tr>
+        <tr>
+          <td>bngels89</td>
+          <td><em>~~Immelerria~~</em> (text credit)</td>
+          <td>See purchasing dept.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 class="section-title">7. External Partnerships</h2>
+
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Partner</th>
+          <th>Relationship</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Vintage Computer Festival Midwest</td>
+          <td>Participant</td>
+        </tr>
+        <tr>
+          <td>Sunny Flea Market</td>
+          <td>Participant</td>
+        </tr>
+        <tr>
+          <td>ECCC</td>
+          <td>Participant</td>
+        </tr>
+      </tbody>
+    </table>
+  </main>
+</Base>
+
+<style>
+  .entities-intro {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    margin-bottom: var(--space-sm);
+  }
+
+  .redacted-row td {
+    background: repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.02) 2px,
+      rgba(0, 0, 0, 0.02) 4px
+    );
+  }
+</style>

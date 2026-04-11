@@ -40,11 +40,6 @@ import Base from '../../layouts/Base.astro';
     <div id="grid" class="catalog__grid" style="display:none;"></div>
   </main>
 
-  <footer class="footer">
-    <span class="footer__doc">A-U.SUPPLY</span>
-    <span class="footer__contact">ausupply000@gmail.com</span>
-    <span class="footer__site">a-u.supply</span>
-  </footer>
 </Base>
 
 <style>
@@ -136,29 +131,12 @@ import Base from '../../layouts/Base.astro';
     gap: var(--space-md);
   }
 
-  .footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--space-sm) var(--space-md);
-    border-top: 1px solid var(--color-border);
-    font-size: var(--text-sm);
-    color: var(--color-muted);
-    max-width: 1200px;
-    margin: 0 auto;
-  }
-
   @media (max-width: 640px) {
     .catalog__grid {
       grid-template-columns: 1fr;
     }
     .catalog__filters {
       flex-direction: column;
-    }
-    .footer {
-      flex-direction: column;
-      text-align: center;
-      gap: var(--space-xs);
     }
   }
 </style>
