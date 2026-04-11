@@ -36,7 +36,7 @@ import Base from '../../layouts/Base.astro';
         <table class="track-table">
           <thead>
             <tr>
-              <th class="track-table__num">No.</th>
+              <th class="track-table__num">Item No.</th>
               <th class="track-table__play"></th>
               <th>Part Name</th>
               <th class="track-table__dur">Duration</th>
@@ -47,12 +47,12 @@ import Base from '../../layouts/Base.astro';
       </section>
 
       <section class="release__section" id="dist-section" style="display:none;">
-        <h2 class="release__section-title">Distribution</h2>
+        <h2 class="release__section-title">Distribution Network</h2>
         <table class="dist-table">
           <thead>
             <tr>
-              <th>Platform</th>
-              <th>Link</th>
+              <th>Distribution Channel</th>
+              <th>URL</th>
             </tr>
           </thead>
           <tbody id="dist-tbody"></tbody>
@@ -60,7 +60,7 @@ import Base from '../../layouts/Base.astro';
       </section>
 
       <section class="release__section" id="meta-section" style="display:none;">
-        <h2 class="release__section-title">Metadata</h2>
+        <h2 class="release__section-title">Additional Specifications</h2>
         <dl class="meta-table" id="meta-table"></dl>
       </section>
 
@@ -585,5 +585,5 @@ import Base from '../../layouts/Base.astro';
     document.head.appendChild(script);
   }
 
-  init();
+  document.addEventListener('astro:page-load', () => init());
 </script>

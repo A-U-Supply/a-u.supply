@@ -308,7 +308,8 @@ import Base from '../../layouts/Base.astro';
     }).join('');
   }
 
-  init();
+  // Run on initial load and on View Transition navigations
+  document.addEventListener('astro:page-load', () => init());
 </script>
 
 <style is:global>
