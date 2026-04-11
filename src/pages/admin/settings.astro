@@ -121,15 +121,15 @@ import Admin from '../../layouts/Admin.astro';
 
     let currentUserId: number;
 
-    document.body.addEventListener('auth-ready', ((e: CustomEvent) => {
-      currentUserId = e.detail.id;
-      if (e.detail.role === 'admin') {
+    (window as any).__authReady.then((user: any) => {
+      currentUserId = user.id;
+      if (user.role === 'admin') {
         document.getElementById('user-management')!.style.display = 'block';
         loadUsers();
       } else {
         document.getElementById('no-admin')!.style.display = 'block';
       }
-    }) as EventListener, { once: true });
+    });
 
     async function loadUsers() {
       const res = await fetch('/api/admin/users', { credentials: 'include' });

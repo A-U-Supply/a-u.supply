@@ -71,6 +71,11 @@ const { title, current } = Astro.props;
     if (loader) loader.style.display = 'none';
 
     // Auth check — redirect to login if not authenticated
+    // Expose as a promise on window so page scripts can await it
+    // regardless of script loading order (no race condition)
+    let resolveAuth: (user: any) => void;
+    (window as any).__authReady = new Promise((r) => { resolveAuth = r; });
+
     async function checkAuth() {
       try {
         const res = await fetch('/api/me', { credentials: 'include' });
@@ -81,12 +86,7 @@ const { title, current } = Astro.props;
         const user = await res.json();
         const userEl = document.getElementById('sidebar-user');
         if (userEl) userEl.textContent = user.name;
-
-        // Store user data for page scripts
-        document.body.dataset.userName = user.name;
-        document.body.dataset.userRole = user.role;
-        document.body.dataset.userEmail = user.email;
-        document.body.dispatchEvent(new CustomEvent('auth-ready', { detail: user }));
+        resolveAuth!(user);
       } catch {
         window.location.href = '/login';
       }

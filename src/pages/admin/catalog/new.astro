@@ -547,12 +547,12 @@ import Admin from '../../../layouts/Admin.astro';
   let freeformFields: { key: string; value: string }[] = [];
 
   // ---- Init ----
-  document.body.addEventListener('auth-ready', (() => {
+  (window as any).__authReady.then(() => {
     loadEntities();
     renderLinks();
     renderFreeform();
     updateReview();
-  }) as EventListener, { once: true });
+  });
 
   // ---- Collapsible sections ----
   document.querySelectorAll('.collapsible__heading').forEach(heading => {
