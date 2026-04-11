@@ -776,16 +776,30 @@ Astro's View Transitions intercept navigation and swap page content via morphing
 
 The player component:
 1. Lives in the base layout (`Base.astro` or a shared layout used by both public and admin pages)
-2. Has `transition:persist` so it is not destroyed on navigation
-3. Contains an `<audio>` element and all player UI
-4. Manages its own state (current queue, current track, playback position) in JavaScript
+2. Is a Svelte island with `transition:persist` so it is not destroyed on navigation
+3. Uses Svelte's native `<audio>` bindings for reactive playback state
+4. Manages its own state (current queue, current track, playback position) as Svelte stores
 
 ```astro
 <!-- In layout -->
-<div id="player" transition:persist>
-  <audio id="player-audio"></audio>
-  <!-- Player UI -->
-</div>
+<Player client:load transition:persist />
+```
+
+```svelte
+<!-- Player.svelte (simplified) -->
+<script>
+  let queue = [];
+  let currentIndex = 0;
+  let paused = true;
+  let currentTime = 0;
+  let duration = 0;
+  let volume = 1.0;
+
+  $: track = queue[currentIndex];
+  $: src = track?.stream_url;
+</script>
+
+<audio bind:currentTime bind:duration bind:paused bind:volume {src} />
 ```
 
 ### 8.2 Player UI
@@ -822,16 +836,18 @@ Fixed bottom bar, always visible when a track is loaded. Hidden initially until 
 
 ### 8.4 State Management
 
-Player state is held in a JavaScript singleton (plain object or class) that persists because the player DOM element persists via View Transitions.
+Player state lives inside the Svelte component as reactive variables. Because the component persists via View Transitions, state survives navigation. The queue is an array of track objects:
 
-```javascript
-const playerState = {
-  queue: [],          // Array of {track_id, title, release_title, release_code, stream_url, cover_url, duration}
-  currentIndex: 0,
-  isPlaying: false,
-  volume: 1.0,
-  shuffleMode: false,
-};
+```typescript
+interface QueueItem {
+  track_id: number;
+  title: string;
+  release_title: string;
+  release_code: string;
+  stream_url: string;
+  cover_url: string;
+  duration: number;
+}
 ```
 
 State does not need to survive a hard page reload (full browser refresh). If the user does a hard refresh, the player resets. This is acceptable — the player is a convenience, not a critical feature.
@@ -866,7 +882,7 @@ The player should also be available in the admin layout, so admins can preview t
 
 ### Q2: Historical Catalog Import — RESOLVED
 
-**Decision**: Seed the Archive.org releases (the three 2020 releases) programmatically as initial data. Remaining historical releases will be uploaded manually through the UI.
+**Decision**: Seed the three Archive.org releases (2020) programmatically — download actual audio files and cover art from Archive.org, create release/track/entity records, and store media in `/srv/media/releases/`. Remaining historical releases will be uploaded manually through the UI.
 
 ### Q3: Audio File Source for Historical Releases — RESOLVED
 
@@ -893,14 +909,11 @@ Implementation:
 - Filtering/sorting still works client-side via API calls after initial load
 - Structured data (JSON-LD MusicAlbum/MusicRecording schema) for search engines
 
-### Q6: Player Framework
+### Q6: Player Framework — RESOLVED
 
-The player UI is the most interactive component. Options:
-- (a) **Vanilla JS**: No dependencies. Matches the project's anti-bloat aesthetic. More code to write for drag interactions and state management.
-- (b) **Preact island**: Tiny (3KB) React-compatible framework. Astro has first-class Preact support. Makes the player's reactive UI easier to build. Adds a dependency but a very small one.
-- (c) **Svelte island**: Another Astro-supported option. Compiles away, so zero runtime. Good DX for reactive UI.
+**Decision**: Svelte island via `@astrojs/svelte`. Compiles to vanilla JS (zero runtime overhead). Native `<audio>` bindings (`bind:currentTime`, `bind:duration`, `bind:paused`, `bind:volume`) make the player reactive with minimal code. Scoped CSS built-in. Persists across navigation via Astro View Transitions `transition:persist`.
 
-**Current recommendation**: Vanilla JS. The player's interactivity is well-bounded (play/pause, next/prev, scrubber, volume) and doesn't need a component framework. It's a single persistent DOM element, not a tree of components.
+The player is a single Svelte component (`Player.svelte`) mounted as an Astro island in the base layout. It communicates with release pages via custom DOM events (`player:queue`, `player:play`).
 
 ### Q7: Existing Product Images — RESOLVED
 
@@ -931,6 +944,7 @@ Settings         → /admin/settings         (existing)
 - `ffmpeg` / `ffprobe` — for audio duration extraction
 
 **JavaScript (package.json)**:
+- `svelte` + `@astrojs/svelte` — persistent audio player island
 - `sortablejs` — for drag-and-drop track reordering (optional, could use native DnD)
 
 ## Appendix C: Environment Variables
