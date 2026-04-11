@@ -16,4 +16,4 @@ jobs:
 
       - name: Create user
         run: |
-          ssh dokku@204.168.201.89 run au-supply python cli.py create-user --email oyouareatubeo@gmail.com --name tube --password changeme123 --role admin
+          ssh dokku@204.168.201.89 run au-supply .venv/bin/python cli.py create-user --email oyouareatubeo@gmail.com --name tube --password changeme123 --role admin
