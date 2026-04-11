@@ -1,0 +1,178 @@
+---
+import Admin from '../../layouts/Admin.astro';
+---
+
+<Admin title="Settings" current="settings">
+  <h1>Settings</h1>
+
+  <section id="user-management" style="display:none;">
+    <h3 style="margin-top: var(--space-md); margin-bottom: var(--space-sm); font-size: var(--text-base); text-transform: uppercase; letter-spacing: 1pt;">Users</h3>
+
+    <table class="user-table" id="user-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Role</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="user-tbody"></tbody>
+    </table>
+
+    <h3 style="margin-top: var(--space-lg); margin-bottom: var(--space-sm); font-size: var(--text-base); text-transform: uppercase; letter-spacing: 1pt;">Invite User</h3>
+
+    <form id="invite-form" class="invite-form">
+      <div class="invite-form__row">
+        <input type="text" name="name" placeholder="Name" required />
+        <input type="email" name="email" placeholder="Email" required />
+        <input type="password" name="password" placeholder="Password" required />
+        <select name="role">
+          <option value="member">Member</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button type="submit">Invite</button>
+      </div>
+      <div id="invite-error" class="login-error" style="display:none;"></div>
+      <div id="invite-success" style="display:none; color: green; font-size: var(--text-sm); margin-top: var(--space-xs);"></div>
+    </form>
+  </section>
+
+  <p id="no-admin" style="color: var(--color-muted); display:none;">Admin access required for user management.</p>
+</Admin>
+
+<style>
+  .user-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+  .user-table th {
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    font-size: 0.7rem;
+    padding: var(--space-xs) var(--space-sm);
+    border-bottom: 2px solid var(--color-text);
+    color: var(--color-muted);
+  }
+  .user-table td {
+    padding: var(--space-xs) var(--space-sm);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .user-table button {
+    background: none;
+    border: 1px solid #c00;
+    color: #c00;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    cursor: pointer;
+    text-transform: uppercase;
+  }
+  .user-table button:hover { background: #c00; color: #fff; }
+
+  .invite-form input,
+  .invite-form select {
+    padding: var(--space-xs) var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    border: 1px solid var(--color-border);
+    background: #fff;
+    color: var(--color-text);
+  }
+  .invite-form button {
+    padding: var(--space-xs) var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: bold;
+    text-transform: uppercase;
+    background: #1a1a1a;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+  }
+  .invite-form button:hover { background: #333; }
+  .invite-form__row {
+    display: flex;
+    gap: var(--space-xs);
+    flex-wrap: wrap;
+  }
+  .invite-form__row input,
+  .invite-form__row select { flex: 1; min-width: 120px; }
+</style>
+
+<script>
+  let currentUserId: number;
+
+  document.body.addEventListener('auth-ready', ((e: CustomEvent) => {
+    currentUserId = e.detail.id;
+    if (e.detail.role === 'admin') {
+      document.getElementById('user-management')!.style.display = 'block';
+      loadUsers();
+    } else {
+      document.getElementById('no-admin')!.style.display = 'block';
+    }
+  }) as EventListener);
+
+  async function loadUsers() {
+    const res = await fetch('/api/admin/users', { credentials: 'include' });
+    if (!res.ok) return;
+    const users = await res.json();
+    const tbody = document.getElementById('user-tbody')!;
+    tbody.innerHTML = users.map((u: any) => `
+      <tr>
+        <td>${u.name}</td>
+        <td>${u.email}</td>
+        <td>${u.role}</td>
+        <td>${u.id !== currentUserId ? `<button onclick="deleteUser(${u.id})">Delete</button>` : ''}</td>
+      </tr>
+    `).join('');
+  }
+
+  (window as any).deleteUser = async (id: number) => {
+    if (!confirm('Delete this user?')) return;
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    if (res.ok) loadUsers();
+  };
+
+  document.getElementById('invite-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target as HTMLFormElement;
+    const data = Object.fromEntries(new FormData(form));
+    const errorEl = document.getElementById('invite-error')!;
+    const successEl = document.getElementById('invite-success')!;
+    errorEl.style.display = 'none';
+    successEl.style.display = 'none';
+
+    // Fetch a CSRF token
+    let csrf_token = '';
+    try {
+      const csrfRes = await fetch('/api/csrf');
+      const csrfData = await csrfRes.json();
+      csrf_token = csrfData.csrf_token;
+    } catch { /* continue */ }
+
+    const res = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ ...data, csrf_token }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      errorEl.textContent = err.detail || 'Failed to create user';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    form.reset();
+    successEl.textContent = `Invited ${data.name}`;
+    successEl.style.display = 'block';
+    loadUsers();
+  });
+</script>
