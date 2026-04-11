@@ -416,6 +416,23 @@ import Admin from '../../../layouts/Admin.astro';
   }
   .track-item__remove:hover { background: #c00; color: #fff; }
 
+  .track-item--uploading {
+    opacity: 0.7;
+    border-left: 3px solid var(--color-accent, #888);
+    animation: pulse-bg 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse-bg {
+    0%, 100% { background: transparent; }
+    50% { background: rgba(128, 128, 128, 0.08); }
+  }
+  .track-item--done {
+    border-left: 3px solid #2a2;
+  }
+  .track-item--failed {
+    border-left: 3px solid #c00;
+    background: rgba(200, 0, 0, 0.05);
+  }
+
   /* Link rows */
   .link-row {
     display: flex;
@@ -996,21 +1013,47 @@ import Admin from '../../../layouts/Admin.astro';
       }
       progressFill.style.width = '60%';
 
-      // Step 3: Upload audio files
+      // Step 3: Upload audio files one at a time
       if (audioFiles.length > 0) {
-        progressText.textContent = 'Uploading audio files...';
-        const trackForm = new FormData();
-        audioFiles.forEach((t) => {
-          trackForm.append('files', t.file);
-        });
-        trackForm.append('titles', JSON.stringify(audioFiles.map(t => t.title)));
-        const trackRes = await fetch(`/api/releases/${code}/tracks`, {
-          method: 'POST',
-          credentials: 'include',
-          body: trackForm,
-        });
-        if (!trackRes.ok) {
-          console.warn('Track upload failed');
+        const total = audioFiles.length;
+        const encCode = encodeURIComponent(code);
+        const failedUploads: string[] = [];
+        for (let i = 0; i < total; i++) {
+          const t = audioFiles[i];
+          const pct = 60 + Math.round((i / total) * 25);
+          progressText.textContent = `Uploading track ${i + 1} of ${total}: ${t.title}`;
+          progressFill.style.width = `${pct}%`;
+
+          const trackEl = document.querySelector(`[data-idx="${i}"]`) as HTMLElement | null;
+          if (trackEl) trackEl.classList.add('track-item--uploading');
+
+          try {
+            const trackForm = new FormData();
+            trackForm.append('files', t.file);
+            trackForm.append('titles', JSON.stringify([t.title]));
+            const trackRes = await fetch(`/api/releases/${encCode}/tracks`, {
+              method: 'POST',
+              credentials: 'include',
+              body: trackForm,
+            });
+            if (!trackRes.ok) {
+              const err = await trackRes.json().catch(() => ({ detail: 'Upload failed' }));
+              throw new Error(err.detail || 'Upload failed');
+            }
+            if (trackEl) {
+              trackEl.classList.remove('track-item--uploading');
+              trackEl.classList.add('track-item--done');
+            }
+          } catch (uploadErr: any) {
+            failedUploads.push(`${t.title}: ${uploadErr.message}`);
+            if (trackEl) {
+              trackEl.classList.remove('track-item--uploading');
+              trackEl.classList.add('track-item--failed');
+            }
+          }
+        }
+        if (failedUploads.length > 0) {
+          throw new Error(`Some tracks failed to upload:\n${failedUploads.join('\n')}`);
         }
       }
       progressFill.style.width = '85%';
