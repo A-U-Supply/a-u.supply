@@ -1,18 +1,353 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>a-u.supply</title>
-    <link rel="stylesheet" href="/static/style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/jpeg" href="/static/favicon.jpg">
+<title>A-U.SUPPLY — Company Profile & Product Catalog</title>
+<style>
+  @page {
+    size: letter;
+    margin: 1in 1in 1.2in 1in;
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 9pt;
+      color: #666;
+    }
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 10pt;
+    line-height: 1.5;
+    color: #1a1a1a;
+    background: #fff;
+  }
+
+  .page {
+    page-break-after: always;
+    min-height: 100vh;
+    padding: 0;
+    position: relative;
+  }
+
+  .page:last-child {
+    page-break-after: avoid;
+  }
+
+  .page-header {
+    text-align: right;
+    font-size: 8pt;
+    color: #666;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 4pt;
+    margin-bottom: 24pt;
+    letter-spacing: 0.5pt;
+  }
+
+  h1 {
+    font-size: 18pt;
+    font-weight: bold;
+    letter-spacing: 3pt;
+    text-transform: uppercase;
+    margin-bottom: 6pt;
+  }
+
+  h2 {
+    font-size: 12pt;
+    font-weight: bold;
+    letter-spacing: 2pt;
+    text-transform: uppercase;
+    margin-top: 24pt;
+    margin-bottom: 12pt;
+    border-bottom: 2px solid #1a1a1a;
+    padding-bottom: 4pt;
+  }
+
+  h3 {
+    font-size: 10pt;
+    font-weight: bold;
+    letter-spacing: 1pt;
+    text-transform: uppercase;
+    margin-top: 18pt;
+    margin-bottom: 8pt;
+  }
+
+  p {
+    margin-bottom: 10pt;
+  }
+
+  .subtitle {
+    font-size: 11pt;
+    letter-spacing: 1pt;
+    color: #444;
+    margin-bottom: 4pt;
+  }
+
+  .doc-info {
+    margin-top: 24pt;
+    font-size: 9pt;
+    color: #666;
+    line-height: 1.8;
+  }
+
+  .doc-info span.label {
+    display: inline-block;
+    width: 160pt;
+    color: #666;
+  }
+
+  .cover-center {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 80vh;
+    text-align: center;
+  }
+
+  .cover-logo {
+    max-width: 400pt;
+    margin-bottom: 36pt;
+  }
+
+  .classification {
+    margin-top: 48pt;
+    font-size: 9pt;
+    letter-spacing: 2pt;
+    color: #666;
+    text-transform: uppercase;
+  }
+
+  .stamp {
+    display: inline-block;
+    font-size: 11pt;
+    font-weight: bold;
+    color: #b8860b;
+    border: 2px solid #b8860b;
+    padding: 3pt 10pt;
+    transform: rotate(-3deg);
+    letter-spacing: 2pt;
+    text-transform: uppercase;
+    margin: 12pt 0;
+  }
+
+  .field-row {
+    display: flex;
+    border-bottom: 1px dotted #ccc;
+    padding: 4pt 0;
+    margin-bottom: 2pt;
+  }
+
+  .field-label {
+    width: 180pt;
+    flex-shrink: 0;
+    font-size: 9pt;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+
+  .field-value {
+    flex: 1;
+    font-size: 10pt;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12pt 0;
+    font-size: 9pt;
+  }
+
+  th {
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    font-size: 8pt;
+    padding: 6pt 8pt;
+    border-bottom: 2px solid #1a1a1a;
+    color: #444;
+  }
+
+  td {
+    padding: 5pt 8pt;
+    border-bottom: 1px solid #ddd;
+    vertical-align: top;
+  }
+
+  tr:last-child td {
+    border-bottom: 2px solid #1a1a1a;
+  }
+
+  .personnel-block {
+    border: 1px solid #ccc;
+    padding: 12pt 16pt;
+    margin-bottom: 12pt;
+  }
+
+  .personnel-block .dept {
+    font-size: 8pt;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    margin-bottom: 2pt;
+  }
+
+  .personnel-block .name {
+    font-size: 12pt;
+    font-weight: bold;
+    margin-bottom: 4pt;
+  }
+
+  .personnel-block .role {
+    font-size: 9pt;
+    color: #444;
+    margin-bottom: 6pt;
+  }
+
+  .personnel-block .remarks {
+    font-size: 9pt;
+    font-style: italic;
+    color: #555;
+    border-left: 2px solid #ccc;
+    padding-left: 10pt;
+    margin-top: 6pt;
+  }
+
+  .product-image {
+    text-align: center;
+    margin: 16pt 0;
+  }
+
+  .product-image img {
+    max-width: 200pt;
+    max-height: 200pt;
+    border: 1px solid #ddd;
+  }
+
+  .product-image .caption {
+    font-size: 8pt;
+    color: #666;
+    margin-top: 4pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+
+  .image-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16pt;
+    justify-content: center;
+    margin: 16pt 0;
+  }
+
+  .image-grid .product-image {
+    margin: 0;
+  }
+
+  .image-grid .product-image img {
+    max-width: 140pt;
+    max-height: 140pt;
+  }
+
+  .line-item {
+    border: 1px solid #ccc;
+    padding: 10pt 14pt;
+    margin-bottom: 8pt;
+  }
+
+  .line-item .line-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4pt;
+  }
+
+  .line-item .line-id {
+    font-size: 8pt;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+  }
+
+  .line-item .line-name {
+    font-weight: bold;
+    font-size: 10pt;
+  }
+
+  .line-item .line-desc {
+    font-size: 9pt;
+    color: #444;
+    margin-top: 4pt;
+  }
+
+  .line-item .line-specs {
+    font-size: 8pt;
+    color: #666;
+    margin-top: 4pt;
+  }
+
+  .back-cover {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-height: 80vh;
+    text-align: center;
+  }
+
+  .back-cover .exit-quote {
+    font-size: 9pt;
+    color: #666;
+    margin-top: 48pt;
+    font-style: italic;
+  }
+
+  .notice {
+    font-size: 8pt;
+    color: #666;
+    border: 1px solid #ccc;
+    padding: 8pt 12pt;
+    margin: 16pt 0;
+  }
+
+  .double-rule {
+    border: none;
+    border-top: 3px double #1a1a1a;
+    margin: 24pt 0;
+  }
+
+  .section-note {
+    font-size: 8pt;
+    color: #888;
+    margin-top: 8pt;
+  }
+</style>
 </head>
 <body>
-    <main>
-        <h1>a-u.supply</h1>
-        <p>Welcome. The API is running.</p>
-        <nav>
-            <a href="/docs">API Docs</a>
-        </nav>
-    </main>
+
+<!-- ==================== COVER PAGE ==================== -->
+<div class="page">
+  <div class="cover-center">
+    <img src="/static/assets/logo.png" alt="A-U.Supply" class="cover-logo">
+    <h1>A-U.SUPPLY</h1>
+    <div class="subtitle">Audio Units Division</div>
+    <hr class="double-rule" style="width: 200pt;">
+    <div class="subtitle" style="margin-top: 12pt;">Company Profile &amp; Product Catalog</div>
+
+    <div class="doc-info">
+      <div><span class="label">Document No:</span> AU-REF-2026-001</div>
+      <div><span class="label">Revision:</span> 01</div>
+      <div><span class="label">Date of Issue:</span> 2026-03-23</div>
+      <div><span class="label">Prepared by:</span> Purchasing &amp; Documentation Dept.</div>
+    </div>
+
+    <div class="classification">Classification: General Distribution</div>
+  </div>
+</div>
+
+
 </body>
 </html>
