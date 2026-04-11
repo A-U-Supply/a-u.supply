@@ -4,15 +4,15 @@
 
 {% block head %}
 <meta name="description" content="{{ release.title }} by {{ artist_names }}. Product Code: {{ release.product_code }}. Released {{ release.release_date.isoformat() if release.release_date else 'TBD' }}.">
-<link rel="canonical" href="https://a-u.supply/catalog/{{ release.product_code }}">
+<link rel="canonical" href="https://a-u.supply/catalog/{{ release.product_code | urlencode }}">
 
 {% if release.cover_art_path %}
-<meta property="og:image" content="https://a-u.supply/api/releases/{{ release.product_code }}/cover">
+<meta property="og:image" content="https://a-u.supply/api/releases/{{ release.product_code | urlencode }}/cover">
 {% endif %}
 <meta property="og:title" content="{{ release.product_code }} — {{ release.title }}">
 <meta property="og:description" content="{{ release.title }} by {{ artist_names }}">
 <meta property="og:type" content="music.album">
-<meta property="og:url" content="https://a-u.supply/catalog/{{ release.product_code }}">
+<meta property="og:url" content="https://a-u.supply/catalog/{{ release.product_code | urlencode }}">
 
 <script type="application/ld+json">{{ json_ld | tojson }}</script>
 {% endblock %}
@@ -320,7 +320,7 @@
     {% if release.cover_art_path %}
     <div class="spec-section spec-cover">
         <div class="spec-cover__image">
-            <img src="/api/releases/{{ release.product_code }}/cover"
+            <img src="/api/releases/{{ release.product_code | urlencode }}/cover"
                  alt="{{ release.title }} cover art"
                  width="800" height="800">
         </div>
