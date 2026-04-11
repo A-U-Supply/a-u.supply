@@ -712,15 +712,11 @@ These are public, no auth required.
 
 **Aesthetic**: Industrial catalog aesthetic — monospace type, thin borders, amber accents, plenty of whitespace. Each card looks like a product listing in a parts catalog. No rounded corners. No gradients.
 
-**Data loading**: Since Astro builds static pages, the catalog page either:
-- (a) Fetches from the API at build time (SSG) — requires rebuild on publish, or
-- (b) Fetches client-side on page load (CSR) — always current
-
-**Recommendation**: Client-side fetch. The catalog changes frequently (new releases, publish/unpublish) and we don't want to trigger a full Astro rebuild for every catalog change. The page loads a skeleton, fetches `GET /api/releases`, and renders the grid.
+**Data loading**: Server-rendered with embedded initial data for SEO (see Q5). FastAPI serves the catalog HTML with release data pre-injected. Client-side JS hydrates for filtering/sorting. No Astro rebuild needed on catalog changes.
 
 ### 7.3 Release Detail Page (catalog/[code].astro)
 
-Also client-side rendered — fetches `GET /api/releases/{code}` on load.
+Server-rendered with embedded data. FastAPI serves HTML with full release data + JSON-LD structured data (MusicAlbum schema) pre-injected. Client-side JS hydrates the player integration and interactive elements.
 
 **Layout**: Styled like a product specification sheet / press kit page. Sections:
 
@@ -876,22 +872,26 @@ The player should also be available in the admin layout, so admins can preview t
 
 **Decision**: Audio files are not required but highly recommended. Tracks can exist with `audio_file_path = NULL` — they'll show in the track listing but won't be playable in the site player. The release can still link to external platforms via distribution links. Historical releases will have their audio uploaded manually over time.
 
-### Q4: Image Handling
+### Q4: Image Handling — RESOLVED
 
-Do we need thumbnails/resized versions of cover art, or serve the original at all sizes? Large album art (the reference doc mentions 8382x8382 AEDAS art) would be heavy for the catalog grid.
+**Decision**: Yes, generate thumbnails on upload. On cover art upload, Pillow generates:
+- `cover.{ext}` — original, served on release detail page
+- `cover_thumb.webp` — 400x400 thumbnail, served in catalog grid and player
 
-**Recommendation**: Generate a thumbnail (e.g., 400x400) on upload and store alongside the original. Serve the thumbnail for catalog grid, original for detail page.
+The cover endpoint accepts a `?size=thumb` query param to serve the thumbnail.
 
-**Dependency**: Requires Pillow or similar in the Docker image.
+**Dependency**: Pillow added to pyproject.toml, installed in Docker image.
 
-### Q5: Catalog Page Rendering Strategy
+### Q5: Catalog Page Rendering Strategy — RESOLVED
 
-Discussed in §7.2 — client-side rendering vs. SSG. CSR is recommended because:
-- No rebuild needed on publish/unpublish
-- Filtering and sorting work without page reloads
-- The catalog data is small enough that the API call is fast
+**Decision**: Hybrid approach for SEO. The catalog and release detail pages are server-rendered by FastAPI (not static Astro builds). FastAPI renders the initial HTML with embedded release data from the database, so crawlers see full content. Client-side JS then hydrates for interactivity (filtering, sorting, player integration).
 
-But this means the catalog page has no SEO content on initial load. Is that a concern? For a label like A-U.Supply, probably not — but worth flagging.
+Implementation:
+- `GET /catalog` and `GET /catalog/{code}` are FastAPI routes that return HTML (using Jinja2 templates or by injecting JSON-LD + initial data into the Astro-built shell)
+- The simplest approach: FastAPI injects a `<script type="application/ld+json">` block and a `<script>window.__INITIAL_DATA__ = {...}</script>` into the HTML served for catalog pages
+- Client-side JS reads `__INITIAL_DATA__` instead of fetching the API, avoiding a loading spinner on first paint
+- Filtering/sorting still works client-side via API calls after initial load
+- Structured data (JSON-LD MusicAlbum/MusicRecording schema) for search engines
 
 ### Q6: Player Framework
 
@@ -926,7 +926,8 @@ Settings         → /admin/settings         (existing)
 
 **Python (pyproject.toml)**:
 - `python-multipart` — for file upload handling in FastAPI
-- `Pillow` — for thumbnail generation (if Q4 is yes)
+- `Pillow` — for thumbnail generation
+- `Jinja2` — for server-rendered catalog/release HTML templates (SEO)
 
 **System (Dockerfile)**:
 - `ffmpeg` / `ffprobe` — for audio duration extraction
