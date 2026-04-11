@@ -284,8 +284,12 @@ import Base from '../../layouts/Base.astro';
     }).join('');
   }
 
-  // Run on initial load and on View Transition navigations
-  document.addEventListener('astro:page-load', () => init());
+  // Run on initial load and on View Transition navigations.
+  // Guard: only run when we're actually on the catalog grid page,
+  // because astro:page-load listeners persist across ViewTransition navigations.
+  document.addEventListener('astro:page-load', () => {
+    if (document.getElementById('grid')) init();
+  });
 </script>
 
 <style is:global>

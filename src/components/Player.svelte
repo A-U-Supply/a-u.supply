@@ -101,14 +101,12 @@
   }
 
   let handler = null;
-  let playerEl = $state(undefined);
 
   $effect(() => {
-    if (visible && playerEl) {
-      const h = playerEl.offsetHeight;
-      document.body.style.paddingBottom = h + 'px';
+    if (visible) {
+      document.body.classList.add('player-active');
     } else {
-      document.body.style.paddingBottom = '';
+      document.body.classList.remove('player-active');
     }
   });
 
@@ -119,12 +117,12 @@
 
   onDestroy(() => {
     if (handler) document.removeEventListener('player:queue', handler);
-    document.body.style.paddingBottom = '';
+    document.body.classList.remove('player-active');
   });
 </script>
 
 {#if visible}
-<div class="player" bind:this={playerEl}>
+<div class="player">
   <audio
     bind:this={audioEl}
     bind:currentTime
