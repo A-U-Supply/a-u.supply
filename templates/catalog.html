@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+
+{% block title %}Catalog — A-U.SUPPLY{% endblock %}
+
+{% block head %}
+<meta name="description" content="Release catalog from A-U.Supply — Audio Units Division. Browse all published releases.">
+<link rel="canonical" href="https://a-u.supply/catalog">
+{% endblock %}
+
+{% block styles %}
+<style>
+    /* --- Catalog Page --- */
+
+    .catalog-header {
+        margin-bottom: 2.5rem;
+    }
+
+    .catalog-header__title {
+        font-size: 0.7rem;
+        font-weight: normal;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        color: var(--color-muted);
+        margin-bottom: 0.25rem;
+    }
+
+    .catalog-header__subtitle {
+        font-size: 1.1rem;
+        font-weight: normal;
+        letter-spacing: 0.05em;
+    }
+
+    /* Filter bar */
+    .catalog-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: flex-end;
+        margin-bottom: 2rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid var(--color-border);
+    }
+
+    .catalog-filters__group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .catalog-filters__label {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.15em;
+        color: var(--color-muted);
+    }
+
+    .catalog-filters__select {
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        padding: 0.4rem 0.6rem;
+        border: 1px solid var(--color-border);
+        border-radius: 0;
+        background: var(--color-bg);
+        color: var(--color-text);
+        cursor: pointer;
+        appearance: none;
+        -webkit-appearance: none;
+        padding-right: 1.5rem;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23666'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.5rem center;
+    }
+
+    .catalog-filters__select:focus {
+        outline: 1px solid var(--color-accent);
+        border-color: var(--color-accent);
+    }
+
+    .catalog-filters__count {
+        font-size: 0.7rem;
+        color: var(--color-muted);
+        margin-left: auto;
+        align-self: flex-end;
+        padding-bottom: 0.4rem;
+    }
+
+    /* Release grid */
+    .catalog-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 2rem;
+    }
+
+    .catalog-grid--empty {
+        display: block;
+        text-align: center;
+        padding: 4rem 1rem;
+        color: var(--color-muted);
+        font-size: 0.85rem;
+    }
+
+    /* Release card */
+    .release-card {
+        display: block;
+        text-decoration: none;
+        color: var(--color-text);
+        border: 1px solid var(--color-border);
+        transition: border-color 0.15s;
+    }
+
+    .release-card:hover {
+        border-color: var(--color-accent);
+        text-decoration: none;
+    }
+
+    .release-card__cover {
+        width: 100%;
+        aspect-ratio: 1;
+        overflow: hidden;
+        background: #f5f5f5;
+        border-bottom: 1px solid var(--color-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .release-card__cover img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .release-card__cover-placeholder {
+        font-size: 0.7rem;
+        color: var(--color-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+    }
+
+    .release-card__body {
+        padding: 1rem;
+    }
+
+    .release-card__code {
+        font-size: 0.65rem;
+        color: var(--color-muted);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        margin-bottom: 0.25rem;
+    }
+
+    .release-card__title {
+        font-size: 0.9rem;
+        font-weight: normal;
+        line-height: 1.4;
+        margin-bottom: 0.35rem;
+    }
+
+    .release-card__artist {
+        font-size: 0.75rem;
+        color: var(--color-muted);
+        margin-bottom: 0.5rem;
+    }
+
+    .release-card__meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        font-size: 0.65rem;
+        color: var(--color-muted);
+        letter-spacing: 0.05em;
+        border-top: 1px solid var(--color-border);
+        padding-top: 0.5rem;
+        margin-top: 0.5rem;
+    }
+
+    @media (max-width: 640px) {
+        .catalog-grid {
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .catalog-filters {
+            gap: 0.75rem;
+        }
+    }
+
+    @media (min-width: 1024px) {
+        .catalog-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="catalog-header">
+    <p class="catalog-header__title">Release Catalog</p>
+    <h1 class="catalog-header__subtitle">Published Releases</h1>
+</div>
+
+<div class="catalog-filters" id="catalog-filters">
+    <div class="catalog-filters__group">
+        <label class="catalog-filters__label" for="filter-entity">Entity</label>
+        <select class="catalog-filters__select" id="filter-entity" name="entity">
+            <option value="">All</option>
+            {% for entity in entities %}
+            <option value="{{ entity.slug }}">{{ entity.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="catalog-filters__group">
+        <label class="catalog-filters__label" for="filter-year">Year</label>
+        <select class="catalog-filters__select" id="filter-year" name="year">
+            <option value="">All</option>
+            {% for year in years %}
+            <option value="{{ year }}">{{ year }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="catalog-filters__group">
+        <label class="catalog-filters__label" for="filter-sort">Sort</label>
+        <select class="catalog-filters__select" id="filter-sort" name="sort">
+            <option value="date_desc">Date (Newest)</option>
+            <option value="date_asc">Date (Oldest)</option>
+            <option value="title">Title</option>
+            <option value="code">Product Code</option>
+        </select>
+    </div>
+    <span class="catalog-filters__count" id="catalog-count">
+        {{ releases | length }} release{{ 's' if releases | length != 1 else '' }}
+    </span>
+</div>
+
+<div class="catalog-grid" id="catalog-grid">
+    {% if releases %}
+        {% for release in releases %}
+        <a href="/catalog/{{ release.product_code }}" class="release-card">
+            <div class="release-card__cover">
+                {% if release.cover_art_path %}
+                <img src="/api/releases/{{ release.product_code }}/cover?size=thumb"
+                     alt="{{ release.title }} cover art"
+                     loading="lazy"
+                     width="400" height="400">
+                {% else %}
+                <span class="release-card__cover-placeholder">No Cover</span>
+                {% endif %}
+            </div>
+            <div class="release-card__body">
+                <div class="release-card__code">{{ release.product_code }}</div>
+                <div class="release-card__title">{{ release.title }}</div>
+                <div class="release-card__artist">
+                    {% for entity in release.entities %}
+                        {{ entity.name }}{% if not loop.last %}, {% endif %}
+                    {% endfor %}
+                </div>
+                <div class="release-card__meta">
+                    <span>{{ release.release_date.isoformat() if release.release_date else 'TBD' }}</span>
+                    <span>{{ release.tracks | length }} trk{% if release.tracks | length != 1 %}s{% endif %}
+                        {%- set total_secs = release.tracks | sum(attribute='duration_seconds', default=0) -%}
+                        {%- if total_secs > 0 %} / {{ '%d:%02d' | format(total_secs // 60, total_secs % 60) }}{% endif -%}
+                    </span>
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    {% else %}
+    <div class="catalog-grid--empty">
+        <p>No releases found.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    'use strict';
+
+    var data = window.__INITIAL_DATA__ || {};
+    var releases = data.releases || [];
+    var filterEntity = document.getElementById('filter-entity');
+    var filterYear = document.getElementById('filter-year');
+    var filterSort = document.getElementById('filter-sort');
+    var grid = document.getElementById('catalog-grid');
+    var countEl = document.getElementById('catalog-count');
+
+    function formatDuration(secs) {
+        if (!secs || secs <= 0) return '';
+        var m = Math.floor(secs / 60);
+        var s = Math.round(secs % 60);
+        return m + ':' + (s < 10 ? '0' : '') + s;
+    }
+
+    function formatArtists(entities) {
+        if (!entities || !entities.length) return '';
+        return entities.map(function(e) { return e.name; }).join(', ');
+    }
+
+    function renderCard(r) {
+        var coverHtml;
+        if (r.cover_art_url) {
+            coverHtml = '<img src="' + r.cover_art_url + '?size=thumb" alt="' +
+                r.title.replace(/"/g, '&quot;') + ' cover art" loading="lazy" width="400" height="400">';
+        } else {
+            coverHtml = '<span class="release-card__cover-placeholder">No Cover</span>';
+        }
+
+        var dur = formatDuration(r.total_duration_seconds);
+        var trackInfo = r.track_count + ' trk' + (r.track_count !== 1 ? 's' : '');
+        if (dur) trackInfo += ' / ' + dur;
+
+        return '<a href="/catalog/' + r.product_code + '" class="release-card">' +
+            '<div class="release-card__cover">' + coverHtml + '</div>' +
+            '<div class="release-card__body">' +
+                '<div class="release-card__code">' + r.product_code + '</div>' +
+                '<div class="release-card__title">' + r.title + '</div>' +
+                '<div class="release-card__artist">' + formatArtists(r.entities) + '</div>' +
+                '<div class="release-card__meta">' +
+                    '<span>' + (r.release_date || 'TBD') + '</span>' +
+                    '<span>' + trackInfo + '</span>' +
+                '</div>' +
+            '</div>' +
+        '</a>';
+    }
+
+    function renderGrid(items) {
+        if (!items.length) {
+            grid.innerHTML = '<div class="catalog-grid--empty"><p>No releases found.</p></div>';
+        } else {
+            grid.innerHTML = items.map(renderCard).join('');
+        }
+        countEl.textContent = items.length + ' release' + (items.length !== 1 ? 's' : '');
+    }
+
+    function fetchReleases() {
+        var params = new URLSearchParams();
+        params.set('status', 'published');
+
+        var entity = filterEntity.value;
+        var year = filterYear.value;
+        var sort = filterSort.value;
+
+        if (entity) params.set('entity', entity);
+        if (year) params.set('year', year);
+        if (sort) params.set('sort', sort);
+
+        fetch('/api/releases?' + params.toString())
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                renderGrid(data.releases || []);
+            })
+            .catch(function(err) {
+                console.error('Failed to fetch releases:', err);
+            });
+    }
+
+    filterEntity.addEventListener('change', fetchReleases);
+    filterYear.addEventListener('change', fetchReleases);
+    filterSort.addEventListener('change', fetchReleases);
+})();
+</script>
+{% endblock %}

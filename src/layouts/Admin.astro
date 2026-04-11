@@ -1,4 +1,7 @@
 ---
+import { ViewTransitions } from 'astro:transitions';
+import Player from '../components/Player.svelte';
+
 interface Props {
   title: string;
   current?: string;
@@ -12,6 +15,7 @@ const { title, current } = Astro.props;
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" type="image/jpeg" href="/favicon.jpg">
   <title>{title} — A-U.SUPPLY Admin</title>
+  <ViewTransitions />
 </head>
 <body>
   <button class="sidebar__toggle" id="sidebar-toggle">|||</button>
@@ -24,6 +28,8 @@ const { title, current } = Astro.props;
 
       <div class="sidebar__section">Navigation</div>
       <ul class="sidebar__nav">
+        <li><a href="/admin/catalog" aria-current={current === 'catalog' ? 'page' : undefined}>Catalog</a></li>
+        <li><a href="/admin/catalog/new" aria-current={current === 'catalog-new' ? 'page' : undefined}>New Release</a></li>
         <li><a href="/admin/dashboard" aria-current={current === 'dashboard' ? 'page' : undefined}>Dashboard</a></li>
         <li><a href="/admin/files" aria-current={current === 'files' ? 'page' : undefined}>Files</a></li>
         <li><a href="/admin/settings" aria-current={current === 'settings' ? 'page' : undefined}>Settings</a></li>
@@ -39,6 +45,7 @@ const { title, current } = Astro.props;
       <slot />
     </main>
   </div>
+  <Player client:load transition:persist="audio-player" />
 </body>
 </html>
 
