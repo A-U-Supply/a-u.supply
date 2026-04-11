@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from PIL import Image
 from pydantic import BaseModel
 from sqlalchemy import func, insert
@@ -514,7 +514,7 @@ def delete_release(code: str, admin: User = Depends(require_admin), db: Session 
 async def upload_tracks(
     code: str,
     files: list[UploadFile] = File(...),
-    titles: str | None = None,
+    titles: str | None = Form(None),
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
