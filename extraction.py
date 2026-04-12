@@ -542,23 +542,9 @@ def _run_video_extraction(db, media_item_id: str, file_path: str, MediaVideoMeta
         _log_failure(db, media_item_id, "thumbnail", exc)
 
     # Step 3: Audio transcription from extracted audio track
-    try:
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-            tmp_audio_path = tmp.name
-        try:
-            if _extract_audio_track(file_path, tmp_audio_path):
-                transcript_result = transcribe_audio(tmp_audio_path)
-                if transcript_result:
-                    meta_kwargs["audio_transcript"] = transcript_result["transcript"]
-                    meta_kwargs["transcript_confidence"] = transcript_result["confidence"]
-            else:
-                raise RuntimeError("Failed to extract audio track from video")
-        finally:
-            if os.path.exists(tmp_audio_path):
-                os.unlink(tmp_audio_path)
-    except Exception as exc:
-        logger.error("Video audio transcription failed for %s: %s", media_item_id, exc)
-        _log_failure(db, media_item_id, "whisper", exc)
+    # SKIPPED during bulk extraction — whisper on CPU is too slow for 224 videos.
+    # Transcription can be run later via batch re-extract on individual items.
+    # TODO: re-enable when GPU is available or run as a separate background job
 
     if not meta_kwargs.get("width"):
         # Can't create meta record without basic video info
