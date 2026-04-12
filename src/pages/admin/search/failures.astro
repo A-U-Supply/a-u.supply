@@ -1,0 +1,300 @@
+---
+import Admin from '../../../layouts/Admin.astro';
+---
+
+<Admin title="Extraction Failures" current="failures">
+  <div class="failures-header">
+    <h1>Extraction Failures</h1>
+    <div class="failures-controls">
+      <select id="filter-type">
+        <option value="">All Types</option>
+        <option value="image_metadata">Image Metadata</option>
+        <option value="dominant_colors">Dominant Colors</option>
+        <option value="ffprobe">FFprobe</option>
+        <option value="whisper">Whisper</option>
+        <option value="thumbnail">Thumbnail</option>
+        <option value="yt-dlp">yt-dlp</option>
+      </select>
+      <button class="action-btn" id="batch-retry-btn" style="display:none;">Retry Selected</button>
+    </div>
+  </div>
+
+  <div id="loading" style="color: var(--color-muted);"><span class="loading-dots">Loading</span></div>
+  <div id="error" class="login-error" style="display:none;"></div>
+  <div id="empty" style="display:none; color: var(--color-muted); padding: var(--space-md) 0;">No extraction failures found.</div>
+
+  <div class="table-wrap" id="table-wrap" style="display:none;">
+    <table class="release-table">
+      <thead>
+        <tr>
+          <th><input type="checkbox" id="select-all" /></th>
+          <th>Filename</th>
+          <th>Extraction Type</th>
+          <th>Error</th>
+          <th>Attempts</th>
+          <th>Last Attempt</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="failures-tbody"></tbody>
+    </table>
+  </div>
+</Admin>
+
+<style>
+  .failures-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+  .failures-header h1 {
+    margin-bottom: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  .failures-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+  .failures-controls select {
+    padding: 4px 6px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    border: 1px solid var(--color-border);
+    background: #fff;
+    color: var(--color-text);
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+  }
+  .release-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+  .release-table th {
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    font-size: 0.7rem;
+    padding: var(--space-xs) var(--space-sm);
+    border-bottom: 2px solid var(--color-text);
+    color: var(--color-muted);
+    white-space: nowrap;
+  }
+  .release-table td {
+    padding: var(--space-xs) var(--space-sm);
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+  .release-table td.error-cell {
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #c00;
+    font-size: 0.7rem;
+  }
+
+  .action-btn {
+    background: none;
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    cursor: pointer;
+    text-transform: uppercase;
+    text-decoration: none;
+    display: inline-block;
+    margin-right: 2px;
+    margin-bottom: 2px;
+  }
+  .action-btn:hover { background: var(--color-text); color: var(--color-bg); }
+  .action-btn--success { border-color: #080; color: #080; }
+  .action-btn--success:hover { background: #080; color: #fff; }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    border: 1px solid;
+  }
+
+  @media (max-width: 640px) {
+    .release-table th:nth-child(4),
+    .release-table td:nth-child(4),
+    .release-table th:nth-child(5),
+    .release-table td:nth-child(5) {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  document.addEventListener('astro:page-load', async () => {
+    const tbody = document.getElementById('failures-tbody');
+    if (!tbody) return;
+
+    const user = await (window as any).__authReady;
+    if (!user) return;
+
+    const loadingEl = document.getElementById('loading')!;
+    const errorEl = document.getElementById('error')!;
+    const emptyEl = document.getElementById('empty')!;
+    const tableWrap = document.getElementById('table-wrap')!;
+    const batchRetryBtn = document.getElementById('batch-retry-btn') as HTMLButtonElement;
+    const filterType = document.getElementById('filter-type') as HTMLSelectElement;
+
+    let allFailures: any[] = [];
+    let selectedIds = new Set<string>();
+
+    filterType.addEventListener('change', () => renderTable());
+
+    // Select all
+    document.getElementById('select-all')?.addEventListener('change', (e) => {
+      const checked = (e.target as HTMLInputElement).checked;
+      getFilteredFailures().forEach(f => {
+        if (checked) selectedIds.add(f.id);
+        else selectedIds.delete(f.id);
+      });
+      updateBatchBtn();
+      renderTable();
+    });
+
+    batchRetryBtn.addEventListener('click', async () => {
+      if (selectedIds.size === 0) return;
+      batchRetryBtn.disabled = true;
+      batchRetryBtn.textContent = 'Retrying...';
+      try {
+        for (const id of selectedIds) {
+          await fetch(`/api/extraction-failures/${id}/retry`, {
+            method: 'POST',
+            credentials: 'include',
+          });
+        }
+        selectedIds.clear();
+        await loadFailures();
+      } catch { alert('Batch retry failed'); }
+      batchRetryBtn.disabled = false;
+      batchRetryBtn.textContent = 'Retry Selected';
+    });
+
+    function getFilteredFailures() {
+      const typeFilter = filterType.value;
+      if (!typeFilter) return allFailures;
+      return allFailures.filter(f => f.extraction_type === typeFilter);
+    }
+
+    function updateBatchBtn() {
+      batchRetryBtn.style.display = selectedIds.size > 0 ? 'inline-block' : 'none';
+    }
+
+    async function loadFailures() {
+      loadingEl.style.display = 'block';
+      errorEl.style.display = 'none';
+      emptyEl.style.display = 'none';
+      tableWrap.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/extraction-failures', { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to load failures');
+        const data = await res.json();
+        allFailures = data.failures || data;
+        loadingEl.style.display = 'none';
+        renderTable();
+      } catch (err: any) {
+        loadingEl.style.display = 'none';
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+      }
+    }
+
+    function renderTable() {
+      const filtered = getFilteredFailures();
+
+      if (filtered.length === 0) {
+        tableWrap.style.display = 'none';
+        emptyEl.style.display = 'block';
+        return;
+      }
+
+      emptyEl.style.display = 'none';
+      tableWrap.style.display = 'block';
+
+      tbody.innerHTML = filtered.map(f => {
+        const checked = selectedIds.has(f.id) ? 'checked' : '';
+        const lastAttempt = f.last_attempt_at ? new Date(f.last_attempt_at).toLocaleString() : '--';
+        return `<tr>
+          <td><input type="checkbox" data-select="${f.id}" ${checked} /></td>
+          <td>
+            <a href="/admin/search/detail?id=${f.media_item_id}" style="color: var(--color-text); text-decoration: underline;">
+              ${f.media_filename || f.media_item_id || 'Unknown'}
+            </a>
+          </td>
+          <td><span class="badge">${f.extraction_type || '--'}</span></td>
+          <td class="error-cell" title="${(f.error_message || '').replace(/"/g, '&quot;')}">${f.error_message || '--'}</td>
+          <td>${f.attempts ?? '--'}</td>
+          <td style="white-space:nowrap;">${lastAttempt}</td>
+          <td style="white-space:nowrap;">
+            <button class="action-btn" data-retry="${f.id}">Retry</button>
+            <button class="action-btn action-btn--success" data-resolve="${f.id}">Resolve</button>
+          </td>
+        </tr>`;
+      }).join('');
+
+      updateBatchBtn();
+    }
+
+    // Delegate clicks
+    tbody.addEventListener('click', async (e) => {
+      const target = e.target as HTMLElement;
+
+      // Checkbox
+      const checkbox = target.closest('[data-select]') as HTMLInputElement | null;
+      if (checkbox) {
+        const id = checkbox.dataset.select!;
+        if (checkbox.checked) selectedIds.add(id);
+        else selectedIds.delete(id);
+        updateBatchBtn();
+        return;
+      }
+
+      // Retry
+      const retryBtn = target.closest('[data-retry]') as HTMLElement | null;
+      if (retryBtn) {
+        const id = retryBtn.dataset.retry!;
+        retryBtn.textContent = '...';
+        try {
+          await fetch(`/api/extraction-failures/${id}/retry`, {
+            method: 'POST',
+            credentials: 'include',
+          });
+          await loadFailures();
+        } catch { alert('Retry failed'); }
+        return;
+      }
+
+      // Resolve
+      const resolveBtn = target.closest('[data-resolve]') as HTMLElement | null;
+      if (resolveBtn) {
+        const id = resolveBtn.dataset.resolve!;
+        try {
+          await fetch(`/api/extraction-failures/${id}/resolve`, {
+            method: 'POST',
+            credentials: 'include',
+          });
+          await loadFailures();
+        } catch { alert('Resolve failed'); }
+      }
+    });
+
+    loadFailures();
+  });
+</script>

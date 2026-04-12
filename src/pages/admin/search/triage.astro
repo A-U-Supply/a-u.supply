@@ -1,0 +1,663 @@
+---
+import Admin from '../../../layouts/Admin.astro';
+---
+
+<Admin title="Triage Queue" current="triage">
+  <div class="triage-header">
+    <h1>Triage Queue</h1>
+    <div class="triage-controls">
+      <select id="triage-type">
+        <option value="">All Types</option>
+        <option value="image">Image</option>
+        <option value="audio">Audio</option>
+        <option value="video">Video</option>
+      </select>
+      <select id="triage-channel">
+        <option value="">All Channels</option>
+      </select>
+      <label class="filter-label" style="display:inline; margin-left: var(--space-sm);">
+        Max Tags:
+        <input type="number" id="triage-max-tags" value="0" min="0" max="10" style="width: 50px;" />
+      </label>
+      <button class="action-btn" id="triage-refresh">Refresh</button>
+    </div>
+  </div>
+
+  <div id="triage-loading" style="color: var(--color-muted);"><span class="loading-dots">Loading</span></div>
+  <div id="triage-error" class="login-error" style="display:none;"></div>
+  <div id="triage-empty" style="display:none; color: var(--color-muted); padding: var(--space-lg) 0; text-align: center;">
+    No items in triage queue. All caught up!
+  </div>
+
+  <div id="triage-content" style="display:none;">
+    <div class="progress-bar">
+      <span id="triage-progress">0 of 0 reviewed</span>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+    </div>
+
+    <div class="triage-card" id="triage-card">
+      <div class="triage-preview" id="triage-preview"></div>
+      <div class="triage-info">
+        <div class="triage-filename" id="triage-filename"></div>
+        <div class="triage-meta" id="triage-meta"></div>
+      </div>
+
+      <div class="triage-tags">
+        <div class="triage-current-tags" id="current-tags"></div>
+        <div class="triage-quick-tags" id="quick-tags"></div>
+        <div class="tag-input-row">
+          <input type="text" id="triage-tag-input" placeholder="Type tag and press Enter..." autocomplete="off" />
+          <div class="tag-suggestions" id="triage-suggestions" style="display:none;"></div>
+        </div>
+        <div class="triage-pending-tags" id="pending-tags"></div>
+      </div>
+
+      <div class="triage-actions">
+        <button class="triage-btn triage-btn--skip" id="btn-skip" title="Skip (Tab)">Skip</button>
+        <button class="triage-btn triage-btn--submit" id="btn-submit" title="Submit (Enter)">Submit & Next</button>
+      </div>
+    </div>
+
+    <div class="triage-nav">
+      <button class="action-btn" id="btn-prev" title="Previous (Left arrow)">Prev</button>
+      <span id="item-counter">1 / 1</span>
+      <button class="action-btn" id="btn-next" title="Next (Right arrow)">Next</button>
+    </div>
+
+    <div class="triage-shortcuts">
+      <span>Shortcuts:</span>
+      <span>Space: play/pause</span>
+      <span>Left/Right: navigate</span>
+      <span>1-9: quick tags</span>
+      <span>Enter: submit</span>
+      <span>Tab: skip</span>
+    </div>
+  </div>
+</Admin>
+
+<style>
+  .triage-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+  .triage-header h1 {
+    margin-bottom: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  .triage-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    flex-wrap: wrap;
+  }
+  .triage-controls select,
+  .triage-controls input {
+    padding: 4px 6px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    border: 1px solid var(--color-border);
+    background: #fff;
+    color: var(--color-text);
+  }
+
+  .progress-bar {
+    margin: var(--space-md) 0;
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+  .progress-track {
+    height: 4px;
+    background: var(--color-border);
+    margin-top: 4px;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--color-accent);
+    width: 0%;
+    transition: width 0.3s;
+  }
+
+  .triage-card {
+    border: 2px solid var(--color-text);
+    padding: var(--space-md);
+    margin-bottom: var(--space-md);
+  }
+
+  .triage-preview {
+    background: #f5f5f5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+    max-height: 500px;
+    margin-bottom: var(--space-md);
+    overflow: hidden;
+  }
+  .triage-preview img {
+    max-width: 100%;
+    max-height: 500px;
+    object-fit: contain;
+  }
+  .triage-preview audio {
+    width: 100%;
+  }
+  .triage-preview video {
+    max-width: 100%;
+    max-height: 500px;
+  }
+
+  .triage-info {
+    margin-bottom: var(--space-sm);
+  }
+  .triage-filename {
+    font-weight: bold;
+    font-size: var(--text-lg);
+    margin-bottom: 4px;
+  }
+  .triage-meta {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+
+  .triage-tags {
+    margin-bottom: var(--space-md);
+  }
+  .triage-current-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: var(--space-xs);
+  }
+  .tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border: 1px solid var(--color-border);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+  .tag-chip--existing { color: var(--color-muted); }
+  .tag-chip--pending { border-color: var(--color-accent); color: var(--color-accent); }
+  .tag-chip button {
+    background: none;
+    border: none;
+    color: #c00;
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0;
+    line-height: 1;
+  }
+
+  .triage-quick-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: var(--space-sm);
+  }
+  .quick-tag {
+    padding: 4px 10px;
+    border: 1px solid var(--color-border);
+    background: none;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    cursor: pointer;
+    color: var(--color-text);
+    position: relative;
+  }
+  .quick-tag:hover { border-color: var(--color-accent); color: var(--color-accent); }
+  .quick-tag .key-hint {
+    font-size: 0.55rem;
+    color: var(--color-muted);
+    position: absolute;
+    top: -6px;
+    right: -4px;
+    background: #fff;
+    padding: 0 2px;
+    border: 1px solid var(--color-border);
+    line-height: 1;
+  }
+
+  .tag-input-row {
+    position: relative;
+  }
+  .tag-input-row input {
+    width: 100%;
+    padding: var(--space-xs) var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    border: 1px solid var(--color-border);
+  }
+  .tag-input-row input:focus {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -1px;
+  }
+  .tag-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid var(--color-border);
+    border-top: none;
+    max-height: 150px;
+    overflow-y: auto;
+    z-index: 10;
+  }
+  .tag-suggestion {
+    padding: 4px 8px;
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+  .tag-suggestion:hover { background: #f0f0f0; }
+
+  .triage-pending-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: var(--space-xs);
+  }
+
+  .triage-actions {
+    display: flex;
+    gap: var(--space-sm);
+  }
+  .triage-btn {
+    flex: 1;
+    padding: var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-base);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    border: 2px solid;
+    cursor: pointer;
+  }
+  .triage-btn--skip {
+    background: none;
+    border-color: var(--color-border);
+    color: var(--color-muted);
+  }
+  .triage-btn--skip:hover { border-color: var(--color-text); color: var(--color-text); }
+  .triage-btn--submit {
+    background: #1a1a1a;
+    border-color: #1a1a1a;
+    color: #fff;
+  }
+  .triage-btn--submit:hover { background: #333; border-color: #333; }
+
+  .triage-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-md);
+    font-size: var(--text-sm);
+    margin-bottom: var(--space-sm);
+  }
+
+  .triage-shortcuts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    font-size: 0.6rem;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    border-top: 1px solid var(--color-border);
+    padding-top: var(--space-sm);
+  }
+
+  .action-btn {
+    background: none;
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    cursor: pointer;
+    text-transform: uppercase;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .action-btn:hover { background: var(--color-text); color: var(--color-bg); }
+
+  .filter-label {
+    font-size: 0.65rem;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+
+  @media (max-width: 640px) {
+    .triage-header { flex-direction: column; }
+    .triage-preview { min-height: 200px; max-height: 300px; }
+    .triage-shortcuts { display: none; }
+    .triage-actions { flex-direction: column; }
+    .triage-btn { text-align: center; }
+  }
+</style>
+
+<script>
+  document.addEventListener('astro:page-load', async () => {
+    const triageCard = document.getElementById('triage-card');
+    if (!triageCard) return;
+
+    const user = await (window as any).__authReady;
+    if (!user) return;
+
+    const loadingEl = document.getElementById('triage-loading')!;
+    const errorEl = document.getElementById('triage-error')!;
+    const emptyEl = document.getElementById('triage-empty')!;
+    const contentEl = document.getElementById('triage-content')!;
+
+    let items: any[] = [];
+    let currentIndex = 0;
+    let reviewed = 0;
+    let totalCount = 0;
+    let pendingTags: string[] = [];
+    let quickTags = ['logo', 'sample', 'reference', 'screenshot', 'render', 'photo', 'music', 'sfx'];
+
+    // Load channels
+    function loadChannels() {
+      const select = document.getElementById('triage-channel') as HTMLSelectElement;
+      ['image-gen', 'sample-sale'].forEach(ch => {
+        const opt = document.createElement('option');
+        opt.value = ch;
+        opt.textContent = ch;
+        select.appendChild(opt);
+      });
+    }
+
+    async function loadItems() {
+      loadingEl.style.display = 'block';
+      errorEl.style.display = 'none';
+      emptyEl.style.display = 'none';
+      contentEl.style.display = 'none';
+
+      const mediaType = (document.getElementById('triage-type') as HTMLSelectElement).value;
+      const channel = (document.getElementById('triage-channel') as HTMLSelectElement).value;
+      const maxTags = parseInt((document.getElementById('triage-max-tags') as HTMLInputElement).value) || 0;
+
+      const body: any = {
+        query: '',
+        page: 1,
+        per_page: 50,
+        sort: 'created_at:desc',
+        filters: {
+          tag_count: { min: 0 },
+        },
+      };
+      if (maxTags === 0) body.filters.tag_count = { min: 0 };
+      if (mediaType) body.media_types = [mediaType];
+      if (channel) body.filters.source_channels = [channel];
+
+      try {
+        const res = await fetch('/api/search', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error('Failed to load triage items');
+        const data = await res.json();
+        items = data.results || data.hits || [];
+        totalCount = data.total || items.length;
+        currentIndex = 0;
+        reviewed = 0;
+        pendingTags = [];
+        loadingEl.style.display = 'none';
+
+        if (items.length === 0) {
+          emptyEl.style.display = 'block';
+        } else {
+          contentEl.style.display = 'block';
+          renderCurrentItem();
+        }
+      } catch (err: any) {
+        loadingEl.style.display = 'none';
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+      }
+    }
+
+    function renderCurrentItem() {
+      if (currentIndex < 0 || currentIndex >= items.length) return;
+      const item = items[currentIndex];
+      pendingTags = [];
+
+      // Progress
+      document.getElementById('triage-progress')!.textContent = `${reviewed} of ${totalCount} reviewed`;
+      const pct = totalCount > 0 ? (reviewed / totalCount) * 100 : 0;
+      (document.getElementById('progress-fill') as HTMLElement).style.width = pct + '%';
+
+      // Counter
+      document.getElementById('item-counter')!.textContent = `${currentIndex + 1} / ${items.length}`;
+
+      // Preview
+      const previewEl = document.getElementById('triage-preview')!;
+      const fileUrl = `/api/media/${item.id}/file`;
+      const thumbUrl = `/api/media/${item.id}/thumbnail`;
+      if (item.media_type === 'image') {
+        previewEl.innerHTML = `<img src="${fileUrl}" alt="" />`;
+      } else if (item.media_type === 'audio') {
+        previewEl.innerHTML = `<audio controls src="${fileUrl}" id="triage-media"></audio>`;
+      } else if (item.media_type === 'video') {
+        previewEl.innerHTML = `<video controls src="${fileUrl}" poster="${thumbUrl}" id="triage-media" style="max-height:500px;"></video>`;
+      } else {
+        previewEl.innerHTML = `<span style="color: var(--color-muted);">No preview</span>`;
+      }
+
+      // Info
+      document.getElementById('triage-filename')!.textContent = item.filename || 'Untitled';
+      const size = item.file_size_bytes ? formatSize(item.file_size_bytes) : '';
+      const channels = (item.source_channels || []).join(', ');
+      document.getElementById('triage-meta')!.textContent = [item.media_type, size, channels].filter(Boolean).join(' / ');
+
+      // Existing tags
+      const currentTagsEl = document.getElementById('current-tags')!;
+      const existingTags = item.tags || [];
+      currentTagsEl.innerHTML = existingTags.map((t: string) =>
+        `<span class="tag-chip tag-chip--existing">${t}</span>`
+      ).join('') || '<span style="color: var(--color-muted); font-size: var(--text-sm);">No tags</span>';
+
+      // Quick tags
+      const quickEl = document.getElementById('quick-tags')!;
+      quickEl.innerHTML = quickTags.map((t, i) =>
+        `<button class="quick-tag" data-quick-tag="${t}">${t}<span class="key-hint">${i + 1}</span></button>`
+      ).join('');
+
+      renderPendingTags();
+
+      // Clear tag input
+      const tagInput = document.getElementById('triage-tag-input') as HTMLInputElement;
+      if (tagInput) tagInput.value = '';
+    }
+
+    function renderPendingTags() {
+      const el = document.getElementById('pending-tags')!;
+      el.innerHTML = pendingTags.map(t =>
+        `<span class="tag-chip tag-chip--pending">${t}<button data-remove-pending="${t}">&times;</button></span>`
+      ).join('');
+    }
+
+    function formatSize(bytes: number): string {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function addPendingTag(tag: string) {
+      tag = tag.trim().toLowerCase();
+      if (!tag || pendingTags.includes(tag)) return;
+      const existing = items[currentIndex]?.tags || [];
+      if (existing.includes(tag)) return;
+      pendingTags.push(tag);
+      renderPendingTags();
+    }
+
+    async function submitTags() {
+      if (pendingTags.length === 0 && (items[currentIndex]?.tags || []).length > 0) {
+        advance();
+        return;
+      }
+      if (pendingTags.length > 0) {
+        const item = items[currentIndex];
+        try {
+          await fetch(`/api/media/${item.id}/tags`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tags: pendingTags }),
+          });
+        } catch { alert('Failed to save tags'); return; }
+      }
+      reviewed++;
+      advance();
+    }
+
+    function advance() {
+      if (currentIndex < items.length - 1) {
+        currentIndex++;
+        renderCurrentItem();
+      } else {
+        document.getElementById('triage-content')!.style.display = 'none';
+        document.getElementById('triage-empty')!.style.display = 'block';
+        document.getElementById('triage-empty')!.textContent = 'Triage complete! Refresh to load more.';
+      }
+    }
+
+    function skipItem() {
+      advance();
+    }
+
+    // Event listeners
+    document.getElementById('triage-refresh')?.addEventListener('click', loadItems);
+
+    document.getElementById('btn-prev')?.addEventListener('click', () => {
+      if (currentIndex > 0) { currentIndex--; renderCurrentItem(); }
+    });
+    document.getElementById('btn-next')?.addEventListener('click', () => {
+      if (currentIndex < items.length - 1) { currentIndex++; renderCurrentItem(); }
+    });
+
+    document.getElementById('btn-skip')?.addEventListener('click', skipItem);
+    document.getElementById('btn-submit')?.addEventListener('click', submitTags);
+
+    // Quick tags
+    document.getElementById('quick-tags')?.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('[data-quick-tag]') as HTMLElement | null;
+      if (btn) addPendingTag(btn.dataset.quickTag!);
+    });
+
+    // Remove pending tag
+    document.getElementById('pending-tags')?.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('[data-remove-pending]') as HTMLElement | null;
+      if (btn) {
+        pendingTags = pendingTags.filter(t => t !== btn.dataset.removePending);
+        renderPendingTags();
+      }
+    });
+
+    // Tag input with autocomplete
+    let suggestTimeout: ReturnType<typeof setTimeout>;
+    const tagInput = document.getElementById('triage-tag-input') as HTMLInputElement;
+    const suggestionsEl = document.getElementById('triage-suggestions')!;
+
+    tagInput?.addEventListener('input', () => {
+      clearTimeout(suggestTimeout);
+      const q = tagInput.value.trim();
+      if (q.length < 1) { suggestionsEl.style.display = 'none'; return; }
+      suggestTimeout = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/tags/suggest?q=${encodeURIComponent(q)}`, { credentials: 'include' });
+          if (res.ok) {
+            const suggestions: any[] = await res.json();
+            if (suggestions.length > 0) {
+              suggestionsEl.innerHTML = suggestions.map(s => `<div class="tag-suggestion" data-tag="${s.tag}">${s.tag} (${s.usage_count})</div>`).join('');
+              suggestionsEl.style.display = 'block';
+            } else {
+              suggestionsEl.style.display = 'none';
+            }
+          }
+        } catch { suggestionsEl.style.display = 'none'; }
+      }, 200);
+    });
+
+    suggestionsEl?.addEventListener('click', (e) => {
+      const el = (e.target as HTMLElement).closest('.tag-suggestion') as HTMLElement | null;
+      if (el) {
+        addPendingTag(el.dataset.tag!);
+        suggestionsEl.style.display = 'none';
+        tagInput.value = '';
+      }
+    });
+
+    tagInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const tag = tagInput.value.trim();
+        if (tag) { addPendingTag(tag); tagInput.value = ''; suggestionsEl.style.display = 'none'; }
+      }
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // Don't intercept when typing in inputs
+      if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA' || (e.target as HTMLElement).tagName === 'SELECT') {
+        return;
+      }
+      // Only act if triage content is visible
+      if (contentEl.style.display === 'none') return;
+
+      if (e.key === ' ') {
+        e.preventDefault();
+        const media = document.getElementById('triage-media') as HTMLAudioElement | HTMLVideoElement | null;
+        if (media) { media.paused ? media.play() : media.pause(); }
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (currentIndex > 0) { currentIndex--; renderCurrentItem(); }
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (currentIndex < items.length - 1) { currentIndex++; renderCurrentItem(); }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        submitTags();
+      } else if (e.key === 'Tab') {
+        e.preventDefault();
+        skipItem();
+      } else if (e.key >= '1' && e.key <= '9') {
+        const idx = parseInt(e.key) - 1;
+        if (idx < quickTags.length) {
+          addPendingTag(quickTags[idx]);
+        }
+      }
+    });
+
+    // Touch swipe support
+    let touchStartX = 0;
+    let touchStartY = 0;
+    triageCard.addEventListener('touchstart', (e: TouchEvent) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    triageCard.addEventListener('touchend', (e: TouchEvent) => {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+        if (dx > 0 && currentIndex > 0) { currentIndex--; renderCurrentItem(); }
+        else if (dx < 0 && currentIndex < items.length - 1) { currentIndex++; renderCurrentItem(); }
+      }
+    }, { passive: true });
+
+    loadChannels();
+    loadItems();
+  });
+</script>
