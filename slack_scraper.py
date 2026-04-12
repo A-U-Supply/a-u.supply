@@ -449,14 +449,9 @@ def _ingest_file(
     db.add(source)
     db.flush()
 
-    # Trigger extraction for new items
-    if status == "new":
-        full_path = SEARCH_MEDIA_DIR / media_item.file_path
-        try:
-            from extraction import run_extraction_async
-            run_extraction_async(media_item.id, str(full_path), media_item.media_type)
-        except ImportError:
-            pass
+    # NOTE: extraction is NOT triggered here — the item hasn't been committed yet
+    # and background threads can't see uncommitted data. Extraction runs as a
+    # batch after the scrape completes via _run_post_scrape_extraction().
 
     # Sync to Meilisearch
     try:
@@ -790,6 +785,12 @@ def _run_scrape(channels: dict[str, str]) -> dict:
             with _status_lock:
                 _scrape_status["current_channel"] = name
             results[name] = scrape_channel(name, cid)
+
+        # Run extraction and Meilisearch sync for all items missing metadata
+        with _status_lock:
+            _scrape_status["current_channel"] = "_extraction"
+        _run_post_scrape_extraction()
+
     finally:
         with _status_lock:
             _scrape_status["running"] = False
@@ -797,6 +798,86 @@ def _run_scrape(channels: dict[str, str]) -> dict:
             _scrape_status["last_result"] = results
 
     return results
+
+
+def _run_post_scrape_extraction():
+    """Run metadata extraction and Meilisearch sync for items missing metadata."""
+    from models import MediaImageMeta, MediaAudioMeta, MediaVideoMeta
+
+    db = SessionLocal()
+    try:
+        # Find images without metadata
+        images_without_meta = (
+            db.query(MediaItem)
+            .filter(
+                MediaItem.media_type == "image",
+                ~MediaItem.id.in_(db.query(MediaImageMeta.media_item_id)),
+            )
+            .all()
+        )
+        logger.info("Post-scrape: %d images need extraction", len(images_without_meta))
+        for item in images_without_meta:
+            try:
+                from extraction import run_extraction
+                full_path = str(SEARCH_MEDIA_DIR / item.file_path)
+                run_extraction(item.id, full_path, item.media_type)
+            except Exception as exc:
+                logger.error("Extraction failed for %s: %s", item.id, exc)
+
+        # Find audio without metadata
+        audio_without_meta = (
+            db.query(MediaItem)
+            .filter(
+                MediaItem.media_type == "audio",
+                ~MediaItem.id.in_(db.query(MediaAudioMeta.media_item_id)),
+            )
+            .all()
+        )
+        logger.info("Post-scrape: %d audio files need extraction", len(audio_without_meta))
+        for item in audio_without_meta:
+            try:
+                from extraction import run_extraction
+                full_path = str(SEARCH_MEDIA_DIR / item.file_path)
+                run_extraction(item.id, full_path, item.media_type)
+            except Exception as exc:
+                logger.error("Extraction failed for %s: %s", item.id, exc)
+
+        # Find videos without metadata
+        videos_without_meta = (
+            db.query(MediaItem)
+            .filter(
+                MediaItem.media_type == "video",
+                ~MediaItem.id.in_(db.query(MediaVideoMeta.media_item_id)),
+            )
+            .all()
+        )
+        logger.info("Post-scrape: %d videos need extraction", len(videos_without_meta))
+        for item in videos_without_meta:
+            try:
+                from extraction import run_extraction
+                full_path = str(SEARCH_MEDIA_DIR / item.file_path)
+                run_extraction(item.id, full_path, item.media_type)
+            except Exception as exc:
+                logger.error("Extraction failed for %s: %s", item.id, exc)
+
+        # Rebuild Meilisearch index for all items
+        logger.info("Post-scrape: syncing all items to Meilisearch")
+        try:
+            from search_client import sync_media_item, configure_indexes
+            configure_indexes()
+            all_items = db.query(MediaItem).all()
+            for item in all_items:
+                try:
+                    db.refresh(item)
+                    sync_media_item(db, item)
+                except Exception as exc:
+                    logger.error("Meilisearch sync failed for %s: %s", item.id, exc)
+        except ImportError:
+            pass
+
+        logger.info("Post-scrape extraction and sync complete")
+    finally:
+        db.close()
 
 
 def trigger_scrape(channels: list[str] | None = None) -> dict:
