@@ -661,6 +661,11 @@ import Admin from '../../../layouts/Admin.astro';
       if (filters.reactionsMin > 0) body.filters.reaction_count = { min: filters.reactionsMin };
       if (filters.tagsMin > 0) body.filters.tag_count = { min: filters.tagsMin };
 
+      // Check URL for color filter param
+      const urlParams = new URLSearchParams(window.location.search);
+      const colorParam = urlParams.get('color');
+      if (colorParam) body.filters.color = colorParam;
+
       try {
         const res = await fetch('/api/search', {
           method: 'POST',
