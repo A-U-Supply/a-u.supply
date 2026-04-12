@@ -79,6 +79,7 @@ import Admin from '../../../layouts/Admin.astro';
     </aside>
 
     <div class="results-area">
+      <div id="active-filters" class="active-filters" style="display:none;"></div>
       <div class="batch-bar" id="batch-bar" style="display:none;">
         <span id="selected-count">0 selected</span>
         <button class="action-btn" data-batch="tag">Tag</button>
@@ -272,6 +273,41 @@ import Admin from '../../../layouts/Admin.astro';
   .filter-group select:focus {
     outline: 2px solid var(--color-accent);
     outline-offset: -1px;
+  }
+
+  .active-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: var(--space-xs) 0;
+    margin-bottom: var(--space-xs);
+    font-size: 0.7rem;
+  }
+  .active-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border: 1px solid var(--color-accent);
+    color: var(--color-accent);
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+  .active-filter__remove {
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+  }
+  .active-filter__color {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 1px solid #ccc;
+    vertical-align: middle;
   }
 
   .batch-bar {
@@ -661,10 +697,15 @@ import Admin from '../../../layouts/Admin.astro';
       if (filters.reactionsMin > 0) body.filters.reaction_count = { min: filters.reactionsMin };
       if (filters.tagsMin > 0) body.filters.tag_count = { min: filters.tagsMin };
 
-      // Check URL for color filter param (hex stored without # to avoid URL fragment issue)
+      // Check URL params for filters
       const urlParams = new URLSearchParams(window.location.search);
       const colorParam = urlParams.get('color');
       if (colorParam) body.filters.color = '#' + colorParam.replace('#', '');
+      const tagParam = urlParams.get('tag');
+      if (tagParam) {
+        body.filters.tags = body.filters.tags || [];
+        if (!body.filters.tags.includes(tagParam)) body.filters.tags.push(tagParam);
+      }
 
       try {
         const res = await fetch('/api/search', {
@@ -803,6 +844,31 @@ import Admin from '../../../layouts/Admin.astro';
           (data.uploaders || []).map((u: string) => `<option value="${u}">${u}</option>`).join('');
       } catch {}
     }
+
+    // Populate UI from URL params
+    const initParams = new URLSearchParams(window.location.search);
+    if (initParams.get('q')) searchInput.value = initParams.get('q')!;
+    if (initParams.get('tag')) (document.getElementById('filter-tags') as HTMLInputElement).value = initParams.get('tag')!;
+
+    function showActiveFilters() {
+      const el = document.getElementById('active-filters')!;
+      const params = new URLSearchParams(window.location.search);
+      const chips: string[] = [];
+      const color = params.get('color');
+      if (color) {
+        const hex = '#' + color.replace('#', '');
+        chips.push(`<span class="active-filter"><span class="active-filter__color" style="background:${hex}"></span> Color: ${hex} <button class="active-filter__remove" onclick="location.href='/admin/search'">&times;</button></span>`);
+      }
+      const tag = params.get('tag');
+      if (tag) {
+        chips.push(`<span class="active-filter">Tag: ${tag} <button class="active-filter__remove" onclick="location.href='/admin/search'">&times;</button></span>`);
+      }
+      if (chips.length > 0) {
+        el.innerHTML = chips.join('');
+        el.style.display = 'flex';
+      }
+    }
+    showActiveFilters();
 
     loadFacets();
     doSearch();
