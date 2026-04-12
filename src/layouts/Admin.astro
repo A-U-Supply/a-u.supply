@@ -35,6 +35,15 @@ const { title, current } = Astro.props;
         <li><a href="/admin/settings" aria-current={current === 'settings' ? 'page' : undefined}>Settings</a></li>
       </ul>
 
+      <div class="sidebar__section">Search Engine</div>
+      <ul class="sidebar__nav">
+        <li><a href="/admin/search" aria-current={current === 'search' ? 'page' : undefined}>Search</a></li>
+        <li><a href="/admin/search/triage" aria-current={current === 'triage' ? 'page' : undefined}>Triage</a></li>
+        <li><a href="/admin/search/upload" aria-current={current === 'upload' ? 'page' : undefined}>Upload</a></li>
+        <li><a href="/admin/search/failures" aria-current={current === 'failures' ? 'page' : undefined}>Failures</a></li>
+        <li><a href="/admin/api-keys" aria-current={current === 'api-keys' ? 'page' : undefined}>API Keys</a></li>
+      </ul>
+
       <div class="sidebar__footer">
         <div class="sidebar__user" id="sidebar-user"></div>
         <button class="sidebar__logout" id="logout-btn">Log Out</button>

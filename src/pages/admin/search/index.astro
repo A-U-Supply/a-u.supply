@@ -1,0 +1,764 @@
+---
+import Admin from '../../../layouts/Admin.astro';
+---
+
+<Admin title="Media Search" current="search">
+  <div class="search-header">
+    <h1>Media Search</h1>
+    <div class="view-toggle">
+      <button class="toggle-btn active" id="grid-view-btn" title="Grid view">Grid</button>
+      <button class="toggle-btn" id="list-view-btn" title="List view">List</button>
+    </div>
+  </div>
+
+  <form id="search-form" class="search-bar">
+    <input type="text" id="search-input" placeholder="Search media..." autocomplete="off" />
+    <button type="submit" class="search-submit">Search</button>
+  </form>
+
+  <div class="search-layout">
+    <aside class="filter-panel" id="filter-panel">
+      <button class="filter-toggle" id="filter-toggle">Filters</button>
+
+      <div class="filter-body" id="filter-body">
+        <div class="filter-group">
+          <label class="filter-label">Media Type</label>
+          <label class="filter-check"><input type="checkbox" value="image" checked /> Image</label>
+          <label class="filter-check"><input type="checkbox" value="audio" checked /> Audio</label>
+          <label class="filter-check"><input type="checkbox" value="video" checked /> Video</label>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Source Channel</label>
+          <select id="filter-channel" multiple size="4">
+            <option value="">Loading...</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Date Range</label>
+          <input type="date" id="filter-date-from" placeholder="From" />
+          <input type="date" id="filter-date-to" placeholder="To" />
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Tags</label>
+          <input type="text" id="filter-tags" placeholder="Comma-separated tags" />
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Min Reactions</label>
+          <input type="number" id="filter-reactions-min" min="0" value="0" />
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Min Tags</label>
+          <input type="number" id="filter-tags-min" min="0" value="0" />
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Sort By</label>
+          <select id="sort-by">
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="most_reactions">Most Reactions</option>
+            <option value="largest">Largest</option>
+            <option value="longest">Longest</option>
+          </select>
+        </div>
+
+        <button class="action-btn" id="apply-filters" style="width:100%; margin-top: var(--space-xs);">Apply Filters</button>
+      </div>
+    </aside>
+
+    <div class="results-area">
+      <div class="batch-bar" id="batch-bar" style="display:none;">
+        <span id="selected-count">0 selected</span>
+        <button class="action-btn" data-batch="tag">Tag</button>
+        <button class="action-btn" data-batch="re-extract">Re-extract</button>
+        <button class="action-btn" data-batch="export">Export</button>
+        <button class="action-btn action-btn--danger" data-batch="delete">Delete</button>
+        <button class="action-btn" id="clear-selection">Clear</button>
+      </div>
+
+      <div id="loading" style="color: var(--color-muted);"><span class="loading-dots">Loading</span></div>
+      <div id="error" class="login-error" style="display:none;"></div>
+      <div id="empty" style="display:none; color: var(--color-muted); padding: var(--space-md) 0;">No media found.</div>
+
+      <div id="results-grid" class="results-grid" style="display:none;"></div>
+
+      <div class="table-wrap" id="results-table" style="display:none;">
+        <table class="release-table">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="select-all" /></th>
+              <th>Filename</th>
+              <th>Type</th>
+              <th>Size</th>
+              <th>Tags</th>
+              <th>Created</th>
+              <th>Reactions</th>
+            </tr>
+          </thead>
+          <tbody id="results-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="pagination" id="pagination" style="display:none;">
+        <button class="action-btn" id="prev-page">Prev</button>
+        <span id="page-info">Page 1</span>
+        <button class="action-btn" id="next-page">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Batch tag dialog -->
+  <div class="dialog-overlay" id="batch-tag-dialog" style="display:none;">
+    <div class="dialog">
+      <p>Add tags to selected items</p>
+      <input type="text" id="batch-tag-input" placeholder="Comma-separated tags" style="width:100%; margin-top: var(--space-sm); padding: var(--space-xs); font-family: var(--font-mono); font-size: var(--text-sm); border: 1px solid var(--color-border);" />
+      <div class="dialog-actions">
+        <button class="btn-cancel" id="batch-tag-cancel">Cancel</button>
+        <button class="action-btn" id="batch-tag-confirm">Apply Tags</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete confirmation dialog -->
+  <div class="dialog-overlay" id="delete-dialog" style="display:none;">
+    <div class="dialog">
+      <p>Delete <strong id="delete-count">0</strong> selected items?</p>
+      <p style="color: var(--color-muted); font-size: var(--text-sm); margin-top: var(--space-xs);">This action cannot be undone.</p>
+      <div class="dialog-actions">
+        <button class="btn-cancel" id="delete-cancel">Cancel</button>
+        <button class="btn-danger" id="delete-confirm">Delete</button>
+      </div>
+    </div>
+  </div>
+</Admin>
+
+<style>
+  .search-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+  .search-header h1 {
+    margin-bottom: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  .view-toggle {
+    display: flex;
+    gap: 0;
+  }
+  .toggle-btn {
+    padding: var(--space-xs) var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    background: none;
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    color: var(--color-muted);
+  }
+  .toggle-btn:first-child { border-right: none; }
+  .toggle-btn.active {
+    color: var(--color-text);
+    font-weight: bold;
+    background: var(--color-bg);
+    border-color: var(--color-text);
+  }
+
+  .search-bar {
+    display: flex;
+    gap: 0;
+    margin: var(--space-md) 0;
+  }
+  .search-bar input {
+    flex: 1;
+    padding: var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-base);
+    border: 2px solid var(--color-text);
+    border-right: none;
+    background: #fff;
+    color: var(--color-text);
+  }
+  .search-bar input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+  }
+  .search-submit {
+    padding: var(--space-sm) var(--space-md);
+    font-family: var(--font-mono);
+    font-size: var(--text-base);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    background: #1a1a1a;
+    color: #fff;
+    border: 2px solid #1a1a1a;
+    cursor: pointer;
+  }
+  .search-submit:hover { background: #333; border-color: #333; }
+
+  .search-layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: var(--space-md);
+    align-items: start;
+  }
+
+  .filter-panel {
+    border: 1px solid var(--color-border);
+    padding: var(--space-sm);
+  }
+  .filter-toggle {
+    display: none;
+    width: 100%;
+    padding: var(--space-xs);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    text-transform: uppercase;
+    background: none;
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    color: var(--color-text);
+  }
+  .filter-group {
+    margin-bottom: var(--space-sm);
+  }
+  .filter-label {
+    display: block;
+    font-size: 0.65rem;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    margin-bottom: var(--space-xs);
+  }
+  .filter-check {
+    display: block;
+    font-size: var(--text-sm);
+    margin-bottom: 2px;
+    cursor: pointer;
+  }
+  .filter-check input { margin-right: 4px; }
+  .filter-group input[type="text"],
+  .filter-group input[type="number"],
+  .filter-group input[type="date"],
+  .filter-group select {
+    width: 100%;
+    padding: 4px 6px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    border: 1px solid var(--color-border);
+    background: #fff;
+    color: var(--color-text);
+  }
+  .filter-group input:focus,
+  .filter-group select:focus {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -1px;
+  }
+
+  .batch-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    background: #f5f5f5;
+    border: 1px solid var(--color-border);
+    margin-bottom: var(--space-sm);
+    flex-wrap: wrap;
+  }
+  .batch-bar span {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    margin-right: auto;
+  }
+
+  .results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: var(--space-sm);
+  }
+  .grid-item {
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.15s;
+  }
+  .grid-item:hover { border-color: var(--color-text); }
+  .grid-item.selected { border-color: var(--color-accent); border-width: 2px; }
+  .grid-item__check {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    z-index: 1;
+  }
+  .grid-item__thumb {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    background: #eee;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    text-transform: uppercase;
+  }
+  .grid-item__thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .grid-item__info {
+    padding: 4px 6px;
+    font-size: 0.65rem;
+    border-top: 1px solid var(--color-border);
+  }
+  .grid-item__name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .grid-item__meta {
+    color: var(--color-muted);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+    font-size: var(--text-sm);
+  }
+
+  .dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+  }
+  .dialog {
+    background: #fff;
+    padding: var(--space-md);
+    border: 2px solid var(--color-text);
+    max-width: 400px;
+    width: 90%;
+    font-family: var(--font-mono);
+  }
+  .dialog-actions {
+    display: flex;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+    justify-content: flex-end;
+  }
+  .btn-cancel {
+    padding: var(--space-xs) var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    text-transform: uppercase;
+    background: none;
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+  }
+  .btn-cancel:hover { border-color: var(--color-text); }
+  .btn-danger {
+    padding: var(--space-xs) var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: bold;
+    text-transform: uppercase;
+    background: #c00;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+  }
+  .btn-danger:hover { background: #a00; }
+
+  .action-btn {
+    background: none;
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    cursor: pointer;
+    text-transform: uppercase;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .action-btn:hover { background: var(--color-text); color: var(--color-bg); }
+  .action-btn--danger { border-color: #c00; color: #c00; }
+  .action-btn--danger:hover { background: #c00; color: #fff; }
+
+  @media (max-width: 640px) {
+    .search-layout {
+      grid-template-columns: 1fr;
+    }
+    .filter-toggle { display: block; }
+    .filter-body { display: none; }
+    .filter-body.open { display: block; margin-top: var(--space-sm); }
+    .results-grid {
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    }
+  }
+</style>
+
+<script>
+  document.addEventListener('astro:page-load', async () => {
+    const searchForm = document.getElementById('search-form') as HTMLFormElement | null;
+    if (!searchForm) return;
+
+    const user = await (window as any).__authReady;
+    if (!user) return;
+
+    let currentView = 'grid';
+    let currentPage = 1;
+    const pageSize = 24;
+    let totalResults = 0;
+    let allResults: any[] = [];
+    let selectedIds = new Set<string>();
+
+    const searchInput = document.getElementById('search-input') as HTMLInputElement;
+    const loadingEl = document.getElementById('loading')!;
+    const errorEl = document.getElementById('error')!;
+    const emptyEl = document.getElementById('empty')!;
+    const gridEl = document.getElementById('results-grid')!;
+    const tableEl = document.getElementById('results-table')!;
+    const tbodyEl = document.getElementById('results-tbody')!;
+    const paginationEl = document.getElementById('pagination')!;
+    const batchBar = document.getElementById('batch-bar')!;
+    const selectedCount = document.getElementById('selected-count')!;
+    const pageInfo = document.getElementById('page-info')!;
+
+    // View toggle
+    document.getElementById('grid-view-btn')?.addEventListener('click', () => {
+      currentView = 'grid';
+      document.getElementById('grid-view-btn')!.classList.add('active');
+      document.getElementById('list-view-btn')!.classList.remove('active');
+      renderResults();
+    });
+    document.getElementById('list-view-btn')?.addEventListener('click', () => {
+      currentView = 'list';
+      document.getElementById('list-view-btn')!.classList.add('active');
+      document.getElementById('grid-view-btn')!.classList.remove('active');
+      renderResults();
+    });
+
+    // Filter toggle (mobile)
+    document.getElementById('filter-toggle')?.addEventListener('click', () => {
+      document.getElementById('filter-body')?.classList.toggle('open');
+    });
+
+    // Apply filters button
+    document.getElementById('apply-filters')?.addEventListener('click', () => {
+      currentPage = 1;
+      doSearch();
+    });
+
+    // Search form
+    searchForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      currentPage = 1;
+      doSearch();
+    });
+
+    // Pagination
+    document.getElementById('prev-page')?.addEventListener('click', () => {
+      if (currentPage > 1) { currentPage--; doSearch(); }
+    });
+    document.getElementById('next-page')?.addEventListener('click', () => {
+      if (currentPage * pageSize < totalResults) { currentPage++; doSearch(); }
+    });
+
+    // Select all
+    document.getElementById('select-all')?.addEventListener('change', (e) => {
+      const checked = (e.target as HTMLInputElement).checked;
+      allResults.forEach(r => {
+        if (checked) selectedIds.add(r.id);
+        else selectedIds.delete(r.id);
+      });
+      updateSelection();
+      renderResults();
+    });
+
+    // Batch actions
+    document.querySelectorAll('[data-batch]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const action = (btn as HTMLElement).dataset.batch;
+        if (action === 'tag') {
+          document.getElementById('batch-tag-dialog')!.style.display = 'flex';
+        } else if (action === 'delete') {
+          document.getElementById('delete-count')!.textContent = String(selectedIds.size);
+          document.getElementById('delete-dialog')!.style.display = 'flex';
+        } else if (action === 're-extract') {
+          batchReExtract();
+        } else if (action === 'export') {
+          batchExport();
+        }
+      });
+    });
+
+    document.getElementById('clear-selection')?.addEventListener('click', () => {
+      selectedIds.clear();
+      updateSelection();
+      renderResults();
+    });
+
+    // Batch tag dialog
+    document.getElementById('batch-tag-cancel')?.addEventListener('click', () => {
+      document.getElementById('batch-tag-dialog')!.style.display = 'none';
+    });
+    document.getElementById('batch-tag-confirm')?.addEventListener('click', async () => {
+      const input = document.getElementById('batch-tag-input') as HTMLInputElement;
+      const tags = input.value.split(',').map(t => t.trim()).filter(Boolean);
+      if (tags.length === 0) return;
+      try {
+        await fetch('/api/media/batch/tags', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ media_ids: Array.from(selectedIds), tags }),
+        });
+        document.getElementById('batch-tag-dialog')!.style.display = 'none';
+        input.value = '';
+        doSearch();
+      } catch { alert('Failed to apply tags'); }
+    });
+
+    // Delete dialog
+    document.getElementById('delete-cancel')?.addEventListener('click', () => {
+      document.getElementById('delete-dialog')!.style.display = 'none';
+    });
+    document.getElementById('delete-confirm')?.addEventListener('click', async () => {
+      try {
+        await fetch('/api/media/batch/delete', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ media_ids: Array.from(selectedIds) }),
+        });
+        document.getElementById('delete-dialog')!.style.display = 'none';
+        selectedIds.clear();
+        doSearch();
+      } catch { alert('Delete failed'); }
+    });
+
+    async function batchReExtract() {
+      try {
+        await fetch('/api/media/batch/re-extract', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ media_ids: Array.from(selectedIds) }),
+        });
+        alert('Re-extraction queued for ' + selectedIds.size + ' items');
+      } catch { alert('Re-extraction failed'); }
+    }
+
+    async function batchExport() {
+      try {
+        const res = await fetch('/api/media/batch/export', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ media_ids: Array.from(selectedIds) }),
+        });
+        if (res.ok) {
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'media-export.zip';
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      } catch { alert('Export failed'); }
+    }
+
+    function getFilters() {
+      const types: string[] = [];
+      document.querySelectorAll('.filter-check input:checked').forEach(cb => {
+        types.push((cb as HTMLInputElement).value);
+      });
+      const channel = document.getElementById('filter-channel') as HTMLSelectElement;
+      const channels = Array.from(channel.selectedOptions).map(o => o.value).filter(Boolean);
+      const dateFrom = (document.getElementById('filter-date-from') as HTMLInputElement).value;
+      const dateTo = (document.getElementById('filter-date-to') as HTMLInputElement).value;
+      const tags = (document.getElementById('filter-tags') as HTMLInputElement).value;
+      const reactionsMin = parseInt((document.getElementById('filter-reactions-min') as HTMLInputElement).value) || 0;
+      const tagsMin = parseInt((document.getElementById('filter-tags-min') as HTMLInputElement).value) || 0;
+      const sortBy = (document.getElementById('sort-by') as HTMLSelectElement).value;
+      return { types, channels, dateFrom, dateTo, tags, reactionsMin, tagsMin, sortBy };
+    }
+
+    async function doSearch() {
+      loadingEl.style.display = 'block';
+      errorEl.style.display = 'none';
+      emptyEl.style.display = 'none';
+      gridEl.style.display = 'none';
+      tableEl.style.display = 'none';
+      paginationEl.style.display = 'none';
+
+      const filters = getFilters();
+      const sortMap: Record<string, string> = {
+        newest: 'created_at:desc',
+        oldest: 'created_at:asc',
+        most_reactions: 'total_reaction_count:desc',
+        largest: 'file_size_bytes:desc',
+        longest: 'duration_seconds:desc',
+      };
+      const body: any = {
+        query: searchInput.value,
+        media_types: filters.types,
+        sort: sortMap[filters.sortBy] || null,
+        page: currentPage,
+        per_page: pageSize,
+        filters: {},
+      };
+      if (filters.channels.length) body.filters.source_channels = filters.channels;
+      if (filters.dateFrom || filters.dateTo) body.filters.date_range = { from: filters.dateFrom || undefined, to: filters.dateTo || undefined };
+      if (filters.tags) body.filters.tags = filters.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
+      if (filters.reactionsMin > 0) body.filters.reaction_count = { min: filters.reactionsMin };
+      if (filters.tagsMin > 0) body.filters.tag_count = { min: filters.tagsMin };
+
+      try {
+        const res = await fetch('/api/search', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error('Search failed');
+        const data = await res.json();
+        allResults = data.results || data.hits || [];
+        totalResults = data.total || allResults.length;
+        loadingEl.style.display = 'none';
+        renderResults();
+      } catch (err: any) {
+        loadingEl.style.display = 'none';
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+      }
+    }
+
+    function updateSelection() {
+      if (selectedIds.size > 0) {
+        batchBar.style.display = 'flex';
+        selectedCount.textContent = selectedIds.size + ' selected';
+      } else {
+        batchBar.style.display = 'none';
+      }
+    }
+
+    function formatSize(bytes: number): string {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function renderResults() {
+      if (allResults.length === 0) {
+        emptyEl.style.display = 'block';
+        return;
+      }
+      emptyEl.style.display = 'none';
+
+      if (currentView === 'grid') {
+        tableEl.style.display = 'none';
+        gridEl.style.display = 'grid';
+        gridEl.innerHTML = allResults.map(item => {
+          const checked = selectedIds.has(item.id) ? 'checked' : '';
+          const selectedClass = selectedIds.has(item.id) ? ' selected' : '';
+          const thumb = (item.media_type === 'image' || item.media_type === 'video')
+            ? `<img src="/api/media/${item.id}/thumbnail" alt="" loading="lazy" />`
+            : `<span>${item.media_type || '?'}</span>`;
+          return `<div class="grid-item${selectedClass}" data-id="${item.id}">
+            <input type="checkbox" class="grid-item__check" data-select="${item.id}" ${checked} />
+            <div class="grid-item__thumb">${thumb}</div>
+            <div class="grid-item__info">
+              <div class="grid-item__name" title="${item.filename || ''}">${item.filename || 'Untitled'}</div>
+              <div class="grid-item__meta">
+                <span>${item.tag_count ?? 0} tags</span>
+                <span>${item.total_reaction_count ?? 0} rxn</span>
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+      } else {
+        gridEl.style.display = 'none';
+        tableEl.style.display = 'block';
+        tbodyEl.innerHTML = allResults.map(item => {
+          const checked = selectedIds.has(item.id) ? 'checked' : '';
+          const tags = (item.tags || []).join(', ') || '--';
+          const date = item.created_at ? new Date(item.created_at).toLocaleDateString() : '--';
+          return `<tr>
+            <td><input type="checkbox" data-select="${item.id}" ${checked} /></td>
+            <td><a href="/admin/search/detail?id=${item.id}" style="color: var(--color-text); text-decoration: underline;">${item.filename || 'Untitled'}</a></td>
+            <td>${item.media_type || '--'}</td>
+            <td style="white-space:nowrap;">${item.file_size_bytes ? formatSize(item.file_size_bytes) : '--'}</td>
+            <td>${tags}</td>
+            <td style="white-space:nowrap;">${date}</td>
+            <td>${item.total_reaction_count ?? 0}</td>
+          </tr>`;
+        }).join('');
+      }
+
+      // Pagination
+      const totalPages = Math.ceil(totalResults / pageSize);
+      if (totalPages > 1) {
+        paginationEl.style.display = 'flex';
+        pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+        (document.getElementById('prev-page') as HTMLButtonElement).disabled = currentPage <= 1;
+        (document.getElementById('next-page') as HTMLButtonElement).disabled = currentPage >= totalPages;
+      }
+
+      updateSelection();
+    }
+
+    // Delegate click for grid items and checkboxes
+    document.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+
+      // Checkbox selection
+      const checkbox = target.closest('[data-select]') as HTMLInputElement | null;
+      if (checkbox) {
+        e.stopPropagation();
+        const id = checkbox.dataset.select!;
+        if (checkbox.checked) selectedIds.add(id);
+        else selectedIds.delete(id);
+        updateSelection();
+        return;
+      }
+
+      // Grid item click (navigate)
+      const gridItem = target.closest('.grid-item') as HTMLElement | null;
+      if (gridItem && !target.closest('.grid-item__check')) {
+        const id = gridItem.dataset.id;
+        if (id) window.location.href = `/admin/search/detail?id=${id}`;
+      }
+    });
+
+    // Load channel options from search facets
+    function loadChannels() {
+      const select = document.getElementById('filter-channel') as HTMLSelectElement;
+      select.innerHTML = ['image-gen', 'sample-sale'].map(ch => `<option value="${ch}">${ch}</option>`).join('');
+    }
+
+    loadChannels();
+    doSearch();
+  });
+</script>

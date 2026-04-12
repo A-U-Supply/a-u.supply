@@ -25,6 +25,7 @@ from auth import (
     verify_password,
 )
 from catalog import router as catalog_router
+from search_api import router as search_router
 from models import Base, User, engine
 
 # Ensure data directory exists
@@ -55,6 +56,7 @@ app.add_middleware(
 )
 
 app.include_router(catalog_router)
+app.include_router(search_router)
 
 IS_PRODUCTION = os.environ.get("PRODUCTION", "").lower() in ("1", "true", "yes")
 

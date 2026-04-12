@@ -1,6 +1,8 @@
+import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    Boolean,
     Column,
     Date,
     DateTime,
@@ -140,3 +142,144 @@ class ReleaseMetadata(Base):
     sort_order = Column(Integer, nullable=False, default=0)
 
     release = relationship("Release", back_populates="metadata_pairs")
+
+
+# --- Media Search Engine Models ---
+
+
+class MediaItem(Base):
+    __tablename__ = "media_items"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    sha256 = Column(String, unique=True, nullable=False)
+    filename = Column(String, nullable=False)
+    file_path = Column(String, nullable=False)
+    media_type = Column(String, nullable=False)  # image, audio, video
+    file_size_bytes = Column(Integer, nullable=False)
+    mime_type = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+    updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
+
+    sources = relationship("MediaSource", back_populates="media_item", cascade="all, delete-orphan")
+    tags = relationship("MediaTag", back_populates="media_item", cascade="all, delete-orphan")
+    image_meta = relationship("MediaImageMeta", back_populates="media_item", uselist=False, cascade="all, delete-orphan")
+    audio_meta = relationship("MediaAudioMeta", back_populates="media_item", uselist=False, cascade="all, delete-orphan")
+    video_meta = relationship("MediaVideoMeta", back_populates="media_item", uselist=False, cascade="all, delete-orphan")
+    extraction_failures = relationship("ExtractionFailure", back_populates="media_item", cascade="all, delete-orphan")
+
+
+class MediaSource(Base):
+    __tablename__ = "media_sources"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    media_item_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False)
+    source_type = Column(String, nullable=False)  # slack_file, slack_link, manual_upload
+    source_channel = Column(String, nullable=True)
+    uploader_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    slack_file_id = Column(String, nullable=True)
+    slack_message_ts = Column(String, nullable=True)
+    slack_message_text = Column(String, nullable=True)
+    slack_reactions = Column(String, nullable=True)  # JSON stored as text
+    reaction_count = Column(Integer, nullable=False, default=0)
+    source_url = Column(String, nullable=True)
+    source_metadata = Column(String, nullable=True)  # JSON stored as text
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+
+    media_item = relationship("MediaItem", back_populates="sources")
+    uploader = relationship("User")
+
+
+class MediaImageMeta(Base):
+    __tablename__ = "media_image_meta"
+
+    media_item_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True, unique=True)
+    width = Column(Integer, nullable=False)
+    height = Column(Integer, nullable=False)
+    format = Column(String, nullable=False)
+    dominant_colors = Column(String, nullable=True)  # JSON stored as text
+    caption = Column(String, nullable=True)
+
+    media_item = relationship("MediaItem", back_populates="image_meta")
+
+
+class MediaAudioMeta(Base):
+    __tablename__ = "media_audio_meta"
+
+    media_item_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True, unique=True)
+    duration_seconds = Column(Float, nullable=False)
+    sample_rate = Column(Integer, nullable=False)
+    channels = Column(Integer, nullable=False)
+    bit_depth = Column(Integer, nullable=True)
+    transcript = Column(String, nullable=True)
+    transcript_confidence = Column(Float, nullable=True)
+    acoustic_tags = Column(String, nullable=True)  # JSON stored as text
+
+    media_item = relationship("MediaItem", back_populates="audio_meta")
+
+
+class MediaVideoMeta(Base):
+    __tablename__ = "media_video_meta"
+
+    media_item_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True, unique=True)
+    duration_seconds = Column(Float, nullable=False)
+    width = Column(Integer, nullable=False)
+    height = Column(Integer, nullable=False)
+    fps = Column(Float, nullable=True)
+    thumbnail_path = Column(String, nullable=True)
+    audio_transcript = Column(String, nullable=True)
+    transcript_confidence = Column(Float, nullable=True)
+
+    media_item = relationship("MediaItem", back_populates="video_meta")
+
+
+class MediaTag(Base):
+    __tablename__ = "media_tags"
+    __table_args__ = (UniqueConstraint("media_item_id", "tag"),)
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    media_item_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False)
+    tag = Column(String, nullable=False)
+    tagged_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+
+    media_item = relationship("MediaItem", back_populates="tags")
+    user = relationship("User")
+
+
+class TagVocabulary(Base):
+    __tablename__ = "tag_vocabulary"
+
+    tag = Column(String, primary_key=True)
+    usage_count = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+
+
+class ApiKey(Base):
+    __tablename__ = "api_keys"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    key_hash = Column(String, nullable=False)
+    key_prefix = Column(String, nullable=False)
+    label = Column(String, nullable=False)
+    scope = Column(String, nullable=False)  # read, write, admin
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+    last_used_at = Column(DateTime, nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+
+    user = relationship("User")
+
+
+class ExtractionFailure(Base):
+    __tablename__ = "extraction_failures"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    media_item_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False)
+    extraction_type = Column(String, nullable=False)
+    error_message = Column(String, nullable=False)
+    attempts = Column(Integer, nullable=False, default=1)
+    last_attempt_at = Column(DateTime, nullable=False, default=_utcnow)
+    resolved = Column(Boolean, nullable=False, default=False)
+
+    media_item = relationship("MediaItem", back_populates="extraction_failures")
