@@ -67,7 +67,7 @@ def get_client() -> meilisearch.Client:
     """Return a singleton Meilisearch client."""
     global _client
     if _client is None:
-        _client = meilisearch.Client(MEILISEARCH_URL, MEILISEARCH_MASTER_KEY or None)
+        _client = meilisearch.Client(MEILISEARCH_URL, MEILISEARCH_MASTER_KEY or None, timeout=5)
     return _client
 
 

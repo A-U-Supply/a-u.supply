@@ -329,7 +329,14 @@ def _storage_path(media_type: str, sha256: str, filename: str) -> Path:
 
 
 def _get_last_scrape_ts(db, channel_name: str) -> str | None:
-    """Get the latest Slack message timestamp scraped for a channel."""
+    """Get the newest Slack message timestamp scraped for a channel.
+
+    Used for incremental scrapes — only fetch messages newer than this.
+    Returns None if no messages have been scraped (triggers full history).
+
+    Note: only used when we're confident the full history has been scraped.
+    For the initial backfill, pass None to get everything.
+    """
     latest = (
         db.query(MediaSource.slack_message_ts)
         .filter(
@@ -654,11 +661,13 @@ def scrape_channel(
         stats["by_type"] = {"image": 0, "audio": 0, "video": 0}
 
     try:
-        oldest = _get_last_scrape_ts(db, channel_name)
+        # Don't pass oldest — always fetch full history.
+        # slack_file_id and source_url dedup skip already-processed files.
+        # This ensures partial runs don't leave gaps in the backlog.
         cursor = None
 
         while True:
-            resp = get_channel_history(channel_id, oldest=oldest, cursor=cursor)
+            resp = get_channel_history(channel_id, oldest=None, cursor=cursor)
             if not resp.get("ok"):
                 logger.error(
                     "Failed to fetch history for %s: %s",
