@@ -571,8 +571,12 @@ def _process_message_urls(
     channel_name: str,
     stats: dict,
     dry_run: bool = False,
+    skip_ytdlp: bool = False,
 ) -> None:
     """Extract and download URLs from a Slack message via yt-dlp."""
+    if skip_ytdlp and not dry_run:
+        return
+
     text = message.get("text", "")
     ts = message.get("ts", "")
     reactions, reaction_count = _extract_reactions_from_message(message)
@@ -693,7 +697,7 @@ def scrape_channel(
 
             for message in messages:
                 _process_message_files(db, message, channel_name, stats, dry_run=dry_run)
-                _process_message_urls(db, message, channel_name, stats, dry_run=dry_run)
+                _process_message_urls(db, message, channel_name, stats, dry_run=dry_run, skip_ytdlp=True)
 
             if not dry_run:
                 db.commit()
