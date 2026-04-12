@@ -431,7 +431,7 @@ import Admin from '../../../layouts/Admin.astro';
         typeMeta.innerHTML = `
           <div class="meta-section"><div class="meta-label">Dimensions</div><div class="meta-value">${m.width || '?'} x ${m.height || '?'}</div></div>
           <div class="meta-section"><div class="meta-label">Format</div><div class="meta-value">${m.format || '--'}</div></div>
-          ${m.dominant_colors ? `<div class="meta-section"><div class="meta-label">Colors</div><div class="meta-value">${(m.dominant_colors || []).map((c: string) => `<span style="display:inline-block;width:16px;height:16px;background:${c};border:1px solid #ccc;margin-right:2px;vertical-align:middle;"></span>`).join('')}</div></div>` : ''}
+          ${m.dominant_colors ? `<div class="meta-section"><div class="meta-label">Colors</div><div class="meta-value">${(typeof m.dominant_colors === 'string' ? JSON.parse(m.dominant_colors) : (m.dominant_colors || [])).map((c: string) => `<span style="display:inline-block;width:16px;height:16px;background:${c};border:1px solid #ccc;margin-right:2px;vertical-align:middle;"></span>`).join('')}</div></div>` : ''}
         `;
       } else if (item.media_type === 'audio' && item.audio_meta) {
         const m = item.audio_meta;

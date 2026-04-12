@@ -44,6 +44,7 @@ def _get_search_media_dir() -> Path:
 class SearchFilters(BaseModel):
     tags: list[str] | None = None
     source_channels: list[str] | None = None
+    poster: str | None = None  # filter by uploader name
     date_range: dict | None = None  # {"from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}
     reaction_count: dict | None = None  # {"min": N}
     tag_count: dict | None = None  # {"min": N}
@@ -224,6 +225,9 @@ def _build_meili_filter(filters: SearchFilters | None) -> str | None:
                 parts.append(f"created_at <= {ts}")
             except ValueError:
                 pass
+
+    if filters.poster:
+        parts.append(f'sources.uploader = "{filters.poster}"')
 
     if filters.reaction_count and filters.reaction_count.get("min") is not None:
         parts.append(f"total_reaction_count >= {filters.reaction_count['min']}")

@@ -42,6 +42,11 @@ import Admin from '../../../layouts/Admin.astro';
         </div>
 
         <div class="filter-group">
+          <label class="filter-label">Posted By</label>
+          <input type="text" id="filter-poster" placeholder="Username" />
+        </div>
+
+        <div class="filter-group">
           <label class="filter-label">Tags</label>
           <input type="text" id="filter-tags" placeholder="Comma-separated tags" />
         </div>
@@ -94,10 +99,12 @@ import Admin from '../../../layouts/Admin.astro';
               <th><input type="checkbox" id="select-all" /></th>
               <th>Filename</th>
               <th>Type</th>
+              <th>Posted By</th>
+              <th>Channel</th>
               <th>Size</th>
+              <th>Reactions</th>
               <th>Tags</th>
               <th>Created</th>
-              <th>Reactions</th>
             </tr>
           </thead>
           <tbody id="results-tbody"></tbody>
@@ -598,11 +605,12 @@ import Admin from '../../../layouts/Admin.astro';
       const channels = Array.from(channel.selectedOptions).map(o => o.value).filter(Boolean);
       const dateFrom = (document.getElementById('filter-date-from') as HTMLInputElement).value;
       const dateTo = (document.getElementById('filter-date-to') as HTMLInputElement).value;
+      const poster = (document.getElementById('filter-poster') as HTMLInputElement).value.trim();
       const tags = (document.getElementById('filter-tags') as HTMLInputElement).value;
       const reactionsMin = parseInt((document.getElementById('filter-reactions-min') as HTMLInputElement).value) || 0;
       const tagsMin = parseInt((document.getElementById('filter-tags-min') as HTMLInputElement).value) || 0;
       const sortBy = (document.getElementById('sort-by') as HTMLSelectElement).value;
-      return { types, channels, dateFrom, dateTo, tags, reactionsMin, tagsMin, sortBy };
+      return { types, channels, poster, dateFrom, dateTo, tags, reactionsMin, tagsMin, sortBy };
     }
 
     async function doSearch() {
@@ -630,6 +638,7 @@ import Admin from '../../../layouts/Admin.astro';
         filters: {},
       };
       if (filters.channels.length) body.filters.source_channels = filters.channels;
+      if (filters.poster) body.filters.poster = filters.poster;
       if (filters.dateFrom || filters.dateTo) body.filters.date_range = { from: filters.dateFrom || undefined, to: filters.dateTo || undefined };
       if (filters.tags) body.filters.tags = filters.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
       if (filters.reactionsMin > 0) body.filters.reaction_count = { min: filters.reactionsMin };
@@ -686,14 +695,17 @@ import Admin from '../../../layouts/Admin.astro';
           const thumb = (item.media_type === 'image' || item.media_type === 'video')
             ? `<img src="/api/media/${item.id}/thumbnail" alt="" loading="lazy" />`
             : `<span>${item.media_type || '?'}</span>`;
+          const poster = (item.sources || []).map((s: any) => s.uploader).filter(Boolean)[0] || '';
+          const rxn = item.total_reaction_count ?? 0;
           return `<div class="grid-item${selectedClass}" data-id="${item.id}">
             <input type="checkbox" class="grid-item__check" data-select="${item.id}" ${checked} />
             <div class="grid-item__thumb">${thumb}</div>
             <div class="grid-item__info">
               <div class="grid-item__name" title="${item.filename || ''}">${item.filename || 'Untitled'}</div>
               <div class="grid-item__meta">
+                ${poster ? `<span>${poster}</span>` : ''}
+                ${rxn > 0 ? `<span>${rxn} rxn</span>` : ''}
                 <span>${item.tag_count ?? 0} tags</span>
-                <span>${item.total_reaction_count ?? 0} rxn</span>
               </div>
             </div>
           </div>`;
@@ -704,15 +716,20 @@ import Admin from '../../../layouts/Admin.astro';
         tbodyEl.innerHTML = allResults.map(item => {
           const checked = selectedIds.has(item.id) ? 'checked' : '';
           const tags = (item.tags || []).join(', ') || '--';
-          const date = item.created_at ? new Date(item.created_at).toLocaleDateString() : '--';
+          const date = item.created_at ? new Date(item.created_at * 1000).toLocaleDateString() : '--';
+          const poster = (item.sources || []).map((s: any) => s.uploader).filter(Boolean)[0] || '--';
+          const channel = (item.source_channels || [])[0] || '--';
+          const rxn = item.total_reaction_count ?? 0;
           return `<tr>
             <td><input type="checkbox" data-select="${item.id}" ${checked} /></td>
             <td><a href="/admin/search/detail?id=${item.id}" style="color: var(--color-text); text-decoration: underline;">${item.filename || 'Untitled'}</a></td>
             <td>${item.media_type || '--'}</td>
+            <td>${poster}</td>
+            <td>${channel}</td>
             <td style="white-space:nowrap;">${item.file_size_bytes ? formatSize(item.file_size_bytes) : '--'}</td>
+            <td>${rxn}</td>
             <td>${tags}</td>
             <td style="white-space:nowrap;">${date}</td>
-            <td>${item.total_reaction_count ?? 0}</td>
           </tr>`;
         }).join('');
       }
