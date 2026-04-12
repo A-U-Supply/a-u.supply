@@ -189,10 +189,14 @@ def download_url(url: str, dest_dir: Path) -> Path | None:
     dest_dir.mkdir(parents=True, exist_ok=True)
     output_template = str(dest_dir / "%(title)s.%(ext)s")
 
+    # Resolve yt-dlp binary: check venv first, then system PATH
+    import shutil
+    ytdlp_bin = shutil.which("yt-dlp") or "/app/.venv/bin/yt-dlp"
+
     try:
         result = subprocess.run(
             [
-                "yt-dlp",
+                ytdlp_bin,
                 "--no-playlist",
                 "-o", output_template,
                 "--write-info-json",
@@ -666,17 +670,27 @@ def scrape_channel(
         # This ensures partial runs don't leave gaps in the backlog.
         cursor = None
 
+        page = 0
         while True:
+            page += 1
             resp = get_channel_history(channel_id, oldest=None, cursor=cursor)
             if not resp.get("ok"):
                 logger.error(
-                    "Failed to fetch history for %s: %s",
-                    channel_name, resp.get("error"),
+                    "Failed to fetch history for %s (page %d): %s",
+                    channel_name, page, resp.get("error"),
                 )
                 stats["errors"] += 1
                 break
 
             messages = resp.get("messages", [])
+            logger.info(
+                "Scraping %s page %d: %d messages (cursor=%s)",
+                channel_name, page, len(messages), cursor or "none",
+            )
+
+            if not messages:
+                break
+
             for message in messages:
                 _process_message_files(db, message, channel_name, stats, dry_run=dry_run)
                 _process_message_urls(db, message, channel_name, stats, dry_run=dry_run)
