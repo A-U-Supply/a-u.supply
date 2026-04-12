@@ -138,7 +138,29 @@ if __name__ == "__main__":
             sys.exit(1)
         revoke_apikey(sys.argv[2])
 
+    elif cmd == "check-meta":
+        check_meta()
+
     else:
         print(f"Unknown command: {cmd}")
         print(__doc__)
         sys.exit(1)
+
+
+def check_meta():
+    from models import MediaItem, MediaImageMeta, MediaAudioMeta, MediaVideoMeta, ExtractionFailure
+    db = SessionLocal()
+    total = db.query(MediaItem).count()
+    imgs = db.query(MediaItem).filter(MediaItem.media_type == "image").count()
+    auds = db.query(MediaItem).filter(MediaItem.media_type == "audio").count()
+    vids = db.query(MediaItem).filter(MediaItem.media_type == "video").count()
+    img_meta = db.query(MediaImageMeta).count()
+    aud_meta = db.query(MediaAudioMeta).count()
+    vid_meta = db.query(MediaVideoMeta).count()
+    failures = db.query(ExtractionFailure).filter(ExtractionFailure.resolved == False).count()
+    print(f"Total items: {total} (images={imgs}, audio={auds}, video={vids})")
+    print(f"Image meta: {img_meta}/{imgs}")
+    print(f"Audio meta: {aud_meta}/{auds}")
+    print(f"Video meta: {vid_meta}/{vids}")
+    print(f"Unresolved failures: {failures}")
+    db.close()
