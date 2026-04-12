@@ -281,6 +281,45 @@ def search_media(
     return results
 
 
+@router.get("/search/facets")
+def search_facets(
+    _auth=Depends(require_scope("read")),
+    db: Session = Depends(get_db),
+):
+    """Return available filter options: channels and uploaders."""
+    from models import MediaSource
+    from sqlalchemy import distinct, func
+
+    # Distinct channels
+    channels = [
+        r[0] for r in
+        db.query(distinct(MediaSource.source_channel))
+        .filter(MediaSource.source_channel.isnot(None))
+        .all()
+    ]
+
+    # Distinct uploaders from source_metadata
+    # The uploader name is stored in the User table via uploader_id
+    uploaders = []
+    sources_with_users = (
+        db.query(User.name)
+        .join(MediaSource, MediaSource.uploader_id == User.id)
+        .distinct()
+        .all()
+    )
+    uploaders = [r[0] for r in sources_with_users]
+
+    # If no uploader_ids are set, try to get unique user references from slack messages
+    if not uploaders:
+        # Fall back to extracting from source_metadata JSON if available
+        pass
+
+    return {
+        "channels": sorted(channels),
+        "uploaders": sorted(uploaders),
+    }
+
+
 @router.get("/tags")
 def list_tags(
     _auth=Depends(require_scope("read")),

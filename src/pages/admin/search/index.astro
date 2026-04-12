@@ -43,7 +43,9 @@ import Admin from '../../../layouts/Admin.astro';
 
         <div class="filter-group">
           <label class="filter-label">Posted By</label>
-          <input type="text" id="filter-poster" placeholder="Username" />
+          <select id="filter-poster">
+            <option value="">All</option>
+          </select>
         </div>
 
         <div class="filter-group">
@@ -412,6 +414,8 @@ import Admin from '../../../layouts/Admin.astro';
   .action-btn--danger:hover { background: #c00; color: #fff; }
 
   @media (max-width: 640px) {
+    .search-header { flex-direction: column; align-items: stretch; }
+    .search-bar input { font-size: 16px; } /* prevent iOS zoom */
     .search-layout {
       grid-template-columns: 1fr;
     }
@@ -419,7 +423,20 @@ import Admin from '../../../layouts/Admin.astro';
     .filter-body { display: none; }
     .filter-body.open { display: block; margin-top: var(--space-sm); }
     .results-grid {
-      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 4px;
+    }
+    .grid-item__info { font-size: 0.55rem; }
+    .batch-bar { font-size: 0.6rem; gap: 4px; }
+    .batch-bar .action-btn { font-size: 0.55rem; padding: 2px 4px; }
+    /* Hide less important columns on mobile */
+    .release-table th:nth-child(4),
+    .release-table td:nth-child(4),
+    .release-table th:nth-child(5),
+    .release-table td:nth-child(5),
+    .release-table th:nth-child(6),
+    .release-table td:nth-child(6) {
+      display: none;
     }
   }
 </style>
@@ -605,7 +622,7 @@ import Admin from '../../../layouts/Admin.astro';
       const channels = Array.from(channel.selectedOptions).map(o => o.value).filter(Boolean);
       const dateFrom = (document.getElementById('filter-date-from') as HTMLInputElement).value;
       const dateTo = (document.getElementById('filter-date-to') as HTMLInputElement).value;
-      const poster = (document.getElementById('filter-poster') as HTMLInputElement).value.trim();
+      const poster = (document.getElementById('filter-poster') as HTMLSelectElement).value;
       const tags = (document.getElementById('filter-tags') as HTMLInputElement).value;
       const reactionsMin = parseInt((document.getElementById('filter-reactions-min') as HTMLInputElement).value) || 0;
       const tagsMin = parseInt((document.getElementById('filter-tags-min') as HTMLInputElement).value) || 0;
@@ -769,13 +786,20 @@ import Admin from '../../../layouts/Admin.astro';
       }
     });
 
-    // Load channel options from search facets
-    function loadChannels() {
-      const select = document.getElementById('filter-channel') as HTMLSelectElement;
-      select.innerHTML = ['image-gen', 'sample-sale'].map(ch => `<option value="${ch}">${ch}</option>`).join('');
+    async function loadFacets() {
+      try {
+        const res = await fetch('/api/search/facets', { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const channelSelect = document.getElementById('filter-channel') as HTMLSelectElement;
+        channelSelect.innerHTML = (data.channels || []).map((ch: string) => `<option value="${ch}">${ch}</option>`).join('');
+        const posterSelect = document.getElementById('filter-poster') as HTMLSelectElement;
+        posterSelect.innerHTML = '<option value="">All</option>' +
+          (data.uploaders || []).map((u: string) => `<option value="${u}">${u}</option>`).join('');
+      } catch {}
     }
 
-    loadChannels();
+    loadFacets();
     doSearch();
   });
 </script>
