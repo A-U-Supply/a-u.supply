@@ -661,10 +661,10 @@ import Admin from '../../../layouts/Admin.astro';
       if (filters.reactionsMin > 0) body.filters.reaction_count = { min: filters.reactionsMin };
       if (filters.tagsMin > 0) body.filters.tag_count = { min: filters.tagsMin };
 
-      // Check URL for color filter param
+      // Check URL for color filter param (hex stored without # to avoid URL fragment issue)
       const urlParams = new URLSearchParams(window.location.search);
       const colorParam = urlParams.get('color');
-      if (colorParam) body.filters.color = colorParam;
+      if (colorParam) body.filters.color = '#' + colorParam.replace('#', '');
 
       try {
         const res = await fetch('/api/search', {

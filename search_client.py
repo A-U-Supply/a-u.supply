@@ -37,6 +37,7 @@ SEARCHABLE_ATTRIBUTES = [
     "caption",
     "filename",
     "sources.source_title",
+    "color_names",
 ]
 
 FILTERABLE_ATTRIBUTES = [
@@ -93,6 +94,72 @@ def configure_indexes() -> None:
             pass
         client.index(index_name).update_settings(settings)
         logger.info("Configured Meilisearch index: %s", index_name)
+
+
+def _hex_to_color_name(hex_color: str) -> str:
+    """Convert a hex color like '#1a2b3c' to human-readable color names.
+
+    Returns space-separated descriptors like 'dark blue' or 'bright red'.
+    """
+    try:
+        hex_color = hex_color.lstrip("#")
+        r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+    except (ValueError, IndexError):
+        return ""
+
+    # Lightness
+    lightness = (r + g + b) / (3 * 255)
+    if lightness < 0.15:
+        return "black dark"
+    if lightness > 0.85:
+        return "white bright light"
+
+    # Saturation (rough)
+    max_c = max(r, g, b)
+    min_c = min(r, g, b)
+    saturation = (max_c - min_c) / max_c if max_c > 0 else 0
+
+    if saturation < 0.15:
+        if lightness < 0.4:
+            return "dark gray grey"
+        return "light gray grey"
+
+    # Hue-based naming
+    names = []
+    if lightness < 0.35:
+        names.append("dark")
+    elif lightness > 0.65:
+        names.append("light bright")
+
+    if r > g and r > b:
+        if g > b * 1.5:
+            names.append("orange warm")
+        elif b > g * 0.8:
+            names.append("pink magenta")
+        else:
+            names.append("red warm")
+    elif g > r and g > b:
+        if b > r * 1.2:
+            names.append("teal cyan")
+        elif r > b * 1.2:
+            names.append("yellow green warm")
+        else:
+            names.append("green")
+    elif b > r and b > g:
+        if r > g * 1.5:
+            names.append("purple violet")
+        elif g > r * 0.8:
+            names.append("cyan teal blue")
+        else:
+            names.append("blue cool")
+    elif abs(r - g) < 30 and r > b:
+        names.append("yellow gold warm")
+    elif abs(g - b) < 30 and g > r:
+        names.append("cyan teal cool")
+    elif abs(r - b) < 30 and r > g:
+        names.append("magenta pink purple")
+
+    return " ".join(names)
 
 
 def _build_document(db: Session, media_item: MediaItem) -> dict:
@@ -166,9 +233,12 @@ def _build_document(db: Session, media_item: MediaItem) -> dict:
         doc["format"] = meta.format
         if meta.dominant_colors:
             try:
-                doc["dominant_colors"] = json.loads(meta.dominant_colors)
+                colors = json.loads(meta.dominant_colors)
+                doc["dominant_colors"] = colors
+                doc["color_names"] = " ".join(_hex_to_color_name(c) for c in colors)
             except (json.JSONDecodeError, TypeError):
                 doc["dominant_colors"] = []
+                doc["color_names"] = ""
         doc["caption"] = meta.caption
 
     elif media_item.media_type == "audio" and media_item.audio_meta:
