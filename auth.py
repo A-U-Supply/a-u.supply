@@ -129,9 +129,12 @@ def get_current_user_or_apikey(
                     )
                 # Debounce last_used_at updates to once per minute
                 now = datetime.now(timezone.utc)
+                last_used = api_key.last_used_at
+                if last_used and last_used.tzinfo is None:
+                    last_used = last_used.replace(tzinfo=timezone.utc)
                 if (
-                    api_key.last_used_at is None
-                    or (now - api_key.last_used_at) > timedelta(minutes=1)
+                    last_used is None
+                    or (now - last_used) > timedelta(minutes=1)
                 ):
                     api_key.last_used_at = now
                     db.commit()
