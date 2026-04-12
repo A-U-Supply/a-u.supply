@@ -136,8 +136,11 @@ def get_current_user_or_apikey(
                     last_used is None
                     or (now - last_used) > timedelta(minutes=1)
                 ):
-                    api_key.last_used_at = now
-                    db.commit()
+                    try:
+                        api_key.last_used_at = now
+                        db.commit()
+                    except Exception:
+                        db.rollback()
                 return (user, api_key.scope)
 
     raise HTTPException(
