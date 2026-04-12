@@ -10,7 +10,12 @@ RUN npm run build
 
 # Stage 2: Python app
 FROM python:3.12-slim
-RUN apt-get update && apt-get install -y --no-install-recommends git ffmpeg media-types libgomp1 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends git ffmpeg media-types libgomp1 unzip && rm -rf /var/lib/apt/lists/*
+# Install deno (required by yt-dlp for YouTube extraction)
+RUN curl -fsSL https://dl.deno.land/release/latest/deno-x86_64-unknown-linux-gnu.zip -o /tmp/deno.zip \
+    && unzip /tmp/deno.zip -d /usr/local/bin/ \
+    && rm /tmp/deno.zip \
+    && chmod +x /usr/local/bin/deno
 WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock ./
