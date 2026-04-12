@@ -619,8 +619,10 @@ def stream_track(code: str, track_id: int, db: Session = Depends(get_db), user: 
     if not fpath.exists():
         raise HTTPException(status_code=404, detail="Audio file not found")
 
+    import mimetypes
+    mime_type = mimetypes.guess_type(str(fpath))[0] or "application/octet-stream"
     from fastapi.responses import FileResponse
-    return FileResponse(fpath, media_type="application/octet-stream", headers={"Accept-Ranges": "bytes"})
+    return FileResponse(fpath, media_type=mime_type, headers={"Accept-Ranges": "bytes"})
 
 
 # --- Cover art endpoints ---
