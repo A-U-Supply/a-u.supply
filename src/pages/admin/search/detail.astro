@@ -446,7 +446,10 @@ import Admin from '../../../layouts/Admin.astro';
             }
             // Deduplicate groups
             const groups = [...new Set(colors.map(hexToGroup))];
-            const swatches = colors.map((c: string) => `<span style="display:inline-block;width:14px;height:14px;background:${c};border:1px solid #ccc;border-radius:2px;vertical-align:middle;"></span>`).join('');
+            const swatches = colors.map((c: string) => {
+              const hex = c.replace('#', '');
+              return `<a href="/admin/search?color=${hex}" style="display:inline-block;width:14px;height:14px;background:${c};border:1px solid #ccc;border-radius:2px;vertical-align:middle;cursor:pointer;" title="Search exact color ${c}"></a>`;
+            }).join('');
             const groupLinks = groups.map((g: string) => `<a href="/admin/search?colorgroup=${g}" class="tag-chip" style="text-decoration:none;">${g}</a>`).join(' ');
             return `<div class="meta-section"><div class="meta-label">Colors</div><div class="meta-value">${swatches} ${groupLinks}</div></div>`;
           })() : ''}
