@@ -192,6 +192,87 @@ def color_overlap():
     db.close()
 
 
+def source_audit():
+    """Look at what source data actually exists — filenames, metadata, URLs."""
+    import json
+    from collections import Counter
+    from models import MediaItem, MediaSource
+
+    db = SessionLocal()
+
+    # What source_types exist?
+    sources = db.query(MediaSource).all()
+    type_counts = Counter(s.source_type for s in sources)
+    print(f"Total sources: {len(sources)}")
+    print(f"Source types: {dict(type_counts)}")
+    print()
+
+    # What's in source_metadata?
+    meta_keys = Counter()
+    extractor_vals = Counter()
+    has_url = 0
+    url_domains = Counter()
+    for s in sources:
+        if s.source_url:
+            has_url += 1
+            try:
+                from urllib.parse import urlparse
+                domain = urlparse(s.source_url).netloc.lower()
+                url_domains[domain] += 1
+            except Exception:
+                pass
+        if s.source_metadata:
+            try:
+                meta = json.loads(s.source_metadata)
+                if isinstance(meta, dict):
+                    for k in meta.keys():
+                        meta_keys[k] += 1
+                    if "extractor" in meta:
+                        extractor_vals[meta["extractor"]] += 1
+            except Exception:
+                pass
+
+    print(f"Sources with URL: {has_url}")
+    if url_domains:
+        print("URL domains:")
+        for d, c in url_domains.most_common(20):
+            print(f"  {d}: {c}")
+    print()
+    print(f"Metadata keys found:")
+    for k, c in meta_keys.most_common():
+        print(f"  {k}: {c}")
+    if extractor_vals:
+        print()
+        print("Extractor values:")
+        for v, c in extractor_vals.most_common():
+            print(f"  {v}: {c}")
+
+    # Sample filenames for patterns
+    items = db.query(MediaItem).limit(500).all()
+    print()
+    print(f"Sample filenames (first 30):")
+    for item in items[:30]:
+        print(f"  [{item.media_type}] {item.filename}")
+
+    # Look for platform-like patterns in filenames
+    patterns = Counter()
+    for item in items:
+        fn = (item.filename or "").lower()
+        for pat in ["tiktok", "instagram", "ig_", "youtube", "yt_", "twitter", "x.com",
+                     "reddit", "snapchat", "fb_", "facebook", "tumblr", "pinterest",
+                     "screen shot", "screenshot", "img_", "photo-", "dsc", "dcim",
+                     "dall-e", "dalle", "midjourney", "mj_", "stable", "comfyui"]:
+            if pat in fn:
+                patterns[pat] += 1
+    if patterns:
+        print()
+        print("Filename patterns found:")
+        for p, c in patterns.most_common():
+            print(f"  '{p}': {c}")
+
+    db.close()
+
+
 def check_meta():
     from models import MediaItem, MediaImageMeta, MediaAudioMeta, MediaVideoMeta, ExtractionFailure
     db = SessionLocal()
@@ -266,6 +347,9 @@ if __name__ == "__main__":
 
     elif cmd == "color-overlap":
         color_overlap()
+
+    elif cmd == "source-audit":
+        source_audit()
 
     elif cmd == "backfill-posters":
         from slack_scraper import backfill_posters
