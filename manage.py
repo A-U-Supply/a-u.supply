@@ -356,6 +356,11 @@ if __name__ == "__main__":
         result = backfill_posters()
         print(f"Updated: {result['updated']}, Errors: {result['errors']}")
 
+    elif cmd == "backfill-text":
+        from slack_scraper import backfill_message_text
+        result = backfill_message_text()
+        print(f"Updated: {result['updated']}, Errors: {result['errors']}")
+
     else:
         print(f"Unknown command: {cmd}")
         print(__doc__)

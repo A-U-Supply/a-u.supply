@@ -91,6 +91,13 @@ def configure_indexes() -> None:
         "pagination": {
             "maxTotalHits": 10000,
         },
+        "typoTolerance": {
+            "disableOnNumbers": True,
+            "minWordSizeForTypos": {
+                "oneTypo": 5,
+                "twoTypos": 9,
+            },
+        },
         "displayedAttributes": ["*"],
     }
 

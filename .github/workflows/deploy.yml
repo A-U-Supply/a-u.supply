@@ -20,21 +20,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push image
+      - name: Build image
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
-          tags: |
-            ${{ env.IMAGE }}:${{ github.sha }}
-            ${{ env.IMAGE }}:latest
+          push: false
+          load: true
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -46,11 +38,13 @@ jobs:
           ssh-keyscan -H 204.168.201.89 >> ~/.ssh/known_hosts
           printf 'Host dokku\n  HostName 204.168.201.89\n  User dokku\n  IdentityFile ~/.ssh/id_ed25519\n' >> ~/.ssh/config
 
-      - name: Authenticate Dokku with GHCR
-        run: ssh dokku registry:login au-supply ghcr.io ${{ github.actor }} ${{ secrets.GITHUB_TOKEN }}
+      - name: Deploy image to Dokku
+        run: docker save ${{ env.IMAGE }}:${{ github.sha }} | ssh dokku git:load-image au-supply ${{ env.IMAGE }}:${{ github.sha }}
 
-      - name: Deploy pre-built image to Dokku
+      - name: Push image to GHCR (backup)
+        if: always()
         run: |
-          ssh dokku git:from-image au-supply ${{ env.IMAGE }}:${{ github.sha }}
-          sleep 10
-          ssh dokku proxy:build-config au-supply
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          docker tag ${{ env.IMAGE }}:${{ github.sha }} ${{ env.IMAGE }}:latest
+          docker push ${{ env.IMAGE }}:${{ github.sha }} || true
+          docker push ${{ env.IMAGE }}:latest || true
