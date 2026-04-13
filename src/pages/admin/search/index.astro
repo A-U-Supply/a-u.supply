@@ -43,10 +43,6 @@ import Admin from '../../../layouts/Admin.astro';
 
         <div class="filter-group">
           <label class="filter-label">Color</label>
-          <div class="color-scope-toggle">
-            <label class="filter-check"><input type="radio" name="color-scope" value="primary" checked /> Primary</label>
-            <label class="filter-check"><input type="radio" name="color-scope" value="all" /> All</label>
-          </div>
           <div class="color-checks">
             <label class="filter-check"><input type="checkbox" name="color-group" value="red" /> Red</label>
             <label class="filter-check"><input type="checkbox" name="color-group" value="orange" /> Orange</label>
@@ -297,11 +293,6 @@ import Admin from '../../../layouts/Admin.astro';
     outline-offset: -1px;
   }
 
-  .color-scope-toggle {
-    display: flex;
-    gap: var(--space-sm);
-    margin-bottom: 4px;
-  }
   .color-checks {
     max-height: 150px;
     overflow-y: auto;
@@ -697,12 +688,11 @@ import Admin from '../../../layouts/Admin.astro';
       const dateTo = (document.getElementById('filter-date-to') as HTMLInputElement).value;
       const poster = (document.getElementById('filter-poster') as HTMLSelectElement).value;
       const colorGroups = Array.from(document.querySelectorAll('input[name="color-group"]:checked')).map(cb => (cb as HTMLInputElement).value);
-      const colorScope = (document.querySelector('input[name="color-scope"]:checked') as HTMLInputElement)?.value || 'primary';
       const tags = (document.getElementById('filter-tags') as HTMLInputElement).value;
       const reactionsMin = parseInt((document.getElementById('filter-reactions-min') as HTMLInputElement).value) || 0;
       const tagsMin = parseInt((document.getElementById('filter-tags-min') as HTMLInputElement).value) || 0;
       const sortBy = (document.getElementById('sort-by') as HTMLSelectElement).value;
-      return { types, channels, poster, colorGroups, colorScope, dateFrom, dateTo, tags, reactionsMin, tagsMin, sortBy };
+      return { types, channels, poster, colorGroups, dateFrom, dateTo, tags, reactionsMin, tagsMin, sortBy };
     }
 
     async function doSearch() {
@@ -733,7 +723,6 @@ import Admin from '../../../layouts/Admin.astro';
       if (filters.poster) body.filters.poster = filters.poster;
       if (filters.colorGroups.length) {
         body.filters.color_group = filters.colorGroups;
-        body.filters.color_scope = filters.colorScope;
       }
       if (filters.dateFrom || filters.dateTo) body.filters.date_range = { from: filters.dateFrom || undefined, to: filters.dateTo || undefined };
       if (filters.tags) body.filters.tags = filters.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
@@ -748,7 +737,6 @@ import Admin from '../../../layouts/Admin.astro';
       if (searchInput.value) stateParams.set('q', searchInput.value);
       if (filters.poster) stateParams.set('poster', filters.poster);
       if (filters.colorGroups.length) stateParams.set('colorgroup', filters.colorGroups.join(','));
-      if (filters.colorScope !== 'primary') stateParams.set('colorscope', filters.colorScope);
       if (filters.channels.length) stateParams.set('channel', filters.channels.join(','));
       if (filters.tags) stateParams.set('tags', filters.tags);
       if (filters.dateFrom) stateParams.set('from', filters.dateFrom);
@@ -937,12 +925,6 @@ import Admin from '../../../layouts/Admin.astro';
           (cb as HTMLInputElement).checked = groups.includes((cb as HTMLInputElement).value);
         });
       }
-      // Color scope radio
-      if (initParams.get('colorscope')) {
-        const radio = document.querySelector(`input[name="color-scope"][value="${initParams.get('colorscope')}"]`) as HTMLInputElement | null;
-        if (radio) radio.checked = true;
-      }
-
       // Date range
       if (initParams.get('from')) (document.getElementById('filter-date-from') as HTMLInputElement).value = initParams.get('from')!;
       if (initParams.get('to')) (document.getElementById('filter-date-to') as HTMLInputElement).value = initParams.get('to')!;
@@ -1006,7 +988,7 @@ import Admin from '../../../layouts/Admin.astro';
         chips.push(`<span class="active-filter"><span class="active-filter__color" style="background:${hex}"></span> Color: ${hex} <button class="active-filter__remove" onclick="__clearFilter('color')">&times;</button></span>`);
       }
       if (filters.colorGroups.length) {
-        chips.push(`<span class="active-filter">Colors: ${filters.colorGroups.join(', ')} (${filters.colorScope}) <button class="active-filter__remove" onclick="__clearFilter('colorgroup')">&times;</button></span>`);
+        chips.push(`<span class="active-filter">Colors: ${filters.colorGroups.join(', ')} <button class="active-filter__remove" onclick="__clearFilter('colorgroup')">&times;</button></span>`);
       }
       if (filters.tags) {
         chips.push(`<span class="active-filter">Tags: ${filters.tags} <button class="active-filter__remove" onclick="__clearFilter('tags')">&times;</button></span>`);
