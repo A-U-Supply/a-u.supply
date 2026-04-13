@@ -32,6 +32,7 @@ SEARCHABLE_ATTRIBUTES = [
     "tags",
     "description",
     "sources.message_text",
+    "sources.uploader",
     "transcript",
     "audio_transcript",
     "caption",
