@@ -9,7 +9,8 @@ Web catalog and admin platform for [A-U.Supply](https://a-u.supply) — Audio Un
 | Frontend | [Astro](https://astro.build/) (static output) |
 | Backend  | [FastAPI](https://fastapi.tiangolo.com/)       |
 | Database | SQLite (WAL mode)                             |
-| Auth     | JWT in httpOnly cookies, bcrypt passwords     |
+| Search   | [Meilisearch](https://www.meilisearch.com/) (full-text, typo-tolerant) |
+| Auth     | JWT in httpOnly cookies + API key Bearer tokens |
 | Deploy   | Docker, Dokku, GitHub Actions                 |
 
 ## Project structure
@@ -17,30 +18,33 @@ Web catalog and admin platform for [A-U.Supply](https://a-u.supply) — Audio Un
 ```
 a-u.supply/
 ├── src/                    # Astro frontend source
+│   ├── components/
+│   │   └── Player.svelte   # Persistent audio player (Svelte 5 island)
 │   ├── layouts/
-│   │   ├── Base.astro      # Public page layout
+│   │   ├── Base.astro      # Public page layout (ViewTransitions + Player)
 │   │   └── Admin.astro     # Authenticated admin layout (sidebar nav)
 │   ├── pages/
-│   │   ├── index.astro     # Homepage (cover page)
+│   │   ├── index.astro     # Homepage
 │   │   ├── login.astro     # Login form
-│   │   └── admin/
-│   │       ├── dashboard.astro
-│   │       ├── files.astro
-│   │       └── settings.astro
+│   │   ├── catalog/        # Public catalog grid + release detail pages
+│   │   └── admin/          # Admin pages (dashboard, catalog mgmt, search, settings)
 │   └── styles/
 │       ├── global.css      # Fluid typography, custom properties, reset
 │       └── admin.css       # Admin layout, sidebar, login form
 ├── public/                 # Static assets (copied to dist/ at build)
-│   ├── assets/             # Images (logo, product art)
-│   └── favicon.jpg
-├── main.py                 # FastAPI application
-├── auth.py                 # JWT, password hashing, auth dependencies
-├── models.py               # SQLAlchemy models (User)
+├── main.py                 # FastAPI application, auth routes, webhooks
+├── auth.py                 # JWT auth, API key auth, scope hierarchy
+├── catalog.py              # Release catalog API (entities, releases, tracks, covers)
+├── search_api.py           # Media search API (search, media CRUD, tags, Slack sync, API keys)
+├── models.py               # SQLAlchemy models (User, Release, Track, MediaItem, etc.)
+├── search_client.py        # Meilisearch integration
+├── slack_scraper.py        # Slack channel scraper + yt-dlp integration
+├── extraction.py           # Async metadata extraction (images, audio, video)
 ├── cli.py                  # User management CLI
 ├── astro.config.mjs        # Astro config (dev proxy to FastAPI)
 ├── Dockerfile              # Multi-stage build (Node + Python)
 ├── Procfile                # Dokku process definition
-├── pyproject.toml           # Python dependencies (uv)
+├── pyproject.toml          # Python dependencies (uv)
 └── package.json            # Node dependencies (Astro)
 ```
 
@@ -102,35 +106,77 @@ python cli.py list-users
 python cli.py delete-user --email user@example.com
 ```
 
-Roles: `admin` (can manage users), `member` (access to everything else).
+Roles: `admin` (full access, can manage users), `member` (read/write access, no admin operations).
 
 ### Admin UI
 
 Admins can invite and delete users at `/admin/settings`.
 
-## API routes
+## API documentation
 
-All API endpoints are under the `/api` prefix.
+**Interactive API docs are available at [`/docs`](https://a-u.supply/docs)** (Swagger UI) and [`/redoc`](https://a-u.supply/redoc) (ReDoc). These are the primary API reference — every endpoint has detailed descriptions, parameter documentation, and request/response schemas.
 
-| Method   | Endpoint              | Auth     | Description           |
-|----------|-----------------------|----------|-----------------------|
-| `GET`    | `/api/csrf`           | No       | Get CSRF token        |
-| `POST`   | `/api/login`          | No       | Login (sets cookie)   |
-| `POST`   | `/api/logout`         | No       | Logout (clears cookie)|
-| `GET`    | `/api/me`             | Session  | Current user info     |
-| `GET`    | `/api/admin/users`    | Admin    | List all users        |
-| `POST`   | `/api/admin/users`    | Admin    | Create a user         |
-| `DELETE` | `/api/admin/users/:id`| Admin    | Delete a user         |
+### Authentication
 
-Login is rate-limited to 5 requests per minute per IP.
+Two methods:
 
-## Auth
+1. **Session cookie** — `POST /api/login` with email/password. Sets an httpOnly JWT cookie. Used by the browser UI.
+2. **API key** — `POST /api/keys` to generate a Bearer token. Send as `Authorization: Bearer au_xxxxx`. Used for scripts and programmatic access.
+
+### Scopes
+
+| Scope | Access level |
+|-------|-------------|
+| `read` | Search, view, stream, download |
+| `write` | Read + upload, tag, edit, manage API keys |
+| `admin` | Write + delete, manage users, trigger scrapes |
+
+Session cookie scope is derived from role: `admin` → admin, `member` → write.
+
+### API overview
+
+| Group | Endpoints | Description |
+|-------|-----------|-------------|
+| **Authentication** | `GET /api/csrf`, `POST /api/login`, `POST /api/logout` | Session management, CSRF tokens |
+| **User Profile** | `GET /api/me`, `POST /api/me/password` | View/edit your own account |
+| **User Admin** | `GET/POST/DELETE /api/admin/users` | Manage user accounts (admin only) |
+| **Entities** | `GET/POST/PUT/DELETE /api/entities` | Artist/manufacturer management |
+| **Releases** | `GET/POST/PUT/DELETE /api/releases`, publish/unpublish | Release catalog CRUD and lifecycle |
+| **Tracks** | `POST/DELETE /api/releases/{code}/tracks`, reorder, stream | Audio upload, management, and streaming |
+| **Cover Art** | `POST/GET /api/releases/{code}/cover` | Cover art upload and serving (auto-thumbnails) |
+| **Media Search** | `POST /api/search`, `GET /api/search/facets` | Full-text search with filters and facets |
+| **Media Items** | `GET/POST/PUT/DELETE /api/media` | Media CRUD, upload, file download, thumbnails |
+| **Tagging** | `POST/DELETE /api/media/{id}/tags`, `GET /api/tags` | Tag management and autocomplete |
+| **Batch Ops** | `POST /api/media/batch/*` | Bulk tag, delete, re-extract, ZIP export |
+| **Slack Sync** | `POST /api/ingest/slack/*` | Scrape, sync, dry-run, reaction refresh |
+| **API Keys** | `GET/POST/DELETE /api/keys` | Generate and revoke API keys |
+| **Extraction** | `GET /api/extraction-failures`, retry, resolve | Manage metadata extraction failures |
+
+**For full endpoint documentation, see [`/docs`](https://a-u.supply/docs).**
+
+### Special characters in product codes
+
+Product codes can contain `#`, spaces, dots, etc. Always URL-encode them in paths:
+
+```javascript
+// JavaScript
+fetch(`/api/releases/${encodeURIComponent(code)}`)
+```
+
+```python
+# Python
+from urllib.parse import quote
+requests.get(f"/api/releases/{quote(code, safe='')}")
+```
+
+## Auth details
 
 - Passwords hashed with bcrypt via passlib
 - JWT tokens stored in httpOnly cookies (`secure` flag enabled in production, `sameSite=lax`)
-- 24-hour token expiry
-- CSRF tokens for state-changing requests
-- No bearer tokens — cookie-only flow
+- 1-year token expiry
+- CSRF tokens for state-changing cookie-based requests
+- API keys: `Authorization: Bearer au_xxxxx`, bcrypt-hashed, with scope hierarchy (`read` < `write` < `admin`)
+- Rate limiting: 5 login attempts per minute per IP
 
 ## Deployment architecture
 
@@ -138,7 +184,7 @@ Two GitHub repos serve the same domain:
 
 | Repo | Purpose | Served from |
 |------|---------|-------------|
-| `A-U-Supply/a-u.supply` | New Astro + FastAPI app | `/` (primary) |
+| `A-U-Supply/a-u.supply` | Astro + FastAPI app | `/` (primary) |
 | `A-U-Supply/ausupply.github.io` | Legacy static site | Fallback for unmatched paths |
 
 ### Routing priority
@@ -155,78 +201,26 @@ If both Astro and legacy have a file at the same path, Astro wins.
 
 #### The `/the-expenditure` alias
 
-The legacy site's `index.html` is NOT served at `/` — the Astro homepage owns that. Instead it's aliased to `/the-expenditure`. All other legacy paths work unchanged (e.g. `/puke-box.html`, `/mire.html`, `/audex.html`). Relative asset paths in legacy HTML resolve correctly because legacy files are served from the root.
-
-### File locations on the server
-
-| Path | Contents | Persistence |
-|------|----------|-------------|
-| `/app/dist/` | Built Astro output | Rebuilt on deploy |
-| `/app/data/` | SQLite database | Dokku persistent storage |
-| `/srv/legacy-site/` | Clone of `ausupply.github.io` | Dokku persistent storage |
+The legacy site's `index.html` is NOT served at `/` — the Astro homepage owns that. Instead it's aliased to `/the-expenditure`. All other legacy paths work unchanged. Relative asset paths in legacy HTML resolve correctly because legacy files are served from the root.
 
 ### Auto-deploy: main repo
 
 Push to `master` → GitHub Actions pushes to Dokku → Docker image rebuilds → container restarts.
 
-The workflow is in `.github/workflows/deploy.yml`. Dokku handles the full build (Astro + Python) via the multi-stage Dockerfile.
-
 ### Auto-deploy: legacy repo
 
-Push to `ausupply.github.io` → GitHub webhook hits `POST /hooks/legacy` → `git pull` in the legacy site directory. No container restart needed — files are served directly from the volume.
-
-To set up the webhook on GitHub:
-1. Go to `A-U-Supply/ausupply.github.io` → Settings → Webhooks → Add webhook
-2. Payload URL: `https://a-u.supply/hooks/legacy`
-3. Content type: `application/json`
-4. Secret: same value as `WEBHOOK_SECRET` env var on the server
-5. Events: Just the push event
-
-### Manual deploy
-
-If a webhook fails or you need to deploy manually:
-
-```bash
-# Legacy site — SSH into the server and pull
-dokku enter au-supply web bash -c "git -C /srv/legacy-site pull --ff-only"
-
-# Main app — re-push to Dokku
-git push dokku master:main --force
-```
+Push to `ausupply.github.io` → GitHub webhook hits `POST /hooks/legacy` → `git pull` in the legacy site directory. No container restart needed.
 
 ### Docker build
 
 The Dockerfile uses a multi-stage build:
 
 1. **Node stage** — installs npm deps, runs `astro build`, produces `dist/`
-2. **Python stage** — installs Python deps via uv, copies app code + `dist/` from Node stage, includes `git` for webhook pulls
-
-### Environment variables
-
-| Variable          | Default                  | Description                          |
-|-------------------|--------------------------|--------------------------------------|
-| `SECRET_KEY`      | `change-me-in-production`| JWT signing key                      |
-| `PRODUCTION`      | (unset)                  | Set to `1` for secure cookies        |
-| `ALLOWED_ORIGINS` | `http://localhost:4321`  | CORS origins (comma-separated)       |
-| `LEGACY_SITE_DIR` | `/srv/legacy-site`       | Path to legacy site clone            |
-| `WEBHOOK_SECRET`  | (unset)                  | GitHub webhook HMAC secret           |
-| `DEPLOY_SCRIPT`   | (unset)                  | Optional script to run on deploy webhook |
+2. **Python stage** — installs Python deps via uv, copies app code + `dist/` from Node stage, includes `git` for webhook pulls and `ffmpeg` for audio processing
 
 ### Data persistence
 
-SQLite database lives at `data/au.db`. Legacy site lives at `/srv/legacy-site`. Both directories should be mounted as Dokku persistent storage:
-
-```bash
-# Database (existing)
-dokku storage:mount au-supply /var/lib/dokku/data/storage/au-supply:/app/data
-
-# Legacy site
-dokku storage:ensure-directory au-supply-legacy
-dokku storage:mount au-supply /var/lib/dokku/data/storage/au-supply-legacy:/srv/legacy-site
-
-# Clone the legacy repo into the storage directory (one-time setup)
-git clone https://github.com/A-U-Supply/ausupply.github.io.git /var/lib/dokku/data/storage/au-supply-legacy
-```
+SQLite database, release media, and search media are stored in persistent volumes that survive container rebuilds. The legacy site is also persisted in a separate volume.
 
 ## CSS architecture
 

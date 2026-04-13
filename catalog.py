@@ -12,7 +12,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from PIL import Image
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, insert
 from sqlalchemy.orm import Session, joinedload
 
@@ -154,52 +154,72 @@ def _release_detail(release: Release) -> dict:
 
 
 class DistLinkIn(BaseModel):
-    platform: str
-    url: str
-    label: str | None = None
+    """A link to an external distribution platform for a release."""
+    platform: str = Field(..., description="Platform name: `bandcamp`, `archive.org`, `soundcloud`, `youtube`, or any freeform string.")
+    url: str = Field(..., description="Full URL to the release on this platform.")
+    label: str | None = Field(None, description="Optional display label override. If omitted, the platform name is used.")
 
 
 class MetadataIn(BaseModel):
-    key: str
-    value: str
-    sort_order: int = 0
+    """A freeform key-value metadata pair attached to a release. Use for credits, personnel, equipment, recording location, etc."""
+    key: str = Field(..., description="Metadata field name (e.g. `credits`, `personnel`, `equipment`, `recording_location`).")
+    value: str = Field(..., description="Metadata value. Can be multi-line text.")
+    sort_order: int = Field(0, description="Display ordering. Lower numbers appear first.")
 
 
 class ReleaseCreate(BaseModel):
-    title: str
-    entity_ids: list[int] = []
-    product_code: str | None = None
-    release_date: str | None = None
-    description: str | None = None
-    format_specs: str | None = None
-    status: str = "draft"
-    distribution_links: list[DistLinkIn] = []
-    metadata: list[MetadataIn] = []
+    """Create a new release in the catalog.
+
+    If `product_code` is omitted or null, one is auto-generated in the format
+    `AU-{YYYY}-{CAT}-{SEQ}` (e.g. `AU-2026-MX-003`). The year is taken from
+    `release_date` if provided, otherwise the current year. Category defaults to `MX`
+    (mixed). The sequence number counts all releases for that year, not per category.
+    """
+    title: str = Field(..., description="Release title.")
+    entity_ids: list[int] = Field([], description="List of entity (artist/manufacturer) IDs to link. Order determines display position.")
+    product_code: str | None = Field(None, description="Custom product code. Must be unique. If omitted, one is auto-generated. Can contain special characters.")
+    release_date: str | None = Field(None, description="Date of manufacture/release in `YYYY-MM-DD` format. Optional for drafts.")
+    description: str | None = Field(None, description="Liner notes or long-form description. Plain text.")
+    format_specs: str | None = Field(None, description="Format specification string, e.g. `Digital (YouTube)`, `Digital (Bandcamp, 24-bit/44.1kHz)`.")
+    status: str = Field("draft", description="Initial status: `draft` (default, only visible to authenticated users) or `published` (publicly visible).")
+    distribution_links: list[DistLinkIn] = Field([], description="Links to external distribution platforms.")
+    metadata: list[MetadataIn] = Field([], description="Freeform key-value metadata pairs.")
 
 
 class ReleaseUpdate(BaseModel):
-    title: str | None = None
-    entity_ids: list[int] | None = None
-    product_code: str | None = None
-    release_date: str | None = None
-    description: str | None = None
-    format_specs: str | None = None
-    distribution_links: list[DistLinkIn] | None = None
-    metadata: list[MetadataIn] | None = None
+    """Update an existing release. Only provided fields are changed (partial update).
+
+    **Important:** `distribution_links` and `metadata` are replaced wholesale if provided —
+    send the full list, not just the changes. Omit them entirely to leave them unchanged.
+
+    **Product code rename:** If you change the product code, the media directory on disk is
+    also renamed. All track stream URLs and cover art URLs will use the new code.
+    """
+    title: str | None = Field(None, description="New release title.")
+    entity_ids: list[int] | None = Field(None, description="Full list of entity IDs (replaces existing). Order determines display position.")
+    product_code: str | None = Field(None, description="New product code. Must be unique. Renames the media directory on disk.")
+    release_date: str | None = Field(None, description="New release date in `YYYY-MM-DD` format.")
+    description: str | None = Field(None, description="New description/liner notes.")
+    format_specs: str | None = Field(None, description="New format specification string.")
+    distribution_links: list[DistLinkIn] | None = Field(None, description="Full list of distribution links (replaces existing). Omit to leave unchanged.")
+    metadata: list[MetadataIn] | None = Field(None, description="Full list of metadata pairs (replaces existing). Omit to leave unchanged.")
 
 
 class EntityCreate(BaseModel):
-    name: str
-    description: str | None = None
+    """Create a new entity (artist/manufacturer/project name). A URL-safe slug is auto-generated from the name."""
+    name: str = Field(..., description="Display name for the entity. Must be unique.")
+    description: str | None = Field(None, description="Optional short description of the entity.")
 
 
 class EntityUpdate(BaseModel):
-    name: str | None = None
-    description: str | None = None
+    """Update an existing entity. Only provided fields are changed."""
+    name: str | None = Field(None, description="New display name. Slug is regenerated automatically.")
+    description: str | None = Field(None, description="New description.")
 
 
 class TrackReorder(BaseModel):
-    track_ids: list[int]
+    """Reorder tracks within a release by providing all track IDs in the desired order."""
+    track_ids: list[int] = Field(..., description="All track IDs for this release in the desired playback order. Must include every track.")
 
 
 # --- Auth helper ---
@@ -229,14 +249,28 @@ def optional_user(request: Request):
 # --- Entity endpoints ---
 
 
-@router.get("/entities")
+@router.get("/entities", tags=["Entities"], summary="List all entities")
 def list_entities(db: Session = Depends(get_db)):
+    """Return all entities (artists/manufacturers) sorted alphabetically by name.
+
+    Each entity includes a `release_count` showing how many releases reference it.
+    This endpoint is public — no authentication required.
+    """
     entities = db.query(Entity).order_by(Entity.name).all()
     return [_entity_response(e, db) for e in entities]
 
 
-@router.post("/entities", status_code=201)
+@router.post("/entities", status_code=201, tags=["Entities"], summary="Create a new entity")
 def create_entity(body: EntityCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Create a new entity (artist/manufacturer/project name).
+
+    A URL-safe slug is auto-generated from the name (lowercased, special characters
+    removed, spaces converted to hyphens). Returns 409 if an entity with the same
+    name already exists.
+
+    Any authenticated user can create entities — this is intentionally permissive so
+    artists can be added during the release creation workflow.
+    """
     slug = _slugify(body.name)
     if db.query(Entity).filter(Entity.name == body.name).first():
         raise HTTPException(status_code=409, detail="Entity already exists")
@@ -247,8 +281,14 @@ def create_entity(body: EntityCreate, user: User = Depends(get_current_user), db
     return _entity_response(entity, db)
 
 
-@router.put("/entities/{entity_id}")
+@router.put("/entities/{entity_id}", tags=["Entities"], summary="Update an entity")
 def update_entity(entity_id: int, body: EntityUpdate, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Update an entity's name and/or description. **Admin only.**
+
+    If the name changes, the slug is automatically regenerated. This does not
+    affect any releases that reference this entity — they continue to reference
+    the same entity ID.
+    """
     entity = db.query(Entity).filter(Entity.id == entity_id).first()
     if not entity:
         raise HTTPException(status_code=404, detail="Entity not found")
@@ -262,8 +302,13 @@ def update_entity(entity_id: int, body: EntityUpdate, admin: User = Depends(requ
     return _entity_response(entity, db)
 
 
-@router.delete("/entities/{entity_id}")
+@router.delete("/entities/{entity_id}", tags=["Entities"], summary="Delete an entity")
 def delete_entity(entity_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Delete an entity. **Admin only.**
+
+    Returns 409 if any releases reference this entity — you must remove the entity
+    from all releases before deleting it. This prevents orphaned references.
+    """
     entity = db.query(Entity).filter(Entity.id == entity_id).first()
     if not entity:
         raise HTTPException(status_code=404, detail="Entity not found")
@@ -283,21 +328,45 @@ def delete_entity(entity_id: int, admin: User = Depends(require_admin), db: Sess
 # --- Product code preview ---
 
 
-@router.get("/releases/next-code")
+@router.get("/releases/next-code", tags=["Releases"], summary="Preview next auto-generated product code")
 def next_code(
-    year: int = Query(...),
-    category: str = Query("MX"),
+    year: int = Query(..., description="Year for the product code (e.g. 2026)."),
+    category: str = Query("MX", description="Two-letter category code: `LP` (album), `EP`, `SG` (single), `DA` (double album), `CX` (compilation), `AR` (archive), `MX` (mixed/default)."),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """Preview the next auto-generated product code without creating a release.
+
+    Product codes follow the format `AU-{YYYY}-{CAT}-{SEQ}`. The sequence number
+    counts **all** releases for that year (not per category). For example, if 2026
+    already has `AU-2026-DA-001` and `AU-2026-LP-002`, the next code for any category
+    will be `AU-2026-XX-003`.
+
+    Use this in the upload form to show the user what code will be assigned. The code
+    is always editable — the user can replace it with anything unique.
+    """
     return {"product_code": generate_product_code(db, year, category)}
 
 
 # --- Release endpoints ---
 
 
-@router.post("/releases", status_code=201)
+@router.post("/releases", status_code=201, tags=["Releases"], summary="Create a new release")
 def create_release(body: ReleaseCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Create a new release in the catalog (draft by default).
+
+    If `product_code` is omitted, one is auto-generated using the year from
+    `release_date` (or the current year) and category `MX`. The generated code
+    follows the format `AU-{YYYY}-MX-{SEQ}`.
+
+    **Workflow:**
+    1. Create the release with metadata
+    2. Upload tracks via `POST /api/releases/{code}/tracks`
+    3. Upload cover art via `POST /api/releases/{code}/cover`
+    4. Publish via `POST /api/releases/{code}/publish`
+
+    Returns the full release detail object including the assigned product code.
+    """
     # Determine product code
     product_code = body.product_code
     if not product_code:
@@ -353,17 +422,26 @@ def create_release(body: ReleaseCreate, user: User = Depends(get_current_user), 
     return _release_detail(release)
 
 
-@router.get("/releases")
+@router.get("/releases", tags=["Releases"], summary="List releases")
 def list_releases(
-    status: str = Query("published"),
-    entity: str | None = Query(None),
-    year: int | None = Query(None),
-    sort: str = Query("date_desc"),
-    page: int = Query(1, ge=1),
-    per_page: int = Query(50, ge=1, le=200),
+    status: str = Query("published", description="Filter by status: `published` (default for public), `draft`, or `all`. Unauthenticated users always see only published."),
+    entity: str | None = Query(None, description="Filter by entity slug (e.g. `complete`, `bdo`)."),
+    year: int | None = Query(None, description="Filter by release year."),
+    sort: str = Query("date_desc", description="Sort order: `date_desc` (default), `date_asc`, `title`, `code`."),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)."),
+    per_page: int = Query(50, ge=1, le=200, description="Results per page (max 200)."),
     db: Session = Depends(get_db),
     user: User | None = Depends(optional_user),
 ):
+    """List releases with optional filtering, sorting, and pagination.
+
+    **Visibility rules:**
+    - Unauthenticated users only see `published` releases (the `status` filter is ignored).
+    - Authenticated users can filter by `status=draft`, `status=published`, or `status=all`.
+
+    Returns paginated release summaries (no tracks or metadata — use
+    `GET /api/releases/{code}` for full detail).
+    """
     q = db.query(Release).options(joinedload(Release.entities), joinedload(Release.tracks))
 
     # Status filter
@@ -410,14 +488,35 @@ def list_releases(
     }
 
 
-@router.get("/releases/{code}")
+@router.get("/releases/{code}", tags=["Releases"], summary="Get release detail")
 def get_release(code: str, db: Session = Depends(get_db), user: User | None = Depends(optional_user)):
+    """Return the full detail for a single release, including tracks, distribution links,
+    and freeform metadata.
+
+    **Visibility:** Published releases are public. Draft releases return 404 for
+    unauthenticated users (they appear to not exist).
+
+    **Note:** The `code` path parameter must be URL-encoded if it contains special
+    characters (e.g. `A-U%23%20M5497.H37` for `A-U# M5497.H37`).
+    """
     release = _get_release_or_404(db, code, user)
     return _release_detail(release)
 
 
-@router.put("/releases/{code}")
+@router.put("/releases/{code}", tags=["Releases"], summary="Update a release")
 def update_release(code: str, body: ReleaseUpdate, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Update release metadata. **Admin only.** Supports partial updates — only
+    provided fields are changed.
+
+    **Replacement fields:** `entity_ids`, `distribution_links`, and `metadata` are
+    replaced wholesale if provided. Send the complete list, not just additions.
+    Omit them entirely to leave them unchanged.
+
+    **Product code rename:** If `product_code` is provided and different from the
+    current code, the media directory on disk is renamed. All existing track stream
+    URLs and cover art URLs will automatically use the new code. Returns 409 if the
+    new code is already in use.
+    """
     release = db.query(Release).filter(Release.product_code == code).first()
     if not release:
         raise HTTPException(status_code=404, detail="Release not found")
@@ -473,8 +572,13 @@ def update_release(code: str, body: ReleaseUpdate, admin: User = Depends(require
     return _release_detail(release)
 
 
-@router.post("/releases/{code}/publish")
+@router.post("/releases/{code}/publish", tags=["Releases"], summary="Publish a release")
 def publish_release(code: str, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Set a release's status to `published`, making it publicly visible.
+
+    **Admin only.** Published releases appear on the public catalog page and their
+    tracks can be streamed without authentication.
+    """
     release = db.query(Release).filter(Release.product_code == code).first()
     if not release:
         raise HTTPException(status_code=404, detail="Release not found")
@@ -483,8 +587,14 @@ def publish_release(code: str, admin: User = Depends(require_admin), db: Session
     return {"ok": True}
 
 
-@router.post("/releases/{code}/unpublish")
+@router.post("/releases/{code}/unpublish", tags=["Releases"], summary="Unpublish a release")
 def unpublish_release(code: str, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Revert a release's status to `draft`, hiding it from the public.
+
+    **Admin only.** The release and its tracks will only be accessible to
+    authenticated users. Existing direct links will return 404 for unauthenticated
+    visitors.
+    """
     release = db.query(Release).filter(Release.product_code == code).first()
     if not release:
         raise HTTPException(status_code=404, detail="Release not found")
@@ -493,8 +603,16 @@ def unpublish_release(code: str, admin: User = Depends(require_admin), db: Sessi
     return {"ok": True}
 
 
-@router.delete("/releases/{code}")
+@router.delete("/releases/{code}", tags=["Releases"], summary="Delete a release")
 def delete_release(code: str, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Permanently delete a release and all associated data. **Admin only.**
+
+    This deletes:
+    - The release record and all database associations (tracks, distribution links, metadata, entity links)
+    - All media files on disk (audio tracks, cover art, thumbnails)
+
+    **This action is irreversible.** The media directory for this release is removed entirely.
+    """
     release = db.query(Release).filter(Release.product_code == code).first()
     if not release:
         raise HTTPException(status_code=404, detail="Release not found")
@@ -510,14 +628,28 @@ def delete_release(code: str, admin: User = Depends(require_admin), db: Session 
 # --- Track endpoints ---
 
 
-@router.post("/releases/{code}/tracks", status_code=201)
+@router.post("/releases/{code}/tracks", status_code=201, tags=["Tracks"], summary="Upload audio tracks")
 async def upload_tracks(
     code: str,
-    files: list[UploadFile] = File(...),
-    titles: str | None = Form(None),
+    files: list[UploadFile] = File(..., description="One or more audio files. Supported formats: FLAC, WAV, MP3, OGG, AAC, M4A, AIFF."),
+    titles: str | None = Form(None, description="JSON array of track titles, one per file. If omitted, titles default to the filename without extension."),
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Upload one or more audio tracks to a release. **Admin only.**
+
+    Tracks are appended after existing tracks — track numbers are auto-assigned
+    sequentially. Duration is extracted server-side via `ffprobe`.
+
+    **File naming on disk:** Tracks are stored as `{NN}-{slugified-title}.{ext}` in
+    the release's media directory (e.g. `01-heat.flac`).
+
+    **Titles:** Pass a JSON array of strings in the `titles` form field to set custom
+    track titles. If omitted or if there are fewer titles than files, remaining tracks
+    use the filename (without extension) as their title.
+
+    Returns the list of created track objects with stream URLs.
+    """
     release = db.query(Release).filter(Release.product_code == code).first()
     if not release:
         raise HTTPException(status_code=404, detail="Release not found")
@@ -560,8 +692,14 @@ async def upload_tracks(
     return created
 
 
-@router.delete("/releases/{code}/tracks/{track_id}")
+@router.delete("/releases/{code}/tracks/{track_id}", tags=["Tracks"], summary="Delete a track")
 def delete_track(code: str, track_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Delete a track from a release and remove its audio file from disk. **Admin only.**
+
+    **Auto-renumbering:** After deletion, all remaining tracks in the release are
+    renumbered sequentially (1, 2, 3, ...) to fill the gap. This means track numbers
+    may change — use track IDs (not track numbers) as stable identifiers.
+    """
     release = db.query(Release).filter(Release.product_code == code).first()
     if not release:
         raise HTTPException(status_code=404, detail="Release not found")
@@ -587,8 +725,16 @@ def delete_track(code: str, track_id: int, admin: User = Depends(require_admin),
     return {"ok": True}
 
 
-@router.put("/releases/{code}/tracks/reorder")
+@router.put("/releases/{code}/tracks/reorder", tags=["Tracks"], summary="Reorder tracks")
 def reorder_tracks(code: str, body: TrackReorder, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Reorder tracks within a release. **Admin only.**
+
+    Provide an array of all track IDs in the desired playback order. Track numbers
+    are reassigned sequentially (1, 2, 3, ...) based on the array order.
+
+    **All track IDs must be included.** If a track ID is missing or doesn't belong
+    to this release, the request fails with 400.
+    """
     release = db.query(Release).filter(Release.product_code == code).first()
     if not release:
         raise HTTPException(status_code=404, detail="Release not found")
@@ -603,8 +749,19 @@ def reorder_tracks(code: str, body: TrackReorder, admin: User = Depends(require_
     return {"ok": True}
 
 
-@router.get("/releases/{code}/tracks/{track_id}/stream")
+@router.get("/releases/{code}/tracks/{track_id}/stream", tags=["Tracks"], summary="Stream an audio track")
 def stream_track(code: str, track_id: int, request: Request, db: Session = Depends(get_db), user: User | None = Depends(optional_user)):
+    """Stream an audio file with full HTTP Range request support for seeking.
+
+    **Visibility:** Public if the release is published. Returns 404 if the release is
+    a draft and the user is not authenticated.
+
+    **Range requests:** The endpoint supports `Range: bytes=START-END` headers for
+    partial content (HTTP 206). This enables seeking in audio players without
+    downloading the entire file. Without a Range header, the full file is returned.
+
+    **Content-Type** is auto-detected from the file extension.
+    """
     release = db.query(Release).filter(Release.product_code == code).first()
     if not release:
         raise HTTPException(status_code=404, detail="Release not found")
@@ -663,8 +820,19 @@ def stream_track(code: str, track_id: int, request: Request, db: Session = Depen
 # --- Cover art endpoints ---
 
 
-@router.post("/releases/{code}/cover")
-async def upload_cover(code: str, file: UploadFile = File(...), admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+@router.post("/releases/{code}/cover", tags=["Cover Art"], summary="Upload cover art")
+async def upload_cover(code: str, file: UploadFile = File(..., description="Image file. Supported formats: JPG, PNG, WEBP, GIF."), admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Upload or replace cover art for a release. **Admin only.**
+
+    On upload, two files are stored in the release's media directory:
+    - `cover.{ext}` — the original image at full resolution
+    - `cover_thumb.webp` — a 400x400 WebP thumbnail for use in grids and the player
+
+    If cover art already exists, it is replaced (both the original and thumbnail are
+    deleted before the new files are written).
+
+    Supported formats: JPG, JPEG, PNG, WEBP, GIF.
+    """
     release = db.query(Release).filter(Release.product_code == code).first()
     if not release:
         raise HTTPException(status_code=404, detail="Release not found")
@@ -696,13 +864,23 @@ async def upload_cover(code: str, file: UploadFile = File(...), admin: User = De
     return {"ok": True, "cover_art_url": f"/api/releases/{code}/cover"}
 
 
-@router.get("/releases/{code}/cover")
+@router.get("/releases/{code}/cover", tags=["Cover Art"], summary="Get cover art")
 def serve_cover(
     code: str,
-    size: str | None = Query(None),
+    size: str | None = Query(None, description="Pass `thumb` to get the 400x400 WebP thumbnail instead of the full image."),
     db: Session = Depends(get_db),
     user: User | None = Depends(optional_user),
 ):
+    """Serve cover art for a release.
+
+    **Visibility:** Public if the release is published. Returns 404 for draft releases
+    when unauthenticated.
+
+    **Thumbnail:** Pass `?size=thumb` to get the auto-generated 400x400 WebP thumbnail.
+    This is what the catalog grid and audio player use.
+
+    Returns the image file with appropriate Content-Type header.
+    """
     release = db.query(Release).filter(Release.product_code == code).first()
     if not release:
         raise HTTPException(status_code=404, detail="Release not found")

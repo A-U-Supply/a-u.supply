@@ -13,7 +13,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session, joinedload
 
 from auth import get_db, require_scope
@@ -42,14 +42,15 @@ def _get_search_media_dir() -> Path:
 
 
 class SearchFilters(BaseModel):
-    tags: list[str] | None = None
-    source_channels: list[str] | None = None
-    poster: str | None = None  # filter by uploader name
-    color: str | None = None  # filter by dominant color hex (exact match)
-    color_group: list[str] | None = None  # filter by color group names (red, blue, green, etc.)
-    date_range: dict | None = None  # {"from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}
-    reaction_count: dict | None = None  # {"min": N}
-    tag_count: dict | None = None  # {"min": N}
+    """Filters for the media search endpoint. All filters are optional and combined with AND logic."""
+    tags: list[str] | None = Field(None, description="Filter to items that have ALL of these tags (AND logic).")
+    source_channels: list[str] | None = Field(None, description="Filter to items from ANY of these Slack channels (OR logic).")
+    poster: str | None = Field(None, description="Filter by uploader/poster name (exact match).")
+    color: str | None = Field(None, description="Filter images by exact dominant color hex value (e.g. `#1a1a2e`). Only returns images.")
+    color_group: list[str] | None = Field(None, description="Filter images by color group names: `red`, `orange`, `yellow`, `green`, `cyan`, `blue`, `purple`, `pink`, `brown`, `gray`, `white`, `black`. Only returns images.")
+    date_range: dict | None = Field(None, description="Date range filter: `{\"from\": \"YYYY-MM-DD\", \"to\": \"YYYY-MM-DD\"}`. Both are optional.")
+    reaction_count: dict | None = Field(None, description="Minimum reaction count: `{\"min\": 3}`.")
+    tag_count: dict | None = Field(None, description="Tag count filter: `{\"min\": 1}` and/or `{\"max\": 5}`.")
 
     @field_validator("color_group", mode="before")
     @classmethod
@@ -60,42 +61,55 @@ class SearchFilters(BaseModel):
 
 
 class SearchRequest(BaseModel):
-    query: str = ""
-    media_types: list[str] | None = None
-    filters: SearchFilters | None = None
-    sort: str | None = None  # e.g. "created_at:desc"
-    page: int = 1
-    per_page: int = 20
+    """Search request body for the multi-index media search.
+
+    Leave `query` empty and use only filters to browse all items. The search is
+    typo-tolerant and searches across tags, descriptions, Slack message text,
+    transcripts, captions, filenames, and source titles.
+    """
+    query: str = Field("", description="Search query string. Typo-tolerant full-text search. Leave empty to browse all items.")
+    media_types: list[str] | None = Field(None, description="Filter by media type: `image`, `audio`, `video`. Null or omitted searches all types.")
+    filters: SearchFilters | None = Field(None, description="Additional filters (tags, channels, dates, etc.).")
+    sort: str | None = Field(None, description="Sort field and direction, e.g. `created_at:desc`, `total_reaction_count:desc`, `file_size_bytes:asc`. Null for relevance sorting.")
+    page: int = Field(1, ge=1, description="Page number (1-indexed).")
+    per_page: int = Field(20, ge=1, le=100, description="Results per page (max 100).")
 
 
 class MediaUpdateRequest(BaseModel):
-    description: str | None = None
+    """Update a media item's metadata."""
+    description: str | None = Field(None, description="New description/notes for the media item. Set to empty string to clear.")
 
 
 class TagsRequest(BaseModel):
-    tags: list[str]
+    """Add tags to a media item."""
+    tags: list[str] = Field(..., description="Tags to add. Normalized automatically (lowercased, trimmed). Duplicates are silently ignored.")
 
 
 class BatchTagsRequest(BaseModel):
-    media_ids: list[str]
-    tags: list[str]
+    """Add tags to multiple media items at once."""
+    media_ids: list[str] = Field(..., description="List of media item UUIDs to tag.")
+    tags: list[str] = Field(..., description="Tags to add to all specified items.")
 
 
 class BatchDeleteRequest(BaseModel):
-    media_ids: list[str]
+    """Delete multiple media items at once."""
+    media_ids: list[str] = Field(..., description="List of media item UUIDs to delete.")
 
 
 class BatchReExtractRequest(BaseModel):
-    media_ids: list[str]
+    """Re-run the metadata extraction pipeline on selected items."""
+    media_ids: list[str] = Field(..., description="List of media item UUIDs to re-extract metadata for.")
 
 
 class BatchExportRequest(BaseModel):
-    media_ids: list[str]
+    """Download multiple media files as a ZIP archive."""
+    media_ids: list[str] = Field(..., description="List of media item UUIDs to include in the ZIP export.")
 
 
 class ApiKeyCreateRequest(BaseModel):
-    label: str
-    scope: str  # read, write, admin
+    """Generate a new API key for programmatic access."""
+    label: str = Field(..., description="Human-readable label for the key (e.g. `my-script`, `laptop`). Shown in the key list for identification.")
+    scope: str = Field(..., description="Permission scope: `read` (search/view/download), `write` (read + upload/tag/edit), or `admin` (write + delete/manage).")
 
 
 # ---------------------------------------------------------------------------
@@ -282,7 +296,7 @@ def _update_vocabulary(db: Session, tag: str, delta: int) -> None:
 # ---------------------------------------------------------------------------
 
 
-@router.post("/search")
+@router.post("/search", tags=["Media Search"], summary="Search media")
 def search_media(
     body: SearchRequest,
     _auth=Depends(require_scope("read")),
@@ -290,10 +304,21 @@ def search_media(
 ):
     """Multi-index media search with filters, facets, and pagination.
 
-    Full-text search across tags, description, message text, uploader names,
-    transcripts, captions, filenames, and color names. Typo-tolerant.
+    Searches across tags, descriptions, Slack message text, uploader names,
+    speech transcripts, image captions, filenames, source titles, and color names.
+    Typo-tolerant (powered by Meilisearch).
 
-    All filtering is done via the `filters` object in the request body.
+    **Search behavior:**
+    - Empty query with no filters returns all items (sorted by newest first)
+    - Filters are combined with AND logic (e.g. tags AND channel AND date range)
+    - Within `tags`, items must match ALL specified tags (AND)
+    - Within `source_channels`, items can match ANY channel (OR)
+    - Color filters (`color` or `color_group`) automatically restrict results to images
+
+    **Sort options:** `created_at:desc`, `created_at:asc`, `total_reaction_count:desc`,
+    `file_size_bytes:asc`, `duration_seconds:desc`, `tag_count:desc`. Omit for relevance sorting.
+
+    **Scope required:** `read`
     """
     from search_client import multi_search
 
@@ -316,162 +341,18 @@ def search_media(
     return results
 
 
-@router.post("/search/stats")
-def search_stats(
-    body: SearchRequest,
-    _auth=Depends(require_scope("read")),
-    db: Session = Depends(get_db),
-):
-    """Return aggregation stats for the current search query and filters.
-
-    Returns: counts by media type, top tags, top uploaders, date histogram
-    (monthly buckets), reaction distribution, and facet stats (min/max for
-    numeric fields). Accepts the same request body as /api/search.
-    """
-    from search_client import multi_search
-    from sqlalchemy import func, extract
-    import json as _json
-
-    meili_filter = _build_meili_filter(body.filters)
-
-    media_types = body.media_types
-    if body.filters and (body.filters.color or body.filters.color_group):
-        media_types = ["image"]
-
-    # Search with limit=0: we only want facets and stats, not hits
-    results = multi_search(
-        query=body.query,
-        media_types=media_types,
-        filters=meili_filter,
-        sort=None,
-        page=1,
-        per_page=0,
-    )
-
-    facets = results.get("facets", {})
-    facet_stats = results.get("facet_stats", {})
-    counts_by_type = results.get("counts_by_type", {})
-
-    # Top tags (sorted by count, limited to top 30)
-    raw_tags = facets.get("tags", {})
-    top_tags = sorted(raw_tags.items(), key=lambda x: x[1], reverse=True)[:30]
-
-    # Source channels with counts
-    channels = facets.get("source_channels", {})
-
-    # Color distribution
-    color_groups = facets.get("primary_color_group", {})
-
-    # Reaction distribution — build histogram buckets from DB
-    # Since Meilisearch only gives min/max, we build buckets from the DB
-    reaction_buckets = _build_reaction_histogram(db, media_types)
-
-    # Date histogram — monthly buckets from DB
-    date_histogram = _build_date_histogram(db, media_types)
-
-    # Top uploaders from facets (sources.uploader is in Meilisearch facets)
-    # But facetDistribution for nested fields may not work in all Meilisearch versions.
-    # Fallback: compute from DB.
-    top_uploaders = _get_top_uploaders(db, limit=15)
-
-    return {
-        "total": results.get("total", 0),
-        "counts_by_type": counts_by_type,
-        "top_tags": [{"tag": t, "count": c} for t, c in top_tags],
-        "channels": channels,
-        "color_groups": color_groups,
-        "reaction_buckets": reaction_buckets,
-        "date_histogram": date_histogram,
-        "top_uploaders": top_uploaders,
-        "facet_stats": facet_stats,
-    }
-
-
-def _build_reaction_histogram(db: Session, media_types: list[str] | None) -> list[dict]:
-    """Build reaction count histogram with fixed buckets."""
-    from sqlalchemy import func, case
-
-    buckets = [
-        ("0", 0, 0),
-        ("1-2", 1, 2),
-        ("3-5", 3, 5),
-        ("6-10", 6, 10),
-        ("11-25", 11, 25),
-        ("26+", 26, None),
-    ]
-
-    query = db.query(MediaSource.reaction_count).join(MediaItem)
-    if media_types:
-        query = query.filter(MediaItem.media_type.in_(media_types))
-
-    # Get all reaction counts in one query
-    counts = [r[0] or 0 for r in query.all()]
-
-    result = []
-    for label, lo, hi in buckets:
-        if hi is not None:
-            n = sum(1 for c in counts if lo <= c <= hi)
-        else:
-            n = sum(1 for c in counts if c >= lo)
-        result.append({"label": label, "count": n})
-
-    return result
-
-
-def _build_date_histogram(db: Session, media_types: list[str] | None) -> list[dict]:
-    """Build monthly date histogram from MediaItem.created_at."""
-    from sqlalchemy import func
-
-    query = db.query(
-        func.strftime("%Y-%m", MediaItem.created_at).label("month"),
-        func.count(MediaItem.id).label("count"),
-    )
-    if media_types:
-        query = query.filter(MediaItem.media_type.in_(media_types))
-
-    rows = (
-        query
-        .filter(MediaItem.created_at.isnot(None))
-        .group_by("month")
-        .order_by("month")
-        .all()
-    )
-
-    return [{"month": r.month, "count": r.count} for r in rows]
-
-
-def _get_top_uploaders(db: Session, limit: int = 15) -> list[dict]:
-    """Get top uploaders by post count from source_metadata."""
-    import json as _json
-    from collections import Counter
-
-    sources = (
-        db.query(MediaSource.source_metadata)
-        .filter(MediaSource.source_metadata.isnot(None))
-        .all()
-    )
-
-    poster_counts: Counter = Counter()
-    for (meta_str,) in sources:
-        try:
-            meta = _json.loads(meta_str)
-            if isinstance(meta, dict) and meta.get("poster"):
-                poster_counts[meta["poster"]] += 1
-        except (ValueError, TypeError):
-            pass
-
-    return [
-        {"uploader": name, "count": count}
-        for name, count in poster_counts.most_common(limit)
-    ]
-
-
-@router.get("/search/facets")
+@router.get("/search/facets", tags=["Media Search"], summary="Get filter facets")
 def search_facets(
     _auth=Depends(require_scope("read")),
     db: Session = Depends(get_db),
 ):
-    """Return available filter options: channels and uploaders."""
+    """Return available filter options for the search UI.
+
+    Returns lists of all known source channels and uploaders, useful for populating
+    dropdown filters in the search interface.
+
+    **Scope required:** `read`
+    """
     from models import MediaSource
     from sqlalchemy import distinct, func
 
@@ -507,12 +388,18 @@ def search_facets(
     }
 
 
-@router.get("/tags")
+@router.get("/tags", tags=["Tagging"], summary="List all tags")
 def list_tags(
     _auth=Depends(require_scope("read")),
     db: Session = Depends(get_db),
 ):
-    """List all tags with usage counts from the vocabulary."""
+    """List all tags in the vocabulary, sorted by usage count (most popular first).
+
+    Each tag includes its `usage_count` (number of media items using it) and
+    `created_at` timestamp.
+
+    **Scope required:** `read`
+    """
     tags = db.query(TagVocabulary).order_by(TagVocabulary.usage_count.desc()).all()
     return [
         {"tag": t.tag, "usage_count": t.usage_count, "created_at": t.created_at.isoformat() if t.created_at else None}
@@ -525,18 +412,30 @@ def list_tags(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/media/upload", status_code=201)
+@router.post("/media/upload", status_code=201, tags=["Media Items"], summary="Upload a media file")
 async def upload_media(
-    file: UploadFile = File(...),
-    tags: str = Form(""),
-    description: str = Form(""),
+    file: UploadFile = File(..., description="The media file to upload. Supported types: images, audio, video."),
+    tags: str = Form("", description="Comma-separated tags to apply (e.g. `drums,percussive,loop`). Optional."),
+    description: str = Form("", description="Freeform notes or description. Optional."),
     _auth=Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
     """Upload a media file with optional tags and description.
 
-    Tags are comma-separated. Media type is auto-detected from MIME type.
-    Deduplication is done via SHA-256 hash.
+    **Deduplication:** Files are identified by SHA-256 hash. If you upload a file that
+    already exists in the system, no duplicate is created — instead, a new **source**
+    record is added to the existing media item (recording that the file was uploaded
+    again from a different context). The existing item is returned.
+
+    **Media type** is auto-detected from the file's MIME type. Unsupported types are
+    rejected with 400.
+
+    **Storage path:** Files are stored as `{media_type}/{YYYY-MM}/{8char-sha256}_{filename}`.
+
+    **Tags** are normalized (lowercased, trimmed) and added to the shared vocabulary
+    for autocomplete.
+
+    **Scope required:** `write`
     """
     content = await file.read()
     if not content:
@@ -617,13 +516,22 @@ async def upload_media(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/media/batch/tags")
+@router.post("/media/batch/tags", tags=["Batch Operations"], summary="Batch add tags")
 def batch_add_tags(
     body: BatchTagsRequest,
     _auth=Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
-    """Add tags to multiple media items."""
+    """Add tags to multiple media items at once.
+
+    Tags are normalized and deduplicated per item — if an item already has a tag,
+    it's silently skipped. The response includes per-item results showing which
+    tags were actually added.
+
+    Items that don't exist are reported as errors but don't fail the entire request.
+
+    **Scope required:** `write`
+    """
     results = {}
     for media_id in body.media_ids:
         item = db.query(MediaItem).filter(MediaItem.id == media_id).first()
@@ -659,13 +567,21 @@ def batch_add_tags(
     return {"ok": True, "results": results}
 
 
-@router.post("/media/batch/delete")
+@router.post("/media/batch/delete", tags=["Batch Operations"], summary="Batch delete media")
 def batch_delete(
     body: BatchDeleteRequest,
     _auth=Depends(require_scope("admin")),
     db: Session = Depends(get_db),
 ):
-    """Delete multiple media items and their files."""
+    """Delete multiple media items and their files from disk. **Admin only.**
+
+    Deletes both the database records and the actual files (including thumbnails).
+    Items are also removed from the search index.
+
+    Items that don't exist are silently skipped and reported in `not_found`.
+
+    **Scope required:** `admin`
+    """
     deleted = []
     not_found = []
     for media_id in body.media_ids:
@@ -690,13 +606,22 @@ def batch_delete(
     return {"ok": True, "deleted": deleted, "not_found": not_found}
 
 
-@router.post("/media/batch/re-extract")
+@router.post("/media/batch/re-extract", tags=["Batch Operations"], summary="Batch re-extract metadata")
 def batch_re_extract_endpoint(
     body: BatchReExtractRequest,
     _auth=Depends(require_scope("admin")),
     db: Session = Depends(get_db),
 ):
-    """Trigger re-extraction for selected media items."""
+    """Re-run the metadata extraction pipeline on selected media items. **Admin only.**
+
+    This queues the items for background extraction (image dimensions, dominant colors,
+    audio transcripts via Whisper, video thumbnails, etc.). Use this after fixing an
+    extraction issue or when extraction was skipped during initial ingest.
+
+    Results are returned as `queued` (successfully scheduled) and `not_found`.
+
+    **Scope required:** `admin`
+    """
     try:
         from extraction import run_extraction_async
     except ImportError:
@@ -721,13 +646,21 @@ def batch_re_extract_endpoint(
     return {"ok": True, "queued": queued, "not_found": not_found}
 
 
-@router.post("/media/batch/export")
+@router.post("/media/batch/export", tags=["Batch Operations"], summary="Export media as ZIP")
 def batch_export(
     body: BatchExportRequest,
     _auth=Depends(require_scope("read")),
     db: Session = Depends(get_db),
 ):
-    """Create a zip archive of selected media files and return as download."""
+    """Download selected media files as a ZIP archive.
+
+    Creates an in-memory ZIP file containing the original media files for all
+    specified items. Files are named using their original filenames.
+
+    Items that don't exist or whose files are missing on disk are silently skipped.
+
+    **Scope required:** `read`
+    """
     if not body.media_ids:
         raise HTTPException(status_code=400, detail="No media IDs provided")
 
@@ -755,24 +688,44 @@ def batch_export(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/media/{media_id}")
+@router.get("/media/{media_id}", tags=["Media Items"], summary="Get media item detail")
 def get_media(
     media_id: str,
     _auth=Depends(require_scope("read")),
     db: Session = Depends(get_db),
 ):
-    """Get full metadata for a media item."""
+    """Return full metadata for a single media item, including:
+
+    - Basic info: filename, SHA-256 hash, media type, file size, MIME type
+    - Description and timestamps
+    - All tags
+    - All sources (where this file came from — Slack messages, manual uploads, etc.)
+    - Type-specific metadata (image dimensions/colors, audio duration/transcript, video FPS/thumbnail)
+    - Any extraction failures
+
+    **Deduplication note:** A single media item can have multiple sources if the same
+    file was posted in different Slack channels or uploaded multiple times. The `sources`
+    array shows all contexts where this file appeared.
+
+    **Scope required:** `read`
+    """
     item = _get_media_item_or_404(db, media_id)
     return _media_item_response(item)
 
 
-@router.get("/media/{media_id}/file")
+@router.get("/media/{media_id}/file", tags=["Media Items"], summary="Download media file")
 def get_media_file(
     media_id: str,
     _auth=Depends(require_scope("read")),
     db: Session = Depends(get_db),
 ):
-    """Stream or download the media file."""
+    """Download or stream the original media file.
+
+    Returns the file with the correct MIME type and the original filename in the
+    `Content-Disposition` header.
+
+    **Scope required:** `read`
+    """
     item = _get_media_item_or_404(db, media_id)
     file_path = _get_search_media_dir() / item.file_path
     if not file_path.exists():
@@ -781,13 +734,24 @@ def get_media_file(
     return FileResponse(file_path, media_type=mime, filename=item.filename)
 
 
-@router.get("/media/{media_id}/thumbnail")
+@router.get("/media/{media_id}/thumbnail", tags=["Media Items"], summary="Get media thumbnail")
 def get_media_thumbnail(
     media_id: str,
     _auth=Depends(require_scope("read")),
     db: Session = Depends(get_db),
 ):
-    """Serve the thumbnail for images and videos."""
+    """Serve the thumbnail for a media item.
+
+    **Thumbnail sources by type:**
+    - **Videos**: Uses the auto-generated frame grab (captured at ~10% into the video)
+    - **Images**: Uses the `_thumb.webp` file generated alongside the original
+    - **Images (fallback)**: If no thumbnail exists, serves the original image
+    - **Audio**: No thumbnail available (returns 404)
+
+    All thumbnails are in WebP format.
+
+    **Scope required:** `read`
+    """
     item = _get_media_item_or_404(db, media_id)
 
     # For videos, use the thumbnail_path from video meta
@@ -812,14 +776,22 @@ def get_media_thumbnail(
     raise HTTPException(status_code=404, detail="Thumbnail not found")
 
 
-@router.put("/media/{media_id}")
+@router.put("/media/{media_id}", tags=["Media Items"], summary="Update media description")
 def update_media(
     media_id: str,
     body: MediaUpdateRequest,
     _auth=Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
-    """Update a media item's description."""
+    """Update a media item's description/notes.
+
+    Currently only the `description` field can be updated. Other metadata (tags, sources)
+    have their own dedicated endpoints.
+
+    The search index is automatically updated after the change.
+
+    **Scope required:** `write`
+    """
     item = db.query(MediaItem).filter(MediaItem.id == media_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Media item not found")
@@ -834,13 +806,21 @@ def update_media(
     return _media_item_response(_get_media_item_or_404(db, media_id))
 
 
-@router.delete("/media/{media_id}")
+@router.delete("/media/{media_id}", tags=["Media Items"], summary="Delete a media item")
 def delete_media(
     media_id: str,
     _auth=Depends(require_scope("admin")),
     db: Session = Depends(get_db),
 ):
-    """Delete a media item and its file from disk."""
+    """Permanently delete a media item, its file, and its thumbnail from disk. **Admin only.**
+
+    Also removes the item from the search index. All associated data (sources, tags,
+    extraction failures, type-specific metadata) is cascade-deleted.
+
+    **This action is irreversible.**
+
+    **Scope required:** `admin`
+    """
     item = db.query(MediaItem).filter(MediaItem.id == media_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Media item not found")
@@ -868,14 +848,23 @@ def delete_media(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/media/{media_id}/tags")
+@router.post("/media/{media_id}/tags", tags=["Tagging"], summary="Add tags to a media item")
 def add_tags(
     media_id: str,
     body: TagsRequest,
     _auth=Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
-    """Add tags to a media item."""
+    """Add one or more tags to a media item.
+
+    Tags are automatically normalized (lowercased, whitespace trimmed). Duplicate tags
+    (tags the item already has) are silently ignored — they won't cause an error.
+
+    New tags are added to the shared vocabulary for autocomplete. The search index is
+    updated automatically.
+
+    **Scope required:** `write`
+    """
     item = db.query(MediaItem).filter(MediaItem.id == media_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Media item not found")
@@ -899,14 +888,22 @@ def add_tags(
     return {"ok": True, "added": added}
 
 
-@router.delete("/media/{media_id}/tags/{tag}")
+@router.delete("/media/{media_id}/tags/{tag}", tags=["Tagging"], summary="Remove a tag from a media item")
 def remove_tag(
     media_id: str,
     tag: str,
     _auth=Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
-    """Remove a tag from a media item."""
+    """Remove a specific tag from a media item.
+
+    The tag is normalized before lookup, so `Drums`, `drums`, and `DRUMS` all match
+    the same tag. Returns 404 if the tag doesn't exist on this item.
+
+    The vocabulary usage count is decremented. The search index is updated automatically.
+
+    **Scope required:** `write`
+    """
     item = db.query(MediaItem).filter(MediaItem.id == media_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Media item not found")
@@ -928,13 +925,20 @@ def remove_tag(
     return {"ok": True}
 
 
-@router.get("/tags/suggest")
+@router.get("/tags/suggest", tags=["Tagging"], summary="Autocomplete tag suggestions")
 def suggest_tags(
-    q: str = Query("", min_length=1),
+    q: str = Query("", min_length=1, description="Search prefix or substring to match against known tags."),
     _auth=Depends(require_scope("read")),
     db: Session = Depends(get_db),
 ):
-    """Autocomplete tag suggestions from vocabulary, sorted by usage count."""
+    """Get tag autocomplete suggestions from the vocabulary.
+
+    Searches by **substring** (not just prefix) — searching for `rum` will match
+    both `drums` and `rum`. Results are sorted by usage count (most popular first),
+    limited to 20 suggestions.
+
+    **Scope required:** `read`
+    """
     tags = (
         db.query(TagVocabulary)
         .filter(TagVocabulary.tag.ilike(f"%{q}%"))
@@ -950,12 +954,26 @@ def suggest_tags(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/ingest/slack")
+@router.post("/ingest/slack", tags=["Slack Ingestion"], summary="Trigger a full Slack scrape")
 def ingest_slack(
     _auth=Depends(require_scope("admin")),
     db: Session = Depends(get_db),
 ):
-    """Trigger a Slack scrape."""
+    """Trigger a full Slack scrape of all configured channels. **Admin only.**
+
+    Pulls all messages posted since the last scrape timestamp. On the **first run**,
+    this fetches the entire channel history (which can be large — consider running a
+    dry-run first).
+
+    For each message, the scraper:
+    1. Downloads file attachments via the Slack API
+    2. Downloads linked media (YouTube, TikTok, SoundCloud) via yt-dlp
+    3. Deduplicates by SHA-256 hash and Slack file ID
+    4. Creates media items and triggers the extraction pipeline
+    5. Indexes everything in the search engine
+
+    **Scope required:** `admin`
+    """
     try:
         from slack_scraper import trigger_scrape
     except ImportError:
@@ -970,12 +988,18 @@ def ingest_slack(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/ingest/slack/status")
+@router.get("/ingest/slack/status", tags=["Slack Ingestion"], summary="Get scrape status")
 def ingest_slack_status(
     _auth=Depends(require_scope("admin")),
     db: Session = Depends(get_db),
 ):
-    """Check the last Slack scrape run status."""
+    """Check the status of the last Slack scrape run. **Admin only.**
+
+    Returns information about when the last scrape ran, how many items were processed,
+    and whether it succeeded or failed.
+
+    **Scope required:** `admin`
+    """
     try:
         from slack_scraper import get_scrape_status
     except ImportError:
@@ -989,13 +1013,22 @@ def ingest_slack_status(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/ingest/slack/reactions")
+@router.post("/ingest/slack/reactions", tags=["Slack Ingestion"], summary="Refresh reaction counts")
 def ingest_slack_reactions(
-    days_back: int = Query(7, ge=1, le=365),
+    days_back: int = Query(7, ge=1, le=365, description="How many days back to refresh reactions for (1-365). Default: 7 days."),
     _auth=Depends(require_scope("admin")),
     db: Session = Depends(get_db),
 ):
-    """Refresh reaction counts from Slack for recent media."""
+    """Refresh Slack reaction counts for recently posted media. **Admin only.**
+
+    Calls the Slack API to get current reaction counts for media ingested within the
+    specified number of days. Updates `slack_reactions` and `reaction_count` fields.
+
+    Reactions on older posts are considered settled and are not re-fetched (to avoid
+    excessive API calls).
+
+    **Scope required:** `admin`
+    """
     try:
         from slack_scraper import trigger_reaction_refresh
     except ImportError:
@@ -1009,12 +1042,22 @@ def ingest_slack_reactions(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/ingest/slack/sync")
+@router.post("/ingest/slack/sync", tags=["Slack Ingestion"], summary="Sync now (incremental scrape + reactions)")
 def ingest_slack_sync(
     _auth=Depends(require_scope("admin")),
     db: Session = Depends(get_db),
 ):
-    """Trigger an incremental scrape + reaction refresh (Sync Now button)."""
+    """Run an incremental scrape and reaction refresh in one call. **Admin only.**
+
+    This is what the **"Sync Now"** button in the admin UI does. It:
+    1. Refreshes reaction counts for the last 7 days (fast, runs first)
+    2. Runs an incremental scrape to pull new messages since the last scrape
+
+    Use this for a quick catch-up. For a full historical backfill, use
+    `POST /api/ingest/slack` instead.
+
+    **Scope required:** `admin`
+    """
     try:
         from slack_scraper import trigger_incremental_scrape, trigger_reaction_refresh
     except ImportError:
@@ -1035,12 +1078,19 @@ def ingest_slack_sync(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/ingest/slack/dry-run")
+@router.post("/ingest/slack/dry-run", tags=["Slack Ingestion"], summary="Dry-run scrape (calculate sizes)")
 def ingest_slack_dry_run(
     _auth=Depends(require_scope("admin")),
     db: Session = Depends(get_db),
 ):
-    """Run a dry-run Slack scrape (calculate sizes without downloading)."""
+    """Run a dry-run Slack scrape that calculates download sizes without fetching anything. **Admin only.**
+
+    Use this before a large backfill to estimate how much data will be downloaded
+    and how many items will be ingested. No files are downloaded, no database records
+    are created.
+
+    **Scope required:** `admin`
+    """
     try:
         from slack_scraper import trigger_dry_run
     except ImportError:
@@ -1059,12 +1109,21 @@ def ingest_slack_dry_run(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/keys")
+@router.get("/keys", tags=["API Keys"], summary="List your API keys")
 def list_api_keys(
     _auth=Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
-    """List active API keys for the current user."""
+    """List all active (non-revoked) API keys belonging to the current user.
+
+    Each key shows its prefix (first 11 characters, for identification), label, scope,
+    creation date, and last usage timestamp.
+
+    **You can only see your own keys.** The full key value is never shown again after
+    creation — only the prefix is stored for display.
+
+    **Scope required:** `write`
+    """
     user, _ = _auth
     keys = (
         db.query(ApiKey)
@@ -1085,13 +1144,32 @@ def list_api_keys(
     ]
 
 
-@router.post("/keys", status_code=201)
+@router.post("/keys", status_code=201, tags=["API Keys"], summary="Create a new API key")
 def create_api_key(
     body: ApiKeyCreateRequest,
     _auth=Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
-    """Generate a new API key. The raw key is returned only once."""
+    """Generate a new API key for programmatic access. **The raw key is returned only once.**
+
+    The key is prefixed with `au_` and followed by a cryptographically random string.
+    Send it as a Bearer token in the `Authorization` header:
+
+    ```
+    Authorization: Bearer au_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    ```
+
+    **IMPORTANT:** Copy the `key` field from the response immediately. It is stored as
+    a bcrypt hash and cannot be recovered. If you lose it, revoke the key and create a
+    new one.
+
+    **Scope hierarchy:** A key's scope determines what it can access:
+    - `read`: Search, view, stream, download
+    - `write`: Everything in read + upload, tag, edit, manage keys
+    - `admin`: Everything in write + delete, manage users, trigger scrapes
+
+    **Scope required:** `write`
+    """
     if body.scope not in ("read", "write", "admin"):
         raise HTTPException(status_code=400, detail="Scope must be read, write, or admin")
 
@@ -1125,13 +1203,22 @@ def create_api_key(
     }
 
 
-@router.delete("/keys/{key_id}")
+@router.delete("/keys/{key_id}", tags=["API Keys"], summary="Revoke an API key")
 def revoke_api_key(
     key_id: str,
     _auth=Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
-    """Revoke an API key."""
+    """Revoke an API key, making it immediately unusable.
+
+    Revocation is instant — the next request using this key will be rejected with 401.
+    The key record is not deleted; it's marked with a `revoked_at` timestamp.
+
+    **You can only revoke your own keys.** Returns 404 if the key doesn't exist, doesn't
+    belong to you, or is already revoked.
+
+    **Scope required:** `write`
+    """
     user, _ = _auth
     api_key = (
         db.query(ApiKey)
@@ -1151,16 +1238,27 @@ def revoke_api_key(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/extraction-failures")
+@router.get("/extraction-failures", tags=["Extraction Failures"], summary="List extraction failures")
 def list_extraction_failures(
-    resolved: bool = Query(False),
-    extraction_type: str | None = Query(None),
-    page: int = Query(1, ge=1),
-    per_page: int = Query(50, ge=1, le=200),
+    resolved: bool = Query(False, description="If true, show resolved failures. Default: false (show unresolved)."),
+    extraction_type: str | None = Query(None, description="Filter by extraction type: `whisper`, `ffprobe`, `dominant_colors`, `thumbnail`, `yt-dlp`."),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)."),
+    per_page: int = Query(50, ge=1, le=200, description="Results per page (max 200)."),
     _auth=Depends(require_scope("admin")),
     db: Session = Depends(get_db),
 ):
-    """List extraction failures with optional filters."""
+    """List extraction failures with optional filtering and pagination. **Admin only.**
+
+    The extraction pipeline runs asynchronously after media ingest. When any step fails
+    (e.g. Whisper transcription, ffprobe, dominant color extraction, thumbnail generation,
+    yt-dlp download), the failure is logged here with error details.
+
+    Use this to identify and fix ingestion issues. Failed items can be retried via
+    `POST /api/extraction-failures/{id}/retry` or marked as resolved via
+    `POST /api/extraction-failures/{id}/resolve`.
+
+    **Scope required:** `admin`
+    """
     q = db.query(ExtractionFailure).options(joinedload(ExtractionFailure.media_item))
     q = q.filter(ExtractionFailure.resolved == resolved)
 
@@ -1190,13 +1288,22 @@ def list_extraction_failures(
     }
 
 
-@router.post("/extraction-failures/{failure_id}/retry")
+@router.post("/extraction-failures/{failure_id}/retry", tags=["Extraction Failures"], summary="Retry a failed extraction")
 def retry_extraction_failure(
     failure_id: str,
     _auth=Depends(require_scope("admin")),
     db: Session = Depends(get_db),
 ):
-    """Retry a single extraction failure."""
+    """Retry a specific extraction failure. **Admin only.**
+
+    Re-runs the failed extraction step (e.g. re-attempts Whisper transcription or
+    dominant color extraction). The `attempts` counter is incremented.
+
+    If the retry succeeds, the failure is automatically marked as resolved.
+    If it fails again, the error message is updated with the new error.
+
+    **Scope required:** `admin`
+    """
     failure = db.query(ExtractionFailure).filter(ExtractionFailure.id == failure_id).first()
     if not failure:
         raise HTTPException(status_code=404, detail="Extraction failure not found")
@@ -1216,13 +1323,22 @@ def retry_extraction_failure(
         return {"ok": False, "detail": str(e)}
 
 
-@router.post("/extraction-failures/{failure_id}/resolve")
+@router.post("/extraction-failures/{failure_id}/resolve", tags=["Extraction Failures"], summary="Mark failure as resolved")
 def resolve_extraction_failure(
     failure_id: str,
     _auth=Depends(require_scope("admin")),
     db: Session = Depends(get_db),
 ):
-    """Mark an extraction failure as resolved without retrying."""
+    """Mark an extraction failure as resolved without retrying. **Admin only.**
+
+    Use this to dismiss failures that don't need to be fixed (e.g. a corrupt file
+    that will never extract successfully, or a yt-dlp failure for a deleted video).
+
+    The media item itself is not affected — it remains in the system with whatever
+    metadata was successfully extracted.
+
+    **Scope required:** `admin`
+    """
     failure = db.query(ExtractionFailure).filter(ExtractionFailure.id == failure_id).first()
     if not failure:
         raise HTTPException(status_code=404, detail="Extraction failure not found")
