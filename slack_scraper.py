@@ -692,8 +692,12 @@ def scrape_channel(
     channel_name: str,
     channel_id: str,
     dry_run: bool = False,
+    incremental: bool = False,
 ) -> dict:
     """Scrape a single Slack channel for media.
+
+    When incremental=True, only fetches messages newer than the last scraped
+    timestamp for this channel. Much faster for periodic auto-sync.
 
     Returns stats dict with counts of files found, downloaded, skipped, errors.
     """
@@ -712,15 +716,18 @@ def scrape_channel(
         stats["by_type"] = {"image": 0, "audio": 0, "video": 0}
 
     try:
-        # Don't pass oldest — always fetch full history.
-        # slack_file_id and source_url dedup skip already-processed files.
-        # This ensures partial runs don't leave gaps in the backlog.
+        oldest = None
+        if incremental:
+            oldest = _get_last_scrape_ts(db, channel_name)
+            if oldest:
+                logger.info("Incremental scrape for %s: oldest=%s", channel_name, oldest)
+
         cursor = None
 
         page = 0
         while True:
             page += 1
-            resp = get_channel_history(channel_id, oldest=None, cursor=cursor)
+            resp = get_channel_history(channel_id, oldest=oldest, cursor=cursor)
             if not resp.get("ok"):
                 logger.error(
                     "Failed to fetch history for %s (page %d): %s",
@@ -820,7 +827,7 @@ def refresh_reactions(days_back: int = 60) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _run_scrape(channels: dict[str, str]) -> dict:
+def _run_scrape(channels: dict[str, str], incremental: bool = False) -> dict:
     """Internal: run the scrape synchronously, updating _scrape_status."""
     results = {}
     with _status_lock:
@@ -832,7 +839,7 @@ def _run_scrape(channels: dict[str, str]) -> dict:
         for name, cid in channels.items():
             with _status_lock:
                 _scrape_status["current_channel"] = name
-            results[name] = scrape_channel(name, cid)
+            results[name] = scrape_channel(name, cid, incremental=incremental)
 
         # Run extraction and Meilisearch sync for all items missing metadata
         with _status_lock:
@@ -1063,6 +1070,68 @@ def backfill_posters() -> dict:
         db.close()
 
     return {"updated": updated, "errors": errors}
+
+
+def trigger_incremental_scrape() -> dict:
+    """Trigger an incremental scrape (only new messages since last run).
+
+    Used by the background auto-sync scheduler. Much faster than a full scrape.
+    Runs in a background thread. Returns immediate status.
+    """
+    with _status_lock:
+        if _scrape_status["running"]:
+            return {"status": "already_running", "current_channel": _scrape_status["current_channel"]}
+
+    target = dict(SCRAPE_CHANNELS)
+    if not target:
+        return {"status": "error", "message": "No channels configured"}
+
+    thread = threading.Thread(
+        target=_run_scrape, args=(target,), kwargs={"incremental": True}, daemon=True,
+    )
+    thread.start()
+
+    return {"status": "started", "channels": list(target.keys()), "mode": "incremental"}
+
+
+def trigger_reaction_refresh(days_back: int = 7) -> dict:
+    """Trigger a reaction refresh and sync updated counts to Meilisearch.
+
+    Runs synchronously (fast — just API calls + DB updates).
+    """
+    result = refresh_reactions(days_back=days_back)
+
+    # Sync updated items to Meilisearch
+    if result["updated"] > 0:
+        db = SessionLocal()
+        try:
+            from search_client import sync_media_item
+            from models import MediaItem
+
+            # Re-sync items whose sources were updated
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
+            sources = (
+                db.query(MediaSource)
+                .filter(
+                    MediaSource.created_at >= cutoff,
+                    MediaSource.slack_message_ts.isnot(None),
+                )
+                .all()
+            )
+            item_ids = {s.media_item_id for s in sources}
+            for item_id in item_ids:
+                item = db.query(MediaItem).filter(MediaItem.id == item_id).first()
+                if item:
+                    try:
+                        sync_media_item(db, item)
+                    except Exception as exc:
+                        logger.error("Meilisearch sync failed for %s: %s", item_id, exc)
+        except ImportError:
+            pass
+        finally:
+            db.close()
+
+    return result
 
 
 def get_scrape_status() -> dict:

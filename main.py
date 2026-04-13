@@ -1,7 +1,10 @@
+import asyncio
 import hashlib
 import hmac
+import logging
 import os
 import subprocess
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -28,13 +31,75 @@ from catalog import router as catalog_router
 from search_api import router as search_router
 from models import Base, User, engine
 
+logger = logging.getLogger(__name__)
+
 # Ensure data directory exists
 Path("data").mkdir(exist_ok=True)
 
 Base.metadata.create_all(bind=engine)
 
+
+# ---------------------------------------------------------------------------
+# Background auto-sync scheduler
+# ---------------------------------------------------------------------------
+
+SYNC_ENABLED = os.environ.get("SLACK_AUTO_SYNC", "").lower() in ("1", "true", "yes")
+SYNC_INTERVAL_SCRAPE = int(os.environ.get("SYNC_INTERVAL_SCRAPE", "120"))   # seconds
+SYNC_INTERVAL_REACTIONS = int(os.environ.get("SYNC_INTERVAL_REACTIONS", "300"))  # seconds
+
+
+async def _auto_scrape_loop():
+    """Periodically run incremental Slack scrapes."""
+    await asyncio.sleep(30)  # let the app finish starting up
+    while True:
+        try:
+            from slack_scraper import trigger_incremental_scrape
+            result = trigger_incremental_scrape()
+            logger.info("Auto-sync scrape: %s", result.get("status"))
+        except Exception:
+            logger.exception("Auto-sync scrape failed")
+        await asyncio.sleep(SYNC_INTERVAL_SCRAPE)
+
+
+async def _auto_reactions_loop():
+    """Periodically refresh reaction counts."""
+    await asyncio.sleep(60)  # offset from scrape loop
+    while True:
+        try:
+            from slack_scraper import trigger_reaction_refresh
+            result = trigger_reaction_refresh(days_back=7)
+            logger.info("Auto-sync reactions: updated=%s errors=%s", result.get("updated"), result.get("errors"))
+        except Exception:
+            logger.exception("Auto-sync reactions failed")
+        await asyncio.sleep(SYNC_INTERVAL_REACTIONS)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage background tasks for the app lifecycle."""
+    tasks = []
+    if SYNC_ENABLED:
+        logger.info(
+            "Slack auto-sync enabled (scrape every %ds, reactions every %ds)",
+            SYNC_INTERVAL_SCRAPE, SYNC_INTERVAL_REACTIONS,
+        )
+        tasks.append(asyncio.create_task(_auto_scrape_loop()))
+        tasks.append(asyncio.create_task(_auto_reactions_loop()))
+    else:
+        logger.info("Slack auto-sync disabled (set SLACK_AUTO_SYNC=true to enable)")
+
+    yield
+
+    for task in tasks:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(title="a-u.supply")
+app = FastAPI(title="a-u.supply", lifespan=lifespan)
 app.state.limiter = limiter
 
 # Rate limit error handler
