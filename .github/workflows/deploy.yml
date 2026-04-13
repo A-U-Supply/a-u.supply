@@ -52,4 +52,5 @@ jobs:
       - name: Deploy pre-built image to Dokku
         run: |
           ssh dokku git:from-image au-supply ${{ env.IMAGE }}:${{ github.sha }}
-          ssh dokku ps:rebuild au-supply
+          sleep 10
+          ssh dokku proxy:build-config au-supply
