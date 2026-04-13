@@ -707,6 +707,22 @@ import Admin from '../../../layouts/Admin.astro';
         if (!body.filters.tags.includes(tagParam)) body.filters.tags.push(tagParam);
       }
 
+      // Update URL to reflect current search state (shareable, back/forward friendly)
+      const stateParams = new URLSearchParams();
+      if (searchInput.value) stateParams.set('q', searchInput.value);
+      if (filters.poster) stateParams.set('poster', filters.poster);
+      if (filters.channels.length) stateParams.set('channel', filters.channels.join(','));
+      if (filters.tags) stateParams.set('tags', filters.tags);
+      if (filters.reactionsMin > 0) stateParams.set('rxn', String(filters.reactionsMin));
+      if (filters.tagsMin > 0) stateParams.set('mintags', String(filters.tagsMin));
+      if (filters.sortBy !== 'newest') stateParams.set('sort', filters.sortBy);
+      if (colorParam) stateParams.set('color', colorParam);
+      if (tagParam && !filters.tags) stateParams.set('tag', tagParam);
+      if (currentPage > 1) stateParams.set('page', String(currentPage));
+      const qs = stateParams.toString();
+      const newUrl = window.location.pathname + (qs ? '?' + qs : '');
+      history.replaceState(null, '', newUrl);
+
       try {
         const res = await fetch('/api/search', {
           method: 'POST',
@@ -842,6 +858,13 @@ import Admin from '../../../layouts/Admin.astro';
         const posterSelect = document.getElementById('filter-poster') as HTMLSelectElement;
         posterSelect.innerHTML = '<option value="">All</option>' +
           (data.uploaders || []).map((u: string) => `<option value="${u}">${u}</option>`).join('');
+        // Restore from URL after dropdowns are populated
+        const p = new URLSearchParams(window.location.search);
+        if (p.get('poster')) posterSelect.value = p.get('poster')!;
+        if (p.get('channel')) {
+          const chs = p.get('channel')!.split(',');
+          Array.from(channelSelect.options).forEach(o => { o.selected = chs.includes(o.value); });
+        }
       } catch {}
     }
 
@@ -849,6 +872,12 @@ import Admin from '../../../layouts/Admin.astro';
     const initParams = new URLSearchParams(window.location.search);
     if (initParams.get('q')) searchInput.value = initParams.get('q')!;
     if (initParams.get('tag')) (document.getElementById('filter-tags') as HTMLInputElement).value = initParams.get('tag')!;
+    if (initParams.get('tags')) (document.getElementById('filter-tags') as HTMLInputElement).value = initParams.get('tags')!;
+    if (initParams.get('rxn')) (document.getElementById('filter-reactions-min') as HTMLInputElement).value = initParams.get('rxn')!;
+    if (initParams.get('mintags')) (document.getElementById('filter-tags-min') as HTMLInputElement).value = initParams.get('mintags')!;
+    if (initParams.get('sort')) (document.getElementById('sort-by') as HTMLSelectElement).value = initParams.get('sort')!;
+    if (initParams.get('page')) currentPage = parseInt(initParams.get('page')!) || 1;
+    // poster and channel are set after facets load (async)
 
     function showActiveFilters() {
       const el = document.getElementById('active-filters')!;
