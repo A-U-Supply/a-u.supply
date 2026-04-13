@@ -5,9 +5,13 @@ import Admin from '../../../layouts/Admin.astro';
 <Admin title="Media Search" current="search">
   <div class="search-header">
     <h1>Media Search</h1>
-    <div class="view-toggle">
-      <button class="toggle-btn active" id="grid-view-btn" title="Grid view">Grid</button>
-      <button class="toggle-btn" id="list-view-btn" title="List view">List</button>
+    <div class="header-actions">
+      <button class="sync-btn" id="sync-now-btn" title="Sync new media from Slack">Sync Now</button>
+      <span class="sync-status" id="sync-status"></span>
+      <div class="view-toggle">
+        <button class="toggle-btn active" id="grid-view-btn" title="Grid view">Grid</button>
+        <button class="toggle-btn" id="list-view-btn" title="List view">List</button>
+      </div>
     </div>
   </div>
 
@@ -178,6 +182,39 @@ import Admin from '../../../layouts/Admin.astro';
     margin-bottom: 0;
     border-bottom: none;
     padding-bottom: 0;
+  }
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+  .sync-btn {
+    padding: var(--space-xs) var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    background: #1a1a1a;
+    color: #fff;
+    border: 2px solid #1a1a1a;
+    cursor: pointer;
+  }
+  .sync-btn:hover { background: #333; border-color: #333; }
+  .sync-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .sync-btn.syncing {
+    background: none;
+    color: var(--color-text);
+    border-color: var(--color-border);
+  }
+  .sync-status {
+    font-size: 0.65rem;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
   }
   .view-toggle {
     display: flex;
@@ -475,6 +512,7 @@ import Admin from '../../../layouts/Admin.astro';
 
   @media (max-width: 640px) {
     .search-header { flex-direction: column; align-items: stretch; }
+    .header-actions { flex-wrap: wrap; }
     .search-bar input { font-size: 16px; } /* prevent iOS zoom */
     .search-layout {
       grid-template-columns: 1fr;
@@ -508,6 +546,63 @@ import Admin from '../../../layouts/Admin.astro';
 
     const user = await (window as any).__authReady;
     if (!user) return;
+
+    // Sync Now button
+    const syncBtn = document.getElementById('sync-now-btn') as HTMLButtonElement | null;
+    const syncStatus = document.getElementById('sync-status');
+    syncBtn?.addEventListener('click', async () => {
+      if (syncBtn.disabled) return;
+      syncBtn.disabled = true;
+      syncBtn.classList.add('syncing');
+      syncBtn.textContent = 'Syncing...';
+      if (syncStatus) syncStatus.textContent = '';
+
+      try {
+        const res = await fetch('/api/ingest/slack/sync', {
+          method: 'POST',
+          credentials: 'include',
+        });
+        const data = await res.json();
+        if (data.ok) {
+          const reactionsUpdated = data.reactions?.updated || 0;
+          if (syncStatus) syncStatus.textContent = `Reactions: ${reactionsUpdated} updated. Scrape: ${data.scrape?.status || 'started'}`;
+          // Poll for scrape completion, then refresh results
+          if (data.scrape?.status === 'started') {
+            pollScrapeStatus();
+          } else {
+            doSearch();
+          }
+        } else {
+          if (syncStatus) syncStatus.textContent = data.detail || 'Sync failed';
+        }
+      } catch {
+        if (syncStatus) syncStatus.textContent = 'Sync request failed';
+      } finally {
+        syncBtn.disabled = false;
+        syncBtn.classList.remove('syncing');
+        syncBtn.textContent = 'Sync Now';
+      }
+    });
+
+    async function pollScrapeStatus() {
+      const poll = async () => {
+        try {
+          const res = await fetch('/api/ingest/slack/status', { credentials: 'include' });
+          const data = await res.json();
+          if (data.ok && data.status?.running) {
+            if (syncStatus) syncStatus.textContent = `Scraping: ${data.status.current_channel || '...'}`;
+            setTimeout(poll, 3000);
+          } else {
+            if (syncStatus) syncStatus.textContent = 'Sync complete';
+            doSearch();
+            setTimeout(() => { if (syncStatus) syncStatus.textContent = ''; }, 5000);
+          }
+        } catch {
+          if (syncStatus) syncStatus.textContent = '';
+        }
+      };
+      setTimeout(poll, 2000);
+    }
 
     let currentView = 'grid';
     let currentPage = 1;
@@ -797,7 +892,7 @@ import Admin from '../../../layouts/Admin.astro';
           const selectedClass = selectedIds.has(item.id) ? ' selected' : '';
           const thumb = (item.media_type === 'image' || item.media_type === 'video')
             ? `<img src="/api/media/${item.id}/thumbnail" alt="" loading="lazy" />`
-            : `<span>${item.media_type || '?'}</span>`;
+            : `<img src="/assets/default-cover.jpg" alt="${item.media_type || '?'}" loading="lazy" style="image-rendering: pixelated;" />`;
           const poster = (item.sources || []).map((s: any) => s.uploader).filter(Boolean)[0] || '';
           const rxn = item.total_reaction_count ?? 0;
           return `<div class="grid-item${selectedClass}" data-id="${item.id}">
