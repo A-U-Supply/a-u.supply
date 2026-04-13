@@ -1,0 +1,16 @@
+{
+  "healthchecks": {
+    "web": [
+      {
+        "type": "startup",
+        "name": "web-ready",
+        "description": "Ensure the web server is responding",
+        "path": "/",
+        "attempts": 10,
+        "wait": 5,
+        "timeout": 30,
+        "content": "A-U.SUPPLY"
+      }
+    ]
+  }
+}
