@@ -389,6 +389,20 @@ def delete_media_item(media_item_id: str, media_type: str) -> None:
         logger.exception("Failed to delete media item %s from Meilisearch", media_item_id)
 
 
+ALL_FACETS = [
+    "tags",
+    "source_channels",
+    "format",
+    "mime_type",
+    "color_groups",
+    "primary_color_group",
+    # Numeric facets — requesting them gives us facetStats (min/max)
+    "total_reaction_count",
+    "created_at",
+    "tag_count",
+]
+
+
 def multi_search(
     query: str,
     media_types: list[str] | None = None,
@@ -399,7 +413,8 @@ def multi_search(
 ) -> dict:
     """Execute a multi-index search across specified media type indexes.
 
-    Returns combined results with hits, total counts, and facet distribution.
+    Returns combined results with hits, total counts, facet distributions,
+    facet stats (min/max for numeric fields), and per-type hit counts.
     """
     client = get_client()
 
@@ -416,7 +431,7 @@ def multi_search(
             "q": query,
             "limit": per_page,
             "offset": (page - 1) * per_page,
-            "facets": ["tags", "source_channels", "format", "mime_type"],
+            "facets": ALL_FACETS,
         }
         if filters:
             q["filter"] = filters
@@ -425,22 +440,33 @@ def multi_search(
         queries.append(q)
 
     if not queries:
-        return {"hits": [], "total": 0, "facets": {}}
+        return {"hits": [], "total": 0, "facets": {}, "facet_stats": {}, "counts_by_type": {}}
 
     try:
         response = client.multi_search(queries)
     except Exception:
         logger.exception("Meilisearch multi-search failed")
-        return {"hits": [], "total": 0, "facets": {}}
+        return {"hits": [], "total": 0, "facets": {}, "facet_stats": {}, "counts_by_type": {}}
 
     # Combine results from all indexes
     all_hits = []
     total = 0
     combined_facets: dict = {}
+    combined_stats: dict = {}
+    counts_by_type: dict = {}
+
+    # Reverse lookup: index name → media type
+    index_to_type = {v: k for k, v in INDEX_NAMES.items()}
 
     for result in response.get("results", []):
+        index_uid = result.get("indexUid", "")
+        media_type = index_to_type.get(index_uid, index_uid)
+        hits_count = result.get("estimatedTotalHits", 0)
+        counts_by_type[media_type] = hits_count
+
         all_hits.extend(result.get("hits", []))
-        total += result.get("estimatedTotalHits", 0)
+        total += hits_count
+
         # Merge facet distributions
         for facet_name, facet_values in result.get("facetDistribution", {}).items():
             if facet_name not in combined_facets:
@@ -448,10 +474,23 @@ def multi_search(
             for k, v in facet_values.items():
                 combined_facets[facet_name][k] = combined_facets[facet_name].get(k, 0) + v
 
+        # Merge facet stats (min/max across indexes)
+        for stat_name, stat_values in result.get("facetStats", {}).items():
+            if stat_name not in combined_stats:
+                combined_stats[stat_name] = dict(stat_values)
+            else:
+                existing = combined_stats[stat_name]
+                if "min" in stat_values:
+                    existing["min"] = min(existing.get("min", float("inf")), stat_values["min"])
+                if "max" in stat_values:
+                    existing["max"] = max(existing.get("max", float("-inf")), stat_values["max"])
+
     return {
         "hits": all_hits,
         "total": total,
         "facets": combined_facets,
+        "facet_stats": combined_stats,
+        "counts_by_type": counts_by_type,
         "page": page,
         "per_page": per_page,
     }
