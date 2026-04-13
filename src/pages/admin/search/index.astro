@@ -43,21 +43,24 @@ import Admin from '../../../layouts/Admin.astro';
 
         <div class="filter-group">
           <label class="filter-label">Color</label>
-          <select id="filter-color-group">
-            <option value="">Any Color</option>
-            <option value="red">Red</option>
-            <option value="orange">Orange</option>
-            <option value="yellow">Yellow</option>
-            <option value="green">Green</option>
-            <option value="teal">Teal / Cyan</option>
-            <option value="blue">Blue</option>
-            <option value="purple">Purple</option>
-            <option value="pink">Pink</option>
-            <option value="brown">Brown / Earth</option>
-            <option value="gray">Gray</option>
-            <option value="black">Black / Dark</option>
-            <option value="white">White / Light</option>
-          </select>
+          <div class="color-scope-toggle">
+            <label class="filter-check"><input type="radio" name="color-scope" value="primary" checked /> Primary</label>
+            <label class="filter-check"><input type="radio" name="color-scope" value="all" /> All</label>
+          </div>
+          <div class="color-checks">
+            <label class="filter-check"><input type="checkbox" name="color-group" value="red" /> Red</label>
+            <label class="filter-check"><input type="checkbox" name="color-group" value="orange" /> Orange</label>
+            <label class="filter-check"><input type="checkbox" name="color-group" value="yellow" /> Yellow</label>
+            <label class="filter-check"><input type="checkbox" name="color-group" value="green" /> Green</label>
+            <label class="filter-check"><input type="checkbox" name="color-group" value="teal" /> Teal</label>
+            <label class="filter-check"><input type="checkbox" name="color-group" value="blue" /> Blue</label>
+            <label class="filter-check"><input type="checkbox" name="color-group" value="purple" /> Purple</label>
+            <label class="filter-check"><input type="checkbox" name="color-group" value="pink" /> Pink</label>
+            <label class="filter-check"><input type="checkbox" name="color-group" value="brown" /> Brown</label>
+            <label class="filter-check"><input type="checkbox" name="color-group" value="gray" /> Gray</label>
+            <label class="filter-check"><input type="checkbox" name="color-group" value="black" /> Black</label>
+            <label class="filter-check"><input type="checkbox" name="color-group" value="white" /> White</label>
+          </div>
         </div>
 
         <div class="filter-group">
@@ -292,6 +295,16 @@ import Admin from '../../../layouts/Admin.astro';
   .filter-group select:focus {
     outline: 2px solid var(--color-accent);
     outline-offset: -1px;
+  }
+
+  .color-scope-toggle {
+    display: flex;
+    gap: var(--space-sm);
+    margin-bottom: 4px;
+  }
+  .color-checks {
+    max-height: 150px;
+    overflow-y: auto;
   }
 
   .active-filters {
@@ -668,22 +681,28 @@ import Admin from '../../../layouts/Admin.astro';
       } catch { alert('Export failed'); }
     }
 
+    // Track hex color from URL (set by clicking a swatch on detail page)
+    let activeColorHex: string | null = new URLSearchParams(window.location.search).get('color') || null;
+
     function getFilters() {
       const types: string[] = [];
-      document.querySelectorAll('.filter-check input:checked').forEach(cb => {
-        types.push((cb as HTMLInputElement).value);
+      document.querySelectorAll('.filter-check input[type="checkbox"]:checked').forEach(cb => {
+        const input = cb as HTMLInputElement;
+        // Only media type checkboxes (not color group)
+        if (!input.name) types.push(input.value);
       });
       const channel = document.getElementById('filter-channel') as HTMLSelectElement;
       const channels = Array.from(channel.selectedOptions).map(o => o.value).filter(Boolean);
       const dateFrom = (document.getElementById('filter-date-from') as HTMLInputElement).value;
       const dateTo = (document.getElementById('filter-date-to') as HTMLInputElement).value;
       const poster = (document.getElementById('filter-poster') as HTMLSelectElement).value;
-      const colorGroup = (document.getElementById('filter-color-group') as HTMLSelectElement).value;
+      const colorGroups = Array.from(document.querySelectorAll('input[name="color-group"]:checked')).map(cb => (cb as HTMLInputElement).value);
+      const colorScope = (document.querySelector('input[name="color-scope"]:checked') as HTMLInputElement)?.value || 'primary';
       const tags = (document.getElementById('filter-tags') as HTMLInputElement).value;
       const reactionsMin = parseInt((document.getElementById('filter-reactions-min') as HTMLInputElement).value) || 0;
       const tagsMin = parseInt((document.getElementById('filter-tags-min') as HTMLInputElement).value) || 0;
       const sortBy = (document.getElementById('sort-by') as HTMLSelectElement).value;
-      return { types, channels, poster, colorGroup, dateFrom, dateTo, tags, reactionsMin, tagsMin, sortBy };
+      return { types, channels, poster, colorGroups, colorScope, dateFrom, dateTo, tags, reactionsMin, tagsMin, sortBy };
     }
 
     async function doSearch() {
@@ -712,34 +731,33 @@ import Admin from '../../../layouts/Admin.astro';
       };
       if (filters.channels.length) body.filters.source_channels = filters.channels;
       if (filters.poster) body.filters.poster = filters.poster;
-      if (filters.colorGroup) body.filters.color_group = filters.colorGroup;
+      if (filters.colorGroups.length) {
+        body.filters.color_group = filters.colorGroups;
+        body.filters.color_scope = filters.colorScope;
+      }
       if (filters.dateFrom || filters.dateTo) body.filters.date_range = { from: filters.dateFrom || undefined, to: filters.dateTo || undefined };
       if (filters.tags) body.filters.tags = filters.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
       if (filters.reactionsMin > 0) body.filters.reaction_count = { min: filters.reactionsMin };
       if (filters.tagsMin > 0) body.filters.tag_count = { min: filters.tagsMin };
 
-      // Check URL params for filters
-      const urlParams = new URLSearchParams(window.location.search);
-      const colorParam = urlParams.get('color');
-      if (colorParam) body.filters.color = '#' + colorParam.replace('#', '');
-      const tagParam = urlParams.get('tag');
-      if (tagParam) {
-        body.filters.tags = body.filters.tags || [];
-        if (!body.filters.tags.includes(tagParam)) body.filters.tags.push(tagParam);
-      }
+      // Hex color filter (from clicking a swatch on detail page)
+      if (activeColorHex) body.filters.color = '#' + activeColorHex.replace('#', '');
 
       // Update URL to reflect current search state (shareable, back/forward friendly)
       const stateParams = new URLSearchParams();
       if (searchInput.value) stateParams.set('q', searchInput.value);
       if (filters.poster) stateParams.set('poster', filters.poster);
-      if (filters.colorGroup) stateParams.set('colorgroup', filters.colorGroup);
+      if (filters.colorGroups.length) stateParams.set('colorgroup', filters.colorGroups.join(','));
+      if (filters.colorScope !== 'primary') stateParams.set('colorscope', filters.colorScope);
       if (filters.channels.length) stateParams.set('channel', filters.channels.join(','));
       if (filters.tags) stateParams.set('tags', filters.tags);
+      if (filters.dateFrom) stateParams.set('from', filters.dateFrom);
+      if (filters.dateTo) stateParams.set('to', filters.dateTo);
       if (filters.reactionsMin > 0) stateParams.set('rxn', String(filters.reactionsMin));
       if (filters.tagsMin > 0) stateParams.set('mintags', String(filters.tagsMin));
       if (filters.sortBy !== 'newest') stateParams.set('sort', filters.sortBy);
-      if (colorParam) stateParams.set('color', colorParam);
-      if (tagParam && !filters.tags) stateParams.set('tag', tagParam);
+      if (activeColorHex) stateParams.set('color', activeColorHex.replace('#', ''));
+      if (filters.types.length < 3 && filters.types.length > 0) stateParams.set('types', filters.types.join(','));
       if (currentPage > 1) stateParams.set('page', String(currentPage));
       const qs = stateParams.toString();
       const newUrl = window.location.pathname + (qs ? '?' + qs : '');
@@ -763,6 +781,8 @@ import Admin from '../../../layouts/Admin.astro';
         errorEl.textContent = err.message;
         errorEl.style.display = 'block';
       }
+
+      showActiveFilters();
     }
 
     function updateSelection() {
@@ -890,61 +910,142 @@ import Admin from '../../../layouts/Admin.astro';
       } catch {}
     }
 
-    // Populate UI from URL params — re-query DOM elements to handle ViewTransitions
+    // Populate UI from URL params
     const initParams = new URLSearchParams(window.location.search);
     function restoreFromUrl() {
       const si = document.getElementById('search-input') as HTMLInputElement;
       if (initParams.get('q') && si) si.value = initParams.get('q')!;
+
+      // Tags: merge ?tag= and ?tags= into one field
       const ft = document.getElementById('filter-tags') as HTMLInputElement;
-      if (initParams.get('tag') && ft) ft.value = initParams.get('tag')!;
-      if (initParams.get('tags') && ft) ft.value = initParams.get('tags')!;
+      const tagVals: string[] = [];
+      if (initParams.get('tag')) tagVals.push(initParams.get('tag')!);
+      if (initParams.get('tags')) tagVals.push(...initParams.get('tags')!.split(',').map(t => t.trim()).filter(Boolean));
+      if (tagVals.length && ft) ft.value = [...new Set(tagVals)].join(', ');
+
       const fr = document.getElementById('filter-reactions-min') as HTMLInputElement;
       if (initParams.get('rxn') && fr) fr.value = initParams.get('rxn')!;
       const fm = document.getElementById('filter-tags-min') as HTMLInputElement;
       if (initParams.get('mintags') && fm) fm.value = initParams.get('mintags')!;
       const sb = document.getElementById('sort-by') as HTMLSelectElement;
       if (initParams.get('sort') && sb) sb.value = initParams.get('sort')!;
-      const cg = document.getElementById('filter-color-group') as HTMLSelectElement;
-      if (initParams.get('colorgroup') && cg) cg.value = initParams.get('colorgroup')!;
+
+      // Color group checkboxes
+      if (initParams.get('colorgroup')) {
+        const groups = initParams.get('colorgroup')!.split(',');
+        document.querySelectorAll('input[name="color-group"]').forEach(cb => {
+          (cb as HTMLInputElement).checked = groups.includes((cb as HTMLInputElement).value);
+        });
+      }
+      // Color scope radio
+      if (initParams.get('colorscope')) {
+        const radio = document.querySelector(`input[name="color-scope"][value="${initParams.get('colorscope')}"]`) as HTMLInputElement | null;
+        if (radio) radio.checked = true;
+      }
+
+      // Date range
+      if (initParams.get('from')) (document.getElementById('filter-date-from') as HTMLInputElement).value = initParams.get('from')!;
+      if (initParams.get('to')) (document.getElementById('filter-date-to') as HTMLInputElement).value = initParams.get('to')!;
+
+      // Media types
+      if (initParams.get('types')) {
+        const types = initParams.get('types')!.split(',');
+        document.querySelectorAll('.filter-check input[type="checkbox"]').forEach(cb => {
+          const input = cb as HTMLInputElement;
+          if (!input.name) input.checked = types.includes(input.value);
+        });
+      }
+
       if (initParams.get('page')) currentPage = parseInt(initParams.get('page')!) || 1;
-      // For color searches, show in placeholder
-      if (initParams.get('color') && !initParams.get('q') && si) {
-        si.placeholder = 'Filtering by color #' + initParams.get('color')!.replace('#','');
+
+      // Hex color from swatch click
+      if (initParams.get('color')) {
+        activeColorHex = initParams.get('color')!.replace('#', '');
       }
     }
-    restoreFromUrl();
-    // Also restore after a brief delay to handle ViewTransition DOM swaps
-    setTimeout(restoreFromUrl, 50);
-    // poster and channel are set after facets load (async)
+
+    function clearFilter(filterName: string) {
+      switch (filterName) {
+        case 'q': searchInput.value = ''; break;
+        case 'color': activeColorHex = null; break;
+        case 'poster': (document.getElementById('filter-poster') as HTMLSelectElement).value = ''; break;
+        case 'tags': (document.getElementById('filter-tags') as HTMLInputElement).value = ''; break;
+        case 'colorgroup':
+          document.querySelectorAll('input[name="color-group"]').forEach(cb => { (cb as HTMLInputElement).checked = false; });
+          break;
+        case 'channel':
+          Array.from((document.getElementById('filter-channel') as HTMLSelectElement).options).forEach(o => { o.selected = false; });
+          break;
+        case 'dateFrom': (document.getElementById('filter-date-from') as HTMLInputElement).value = ''; break;
+        case 'dateTo': (document.getElementById('filter-date-to') as HTMLInputElement).value = ''; break;
+        case 'rxn': (document.getElementById('filter-reactions-min') as HTMLInputElement).value = '0'; break;
+        case 'mintags': (document.getElementById('filter-tags-min') as HTMLInputElement).value = '0'; break;
+        case 'types':
+          document.querySelectorAll('.filter-check input[type="checkbox"]').forEach(cb => {
+            const input = cb as HTMLInputElement;
+            if (!input.name) input.checked = true;
+          });
+          break;
+      }
+      currentPage = 1;
+      doSearch();
+    }
+    // Expose for inline onclick
+    (window as any).__clearFilter = clearFilter;
 
     function showActiveFilters() {
       const el = document.getElementById('active-filters')!;
-      const params = new URLSearchParams(window.location.search);
+      const filters = getFilters();
       const chips: string[] = [];
-      const clearBtn = `<button class="active-filter__remove" onclick="location.href='/admin/search'">&times;</button>`;
-      const q = params.get('q');
-      if (q) chips.push(`<span class="active-filter">Query: "${q}" ${clearBtn}</span>`);
-      const color = params.get('color');
-      if (color) {
-        const hex = '#' + color.replace('#', '');
-        chips.push(`<span class="active-filter"><span class="active-filter__color" style="background:${hex}"></span> Color: ${hex} ${clearBtn}</span>`);
+
+      if (searchInput.value) {
+        chips.push(`<span class="active-filter">Query: "${searchInput.value}" <button class="active-filter__remove" onclick="__clearFilter('q')">&times;</button></span>`);
       }
-      const cg = params.get('colorgroup');
-      if (cg) chips.push(`<span class="active-filter">Color: ${cg} ${clearBtn}</span>`);
-      const tag = params.get('tag');
-      if (tag) chips.push(`<span class="active-filter">Tag: ${tag} ${clearBtn}</span>`);
-      const tags = params.get('tags');
-      if (tags) chips.push(`<span class="active-filter">Tags: ${tags} ${clearBtn}</span>`);
-      const poster = params.get('poster');
-      if (poster) chips.push(`<span class="active-filter">Posted by: ${poster} ${clearBtn}</span>`);
+      if (activeColorHex) {
+        const hex = '#' + activeColorHex.replace('#', '');
+        chips.push(`<span class="active-filter"><span class="active-filter__color" style="background:${hex}"></span> Color: ${hex} <button class="active-filter__remove" onclick="__clearFilter('color')">&times;</button></span>`);
+      }
+      if (filters.colorGroups.length) {
+        chips.push(`<span class="active-filter">Colors: ${filters.colorGroups.join(', ')} (${filters.colorScope}) <button class="active-filter__remove" onclick="__clearFilter('colorgroup')">&times;</button></span>`);
+      }
+      if (filters.tags) {
+        chips.push(`<span class="active-filter">Tags: ${filters.tags} <button class="active-filter__remove" onclick="__clearFilter('tags')">&times;</button></span>`);
+      }
+      if (filters.poster) {
+        chips.push(`<span class="active-filter">Posted by: ${filters.poster} <button class="active-filter__remove" onclick="__clearFilter('poster')">&times;</button></span>`);
+      }
+      if (filters.channels.length) {
+        chips.push(`<span class="active-filter">Channel: ${filters.channels.join(', ')} <button class="active-filter__remove" onclick="__clearFilter('channel')">&times;</button></span>`);
+      }
+      if (filters.dateFrom) {
+        chips.push(`<span class="active-filter">From: ${filters.dateFrom} <button class="active-filter__remove" onclick="__clearFilter('dateFrom')">&times;</button></span>`);
+      }
+      if (filters.dateTo) {
+        chips.push(`<span class="active-filter">To: ${filters.dateTo} <button class="active-filter__remove" onclick="__clearFilter('dateTo')">&times;</button></span>`);
+      }
+      if (filters.reactionsMin > 0) {
+        chips.push(`<span class="active-filter">Min reactions: ${filters.reactionsMin} <button class="active-filter__remove" onclick="__clearFilter('rxn')">&times;</button></span>`);
+      }
+      if (filters.tagsMin > 0) {
+        chips.push(`<span class="active-filter">Min tags: ${filters.tagsMin} <button class="active-filter__remove" onclick="__clearFilter('mintags')">&times;</button></span>`);
+      }
+      if (filters.types.length < 3 && filters.types.length > 0) {
+        chips.push(`<span class="active-filter">Types: ${filters.types.join(', ')} <button class="active-filter__remove" onclick="__clearFilter('types')">&times;</button></span>`);
+      }
+
       if (chips.length > 0) {
+        chips.push(`<button class="action-btn" onclick="location.href='/admin/search'" style="margin-left:auto;">Clear All</button>`);
         el.innerHTML = chips.join('');
         el.style.display = 'flex';
+      } else {
+        el.innerHTML = '';
+        el.style.display = 'none';
       }
     }
-    showActiveFilters();
 
-    loadFacets();
+    // Restore form state from URL, load facets, then run first search
+    restoreFromUrl();
+    await loadFacets();
     doSearch();
   });
 </script>

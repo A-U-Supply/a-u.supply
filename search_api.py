@@ -13,7 +13,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session, joinedload
 
 from auth import get_db, require_scope
@@ -46,10 +46,18 @@ class SearchFilters(BaseModel):
     source_channels: list[str] | None = None
     poster: str | None = None  # filter by uploader name
     color: str | None = None  # filter by dominant color hex (exact match)
-    color_group: str | None = None  # filter by color group name (red, blue, green, etc.)
+    color_group: list[str] | None = None  # filter by color group names (red, blue, green, etc.)
+    color_scope: str | None = None  # "primary" (default) or "all"
     date_range: dict | None = None  # {"from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}
     reaction_count: dict | None = None  # {"min": N}
     tag_count: dict | None = None  # {"min": N}
+
+    @field_validator("color_group", mode="before")
+    @classmethod
+    def coerce_color_group(cls, v):
+        if isinstance(v, str):
+            return [v] if v else None
+        return v
 
 
 class SearchRequest(BaseModel):
@@ -197,6 +205,11 @@ def _media_item_response(item: MediaItem) -> dict:
     return data
 
 
+def _escape_filter_value(val: str) -> str:
+    """Escape values interpolated into Meilisearch filter strings."""
+    return val.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def _build_meili_filter(filters: SearchFilters | None) -> str | None:
     """Convert SearchFilters into a Meilisearch filter string."""
     if not filters:
@@ -205,11 +218,11 @@ def _build_meili_filter(filters: SearchFilters | None) -> str | None:
     parts = []
 
     if filters.tags:
-        tag_clauses = [f'tags = "{t}"' for t in filters.tags]
+        tag_clauses = [f'tags = "{_escape_filter_value(t)}"' for t in filters.tags]
         parts.append("(" + " AND ".join(tag_clauses) + ")")
 
     if filters.source_channels:
-        ch_clauses = [f'source_channels = "{c}"' for c in filters.source_channels]
+        ch_clauses = [f'source_channels = "{_escape_filter_value(c)}"' for c in filters.source_channels]
         parts.append("(" + " OR ".join(ch_clauses) + ")")
 
     if filters.date_range:
@@ -229,13 +242,15 @@ def _build_meili_filter(filters: SearchFilters | None) -> str | None:
                 pass
 
     if filters.poster:
-        parts.append(f'sources.uploader = "{filters.poster}"')
+        parts.append(f'sources.uploader = "{_escape_filter_value(filters.poster)}"')
 
     if filters.color:
-        parts.append(f'dominant_colors = "{filters.color}"')
+        parts.append(f'dominant_colors = "{_escape_filter_value(filters.color)}"')
 
     if filters.color_group:
-        parts.append(f'color_groups = "{filters.color_group}"')
+        field = "primary_color_group" if (filters.color_scope or "primary") == "primary" else "color_groups"
+        cg_clauses = [f'{field} = "{_escape_filter_value(g)}"' for g in filters.color_group]
+        parts.append("(" + " OR ".join(cg_clauses) + ")")
 
     if filters.reaction_count and filters.reaction_count.get("min") is not None:
         parts.append(f"total_reaction_count >= {filters.reaction_count['min']}")
@@ -269,74 +284,6 @@ def _update_vocabulary(db: Session, tag: str, delta: int) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _parse_query_syntax(raw_query: str) -> tuple[str, SearchFilters]:
-    """Parse field:value syntax from the query string.
-
-    Supported fields:
-        poster:name       — filter by uploader display name
-        tag:name          — filter by tag
-        channel:name      — filter by source channel
-        color:group       — filter by color group (red, blue, green, etc.)
-        type:image        — filter by media type (image, audio, video)
-        reactions:>N      — minimum reaction count
-        tags:>N           — minimum tag count
-
-    Quoted values: poster:"M. Curtis Allen"
-    Multiple fields can be combined: tag:logo poster:brendan color:blue
-
-    Remaining text after extracting fields becomes the full-text search query.
-
-    Returns (clean_query, extracted_filters).
-    """
-    import re
-
-    filters = SearchFilters()
-    remaining = raw_query
-
-    # Extract quoted field:value pairs first
-    def extract_field(pattern, raw):
-        matches = re.findall(pattern, raw)
-        cleaned = re.sub(pattern, '', raw)
-        return matches, cleaned
-
-    # poster:"quoted name" or poster:name
-    poster_matches, remaining = extract_field(r'poster:"([^"]+)"|poster:(\S+)', remaining)
-    for match in poster_matches:
-        filters.poster = match[0] or match[1]
-
-    # tag:"quoted" or tag:name
-    tag_matches, remaining = extract_field(r'tag:"([^"]+)"|tag:(\S+)', remaining)
-    if tag_matches:
-        filters.tags = [m[0] or m[1] for m in tag_matches]
-
-    # channel:name
-    ch_matches, remaining = extract_field(r'channel:"([^"]+)"|channel:(\S+)', remaining)
-    if ch_matches:
-        filters.source_channels = [m[0] or m[1] for m in ch_matches]
-
-    # color:group
-    color_matches, remaining = extract_field(r'color:"([^"]+)"|color:(\S+)', remaining)
-    if color_matches:
-        filters.color_group = color_matches[0][0] or color_matches[0][1]
-
-    # type:image/audio/video
-    type_matches, remaining = extract_field(r'type:(\S+)', remaining)
-    # type is handled via media_types on the request, not filters — returned separately
-
-    # reactions:>N
-    rxn_matches, remaining = extract_field(r'reactions:>(\d+)', remaining)
-    if rxn_matches:
-        filters.reaction_count = {"min": int(rxn_matches[0])}
-
-    # tags:>N (minimum tag count)
-    tagcount_matches, remaining = extract_field(r'tags:>(\d+)', remaining)
-    if tagcount_matches:
-        filters.tag_count = {"min": int(tagcount_matches[0])}
-
-    clean_query = ' '.join(remaining.split()).strip()
-    return clean_query, filters
-
-
 @router.post("/search")
 def search_media(
     body: SearchRequest,
@@ -345,61 +292,23 @@ def search_media(
 ):
     """Multi-index media search with filters, facets, and pagination.
 
-    The query field supports both full-text search and field:value syntax:
+    Full-text search across tags, description, message text, uploader names,
+    transcripts, captions, filenames, and color names. Typo-tolerant.
 
-    **Full-text search:** Searches across tags, description, message text,
-    uploader names, transcripts, captions, filenames, and color names.
-    Typo-tolerant. Example: `green textures`
-
-    **Field syntax** (can be combined with full-text):
-    - `poster:brendan` — filter by who posted it
-    - `poster:"M. Curtis Allen"` — quoted for names with spaces
-    - `tag:logo` — filter by tag
-    - `channel:image-gen` — filter by Slack channel
-    - `color:blue` — filter by color group (red, orange, yellow, green, teal, blue, purple, pink, brown, gray, black, white)
-    - `type:image` — filter by media type (image, audio, video)
-    - `reactions:>5` — minimum reaction count
-    - `tags:>2` — minimum tag count
-
-    **Combined example:** `poster:brendan tag:logo color:blue textures`
-    This finds items posted by brendan, tagged "logo", with blue colors,
-    matching "textures" as full-text.
-
-    Filters from the `filters` object in the request body are merged with
-    any field:value syntax extracted from the query.
+    All filtering is done via the `filters` object in the request body.
     """
     from search_client import multi_search
 
-    # Parse field:value syntax from query
-    clean_query, query_filters = _parse_query_syntax(body.query)
-
-    # Merge parsed filters with explicit filters from request body
-    merged = body.filters or SearchFilters()
-    if query_filters.poster and not merged.poster:
-        merged.poster = query_filters.poster
-    if query_filters.tags:
-        merged.tags = (merged.tags or []) + query_filters.tags
-    if query_filters.source_channels:
-        merged.source_channels = (merged.source_channels or []) + query_filters.source_channels
-    if query_filters.color_group and not merged.color_group:
-        merged.color_group = query_filters.color_group
-    if query_filters.color and not merged.color:
-        merged.color = query_filters.color
-    if query_filters.reaction_count and not merged.reaction_count:
-        merged.reaction_count = query_filters.reaction_count
-    if query_filters.tag_count and not merged.tag_count:
-        merged.tag_count = query_filters.tag_count
-
-    meili_filter = _build_meili_filter(merged)
+    meili_filter = _build_meili_filter(body.filters)
     sort_list = [body.sort] if body.sort else None
 
     # If filtering by color, only search images (other indexes don't have dominant_colors)
     media_types = body.media_types
-    if merged.color or merged.color_group:
+    if body.filters and (body.filters.color or body.filters.color_group):
         media_types = ["image"]
 
     results = multi_search(
-        query=clean_query,
+        query=body.query,
         media_types=media_types,
         filters=meili_filter,
         sort=sort_list,

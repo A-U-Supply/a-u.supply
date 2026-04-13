@@ -55,6 +55,7 @@ FILTERABLE_ATTRIBUTES = [
     "mime_type",
     "dominant_colors",
     "color_groups",
+    "primary_color_group",
     "sources.uploader",
 ]
 
@@ -308,6 +309,9 @@ def _build_document(db: Session, media_item: MediaItem) -> dict:
                 doc["dominant_colors"] = colors
                 doc["color_names"] = " ".join(_hex_to_color_name(c) for c in colors)
                 doc["color_groups"] = list(set(g for c in colors for g in _hex_to_color_groups(c)))
+                # Primary = group of the #1 most dominant color only
+                primary_groups = _hex_to_color_groups(colors[0]) if colors else []
+                doc["primary_color_group"] = primary_groups[0] if primary_groups else ""
             except (json.JSONDecodeError, TypeError):
                 doc["dominant_colors"] = []
                 doc["color_names"] = ""
