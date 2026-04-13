@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 import threading
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -123,8 +124,11 @@ _status_lock = threading.Lock()
 # ---------------------------------------------------------------------------
 
 
-def slack_api(method: str, params: dict | None = None) -> dict:
-    """Call a Slack Web API method and return the parsed JSON response."""
+def slack_api(method: str, params: dict | None = None, _retries: int = 3) -> dict:
+    """Call a Slack Web API method and return the parsed JSON response.
+
+    Automatically retries on 429 (rate limited) using the Retry-After header.
+    """
     url = f"{SLACK_API_BASE}{method}"
     if params:
         url = f"{url}?{urlencode(params)}"
@@ -134,17 +138,28 @@ def slack_api(method: str, params: dict | None = None) -> dict:
         "Content-Type": "application/x-www-form-urlencoded",
     })
 
-    try:
-        with urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read().decode())
-    except (HTTPError, URLError) as exc:
-        logger.error("Slack API error calling %s: %s", method, exc)
-        return {"ok": False, "error": str(exc)}
+    for attempt in range(_retries + 1):
+        try:
+            with urlopen(req, timeout=30) as resp:
+                data = json.loads(resp.read().decode())
+        except HTTPError as exc:
+            if exc.code == 429 and attempt < _retries:
+                retry_after = int(exc.headers.get("Retry-After", 5))
+                logger.info("Slack API %s rate limited, retrying in %ds", method, retry_after)
+                time.sleep(retry_after)
+                continue
+            logger.error("Slack API error calling %s: %s", method, exc)
+            return {"ok": False, "error": str(exc)}
+        except URLError as exc:
+            logger.error("Slack API error calling %s: %s", method, exc)
+            return {"ok": False, "error": str(exc)}
 
-    if not data.get("ok"):
-        logger.warning("Slack API %s returned error: %s", method, data.get("error"))
+        if not data.get("ok"):
+            logger.warning("Slack API %s returned error: %s", method, data.get("error"))
 
-    return data
+        return data
+
+    return {"ok": False, "error": "max retries exceeded"}
 
 
 def get_channel_history(
