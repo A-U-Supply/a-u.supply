@@ -168,7 +168,11 @@ def _hex_to_color_name(hex_color: str) -> str:
 
 
 def _hex_to_color_groups(hex_color: str) -> list[str]:
-    """Map a hex color to broad color group names for filtering."""
+    """Map a hex color to color group names for filtering.
+
+    Groups: red, orange, yellow, green, teal, blue, purple, pink,
+            brown, beige, gray, black, white.
+    """
     try:
         hex_color = hex_color.lstrip("#")
         r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
@@ -176,15 +180,16 @@ def _hex_to_color_groups(hex_color: str) -> list[str]:
         return []
 
     lightness = (r + g + b) / (3 * 255)
-    if lightness < 0.12:
-        return ["black"]
-    if lightness > 0.88:
-        return ["white"]
-
     max_c = max(r, g, b)
     min_c = min(r, g, b)
     sat = (max_c - min_c) / max_c if max_c > 0 else 0
-    if sat < 0.12:
+
+    # Achromatic: very dark, very light, or desaturated
+    if lightness < 0.10:
+        return ["black"]
+    if lightness > 0.90:
+        return ["white"]
+    if sat < 0.10:
         return ["gray"]
 
     # Compute hue (0-360)
@@ -199,32 +204,32 @@ def _hex_to_color_groups(hex_color: str) -> list[str]:
     if hue < 0:
         hue += 360
 
-    groups = []
-    # Low saturation earthy tones
-    if sat < 0.35 and lightness < 0.5:
-        groups.append("brown")
-    if sat < 0.35 and lightness >= 0.5:
-        groups.append("gray")
+    # Low saturation warm tones → brown/beige (not chromatic)
+    if sat < 0.30 and 10 < hue < 50:
+        if lightness < 0.45:
+            return ["brown"]
+        return ["beige"]
 
-    # Hue-based groups
-    if hue < 15 or hue >= 345:
-        groups.append("red")
-    elif hue < 45:
-        groups.append("orange")
-    elif hue < 70:
-        groups.append("yellow")
-    elif hue < 160:
-        groups.append("green")
-    elif hue < 200:
-        groups.append("teal")
-    elif hue < 260:
-        groups.append("blue")
-    elif hue < 300:
-        groups.append("purple")
-    else:
-        groups.append("pink")
+    # Low saturation cool tones → gray
+    if sat < 0.20:
+        return ["gray"]
 
-    return groups
+    # Chromatic colors — require meaningful saturation
+    if hue < 10 or hue >= 350:
+        return ["red"]
+    if hue < 35:
+        return ["orange"]
+    if hue < 55:
+        return ["yellow"]
+    if hue < 160:
+        return ["green"]
+    if hue < 195:
+        return ["teal"]
+    if hue < 260:
+        return ["blue"]
+    if hue < 300:
+        return ["purple"]
+    return ["pink"]
 
 
 def _build_document(db: Session, media_item: MediaItem) -> dict:
@@ -312,7 +317,7 @@ def _build_document(db: Session, media_item: MediaItem) -> dict:
                 # Visual color = first chromatic (non-neutral) group from ranked colors.
                 # Most images have a neutral background as the biggest cluster;
                 # the first saturated color is what the image "looks like" to a human.
-                neutrals = {"gray", "black", "white", "brown"}
+                neutrals = {"gray", "black", "white", "brown", "beige"}
                 visual_group = ""
                 for c in colors:
                     for g in _hex_to_color_groups(c):

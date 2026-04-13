@@ -438,20 +438,21 @@ import Admin from '../../../layouts/Admin.astro';
               const r = parseInt(hex.substring(0,2),16), g = parseInt(hex.substring(2,4),16), b = parseInt(hex.substring(4,6),16);
               const max = Math.max(r,g,b), min = Math.min(r,g,b);
               const l = (r+g+b)/(3*255), sat = max>0?(max-min)/max:0;
-              if (l<0.12) return 'black'; if (l>0.88) return 'white';
-              if (sat<0.12) return 'gray';
-              if (sat<0.35&&l<0.5) return 'brown';
+              if (l<0.10) return 'black'; if (l>0.90) return 'white';
+              if (sat<0.10) return 'gray';
               let h=0; if(max!==min){if(max===r)h=60*((g-b)/(max-min)%6);else if(max===g)h=60*((b-r)/(max-min)+2);else h=60*((r-g)/(max-min)+4);}if(h<0)h+=360;
-              if(h<15||h>=345)return 'red';if(h<45)return 'orange';if(h<70)return 'yellow';if(h<160)return 'green';if(h<200)return 'teal';if(h<260)return 'blue';if(h<300)return 'purple';return 'pink';
+              if(sat<0.30&&h>10&&h<50) return l<0.45?'brown':'beige';
+              if(sat<0.20) return 'gray';
+              if(h<10||h>=350)return 'red';if(h<35)return 'orange';if(h<55)return 'yellow';if(h<160)return 'green';if(h<195)return 'teal';if(h<260)return 'blue';if(h<300)return 'purple';return 'pink';
             }
             // Deduplicate groups
             const groups = [...new Set(colors.map(hexToGroup))];
-            const swatches = colors.map((c: string) => {
-              const hex = c.replace('#', '');
-              return `<a href="/admin/search?color=${hex}" style="display:inline-block;width:28px;height:28px;background:${c};border:1px solid #ccc;border-radius:3px;vertical-align:middle;cursor:pointer;" title="Search exact color ${c}"></a>`;
-            }).join(' ');
+            const swatches = colors.map((c: string) =>
+              `<span style="display:inline-block;width:28px;height:28px;background:${c};border:1px solid #ccc;border-radius:3px;vertical-align:middle;"></span>`
+            ).join(' ');
             const groupLinks = groups.map((g: string) => `<a href="/admin/search?colorgroup=${g}" class="tag-chip" style="text-decoration:none;">${g}</a>`).join(' ');
-            return `<div class="meta-section"><div class="meta-label">Colors</div><div class="meta-value">${swatches} ${groupLinks}</div></div>`;
+            return `<div class="meta-section"><div class="meta-label">Palette</div><div class="meta-value" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">${swatches}</div></div>` +
+                   `<div class="meta-section"><div class="meta-label">Color Groups</div><div class="meta-value">${groupLinks}</div></div>`;
           })() : ''}
         `;
       } else if (item.media_type === 'audio' && item.audio_meta) {
