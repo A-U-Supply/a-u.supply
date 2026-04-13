@@ -261,13 +261,9 @@ import Admin from '../../../layouts/Admin.astro';
   }
   .source-card__label {
     color: var(--color-muted);
-    min-width: 80px;
     font-size: 0.65rem;
     font-weight: 700;
     text-transform: uppercase;
-  }
-  .source-card__label::after {
-    content: ':';
   }
 
   .extraction-item {
@@ -489,11 +485,11 @@ import Admin from '../../../layouts/Admin.astro';
         sourcesEl.innerHTML = sources.map((s: any) => `
           <div class="source-card">
             <div class="source-card__type">${s.source_type || 'Unknown'}</div>
-            ${s.source_channel ? `<div class="source-card__field"><span class="source-card__label">Channel</span><span>${s.source_channel}</span></div>` : ''}
-            ${s.slack_message_text ? `<div class="source-card__field"><span class="source-card__label">Message</span><span>${s.slack_message_text}</span></div>` : ''}
-            ${s.source_url ? `<div class="source-card__field"><span class="source-card__label">URL</span><a href="${s.source_url}" target="_blank" style="color: var(--color-accent);">${s.source_url}</a></div>` : ''}
-            ${s.reaction_count ? `<div class="source-card__field"><span class="source-card__label">Reactions</span><span>${s.reaction_count}</span></div>` : ''}
-            <div class="source-card__field"><span class="source-card__label">Added</span><span>${s.created_at ? new Date(s.created_at).toLocaleString() : '--'}</span></div>
+            ${s.source_channel ? `<div class="source-card__field"><span class="source-card__label">Channel:</span> ${s.source_channel}</div>` : ''}
+            ${s.slack_message_text ? `<div class="source-card__field"><span class="source-card__label">Message:</span> ${s.slack_message_text}</div>` : ''}
+            ${s.source_url ? `<div class="source-card__field"><span class="source-card__label">URL:</span> <a href="${s.source_url}" target="_blank" style="color: var(--color-accent);">${s.source_url}</a></div>` : ''}
+            ${s.reaction_count ? `<div class="source-card__field"><span class="source-card__label">Reactions:</span> ${s.reaction_count}</div>` : ''}
+            <div class="source-card__field"><span class="source-card__label">Added:</span> ${s.created_at ? new Date(s.created_at).toLocaleString() : '--'}</div>
           </div>
         `).join('');
       }
