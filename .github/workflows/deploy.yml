@@ -44,8 +44,5 @@ jobs:
           ssh-keyscan -H 204.168.201.89 >> ~/.ssh/known_hosts
           printf 'Host dokku\n  HostName 204.168.201.89\n  User dokku\n  IdentityFile ~/.ssh/id_ed25519\n' >> ~/.ssh/config
 
-      - name: Authenticate Dokku with GHCR
-        run: ssh dokku registry:login au-supply ghcr.io ${{ github.actor }} ${{ secrets.GITHUB_TOKEN }}
-
       - name: Deploy pre-built image to Dokku
         run: ssh dokku git:from-image au-supply ${{ env.IMAGE }}
