@@ -110,6 +110,44 @@ def reindex_search():
     db.close()
 
 
+def color_histogram():
+    import json
+    from models import MediaImageMeta
+    from search_client import _hex_to_color_groups
+
+    db = SessionLocal()
+    metas = db.query(MediaImageMeta).filter(MediaImageMeta.dominant_colors.isnot(None)).all()
+
+    primary_groups = {}
+    all_groups = {}
+
+    for m in metas:
+        try:
+            colors = json.loads(m.dominant_colors)
+        except Exception:
+            continue
+        if not colors:
+            continue
+        for g in _hex_to_color_groups(colors[0]):
+            primary_groups[g] = primary_groups.get(g, 0) + 1
+        for c in colors:
+            for g in _hex_to_color_groups(c):
+                all_groups[g] = all_groups.get(g, 0) + 1
+
+    print(f"Total images with colors: {len(metas)}")
+    print()
+    print("PRIMARY (top color only):")
+    for g, count in sorted(primary_groups.items(), key=lambda x: -x[1]):
+        bar = "#" * (count // 5)
+        print(f"  {g:8s} {count:4d}  {bar}")
+    print()
+    print("ALL (all 5 colors):")
+    for g, count in sorted(all_groups.items(), key=lambda x: -x[1]):
+        bar = "#" * (count // 5)
+        print(f"  {g:8s} {count:4d}  {bar}")
+    db.close()
+
+
 def check_meta():
     from models import MediaItem, MediaImageMeta, MediaAudioMeta, MediaVideoMeta, ExtractionFailure
     db = SessionLocal()
@@ -178,6 +216,9 @@ if __name__ == "__main__":
 
     elif cmd == "reindex":
         reindex_search()
+
+    elif cmd == "color-histogram":
+        color_histogram()
 
     elif cmd == "backfill-posters":
         from slack_scraper import backfill_posters
