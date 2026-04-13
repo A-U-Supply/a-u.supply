@@ -50,4 +50,6 @@ jobs:
         run: ssh dokku registry:login au-supply ghcr.io ${{ github.actor }} ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy pre-built image to Dokku
-        run: ssh dokku git:from-image au-supply ${{ env.IMAGE }}:${{ github.sha }}
+        run: |
+          ssh dokku git:from-image au-supply ${{ env.IMAGE }}:${{ github.sha }}
+          ssh dokku ps:restart au-supply
