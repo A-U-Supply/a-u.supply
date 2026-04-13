@@ -94,6 +94,22 @@ def revoke_apikey(prefix: str):
     db.close()
 
 
+def reindex_search():
+    from models import MediaItem
+    from search_client import configure_indexes, sync_media_item
+
+    db = SessionLocal()
+    configure_indexes()
+    items = db.query(MediaItem).all()
+    print(f"Re-indexing {len(items)} items...")
+    for i, item in enumerate(items):
+        sync_media_item(db, item)
+        if (i + 1) % 100 == 0:
+            print(f"  {i + 1}/{len(items)}")
+    print(f"Done! Re-indexed {len(items)} items.")
+    db.close()
+
+
 def check_meta():
     from models import MediaItem, MediaImageMeta, MediaAudioMeta, MediaVideoMeta, ExtractionFailure
     db = SessionLocal()
@@ -159,6 +175,9 @@ if __name__ == "__main__":
 
     elif cmd == "check-meta":
         check_meta()
+
+    elif cmd == "reindex":
+        reindex_search()
 
     elif cmd == "backfill-posters":
         from slack_scraper import backfill_posters
