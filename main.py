@@ -31,6 +31,7 @@ from catalog import router as catalog_router
 from search_api import router as search_router
 from models import Base, User, engine
 
+logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 # Ensure data directory exists
