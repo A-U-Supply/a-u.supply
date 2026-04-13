@@ -1122,6 +1122,75 @@ def backfill_posters() -> dict:
     return {"updated": updated, "errors": errors}
 
 
+def backfill_message_text() -> dict:
+    """Backfill slack_message_text for all sources by re-reading channel history.
+
+    Matches sources by slack_message_ts and updates their text. Resyncs to Meilisearch.
+    """
+    db = SessionLocal()
+    updated = 0
+    errors = 0
+
+    try:
+        for channel_name, channel_id in SCRAPE_CHANNELS.items():
+            logger.info("Backfilling message text for channel: %s", channel_name)
+            cursor = None
+            while True:
+                resp = get_channel_history(channel_id, oldest=None, cursor=cursor)
+                if not resp.get("ok"):
+                    errors += 1
+                    break
+
+                for message in resp.get("messages", []):
+                    ts = message.get("ts", "")
+                    text = message.get("text", "")
+                    if not ts or not text:
+                        continue
+
+                    sources = (
+                        db.query(MediaSource)
+                        .filter(
+                            MediaSource.slack_message_ts == ts,
+                            MediaSource.source_channel == channel_name,
+                        )
+                        .all()
+                    )
+                    for source in sources:
+                        if source.slack_message_text != text:
+                            source.slack_message_text = text
+                            updated += 1
+
+                db.commit()
+
+                next_cursor = resp.get("response_metadata", {}).get("next_cursor", "")
+                if not next_cursor:
+                    break
+                cursor = next_cursor
+
+        logger.info("Resyncing %d updated sources to Meilisearch", updated)
+        try:
+            from search_client import sync_media_item, configure_indexes
+            configure_indexes()
+            items = db.query(MediaItem).all()
+            for item in items:
+                try:
+                    db.refresh(item)
+                    sync_media_item(db, item)
+                except Exception:
+                    pass
+        except ImportError:
+            pass
+
+    except Exception as exc:
+        logger.exception("Error backfilling message text: %s", exc)
+        db.rollback()
+        errors += 1
+    finally:
+        db.close()
+
+    return {"updated": updated, "errors": errors}
+
+
 def trigger_incremental_scrape() -> dict:
     """Trigger an incremental scrape (only new messages since last run).
 
