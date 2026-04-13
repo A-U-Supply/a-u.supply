@@ -47,7 +47,6 @@ class SearchFilters(BaseModel):
     poster: str | None = None  # filter by uploader name
     color: str | None = None  # filter by dominant color hex (exact match)
     color_group: list[str] | None = None  # filter by color group names (red, blue, green, etc.)
-    color_scope: str | None = None  # "primary" (default) or "all"
     date_range: dict | None = None  # {"from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}
     reaction_count: dict | None = None  # {"min": N}
     tag_count: dict | None = None  # {"min": N}
@@ -248,8 +247,7 @@ def _build_meili_filter(filters: SearchFilters | None) -> str | None:
         parts.append(f'dominant_colors = "{_escape_filter_value(filters.color)}"')
 
     if filters.color_group:
-        field = "primary_color_group" if (filters.color_scope or "primary") == "primary" else "color_groups"
-        cg_clauses = [f'{field} = "{_escape_filter_value(g)}"' for g in filters.color_group]
+        cg_clauses = [f'primary_color_group = "{_escape_filter_value(g)}"' for g in filters.color_group]
         parts.append("(" + " OR ".join(cg_clauses) + ")")
 
     if filters.reaction_count and filters.reaction_count.get("min") is not None:

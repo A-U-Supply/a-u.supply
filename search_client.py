@@ -309,9 +309,23 @@ def _build_document(db: Session, media_item: MediaItem) -> dict:
                 doc["dominant_colors"] = colors
                 doc["color_names"] = " ".join(_hex_to_color_name(c) for c in colors)
                 doc["color_groups"] = list(set(g for c in colors for g in _hex_to_color_groups(c)))
-                # Primary = group of the #1 most dominant color only
-                primary_groups = _hex_to_color_groups(colors[0]) if colors else []
-                doc["primary_color_group"] = primary_groups[0] if primary_groups else ""
+                # Visual color = first chromatic (non-neutral) group from ranked colors.
+                # Most images have a neutral background as the biggest cluster;
+                # the first saturated color is what the image "looks like" to a human.
+                neutrals = {"gray", "black", "white", "brown"}
+                visual_group = ""
+                for c in colors:
+                    for g in _hex_to_color_groups(c):
+                        if g not in neutrals:
+                            visual_group = g
+                            break
+                    if visual_group:
+                        break
+                # Fallback: if all colors are neutral, use the #1 dominant
+                if not visual_group:
+                    primary_groups = _hex_to_color_groups(colors[0]) if colors else []
+                    visual_group = primary_groups[0] if primary_groups else ""
+                doc["primary_color_group"] = visual_group
             except (json.JSONDecodeError, TypeError):
                 doc["dominant_colors"] = []
                 doc["color_names"] = ""

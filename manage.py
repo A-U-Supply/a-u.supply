@@ -118,8 +118,9 @@ def color_histogram():
     db = SessionLocal()
     metas = db.query(MediaImageMeta).filter(MediaImageMeta.dominant_colors.isnot(None)).all()
 
-    primary_groups = {}
+    visual_groups = {}
     all_groups = {}
+    neutrals = {"gray", "black", "white", "brown"}
 
     for m in metas:
         try:
@@ -128,16 +129,27 @@ def color_histogram():
             continue
         if not colors:
             continue
-        for g in _hex_to_color_groups(colors[0]):
-            primary_groups[g] = primary_groups.get(g, 0) + 1
+        # Visual = first chromatic color, fallback to #1 dominant
+        visual = ""
+        for c in colors:
+            for g in _hex_to_color_groups(c):
+                if g not in neutrals:
+                    visual = g
+                    break
+            if visual:
+                break
+        if not visual:
+            gs = _hex_to_color_groups(colors[0])
+            visual = gs[0] if gs else "?"
+        visual_groups[visual] = visual_groups.get(visual, 0) + 1
         for c in colors:
             for g in _hex_to_color_groups(c):
                 all_groups[g] = all_groups.get(g, 0) + 1
 
     print(f"Total images with colors: {len(metas)}")
     print()
-    print("PRIMARY (top color only):")
-    for g, count in sorted(primary_groups.items(), key=lambda x: -x[1]):
+    print("VISUAL (first chromatic color, skip neutrals):")
+    for g, count in sorted(visual_groups.items(), key=lambda x: -x[1]):
         bar = "#" * (count // 5)
         print(f"  {g:8s} {count:4d}  {bar}")
     print()
