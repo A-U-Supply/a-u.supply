@@ -392,10 +392,9 @@ import Admin from '../../../layouts/Admin.astro';
         per_page: 50,
         sort: 'created_at:desc',
         filters: {
-          tag_count: { min: 0 },
+          tag_count: { max: maxTags },
         },
       };
-      if (maxTags === 0) body.filters.tag_count = { min: 0 };
       if (mediaType) body.media_types = [mediaType];
       if (channel) body.filters.source_channels = [channel];
 
@@ -505,7 +504,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     async function submitTags() {
       if (pendingTags.length === 0 && (items[currentIndex]?.tags || []).length > 0) {
-        advance();
+        skipItem();
         return;
       }
       if (pendingTags.length > 0) {
@@ -520,7 +519,52 @@ import Admin from '../../../layouts/Admin.astro';
         } catch { alert('Failed to save tags'); return; }
       }
       reviewed++;
-      advance();
+      // Remove the tagged item from the list so it doesn't reappear
+      items.splice(currentIndex, 1);
+      totalCount = Math.max(0, totalCount - 1);
+      // If we're near the end, fetch more items
+      if (items.length - currentIndex < 5 && items.length > 0) {
+        fetchMoreItems();
+      }
+      if (currentIndex >= items.length) {
+        currentIndex = Math.max(0, items.length - 1);
+      }
+      if (items.length === 0) {
+        document.getElementById('triage-content')!.style.display = 'none';
+        document.getElementById('triage-empty')!.style.display = 'block';
+        document.getElementById('triage-empty')!.textContent = 'All caught up! No more untagged items.';
+      } else {
+        renderCurrentItem();
+      }
+    }
+
+    async function fetchMoreItems() {
+      const mediaType = (document.getElementById('triage-type') as HTMLSelectElement).value;
+      const channel = (document.getElementById('triage-channel') as HTMLSelectElement).value;
+      const maxTags = parseInt((document.getElementById('triage-max-tags') as HTMLInputElement).value) || 0;
+      const existingIds = new Set(items.map((i: any) => i.id));
+      const body: any = {
+        query: '',
+        page: 1,
+        per_page: 50,
+        sort: 'created_at:desc',
+        filters: { tag_count: { max: maxTags } },
+      };
+      if (mediaType) body.media_types = [mediaType];
+      if (channel) body.filters.source_channels = [channel];
+      try {
+        const res = await fetch('/api/search', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const newItems = (data.results || data.hits || []).filter((i: any) => !existingIds.has(i.id));
+        items.push(...newItems);
+        totalCount = data.total || items.length;
+      } catch {}
     }
 
     function advance() {
@@ -530,7 +574,7 @@ import Admin from '../../../layouts/Admin.astro';
       } else {
         document.getElementById('triage-content')!.style.display = 'none';
         document.getElementById('triage-empty')!.style.display = 'block';
-        document.getElementById('triage-empty')!.textContent = 'Triage complete! Refresh to load more.';
+        document.getElementById('triage-empty')!.textContent = 'All caught up! No more untagged items.';
       }
     }
 

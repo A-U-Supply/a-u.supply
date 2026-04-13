@@ -240,8 +240,11 @@ def _build_meili_filter(filters: SearchFilters | None) -> str | None:
     if filters.reaction_count and filters.reaction_count.get("min") is not None:
         parts.append(f"total_reaction_count >= {filters.reaction_count['min']}")
 
-    if filters.tag_count and filters.tag_count.get("min") is not None:
-        parts.append(f"tag_count >= {filters.tag_count['min']}")
+    if filters.tag_count:
+        if filters.tag_count.get("min") is not None:
+            parts.append(f"tag_count >= {filters.tag_count['min']}")
+        if filters.tag_count.get("max") is not None:
+            parts.append(f"tag_count <= {filters.tag_count['max']}")
 
     return " AND ".join(parts) if parts else None
 
