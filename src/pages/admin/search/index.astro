@@ -53,6 +53,7 @@ import Admin from '../../../layouts/Admin.astro';
             <label class="filter-check"><input type="checkbox" name="color-group" value="purple" /> Purple</label>
             <label class="filter-check"><input type="checkbox" name="color-group" value="pink" /> Pink</label>
             <label class="filter-check"><input type="checkbox" name="color-group" value="brown" /> Brown</label>
+            <label class="filter-check"><input type="checkbox" name="color-group" value="beige" /> Beige</label>
             <label class="filter-check"><input type="checkbox" name="color-group" value="gray" /> Gray</label>
             <label class="filter-check"><input type="checkbox" name="color-group" value="black" /> Black</label>
             <label class="filter-check"><input type="checkbox" name="color-group" value="white" /> White</label>
@@ -672,9 +673,6 @@ import Admin from '../../../layouts/Admin.astro';
       } catch { alert('Export failed'); }
     }
 
-    // Track hex color from URL (set by clicking a swatch on detail page)
-    let activeColorHex: string | null = new URLSearchParams(window.location.search).get('color') || null;
-
     function getFilters() {
       const types: string[] = [];
       document.querySelectorAll('.filter-check input[type="checkbox"]:checked').forEach(cb => {
@@ -729,9 +727,6 @@ import Admin from '../../../layouts/Admin.astro';
       if (filters.reactionsMin > 0) body.filters.reaction_count = { min: filters.reactionsMin };
       if (filters.tagsMin > 0) body.filters.tag_count = { min: filters.tagsMin };
 
-      // Hex color filter (from clicking a swatch on detail page)
-      if (activeColorHex) body.filters.color = '#' + activeColorHex.replace('#', '');
-
       // Update URL to reflect current search state (shareable, back/forward friendly)
       const stateParams = new URLSearchParams();
       if (searchInput.value) stateParams.set('q', searchInput.value);
@@ -744,7 +739,6 @@ import Admin from '../../../layouts/Admin.astro';
       if (filters.reactionsMin > 0) stateParams.set('rxn', String(filters.reactionsMin));
       if (filters.tagsMin > 0) stateParams.set('mintags', String(filters.tagsMin));
       if (filters.sortBy !== 'newest') stateParams.set('sort', filters.sortBy);
-      if (activeColorHex) stateParams.set('color', activeColorHex.replace('#', ''));
       if (filters.types.length < 3 && filters.types.length > 0) stateParams.set('types', filters.types.join(','));
       if (currentPage > 1) stateParams.set('page', String(currentPage));
       const qs = stateParams.toString();
@@ -940,16 +934,16 @@ import Admin from '../../../layouts/Admin.astro';
 
       if (initParams.get('page')) currentPage = parseInt(initParams.get('page')!) || 1;
 
-      // Hex color from swatch click
-      if (initParams.get('color')) {
-        activeColorHex = initParams.get('color')!.replace('#', '');
+      // Legacy ?color= param: convert to colorgroup if possible
+      if (initParams.get('color') && !initParams.get('colorgroup')) {
+        // Old hex color URLs no longer supported; redirect to search
       }
     }
 
     function clearFilter(filterName: string) {
       switch (filterName) {
         case 'q': searchInput.value = ''; break;
-        case 'color': activeColorHex = null; break;
+        case 'color': break; // no longer used
         case 'poster': (document.getElementById('filter-poster') as HTMLSelectElement).value = ''; break;
         case 'tags': (document.getElementById('filter-tags') as HTMLInputElement).value = ''; break;
         case 'colorgroup':
@@ -982,10 +976,6 @@ import Admin from '../../../layouts/Admin.astro';
 
       if (searchInput.value) {
         chips.push(`<span class="active-filter">Query: "${searchInput.value}" <button class="active-filter__remove" onclick="__clearFilter('q')">&times;</button></span>`);
-      }
-      if (activeColorHex) {
-        const hex = '#' + activeColorHex.replace('#', '');
-        chips.push(`<span class="active-filter"><span class="active-filter__color" style="background:${hex}"></span> Color: ${hex} <button class="active-filter__remove" onclick="__clearFilter('color')">&times;</button></span>`);
       }
       if (filters.colorGroups.length) {
         chips.push(`<span class="active-filter">Colors: ${filters.colorGroups.join(', ')} <button class="active-filter__remove" onclick="__clearFilter('colorgroup')">&times;</button></span>`);

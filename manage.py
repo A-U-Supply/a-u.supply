@@ -120,7 +120,7 @@ def color_histogram():
 
     visual_groups = {}
     all_groups = {}
-    neutrals = {"gray", "black", "white", "brown"}
+    neutrals = {"gray", "black", "white", "brown", "beige"}
 
     for m in metas:
         try:
