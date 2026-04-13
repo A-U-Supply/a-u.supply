@@ -52,6 +52,8 @@ FILTERABLE_ATTRIBUTES = [
     "duration_seconds",
     "format",
     "mime_type",
+    "dominant_colors",
+    "sources.uploader",
 ]
 
 SORTABLE_ATTRIBUTES = [

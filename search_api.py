@@ -274,9 +274,14 @@ def search_media(
     meili_filter = _build_meili_filter(body.filters)
     sort_list = [body.sort] if body.sort else None
 
+    # If filtering by color, only search images (other indexes don't have dominant_colors)
+    media_types = body.media_types
+    if body.filters and body.filters.color:
+        media_types = ["image"]
+
     results = multi_search(
         query=body.query,
-        media_types=body.media_types,
+        media_types=media_types,
         filters=meili_filter,
         sort=sort_list,
         page=body.page,
