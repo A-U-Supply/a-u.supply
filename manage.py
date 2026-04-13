@@ -160,6 +160,11 @@ if __name__ == "__main__":
     elif cmd == "check-meta":
         check_meta()
 
+    elif cmd == "backfill-posters":
+        from slack_scraper import backfill_posters
+        result = backfill_posters()
+        print(f"Updated: {result['updated']}, Errors: {result['errors']}")
+
     else:
         print(f"Unknown command: {cmd}")
         print(__doc__)

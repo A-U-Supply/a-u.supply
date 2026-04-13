@@ -180,8 +180,15 @@ def _build_document(db: Session, media_item: MediaItem) -> dict:
             "message_text": src.slack_message_text,
             "reaction_count": src.reaction_count or 0,
         }
-        # Get uploader name
-        if src.uploader_id:
+        # Get uploader name — from source_metadata.poster or from User table
+        if src.source_metadata:
+            try:
+                sm = json.loads(src.source_metadata)
+                if isinstance(sm, dict) and sm.get("poster"):
+                    source_doc["uploader"] = sm["poster"]
+            except (json.JSONDecodeError, TypeError):
+                pass
+        if "uploader" not in source_doc and src.uploader_id:
             uploader = db.query(User).filter(User.id == src.uploader_id).first()
             if uploader:
                 source_doc["uploader"] = uploader.name

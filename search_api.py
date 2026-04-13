@@ -307,21 +307,23 @@ def search_facets(
         .all()
     ]
 
-    # Distinct uploaders from source_metadata
-    # The uploader name is stored in the User table via uploader_id
-    uploaders = []
-    sources_with_users = (
-        db.query(User.name)
-        .join(MediaSource, MediaSource.uploader_id == User.id)
+    # Distinct uploaders — extract from source_metadata JSON "poster" field
+    import json as _json
+    uploaders_set = set()
+    sources_with_meta = (
+        db.query(MediaSource.source_metadata)
+        .filter(MediaSource.source_metadata.isnot(None))
         .distinct()
         .all()
     )
-    uploaders = [r[0] for r in sources_with_users]
-
-    # If no uploader_ids are set, try to get unique user references from slack messages
-    if not uploaders:
-        # Fall back to extracting from source_metadata JSON if available
-        pass
+    for (meta_str,) in sources_with_meta:
+        try:
+            meta = _json.loads(meta_str)
+            if isinstance(meta, dict) and meta.get("poster"):
+                uploaders_set.add(meta["poster"])
+        except (ValueError, TypeError):
+            pass
+    uploaders = list(uploaders_set)
 
     return {
         "channels": sorted(channels),

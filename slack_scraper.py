@@ -38,6 +38,51 @@ SCRAPE_CHANNELS: dict[str, str] = {
 
 SLACK_API_BASE = "https://slack.com/api/"
 
+# Cache of Slack user ID → display name
+_user_cache: dict[str, str] = {}
+
+
+def _get_slack_username(user_id: str) -> str:
+    """Resolve a Slack user ID to a display name. Caches results."""
+    if not user_id:
+        return ""
+    if user_id in _user_cache:
+        return _user_cache[user_id]
+    # Lazy-load full user list on first call
+    if not _user_cache:
+        _load_slack_users()
+    return _user_cache.get(user_id, user_id)
+
+
+def _load_slack_users():
+    """Fetch all workspace users and cache their display names."""
+    global _user_cache
+    cursor = None
+    while True:
+        params: dict = {"limit": "200"}
+        if cursor:
+            params["cursor"] = cursor
+        resp = slack_api("users.list", params)
+        if not resp.get("ok"):
+            logger.error("Failed to fetch users list: %s", resp.get("error"))
+            break
+        for member in resp.get("members", []):
+            uid = member.get("id", "")
+            name = (
+                member.get("profile", {}).get("display_name")
+                or member.get("profile", {}).get("real_name")
+                or member.get("real_name")
+                or member.get("name")
+                or uid
+            )
+            _user_cache[uid] = name
+        meta = resp.get("response_metadata", {})
+        next_cursor = meta.get("next_cursor", "")
+        if not next_cursor:
+            break
+        cursor = next_cursor
+    logger.info("Loaded %d Slack users into cache", len(_user_cache))
+
 # URL patterns that yt-dlp is likely to handle
 _DOWNLOADABLE_DOMAINS = {
     "youtube.com", "youtu.be", "www.youtube.com",
@@ -489,6 +534,8 @@ def _process_message_files(
     files = message.get("files", [])
     ts = message.get("ts", "")
     text = message.get("text", "")
+    user_id = message.get("user", "")
+    poster = _get_slack_username(user_id) if user_id else ""
     reactions, reaction_count = _extract_reactions_from_message(message)
 
     for file_info in files:
@@ -546,6 +593,7 @@ def _process_message_files(
                 slack_message_text=text,
                 slack_reactions=reactions,
                 reaction_count=reaction_count,
+                source_metadata={"poster": poster, "slack_user_id": user_id} if poster else None,
             )
             if result["status"] == "skipped":
                 stats["files_skipped_dedup"] += 1
@@ -929,6 +977,92 @@ def trigger_dry_run(channels: list[str] | None = None) -> dict:
         results[name] = scrape_channel(name, cid, dry_run=True)
 
     return {"status": "complete", "results": results}
+
+
+def backfill_posters() -> dict:
+    """Backfill poster display names for all existing MediaSource records.
+
+    Re-reads channel history, matches sources by slack_message_ts,
+    and stores the poster name in source_metadata.
+    """
+    db = SessionLocal()
+    updated = 0
+    errors = 0
+
+    try:
+        # Load Slack user cache
+        _load_slack_users()
+        logger.info("Backfilling posters for %d cached users", len(_user_cache))
+
+        for channel_name, channel_id in SCRAPE_CHANNELS.items():
+            logger.info("Backfilling posters for channel: %s", channel_name)
+            cursor = None
+            while True:
+                resp = get_channel_history(channel_id, oldest=None, cursor=cursor)
+                if not resp.get("ok"):
+                    errors += 1
+                    break
+
+                for message in resp.get("messages", []):
+                    ts = message.get("ts", "")
+                    user_id = message.get("user", "")
+                    if not ts or not user_id:
+                        continue
+
+                    poster_name = _get_slack_username(user_id)
+
+                    # Find all sources with this message timestamp in this channel
+                    sources = (
+                        db.query(MediaSource)
+                        .filter(
+                            MediaSource.slack_message_ts == ts,
+                            MediaSource.source_channel == channel_name,
+                        )
+                        .all()
+                    )
+                    for source in sources:
+                        # Merge poster into source_metadata
+                        try:
+                            meta = json.loads(source.source_metadata) if source.source_metadata else {}
+                        except (json.JSONDecodeError, TypeError):
+                            meta = {}
+                        if meta.get("poster") == poster_name:
+                            continue
+                        meta["poster"] = poster_name
+                        meta["slack_user_id"] = user_id
+                        source.source_metadata = json.dumps(meta)
+                        updated += 1
+
+                db.commit()
+
+                next_cursor = resp.get("response_metadata", {}).get("next_cursor", "")
+                if not next_cursor:
+                    break
+                cursor = next_cursor
+
+        # Resync all items to Meilisearch with updated poster data
+        logger.info("Resyncing %d updated sources to Meilisearch", updated)
+        try:
+            from search_client import sync_media_item, configure_indexes
+            configure_indexes()
+            items = db.query(MediaItem).all()
+            for item in items:
+                try:
+                    db.refresh(item)
+                    sync_media_item(db, item)
+                except Exception:
+                    pass
+        except ImportError:
+            pass
+
+    except Exception as exc:
+        logger.exception("Error backfilling posters: %s", exc)
+        db.rollback()
+        errors += 1
+    finally:
+        db.close()
+
+    return {"updated": updated, "errors": errors}
 
 
 def get_scrape_status() -> dict:
