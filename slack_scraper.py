@@ -434,6 +434,39 @@ def _source_url_already_scraped(db, source_url: str, channel_name: str) -> bool:
     ) is not None
 
 
+def _update_source_text(db, slack_file_id: str, text: str) -> None:
+    """Update message text on an existing source if it changed."""
+    if not text:
+        return
+    source = db.query(MediaSource).filter(MediaSource.slack_file_id == slack_file_id).first()
+    if source and source.slack_message_text != text:
+        source.slack_message_text = text
+        # Re-sync to Meilisearch
+        try:
+            from search_client import sync_media_item
+            sync_media_item(db, source.media_item_id)
+        except Exception:
+            pass
+
+
+def _update_source_text_by_url(db, source_url: str, channel_name: str, text: str) -> None:
+    """Update message text on an existing URL source if it changed."""
+    if not text:
+        return
+    source = (
+        db.query(MediaSource)
+        .filter(MediaSource.source_url == source_url, MediaSource.source_channel == channel_name)
+        .first()
+    )
+    if source and source.slack_message_text != text:
+        source.slack_message_text = text
+        try:
+            from search_client import sync_media_item
+            sync_media_item(db, source.media_item_id)
+        except Exception:
+            pass
+
+
 def _ingest_file(
     db,
     file_path: Path,
@@ -582,8 +615,9 @@ def _process_message_files(
             stats["total_files"] = stats.get("total_files", 0) + 1
             continue
 
-        # Dedup by slack_file_id
+        # Dedup by slack_file_id — but update text if it changed
         if file_id and _slack_file_already_scraped(db, file_id):
+            _update_source_text(db, file_id, text)
             stats["files_skipped_dedup"] += 1
             continue
 
@@ -651,8 +685,9 @@ def _process_message_urls(
             stats["total_files"] = stats.get("total_files", 0) + 1
             continue
 
-        # Dedup by source URL
+        # Dedup by source URL — but update text if it changed
         if _source_url_already_scraped(db, url, channel_name):
+            _update_source_text_by_url(db, url, channel_name, text)
             stats["files_skipped_dedup"] += 1
             continue
 

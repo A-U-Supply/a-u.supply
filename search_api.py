@@ -1209,14 +1209,17 @@ def ingest_slack_sync(
         return {"ok": False, "detail": "Slack scraper module not yet available"}
 
     try:
-        # Refresh reactions synchronously first (fast)
-        reactions_result = trigger_reaction_refresh(days_back=7)
-        # Then kick off incremental scrape in background
+        # Kick off incremental scrape in background
         scrape_result = trigger_incremental_scrape()
+        # Run reactions in background too — it makes hundreds of API calls
+        import threading
+        threading.Thread(
+            target=trigger_reaction_refresh, kwargs={"days_back": 7}, daemon=True,
+        ).start()
         return {
             "ok": True,
             "scrape": scrape_result,
-            "reactions": reactions_result,
+            "reactions": {"status": "started"},
         }
     except Exception as e:
         logger.exception("Sync failed")
