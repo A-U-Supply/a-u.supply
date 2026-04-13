@@ -488,6 +488,16 @@ def multi_search(
                 if "max" in stat_values:
                     existing["max"] = max(existing.get("max", float("-inf")), stat_values["max"])
 
+    # Interleave results from different indexes by the active sort field
+    if sort and all_hits:
+        sort_field = sort[0].split(":")[0]
+        sort_dir = sort[0].split(":")[-1] if ":" in sort[0] else "asc"
+        reverse = sort_dir == "desc"
+        all_hits.sort(key=lambda h: h.get(sort_field, 0) or 0, reverse=reverse)
+    elif not query and all_hits:
+        # Default: newest first when browsing without a query
+        all_hits.sort(key=lambda h: h.get("created_at", 0) or 0, reverse=True)
+
     return {
         "hits": all_hits,
         "total": total,
