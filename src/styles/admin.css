@@ -30,7 +30,6 @@
 
 .sidebar__nav {
   list-style: none;
-  flex: 1;
 }
 
 .sidebar__nav li a {
