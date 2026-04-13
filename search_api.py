@@ -839,6 +839,52 @@ def ingest_slack_status(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/ingest/slack/reactions")
+def ingest_slack_reactions(
+    days_back: int = Query(7, ge=1, le=365),
+    _auth=Depends(require_scope("admin")),
+    db: Session = Depends(get_db),
+):
+    """Refresh reaction counts from Slack for recent media."""
+    try:
+        from slack_scraper import trigger_reaction_refresh
+    except ImportError:
+        return {"ok": False, "detail": "Slack scraper module not yet available"}
+
+    try:
+        result = trigger_reaction_refresh(days_back=days_back)
+        return {"ok": True, "result": result}
+    except Exception as e:
+        logger.exception("Reaction refresh failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/ingest/slack/sync")
+def ingest_slack_sync(
+    _auth=Depends(require_scope("admin")),
+    db: Session = Depends(get_db),
+):
+    """Trigger an incremental scrape + reaction refresh (Sync Now button)."""
+    try:
+        from slack_scraper import trigger_incremental_scrape, trigger_reaction_refresh
+    except ImportError:
+        return {"ok": False, "detail": "Slack scraper module not yet available"}
+
+    try:
+        # Refresh reactions synchronously first (fast)
+        reactions_result = trigger_reaction_refresh(days_back=7)
+        # Then kick off incremental scrape in background
+        scrape_result = trigger_incremental_scrape()
+        return {
+            "ok": True,
+            "scrape": scrape_result,
+            "reactions": reactions_result,
+        }
+    except Exception as e:
+        logger.exception("Sync failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/ingest/slack/dry-run")
 def ingest_slack_dry_run(
     _auth=Depends(require_scope("admin")),
