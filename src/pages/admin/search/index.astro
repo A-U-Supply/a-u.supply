@@ -1292,13 +1292,33 @@ import Admin from '../../../layouts/Admin.astro';
       const rows = items.slice(0, 10).map(item => {
         const pct = Math.round((item[countKey] / max) * 100);
         const label = item[labelKey];
-        return `<div class="insight-bar-row" title="${label}: ${item[countKey]}">
+        return `<div class="insight-bar-row insight-clickable" data-insight-type="${labelKey}" data-insight-value="${label}" title="${label}: ${item[countKey]}">
           <span class="insight-bar-label">${label}</span>
           <span class="insight-bar-track"><span class="insight-bar-fill" style="width:${pct}%"></span></span>
           <span class="insight-bar-count">${item[countKey]}</span>
         </div>`;
       }).join('');
       el.innerHTML = `<div class="insight-title">${title}</div>${rows}`;
+
+      // Click to filter
+      el.querySelectorAll('.insight-clickable').forEach(row => {
+        row.addEventListener('click', () => {
+          const type = (row as HTMLElement).dataset.insightType!;
+          const value = (row as HTMLElement).dataset.insightValue!;
+          if (type === 'tag') {
+            const tagInput = document.getElementById('filter-tags') as HTMLInputElement;
+            const existing = tagInput.value.split(',').map(t => t.trim()).filter(Boolean);
+            if (!existing.includes(value)) {
+              existing.push(value);
+              tagInput.value = existing.join(', ');
+            }
+          } else if (type === 'uploader') {
+            (document.getElementById('filter-poster') as HTMLSelectElement).value = value;
+          }
+          currentPage = 1;
+          doSearch();
+        });
+      });
     }
 
     function renderReactionChart(buckets: any[]) {
@@ -1306,14 +1326,25 @@ import Admin from '../../../layouts/Admin.astro';
       if (!buckets.length) { el.innerHTML = ''; return; }
       const max = Math.max(...buckets.map(b => b.count), 1);
       const rows = buckets.map(b => {
+        // Extract minimum value from label (e.g. "3-5" → 3, "26+" → 26, "0" → 0)
+        const minVal = parseInt(b.label.replace('+', ''));
         const pct = Math.round((b.count / max) * 100);
-        return `<div class="insight-bar-row" title="${b.label} reactions: ${b.count} items">
+        return `<div class="insight-bar-row insight-clickable" data-reaction-min="${minVal}" title="${b.label} reactions: ${b.count} items">
           <span class="insight-bar-label">${b.label}</span>
           <span class="insight-bar-track"><span class="insight-bar-fill" style="width:${pct}%"></span></span>
           <span class="insight-bar-count">${b.count}</span>
         </div>`;
       }).join('');
       el.innerHTML = `<div class="insight-title">Reactions</div>${rows}`;
+
+      el.querySelectorAll('.insight-clickable').forEach(row => {
+        row.addEventListener('click', () => {
+          const minVal = (row as HTMLElement).dataset.reactionMin!;
+          (document.getElementById('filter-reactions-min') as HTMLInputElement).value = minVal;
+          currentPage = 1;
+          doSearch();
+        });
+      });
     }
 
     function renderTimeline(histogram: any[]) {
@@ -1324,13 +1355,25 @@ import Admin from '../../../layouts/Admin.astro';
       const recent = histogram.slice(-12);
       const rows = recent.map(h => {
         const pct = Math.round((h.count / max) * 100);
-        return `<div class="insight-bar-row" title="${h.month}: ${h.count} items">
+        return `<div class="insight-bar-row insight-clickable" data-month="${h.month}" title="${h.month}: ${h.count} items">
           <span class="insight-bar-label">${h.month}</span>
           <span class="insight-bar-track"><span class="insight-bar-fill" style="width:${pct}%"></span></span>
           <span class="insight-bar-count">${h.count}</span>
         </div>`;
       }).join('');
       el.innerHTML = `<div class="insight-title">Timeline</div>${rows}`;
+
+      el.querySelectorAll('.insight-clickable').forEach(row => {
+        row.addEventListener('click', () => {
+          const month = (row as HTMLElement).dataset.month!; // "YYYY-MM"
+          const [year, mon] = month.split('-').map(Number);
+          const lastDay = new Date(year, mon, 0).getDate();
+          (document.getElementById('filter-date-from') as HTMLInputElement).value = `${month}-01`;
+          (document.getElementById('filter-date-to') as HTMLInputElement).value = `${month}-${String(lastDay).padStart(2, '0')}`;
+          currentPage = 1;
+          doSearch();
+        });
+      });
     }
 
     function renderColorChart(colorGroups: Record<string, number>) {
