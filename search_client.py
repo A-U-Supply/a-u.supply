@@ -424,6 +424,12 @@ def multi_search(
     if not media_types:
         media_types = ["image", "audio", "video"]
 
+    # To correctly interleave results across indexes, each index must
+    # return enough results to cover the requested page globally.
+    # Fetch page*per_page from each index (offset 0), merge, sort, then
+    # slice to the requested page.
+    fetch_limit = page * per_page
+
     queries = []
     for mt in media_types:
         index_name = INDEX_NAMES.get(mt)
@@ -432,8 +438,8 @@ def multi_search(
         q = {
             "indexUid": index_name,
             "q": query,
-            "limit": per_page,
-            "offset": (page - 1) * per_page,
+            "limit": fetch_limit,
+            "offset": 0,
             "facets": ALL_FACETS,
         }
         if filters:
@@ -497,6 +503,10 @@ def multi_search(
     elif not query and all_hits:
         # Default: newest first when browsing without a query
         all_hits.sort(key=lambda h: h.get("created_at", 0) or 0, reverse=True)
+
+    # Slice to the requested page
+    start = (page - 1) * per_page
+    all_hits = all_hits[start:start + per_page]
 
     return {
         "hits": all_hits,
