@@ -88,6 +88,9 @@ def configure_indexes() -> None:
         "faceting": {
             "maxValuesPerFacet": 200,
         },
+        "pagination": {
+            "maxTotalHits": 10000,
+        },
         "displayedAttributes": ["*"],
     }
 
