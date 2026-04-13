@@ -160,6 +160,38 @@ def color_histogram():
     db.close()
 
 
+def color_overlap():
+    import json
+    from collections import Counter
+    from models import MediaImageMeta
+
+    db = SessionLocal()
+    metas = db.query(MediaImageMeta).filter(MediaImageMeta.dominant_colors.isnot(None)).all()
+
+    hex_to_items: dict[str, int] = Counter()
+    total_colors = 0
+    for m in metas:
+        try:
+            colors = json.loads(m.dominant_colors)
+        except Exception:
+            continue
+        for c in colors:
+            hex_to_items[c] += 1
+            total_colors += 1
+
+    unique = sum(1 for v in hex_to_items.values() if v == 1)
+    shared = sum(1 for v in hex_to_items.values() if v > 1)
+    print(f"Total hex colors: {total_colors}")
+    print(f"Unique hex values: {len(hex_to_items)}")
+    print(f"  Appear in 1 image only: {unique}")
+    print(f"  Shared across 2+ images: {shared}")
+    print()
+    print("Most shared colors:")
+    for hex_val, count in hex_to_items.most_common(20):
+        print(f"  {hex_val}  appears in {count} images")
+    db.close()
+
+
 def check_meta():
     from models import MediaItem, MediaImageMeta, MediaAudioMeta, MediaVideoMeta, ExtractionFailure
     db = SessionLocal()
@@ -231,6 +263,9 @@ if __name__ == "__main__":
 
     elif cmd == "color-histogram":
         color_histogram()
+
+    elif cmd == "color-overlap":
+        color_overlap()
 
     elif cmd == "backfill-posters":
         from slack_scraper import backfill_posters
