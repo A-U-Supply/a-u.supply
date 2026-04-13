@@ -52,19 +52,4 @@ jobs:
       - name: Deploy pre-built image to Dokku
         run: |
           ssh dokku git:from-image au-supply ${{ env.IMAGE }}:${{ github.sha }}
-          ssh dokku ps:restart au-supply
-          sleep 5
-          ssh dokku proxy:build-config au-supply
-
-      - name: Verify site is up
-        run: |
-          for i in 1 2 3 4 5; do
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://a-u.supply/ || echo "000")
-            if [ "$code" = "200" ]; then echo "Site is up"; exit 0; fi
-            echo "Attempt $i: got $code, waiting..."
-            sleep 5
-          done
-          echo "Site still not responding, forcing restart..."
-          ssh dokku ps:restart au-supply
-          sleep 10
-          ssh dokku proxy:build-config au-supply
+          ssh dokku ps:rebuild au-supply
