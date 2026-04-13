@@ -316,6 +316,156 @@ def search_media(
     return results
 
 
+@router.post("/search/stats")
+def search_stats(
+    body: SearchRequest,
+    _auth=Depends(require_scope("read")),
+    db: Session = Depends(get_db),
+):
+    """Return aggregation stats for the current search query and filters.
+
+    Returns: counts by media type, top tags, top uploaders, date histogram
+    (monthly buckets), reaction distribution, and facet stats (min/max for
+    numeric fields). Accepts the same request body as /api/search.
+    """
+    from search_client import multi_search
+    from sqlalchemy import func, extract
+    import json as _json
+
+    meili_filter = _build_meili_filter(body.filters)
+
+    media_types = body.media_types
+    if body.filters and (body.filters.color or body.filters.color_group):
+        media_types = ["image"]
+
+    # Search with limit=0: we only want facets and stats, not hits
+    results = multi_search(
+        query=body.query,
+        media_types=media_types,
+        filters=meili_filter,
+        sort=None,
+        page=1,
+        per_page=0,
+    )
+
+    facets = results.get("facets", {})
+    facet_stats = results.get("facet_stats", {})
+    counts_by_type = results.get("counts_by_type", {})
+
+    # Top tags (sorted by count, limited to top 30)
+    raw_tags = facets.get("tags", {})
+    top_tags = sorted(raw_tags.items(), key=lambda x: x[1], reverse=True)[:30]
+
+    # Source channels with counts
+    channels = facets.get("source_channels", {})
+
+    # Color distribution
+    color_groups = facets.get("primary_color_group", {})
+
+    # Reaction distribution — build histogram buckets from DB
+    # Since Meilisearch only gives min/max, we build buckets from the DB
+    reaction_buckets = _build_reaction_histogram(db, media_types)
+
+    # Date histogram — monthly buckets from DB
+    date_histogram = _build_date_histogram(db, media_types)
+
+    # Top uploaders from facets (sources.uploader is in Meilisearch facets)
+    # But facetDistribution for nested fields may not work in all Meilisearch versions.
+    # Fallback: compute from DB.
+    top_uploaders = _get_top_uploaders(db, limit=15)
+
+    return {
+        "total": results.get("total", 0),
+        "counts_by_type": counts_by_type,
+        "top_tags": [{"tag": t, "count": c} for t, c in top_tags],
+        "channels": channels,
+        "color_groups": color_groups,
+        "reaction_buckets": reaction_buckets,
+        "date_histogram": date_histogram,
+        "top_uploaders": top_uploaders,
+        "facet_stats": facet_stats,
+    }
+
+
+def _build_reaction_histogram(db: Session, media_types: list[str] | None) -> list[dict]:
+    """Build reaction count histogram with fixed buckets."""
+    from sqlalchemy import func, case
+
+    buckets = [
+        ("0", 0, 0),
+        ("1-2", 1, 2),
+        ("3-5", 3, 5),
+        ("6-10", 6, 10),
+        ("11-25", 11, 25),
+        ("26+", 26, None),
+    ]
+
+    query = db.query(MediaSource.reaction_count).join(MediaItem)
+    if media_types:
+        query = query.filter(MediaItem.media_type.in_(media_types))
+
+    # Get all reaction counts in one query
+    counts = [r[0] or 0 for r in query.all()]
+
+    result = []
+    for label, lo, hi in buckets:
+        if hi is not None:
+            n = sum(1 for c in counts if lo <= c <= hi)
+        else:
+            n = sum(1 for c in counts if c >= lo)
+        result.append({"label": label, "count": n})
+
+    return result
+
+
+def _build_date_histogram(db: Session, media_types: list[str] | None) -> list[dict]:
+    """Build monthly date histogram from MediaItem.created_at."""
+    from sqlalchemy import func
+
+    query = db.query(
+        func.strftime("%Y-%m", MediaItem.created_at).label("month"),
+        func.count(MediaItem.id).label("count"),
+    )
+    if media_types:
+        query = query.filter(MediaItem.media_type.in_(media_types))
+
+    rows = (
+        query
+        .filter(MediaItem.created_at.isnot(None))
+        .group_by("month")
+        .order_by("month")
+        .all()
+    )
+
+    return [{"month": r.month, "count": r.count} for r in rows]
+
+
+def _get_top_uploaders(db: Session, limit: int = 15) -> list[dict]:
+    """Get top uploaders by post count from source_metadata."""
+    import json as _json
+    from collections import Counter
+
+    sources = (
+        db.query(MediaSource.source_metadata)
+        .filter(MediaSource.source_metadata.isnot(None))
+        .all()
+    )
+
+    poster_counts: Counter = Counter()
+    for (meta_str,) in sources:
+        try:
+            meta = _json.loads(meta_str)
+            if isinstance(meta, dict) and meta.get("poster"):
+                poster_counts[meta["poster"]] += 1
+        except (ValueError, TypeError):
+            pass
+
+    return [
+        {"uploader": name, "count": count}
+        for name, count in poster_counts.most_common(limit)
+    ]
+
+
 @router.get("/search/facets")
 def search_facets(
     _auth=Depends(require_scope("read")),
