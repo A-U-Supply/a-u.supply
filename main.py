@@ -51,10 +51,11 @@ SYNC_INTERVAL_REACTIONS = int(os.environ.get("SYNC_INTERVAL_REACTIONS", "300")) 
 async def _auto_scrape_loop():
     """Periodically run incremental Slack scrapes."""
     await asyncio.sleep(30)  # let the app finish starting up
+    loop = asyncio.get_running_loop()
     while True:
         try:
             from slack_scraper import trigger_incremental_scrape
-            result = trigger_incremental_scrape()
+            result = await loop.run_in_executor(None, trigger_incremental_scrape)
             logger.info("Auto-sync scrape: %s", result.get("status"))
         except Exception:
             logger.exception("Auto-sync scrape failed")
@@ -64,10 +65,11 @@ async def _auto_scrape_loop():
 async def _auto_reactions_loop():
     """Periodically refresh reaction counts."""
     await asyncio.sleep(60)  # offset from scrape loop
+    loop = asyncio.get_running_loop()
     while True:
         try:
             from slack_scraper import trigger_reaction_refresh
-            result = trigger_reaction_refresh(days_back=7)
+            result = await loop.run_in_executor(None, lambda: trigger_reaction_refresh(days_back=7))
             logger.info("Auto-sync reactions: updated=%s errors=%s", result.get("updated"), result.get("errors"))
         except Exception:
             logger.exception("Auto-sync reactions failed")
