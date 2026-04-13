@@ -45,7 +45,8 @@ class SearchFilters(BaseModel):
     tags: list[str] | None = None
     source_channels: list[str] | None = None
     poster: str | None = None  # filter by uploader name
-    color: str | None = None  # filter by dominant color hex
+    color: str | None = None  # filter by dominant color hex (exact match)
+    color_group: str | None = None  # filter by color group name (red, blue, green, etc.)
     date_range: dict | None = None  # {"from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}
     reaction_count: dict | None = None  # {"min": N}
     tag_count: dict | None = None  # {"min": N}
@@ -233,6 +234,9 @@ def _build_meili_filter(filters: SearchFilters | None) -> str | None:
     if filters.color:
         parts.append(f'dominant_colors = "{filters.color}"')
 
+    if filters.color_group:
+        parts.append(f'color_groups = "{filters.color_group}"')
+
     if filters.reaction_count and filters.reaction_count.get("min") is not None:
         parts.append(f"total_reaction_count >= {filters.reaction_count['min']}")
 
@@ -276,7 +280,7 @@ def search_media(
 
     # If filtering by color, only search images (other indexes don't have dominant_colors)
     media_types = body.media_types
-    if body.filters and body.filters.color:
+    if body.filters and (body.filters.color or body.filters.color_group):
         media_types = ["image"]
 
     results = multi_search(

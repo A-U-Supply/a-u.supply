@@ -53,6 +53,7 @@ FILTERABLE_ATTRIBUTES = [
     "format",
     "mime_type",
     "dominant_colors",
+    "color_groups",
     "sources.uploader",
 ]
 
@@ -164,6 +165,66 @@ def _hex_to_color_name(hex_color: str) -> str:
     return " ".join(names)
 
 
+def _hex_to_color_groups(hex_color: str) -> list[str]:
+    """Map a hex color to broad color group names for filtering."""
+    try:
+        hex_color = hex_color.lstrip("#")
+        r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+    except (ValueError, IndexError):
+        return []
+
+    lightness = (r + g + b) / (3 * 255)
+    if lightness < 0.12:
+        return ["black"]
+    if lightness > 0.88:
+        return ["white"]
+
+    max_c = max(r, g, b)
+    min_c = min(r, g, b)
+    sat = (max_c - min_c) / max_c if max_c > 0 else 0
+    if sat < 0.12:
+        return ["gray"]
+
+    # Compute hue (0-360)
+    if max_c == min_c:
+        hue = 0
+    elif max_c == r:
+        hue = 60 * ((g - b) / (max_c - min_c) % 6)
+    elif max_c == g:
+        hue = 60 * ((b - r) / (max_c - min_c) + 2)
+    else:
+        hue = 60 * ((r - g) / (max_c - min_c) + 4)
+    if hue < 0:
+        hue += 360
+
+    groups = []
+    # Low saturation earthy tones
+    if sat < 0.35 and lightness < 0.5:
+        groups.append("brown")
+    if sat < 0.35 and lightness >= 0.5:
+        groups.append("gray")
+
+    # Hue-based groups
+    if hue < 15 or hue >= 345:
+        groups.append("red")
+    elif hue < 45:
+        groups.append("orange")
+    elif hue < 70:
+        groups.append("yellow")
+    elif hue < 160:
+        groups.append("green")
+    elif hue < 200:
+        groups.append("teal")
+    elif hue < 260:
+        groups.append("blue")
+    elif hue < 300:
+        groups.append("purple")
+    else:
+        groups.append("pink")
+
+    return groups
+
+
 def _build_document(db: Session, media_item: MediaItem) -> dict:
     """Build a flat Meilisearch document from a MediaItem and its relations."""
     # Collect tags
@@ -245,6 +306,7 @@ def _build_document(db: Session, media_item: MediaItem) -> dict:
                 colors = json.loads(meta.dominant_colors)
                 doc["dominant_colors"] = colors
                 doc["color_names"] = " ".join(_hex_to_color_name(c) for c in colors)
+                doc["color_groups"] = list(set(g for c in colors for g in _hex_to_color_groups(c)))
             except (json.JSONDecodeError, TypeError):
                 doc["dominant_colors"] = []
                 doc["color_names"] = ""

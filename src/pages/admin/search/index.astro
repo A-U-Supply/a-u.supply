@@ -42,6 +42,25 @@ import Admin from '../../../layouts/Admin.astro';
         </div>
 
         <div class="filter-group">
+          <label class="filter-label">Color</label>
+          <select id="filter-color-group">
+            <option value="">Any Color</option>
+            <option value="red">Red</option>
+            <option value="orange">Orange</option>
+            <option value="yellow">Yellow</option>
+            <option value="green">Green</option>
+            <option value="teal">Teal / Cyan</option>
+            <option value="blue">Blue</option>
+            <option value="purple">Purple</option>
+            <option value="pink">Pink</option>
+            <option value="brown">Brown / Earth</option>
+            <option value="gray">Gray</option>
+            <option value="black">Black / Dark</option>
+            <option value="white">White / Light</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
           <label class="filter-label">Posted By</label>
           <select id="filter-poster">
             <option value="">All</option>
@@ -659,11 +678,12 @@ import Admin from '../../../layouts/Admin.astro';
       const dateFrom = (document.getElementById('filter-date-from') as HTMLInputElement).value;
       const dateTo = (document.getElementById('filter-date-to') as HTMLInputElement).value;
       const poster = (document.getElementById('filter-poster') as HTMLSelectElement).value;
+      const colorGroup = (document.getElementById('filter-color-group') as HTMLSelectElement).value;
       const tags = (document.getElementById('filter-tags') as HTMLInputElement).value;
       const reactionsMin = parseInt((document.getElementById('filter-reactions-min') as HTMLInputElement).value) || 0;
       const tagsMin = parseInt((document.getElementById('filter-tags-min') as HTMLInputElement).value) || 0;
       const sortBy = (document.getElementById('sort-by') as HTMLSelectElement).value;
-      return { types, channels, poster, dateFrom, dateTo, tags, reactionsMin, tagsMin, sortBy };
+      return { types, channels, poster, colorGroup, dateFrom, dateTo, tags, reactionsMin, tagsMin, sortBy };
     }
 
     async function doSearch() {
@@ -692,6 +712,7 @@ import Admin from '../../../layouts/Admin.astro';
       };
       if (filters.channels.length) body.filters.source_channels = filters.channels;
       if (filters.poster) body.filters.poster = filters.poster;
+      if (filters.colorGroup) body.filters.color_group = filters.colorGroup;
       if (filters.dateFrom || filters.dateTo) body.filters.date_range = { from: filters.dateFrom || undefined, to: filters.dateTo || undefined };
       if (filters.tags) body.filters.tags = filters.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
       if (filters.reactionsMin > 0) body.filters.reaction_count = { min: filters.reactionsMin };
@@ -711,6 +732,7 @@ import Admin from '../../../layouts/Admin.astro';
       const stateParams = new URLSearchParams();
       if (searchInput.value) stateParams.set('q', searchInput.value);
       if (filters.poster) stateParams.set('poster', filters.poster);
+      if (filters.colorGroup) stateParams.set('colorgroup', filters.colorGroup);
       if (filters.channels.length) stateParams.set('channel', filters.channels.join(','));
       if (filters.tags) stateParams.set('tags', filters.tags);
       if (filters.reactionsMin > 0) stateParams.set('rxn', String(filters.reactionsMin));
@@ -868,7 +890,7 @@ import Admin from '../../../layouts/Admin.astro';
       } catch {}
     }
 
-    // Populate UI from URL params
+    // Populate UI from URL params — must run before doSearch so the query is visible
     const initParams = new URLSearchParams(window.location.search);
     if (initParams.get('q')) searchInput.value = initParams.get('q')!;
     if (initParams.get('tag')) (document.getElementById('filter-tags') as HTMLInputElement).value = initParams.get('tag')!;
@@ -876,7 +898,13 @@ import Admin from '../../../layouts/Admin.astro';
     if (initParams.get('rxn')) (document.getElementById('filter-reactions-min') as HTMLInputElement).value = initParams.get('rxn')!;
     if (initParams.get('mintags')) (document.getElementById('filter-tags-min') as HTMLInputElement).value = initParams.get('mintags')!;
     if (initParams.get('sort')) (document.getElementById('sort-by') as HTMLSelectElement).value = initParams.get('sort')!;
+    if (initParams.get('colorgroup')) (document.getElementById('filter-color-group') as HTMLSelectElement).value = initParams.get('colorgroup')!;
     if (initParams.get('page')) currentPage = parseInt(initParams.get('page')!) || 1;
+    // For color searches, show the hex in the search box too for visibility
+    if (initParams.get('color') && !initParams.get('q')) {
+      searchInput.value = '';
+      searchInput.placeholder = 'Filtering by color #' + initParams.get('color')!.replace('#','');
+    }
     // poster and channel are set after facets load (async)
 
     function showActiveFilters() {

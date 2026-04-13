@@ -431,7 +431,20 @@ import Admin from '../../../layouts/Admin.astro';
         typeMeta.innerHTML = `
           <div class="meta-section"><div class="meta-label">Dimensions</div><div class="meta-value">${m.width || '?'} x ${m.height || '?'}</div></div>
           <div class="meta-section"><div class="meta-label">Format</div><div class="meta-value">${m.format || '--'}</div></div>
-          ${m.dominant_colors ? `<div class="meta-section"><div class="meta-label">Colors</div><div class="meta-value">${(typeof m.dominant_colors === 'string' ? JSON.parse(m.dominant_colors) : (m.dominant_colors || [])).map((c: string) => `<a href="/admin/search?color=${encodeURIComponent(c.replace('#',''))}" title="Find similar: ${c}" style="display:inline-block;width:20px;height:20px;background:${c};border:1px solid #ccc;margin-right:3px;vertical-align:middle;cursor:pointer;"></a>`).join('')}</div></div>` : ''}
+          ${m.dominant_colors ? `<div class="meta-section"><div class="meta-label">Colors</div><div class="meta-value">${(typeof m.dominant_colors === 'string' ? JSON.parse(m.dominant_colors) : (m.dominant_colors || [])).map((c: string) => {
+            const hex = c.replace('#','');
+            const r = parseInt(hex.substring(0,2),16), g = parseInt(hex.substring(2,4),16), b = parseInt(hex.substring(4,6),16);
+            const max = Math.max(r,g,b), min = Math.min(r,g,b);
+            const l = (r+g+b)/(3*255), sat = max>0?(max-min)/max:0;
+            let group = 'gray';
+            if (l<0.12) group='black'; else if (l>0.88) group='white';
+            else if (sat<0.12) group='gray';
+            else { let h=0; if(max===min)h=0;else if(max===r)h=60*((g-b)/(max-min)%6);else if(max===g)h=60*((b-r)/(max-min)+2);else h=60*((r-g)/(max-min)+4);if(h<0)h+=360;
+              if(h<15||h>=345)group='red';else if(h<45)group='orange';else if(h<70)group='yellow';else if(h<160)group='green';else if(h<200)group='teal';else if(h<260)group='blue';else if(h<300)group='purple';else group='pink';
+              if(sat<0.35&&l<0.5)group='brown';
+            }
+            return `<a href="/admin/search?colorgroup=${group}" title="${c} — find similar ${group}" style="display:inline-block;width:20px;height:20px;background:${c};border:1px solid #ccc;margin-right:3px;vertical-align:middle;cursor:pointer;border-radius:2px;"></a>`;
+          }).join('')}</div></div>` : ''}
         `;
       } else if (item.media_type === 'audio' && item.audio_meta) {
         const m = item.audio_meta;
