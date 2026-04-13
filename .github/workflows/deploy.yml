@@ -41,6 +41,9 @@ jobs:
       - name: Deploy image to Dokku
         run: docker save ${{ env.IMAGE }}:${{ github.sha }} | ssh dokku git:load-image au-supply ${{ env.IMAGE }}:${{ github.sha }}
 
+      - name: Fix nginx routing
+        run: ssh dokku ps:restart au-supply
+
       - name: Push image to GHCR (backup)
         if: always()
         run: |
