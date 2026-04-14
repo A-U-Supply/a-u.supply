@@ -5,30 +5,13 @@ on:
     branches:
       - master
 
-env:
-  IMAGE: ghcr.io/a-u-supply/a-u.supply
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build image
-        uses: docker/build-push-action@v6
         with:
-          context: .
-          push: false
-          load: true
-          tags: ${{ env.IMAGE }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          fetch-depth: 0
 
       - name: Set up SSH
         run: |
@@ -38,16 +21,5 @@ jobs:
           ssh-keyscan -H 204.168.201.89 >> ~/.ssh/known_hosts
           printf 'Host dokku\n  HostName 204.168.201.89\n  User dokku\n  IdentityFile ~/.ssh/id_ed25519\n' >> ~/.ssh/config
 
-      - name: Deploy image to Dokku
-        run: docker save ${{ env.IMAGE }}:${{ github.sha }} | ssh dokku git:load-image au-supply ${{ env.IMAGE }}:${{ github.sha }}
-
-      - name: Fix nginx routing
-        run: ssh dokku ps:restart au-supply
-
-      - name: Push image to GHCR (backup)
-        if: always()
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          docker tag ${{ env.IMAGE }}:${{ github.sha }} ${{ env.IMAGE }}:latest
-          docker push ${{ env.IMAGE }}:${{ github.sha }} || true
-          docker push ${{ env.IMAGE }}:latest || true
+      - name: Deploy via git push
+        run: git push dokku master:main --force
