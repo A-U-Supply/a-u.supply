@@ -283,3 +283,86 @@ class ExtractionFailure(Base):
     resolved = Column(Boolean, nullable=False, default=False)
 
     media_item = relationship("MediaItem", back_populates="extraction_failures")
+
+
+# --- App Runner Models ---
+
+
+class Workspace(Base):
+    __tablename__ = "workspaces"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+    updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
+
+    creator = relationship("User")
+    items = relationship("WorkspaceItem", back_populates="workspace", cascade="all, delete-orphan")
+
+
+class WorkspaceItem(Base):
+    __tablename__ = "workspace_items"
+    __table_args__ = (UniqueConstraint("workspace_id", "media_item_id"),)
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    workspace_id = Column(String, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    media_item_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False)
+    added_at = Column(DateTime, nullable=False, default=_utcnow)
+
+    workspace = relationship("Workspace", back_populates="items")
+    media_item = relationship("MediaItem")
+
+
+class AppDefinition(Base):
+    __tablename__ = "app_definitions"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, unique=True, nullable=False)
+    display_name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    image = Column(String, nullable=False)
+    manifest = Column(String, nullable=False)  # Full TOML stored as text
+    enabled = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+    updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
+
+
+class Job(Base):
+    __tablename__ = "jobs"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    app_name = Column(String, ForeignKey("app_definitions.name"), nullable=False)
+    status = Column(String, nullable=False, default="pending")  # pending, running, completed, failed, cancelled
+    input_items = Column(String, nullable=False)  # JSON array of media_item_ids
+    params = Column(String, nullable=False)  # JSON object of app-specific params
+    priority = Column(Integer, nullable=False, default=100)  # lower = higher priority
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    error_message = Column(String, nullable=True)
+    retry_count = Column(Integer, nullable=False, default=0)
+    max_retries = Column(Integer, nullable=False, default=3)
+    log_tail = Column(String, nullable=True)  # Last N lines of container stdout/stderr
+
+    app = relationship("AppDefinition")
+    creator = relationship("User")
+    outputs = relationship("JobOutput", back_populates="job", cascade="all, delete-orphan")
+
+
+class JobOutput(Base):
+    __tablename__ = "job_outputs"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    job_id = Column(String, ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False)
+    filename = Column(String, nullable=False)
+    file_path = Column(String, nullable=False)  # Relative to /app/job-data/{job_id}/output/
+    media_type = Column(String, nullable=True)  # image, audio, video, or null
+    file_size_bytes = Column(Integer, nullable=True)
+    indexed = Column(Boolean, nullable=False, default=False)
+    media_item_id = Column(String, ForeignKey("media_items.id"), nullable=True)  # Set when indexed
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+
+    job = relationship("Job", back_populates="outputs")
+    media_item = relationship("MediaItem")

@@ -28,6 +28,7 @@ from auth import (
     verify_password,
 )
 from catalog import router as catalog_router
+from jobs_api import router as jobs_router
 from search_api import router as search_router
 from models import Base, User, engine
 
@@ -283,6 +284,41 @@ TAGS_METADATA = [
                        "- You can only see and revoke your own keys",
     },
     {
+        "name": "Workspaces",
+        "description": "Persistent selection carts for collecting media items before processing. "
+                       "Add items from the search engine across multiple sessions, then submit "
+                       "the workspace to an app for processing.",
+    },
+    {
+        "name": "Apps",
+        "description": "Registry of available processing apps. Each app is a Docker container "
+                       "with a TOML manifest defining what inputs it accepts, what parameters "
+                       "it takes, and how to run it.\n\n"
+                       "Apps are registered by admins. Use `GET /api/apps` to list available apps "
+                       "and their manifests, which describe the parameter schema for building UI forms.\n\n"
+                       "See `POST /api/apps` for the full manifest format documentation.",
+    },
+    {
+        "name": "Jobs",
+        "description": "Job queue for processing media through apps. Submit a job with input items "
+                       "and parameters, and the worker will run it in a Docker container.\n\n"
+                       "**Job lifecycle:** `pending` → `running` → `completed` or `failed`\n\n"
+                       "- Pending jobs are picked up by the worker in priority order (lower = first)\n"
+                       "- Running jobs can be cancelled (the container is stopped)\n"
+                       "- Failed jobs can be retried up to `max_retries` times\n"
+                       "- Completed jobs have output files that can be previewed, indexed, or discarded",
+    },
+    {
+        "name": "Job Outputs",
+        "description": "Files produced by completed jobs. Outputs can be:\n\n"
+                       "- **Downloaded** directly\n"
+                       "- **Indexed** into the search engine (creates a media item, runs extraction, "
+                       "syncs to Meilisearch, tagged with `job:<app_name>`)\n"
+                       "- **Discarded** (deleted from disk)\n\n"
+                       "Indexing is non-destructive — the original output file stays in the job directory "
+                       "and a copy is placed in the search media directory.",
+    },
+    {
         "name": "Extraction Failures",
         "description": "View and manage failures from the async metadata extraction pipeline. When a "
                        "media item is ingested, background tasks extract metadata (image dimensions, "
@@ -330,6 +366,7 @@ app.add_middleware(
 )
 
 app.include_router(catalog_router)
+app.include_router(jobs_router)
 app.include_router(search_router)
 
 IS_PRODUCTION = os.environ.get("PRODUCTION", "").lower() in ("1", "true", "yes")
