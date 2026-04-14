@@ -23,9 +23,3 @@ jobs:
 
       - name: Deploy via git push
         run: git push dokku@204.168.201.89:au-supply master:main --force
-
-      - name: Wait for old containers to retire
-        run: sleep 65
-
-      - name: Restart to fix Docker networking
-        run: ssh dokku ps:restart au-supply
