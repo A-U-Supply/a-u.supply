@@ -1,0 +1,357 @@
+---
+import Admin from '../../../layouts/Admin.astro';
+---
+
+<Admin title="Workspace" current="workspace">
+  <div class="page-header">
+    <h1 id="workspace-title">Workspace</h1>
+    <div class="header-actions">
+      <button class="action-btn" id="clear-workspace-btn">Clear All</button>
+    </div>
+  </div>
+
+  <div id="empty" style="display:none; color: var(--color-muted); padding: var(--space-md) 0;">
+    Workspace is empty. Go to <a href="/admin/search">Search</a> and add items using the batch bar.
+  </div>
+
+  <div id="workspace-items" class="workspace-grid" style="display:none;"></div>
+
+  <div class="pagination" id="pagination" style="display:none;">
+    <button class="action-btn" id="prev-page">Prev</button>
+    <span id="page-info">Page 1</span>
+    <button class="action-btn" id="next-page">Next</button>
+  </div>
+
+  <div class="process-bar" id="process-bar" style="display:none;">
+    <label>Process with:</label>
+    <select id="app-select">
+      <option value="">Select an app...</option>
+    </select>
+    <button class="action-btn" id="configure-btn" disabled>Configure & Run</button>
+  </div>
+
+  <!-- App config dialog -->
+  <div class="dialog-overlay" id="config-dialog" style="display:none;">
+    <div class="dialog" style="max-width: 500px;">
+      <h3 id="config-app-name"></h3>
+      <p id="config-app-desc" style="color: var(--color-muted); font-size: var(--text-sm);"></p>
+      <div id="config-params"></div>
+      <div class="dialog-actions">
+        <button class="btn-cancel" id="config-cancel">Cancel</button>
+        <button class="action-btn" id="config-submit">Submit Job</button>
+      </div>
+    </div>
+  </div>
+</Admin>
+
+<style>
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+  .page-header h1 {
+    margin-bottom: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  .workspace-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+  }
+  .ws-item {
+    border: 1px solid var(--color-border);
+    padding: var(--space-xs);
+    font-size: var(--text-sm);
+    font-family: var(--font-mono);
+    position: relative;
+  }
+  .ws-item .ws-type {
+    color: var(--color-muted);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+  }
+  .ws-item .ws-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ws-item .ws-remove {
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    background: none;
+    border: none;
+    color: var(--color-muted);
+    cursor: pointer;
+    font-size: var(--text-sm);
+    padding: 0;
+  }
+  .ws-item .ws-remove:hover { color: var(--color-text); }
+  .process-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+    padding: var(--space-sm);
+    border: 1px solid var(--color-border);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+  .process-bar select {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    padding: var(--space-xs);
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+  }
+  .config-field {
+    margin-top: var(--space-sm);
+  }
+  .config-field label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    margin-bottom: 2px;
+  }
+  .config-field .config-desc {
+    color: var(--color-muted);
+    font-size: 0.65rem;
+    margin-bottom: 2px;
+  }
+  .config-field input, .config-field select {
+    width: 100%;
+    padding: var(--space-xs);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    color: var(--color-text);
+  }
+  .pagination {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+</style>
+
+<script>
+  document.addEventListener('astro:page-load', async () => {
+    await (window as any).__authReady;
+
+    const wsId = localStorage.getItem('active_workspace_id');
+    const emptyEl = document.getElementById('empty')!;
+    const gridEl = document.getElementById('workspace-items')!;
+    const processBar = document.getElementById('process-bar')!;
+    const paginationEl = document.getElementById('pagination')!;
+    const pageInfo = document.getElementById('page-info')!;
+    const titleEl = document.getElementById('workspace-title')!;
+
+    let currentPage = 1;
+    const pageSize = 48;
+    let totalItems = 0;
+
+    if (!wsId) {
+      emptyEl.style.display = '';
+      return;
+    }
+
+    async function loadItems() {
+      const res = await fetch(`/api/workspaces/${wsId}/items?page=${currentPage}&per_page=${pageSize}`, { credentials: 'include' });
+      if (!res.ok) { emptyEl.style.display = ''; return; }
+      const data = await res.json();
+      totalItems = data.total;
+
+      // Update title
+      const wsRes = await fetch(`/api/workspaces/${wsId}`, { credentials: 'include' });
+      if (wsRes.ok) {
+        const ws = await wsRes.json();
+        titleEl.textContent = `${ws.name} (${totalItems})`;
+      }
+
+      if (totalItems === 0) {
+        emptyEl.style.display = '';
+        gridEl.style.display = 'none';
+        processBar.style.display = 'none';
+        return;
+      }
+
+      emptyEl.style.display = 'none';
+      gridEl.style.display = 'grid';
+      processBar.style.display = 'flex';
+
+      gridEl.innerHTML = data.items.map((item: any) => `
+        <div class="ws-item">
+          <button class="ws-remove" data-id="${item.media_item_id}" title="Remove">&times;</button>
+          <div class="ws-type">${item.media_type}</div>
+          <div class="ws-name" title="${item.filename}">${item.filename}</div>
+        </div>
+      `).join('');
+
+      // Remove buttons
+      gridEl.querySelectorAll('.ws-remove').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = (btn as HTMLElement).dataset.id;
+          await fetch(`/api/workspaces/${wsId}/items`, { method: 'DELETE', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ media_item_ids: [id] }) });
+          loadItems();
+        });
+      });
+
+      // Pagination
+      const totalPages = Math.ceil(totalItems / pageSize);
+      paginationEl.style.display = totalPages > 1 ? 'flex' : 'none';
+      pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+    }
+
+    document.getElementById('prev-page')?.addEventListener('click', () => {
+      if (currentPage > 1) { currentPage--; loadItems(); }
+    });
+    document.getElementById('next-page')?.addEventListener('click', () => {
+      if (currentPage * pageSize < totalItems) { currentPage++; loadItems(); }
+    });
+
+    // Clear workspace
+    document.getElementById('clear-workspace-btn')?.addEventListener('click', async () => {
+      if (!confirm('Remove all items from workspace?')) return;
+      await fetch(`/api/workspaces/${wsId}`, { method: 'DELETE', credentials: 'include' });
+      localStorage.removeItem('active_workspace_id');
+      emptyEl.style.display = '';
+      gridEl.style.display = 'none';
+      processBar.style.display = 'none';
+    });
+
+    // Load apps
+    const appSelect = document.getElementById('app-select') as HTMLSelectElement;
+    const configureBtn = document.getElementById('configure-btn') as HTMLButtonElement;
+    let apps: any[] = [];
+
+    try {
+      const res = await fetch('/api/apps', { credentials: 'include' });
+      if (res.ok) {
+        apps = await res.json();
+        apps.forEach(app => {
+          const opt = document.createElement('option');
+          opt.value = app.name;
+          opt.textContent = app.display_name;
+          appSelect.appendChild(opt);
+        });
+      }
+    } catch {}
+
+    appSelect.addEventListener('change', () => {
+      configureBtn.disabled = !appSelect.value;
+    });
+
+    // Configure & Run
+    configureBtn.addEventListener('click', () => {
+      const app = apps.find(a => a.name === appSelect.value);
+      if (!app) return;
+
+      document.getElementById('config-app-name')!.textContent = app.display_name;
+      document.getElementById('config-app-desc')!.textContent = app.description || '';
+
+      const paramsContainer = document.getElementById('config-params')!;
+      paramsContainer.innerHTML = '';
+
+      const manifest = app.manifest;
+      const params = manifest.params || {};
+
+      for (const [name, spec] of Object.entries(params) as [string, any][]) {
+        const field = document.createElement('div');
+        field.className = 'config-field';
+
+        let inputHtml = '';
+        if (spec.type === 'select') {
+          const options = (spec.options || []).map((o: string) =>
+            `<option value="${o}" ${o === spec.default ? 'selected' : ''}>${o}</option>`
+          ).join('');
+          inputHtml = `<select name="${name}">${options}</select>`;
+        } else if (spec.type === 'bool') {
+          inputHtml = `<label style="display:inline;"><input type="checkbox" name="${name}" ${spec.default ? 'checked' : ''} /> Enabled</label>`;
+        } else if (spec.type === 'float' || spec.type === 'int') {
+          const step = spec.type === 'float' ? '0.1' : '1';
+          inputHtml = `<input type="number" name="${name}" value="${spec.default ?? ''}" min="${spec.min ?? ''}" max="${spec.max ?? ''}" step="${step}" />`;
+        } else {
+          inputHtml = `<input type="text" name="${name}" value="${spec.default ?? ''}" />`;
+        }
+
+        field.innerHTML = `
+          <label>${spec.label || name}${spec.required ? ' *' : ''}</label>
+          ${spec.description ? `<div class="config-desc">${spec.description}</div>` : ''}
+          ${inputHtml}
+        `;
+        paramsContainer.appendChild(field);
+      }
+
+      document.getElementById('config-dialog')!.style.display = 'flex';
+    });
+
+    document.getElementById('config-cancel')?.addEventListener('click', () => {
+      document.getElementById('config-dialog')!.style.display = 'none';
+    });
+
+    document.getElementById('config-submit')?.addEventListener('click', async () => {
+      const app = apps.find(a => a.name === appSelect.value);
+      if (!app) return;
+
+      // Collect params from form
+      const paramsContainer = document.getElementById('config-params')!;
+      const jobParams: Record<string, any> = {};
+      const manifest = app.manifest;
+
+      for (const [name, spec] of Object.entries(manifest.params || {}) as [string, any][]) {
+        const el = paramsContainer.querySelector(`[name="${name}"]`) as HTMLInputElement | HTMLSelectElement;
+        if (!el) continue;
+        if (spec.type === 'bool') {
+          jobParams[name] = (el as HTMLInputElement).checked;
+        } else if (spec.type === 'float') {
+          jobParams[name] = parseFloat(el.value);
+        } else if (spec.type === 'int') {
+          jobParams[name] = parseInt(el.value);
+        } else {
+          jobParams[name] = el.value;
+        }
+      }
+
+      // Get all workspace item IDs
+      const allRes = await fetch(`/api/workspaces/${wsId}/items?page=1&per_page=200`, { credentials: 'include' });
+      const allData = await allRes.json();
+      const mediaIds = allData.items.map((i: any) => i.media_item_id);
+
+      try {
+        const res = await fetch('/api/jobs', { method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            app_name: app.name,
+            media_item_ids: mediaIds,
+            params: jobParams,
+          }) });
+
+        if (res.ok) {
+          const job = await res.json();
+          document.getElementById('config-dialog')!.style.display = 'none';
+          window.location.href = `/admin/jobs?highlight=${job.id}`;
+        } else {
+          const err = await res.json();
+          if (err.detail?.errors) {
+            alert('Validation errors:\n' + err.detail.errors.map((e: any) => `${e.field}: ${e.message}`).join('\n'));
+          } else {
+            alert(err.detail || 'Failed to create job');
+          }
+        }
+      } catch { alert('Failed to create job'); }
+    });
+
+    loadItems();
+  });
+</script>

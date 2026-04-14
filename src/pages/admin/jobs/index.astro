@@ -1,0 +1,204 @@
+---
+import Admin from '../../../layouts/Admin.astro';
+---
+
+<Admin title="Jobs" current="jobs">
+  <div class="page-header">
+    <h1>Jobs</h1>
+    <div class="header-actions">
+      <select id="filter-status" class="filter-select">
+        <option value="">All statuses</option>
+        <option value="pending">Pending</option>
+        <option value="running">Running</option>
+        <option value="completed">Completed</option>
+        <option value="failed">Failed</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="loading" style="color: var(--color-muted);"><span class="loading-dots">Loading</span></div>
+  <div id="empty" style="display:none; color: var(--color-muted); padding: var(--space-md) 0;">No jobs found.</div>
+
+  <div class="table-wrap" id="jobs-table" style="display:none;">
+    <table class="release-table">
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th>App</th>
+          <th>Items</th>
+          <th>Created</th>
+          <th>Duration</th>
+          <th>Outputs</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="jobs-tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="pagination" id="pagination" style="display:none;">
+    <button class="action-btn" id="prev-page">Prev</button>
+    <span id="page-info">Page 1</span>
+    <button class="action-btn" id="next-page">Next</button>
+  </div>
+</Admin>
+
+<style>
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+  .page-header h1 {
+    margin-bottom: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  .filter-select {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    padding: var(--space-xs);
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+  }
+  .status-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    font-family: var(--font-mono);
+  }
+  .status-pending { color: var(--color-muted); border: 1px solid var(--color-border); }
+  .status-running { color: #f0c040; border: 1px solid #f0c040; }
+  .status-completed { color: #40c040; border: 1px solid #40c040; }
+  .status-failed { color: #e04040; border: 1px solid #e04040; }
+  .status-cancelled { color: var(--color-muted); border: 1px solid var(--color-border); text-decoration: line-through; }
+  .pagination {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+</style>
+
+<script>
+  document.addEventListener('astro:page-load', async () => {
+    await (window as any).__authReady;
+
+    const loadingEl = document.getElementById('loading')!;
+    const emptyEl = document.getElementById('empty')!;
+    const tableEl = document.getElementById('jobs-table')!;
+    const tbodyEl = document.getElementById('jobs-tbody')!;
+    const paginationEl = document.getElementById('pagination')!;
+    const pageInfo = document.getElementById('page-info')!;
+    const filterStatus = document.getElementById('filter-status') as HTMLSelectElement;
+
+    let currentPage = 1;
+    const pageSize = 50;
+    let totalJobs = 0;
+
+    // Highlight param from workspace redirect
+    const urlParams = new URLSearchParams(window.location.search);
+    const highlightId = urlParams.get('highlight');
+
+    function formatDuration(job: any): string {
+      if (!job.started_at) return '-';
+      const end = job.completed_at ? new Date(job.completed_at) : new Date();
+      const start = new Date(job.started_at);
+      const secs = Math.round((end.getTime() - start.getTime()) / 1000);
+      if (secs < 60) return `${secs}s`;
+      return `${Math.floor(secs / 60)}m ${secs % 60}s`;
+    }
+
+    function formatDate(iso: string): string {
+      const d = new Date(iso);
+      return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    async function loadJobs() {
+      const status = filterStatus.value;
+      const params = new URLSearchParams({ page: String(currentPage), per_page: String(pageSize) });
+      if (status) params.set('status', status);
+
+      const res = await fetch(`/api/jobs?${params}`, { credentials: 'include' });
+      loadingEl.style.display = 'none';
+
+      if (!res.ok) { emptyEl.style.display = ''; return; }
+      const data = await res.json();
+      totalJobs = data.total;
+
+      if (totalJobs === 0) {
+        emptyEl.style.display = '';
+        tableEl.style.display = 'none';
+        return;
+      }
+
+      emptyEl.style.display = 'none';
+      tableEl.style.display = '';
+
+      tbodyEl.innerHTML = data.jobs.map((j: any) => `
+        <tr${j.id === highlightId ? ' style="background: rgba(255,255,255,0.05);"' : ''}>
+          <td><span class="status-badge status-${j.status}">${j.status}</span></td>
+          <td>${j.app_name}</td>
+          <td>${j.input_item_count}</td>
+          <td>${formatDate(j.created_at)}</td>
+          <td>${formatDuration(j)}</td>
+          <td>${j.output_count > 0 ? j.output_count + ' files' : '-'}</td>
+          <td>
+            <a href="/admin/jobs/detail?id=${j.id}" class="action-btn" style="text-decoration:none;">View</a>
+            ${j.status === 'pending' || j.status === 'running'
+              ? `<button class="action-btn" data-cancel="${j.id}">Cancel</button>` : ''}
+            ${j.status === 'failed'
+              ? `<button class="action-btn" data-retry="${j.id}">Retry</button>` : ''}
+          </td>
+        </tr>
+      `).join('');
+
+      // Cancel buttons
+      tbodyEl.querySelectorAll('[data-cancel]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = (btn as HTMLElement).dataset.cancel;
+          await fetch(`/api/jobs/${id}/cancel`, { method: 'POST', credentials: 'include' });
+          loadJobs();
+        });
+      });
+
+      // Retry buttons
+      tbodyEl.querySelectorAll('[data-retry]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = (btn as HTMLElement).dataset.retry;
+          await fetch(`/api/jobs/${id}/retry`, { method: 'POST', credentials: 'include' });
+          loadJobs();
+        });
+      });
+
+      // Pagination
+      const totalPages = Math.ceil(totalJobs / pageSize);
+      paginationEl.style.display = totalPages > 1 ? 'flex' : 'none';
+      pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+    }
+
+    filterStatus.addEventListener('change', () => { currentPage = 1; loadJobs(); });
+    document.getElementById('prev-page')?.addEventListener('click', () => {
+      if (currentPage > 1) { currentPage--; loadJobs(); }
+    });
+    document.getElementById('next-page')?.addEventListener('click', () => {
+      if (currentPage * pageSize < totalJobs) { currentPage++; loadJobs(); }
+    });
+
+    loadJobs();
+
+    // Auto-refresh if there are running jobs
+    setInterval(() => {
+      if (tbodyEl.querySelector('.status-running') || tbodyEl.querySelector('.status-pending')) {
+        loadJobs();
+      }
+    }, 5000);
+  });
+</script>

@@ -6,6 +6,7 @@ import Admin from '../../../layouts/Admin.astro';
   <div class="search-header">
     <h1>Media Search</h1>
     <div class="header-actions">
+      <a class="workspace-badge" id="workspace-badge" href="/admin/search/workspace" style="display:none;" title="View workspace">Workspace: <span id="workspace-count">0</span></a>
       <button class="sync-btn" id="sync-now-btn" title="Sync new media from Slack">Sync Now</button>
       <span class="sync-status" id="sync-status"></span>
       <div class="view-toggle">
@@ -118,6 +119,7 @@ import Admin from '../../../layouts/Admin.astro';
       <div class="batch-bar" id="batch-bar" style="display:none;">
         <span id="selected-count">0 selected</span>
         <button class="action-btn" data-batch="tag">Tag</button>
+        <button class="action-btn" data-batch="workspace">+ Workspace</button>
         <button class="action-btn" data-batch="re-extract">Re-extract</button>
         <button class="action-btn" data-batch="export">Export</button>
         <button class="action-btn action-btn--danger" data-batch="delete">Delete</button>
@@ -200,6 +202,16 @@ import Admin from '../../../layouts/Admin.astro';
     align-items: center;
     gap: var(--space-sm);
   }
+  .workspace-badge {
+    padding: var(--space-xs) var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--color-text);
+    background: none;
+    border: 1px solid var(--color-border);
+    text-decoration: none;
+  }
+  .workspace-badge:hover { border-color: var(--color-text); }
   .sync-btn {
     padding: var(--space-xs) var(--space-sm);
     font-family: var(--font-mono);
@@ -793,6 +805,8 @@ import Admin from '../../../layouts/Admin.astro';
         const action = (btn as HTMLElement).dataset.batch;
         if (action === 'tag') {
           document.getElementById('batch-tag-dialog')!.style.display = 'flex';
+        } else if (action === 'workspace') {
+          addToWorkspace();
         } else if (action === 'delete') {
           document.getElementById('delete-count')!.textContent = String(selectedIds.size);
           document.getElementById('delete-dialog')!.style.display = 'flex';
@@ -880,6 +894,49 @@ import Admin from '../../../layouts/Admin.astro';
         }
       } catch { alert('Export failed'); }
     }
+
+    // --- Workspace ---
+    async function ensureWorkspace(): Promise<string> {
+      let wsId = localStorage.getItem('active_workspace_id');
+      if (wsId) return wsId;
+      const res = await fetch('/api/workspaces', { method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'My Workspace' }) });
+      const data = await res.json();
+      wsId = data.id;
+      localStorage.setItem('active_workspace_id', wsId!);
+      return wsId!;
+    }
+
+    async function refreshWorkspaceBadge() {
+      const wsId = localStorage.getItem('active_workspace_id');
+      const badge = document.getElementById('workspace-badge')!;
+      const countEl = document.getElementById('workspace-count')!;
+      if (!wsId) { badge.style.display = 'none'; return; }
+      try {
+        const res = await fetch(`/api/workspaces/${wsId}`, { credentials: 'include' });
+        if (!res.ok) { badge.style.display = 'none'; return; }
+        const data = await res.json();
+        countEl.textContent = String(data.item_count);
+        badge.style.display = data.item_count > 0 ? '' : 'none';
+      } catch { badge.style.display = 'none'; }
+    }
+
+    async function addToWorkspace() {
+      const wsId = await ensureWorkspace();
+      try {
+        const res = await fetch(`/api/workspaces/${wsId}/items`, { method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ media_item_ids: Array.from(selectedIds) }) });
+        const data = await res.json();
+        if (data.ok) {
+          alert(`Added ${data.added} item(s) to workspace`);
+          refreshWorkspaceBadge();
+        }
+      } catch { alert('Failed to add to workspace'); }
+    }
+
+    refreshWorkspaceBadge();
 
     function getFilters() {
       const types: string[] = [];
