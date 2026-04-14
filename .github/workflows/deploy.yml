@@ -23,3 +23,6 @@ jobs:
 
       - name: Deploy via git push
         run: git push dokku@204.168.201.89:au-supply master:main --force
+
+      - name: Fix nginx routing
+        run: ssh dokku ps:restart au-supply
