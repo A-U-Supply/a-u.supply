@@ -17,7 +17,7 @@ RUN curl -fsSL -L https://github.com/denoland/deno/releases/latest/download/deno
     && rm /tmp/deno.zip \
     && chmod +x /usr/local/bin/deno
 WORKDIR /app
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+RUN curl -fsSL https://astral.sh/uv/install.sh | sh && mv /root/.local/bin/uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY . .
