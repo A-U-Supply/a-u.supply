@@ -247,23 +247,18 @@ import Admin from '../../../layouts/Admin.astro';
     margin-bottom: var(--space-sm);
     font-size: var(--text-sm);
   }
-  .source-card__type {
-    font-size: 0.65rem;
-    color: var(--color-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    margin-bottom: 4px;
-  }
   .source-card__field {
-    display: flex;
-    gap: var(--space-sm);
-    margin-bottom: 2px;
+    margin-bottom: 6px;
+    font-size: var(--text-sm);
   }
   .source-card__label {
+    display: block;
     color: var(--color-muted);
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     font-weight: 700;
     text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    margin-bottom: 1px;
   }
 
   .extraction-item {
@@ -484,7 +479,7 @@ import Admin from '../../../layouts/Admin.astro';
       } else {
         sourcesEl.innerHTML = sources.map((s: any) => `
           <div class="source-card">
-            <div class="source-card__type">${s.source_type || 'Unknown'}</div>
+            <div class="source-card__field"><span class="source-card__label">Source:</span> ${{slack_file: 'Slack File', slack_link: 'Slack Link', upload: 'Upload'}[s.source_type] || s.source_type || 'Unknown'}</div>
             ${s.source_channel ? `<div class="source-card__field"><span class="source-card__label">Channel:</span> ${s.source_channel}</div>` : ''}
             ${s.slack_message_text ? `<div class="source-card__field"><span class="source-card__label">Message:</span> ${s.slack_message_text}</div>` : ''}
             ${s.source_url ? `<div class="source-card__field"><span class="source-card__label">URL:</span> <a href="${s.source_url}" target="_blank" style="color: var(--color-accent);">${s.source_url}</a></div>` : ''}
