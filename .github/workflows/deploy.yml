@@ -22,4 +22,4 @@ jobs:
           printf 'Host dokku\n  HostName 204.168.201.89\n  User dokku\n  IdentityFile ~/.ssh/id_ed25519\n' >> ~/.ssh/config
 
       - name: Deploy via git push
-        run: git push dokku master:main --force
+        run: git push dokku@204.168.201.89:au-supply master:main --force
