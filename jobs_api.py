@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from auth import get_current_user, get_db, require_admin, require_scope
+from auth import get_db, require_scope
 from models import (
     AppDefinition,
     Job,
@@ -373,9 +373,10 @@ class BulkIndexRequest(BaseModel):
 @router.post("/workspaces", tags=["Workspaces"], summary="Create a workspace")
 def create_workspace(
     body: WorkspaceCreate,
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Create a new workspace for collecting media items before processing.
 
     Workspaces are like shopping carts — add items from the search engine
@@ -393,9 +394,10 @@ def create_workspace(
 
 @router.get("/workspaces", tags=["Workspaces"], summary="List your workspaces")
 def list_workspaces(
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """List all workspaces owned by the current user, with item counts."""
     rows = (
         db.query(Workspace, func.count(WorkspaceItem.id).label("item_count"))
@@ -417,9 +419,10 @@ def list_workspaces(
 @router.get("/workspaces/{workspace_id}", tags=["Workspaces"], summary="Get workspace details")
 def get_workspace(
     workspace_id: str,
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Get a workspace with its item count."""
     ws = db.query(Workspace).filter(Workspace.id == workspace_id, Workspace.created_by == user.id).first()
     if not ws:
@@ -435,9 +438,10 @@ def get_workspace(
 def rename_workspace(
     workspace_id: str,
     body: WorkspaceCreate,
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Rename an existing workspace."""
     ws = db.query(Workspace).filter(Workspace.id == workspace_id, Workspace.created_by == user.id).first()
     if not ws:
@@ -450,9 +454,10 @@ def rename_workspace(
 @router.delete("/workspaces/{workspace_id}", tags=["Workspaces"], summary="Delete workspace")
 def delete_workspace(
     workspace_id: str,
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Delete a workspace and all its item associations.
 
     This does not delete the media items themselves — just removes them from the workspace.
@@ -469,9 +474,10 @@ def delete_workspace(
 def add_workspace_items(
     workspace_id: str,
     body: WorkspaceItemsAdd,
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Add media items to a workspace. Duplicates are silently ignored."""
     ws = db.query(Workspace).filter(Workspace.id == workspace_id, Workspace.created_by == user.id).first()
     if not ws:
@@ -498,9 +504,10 @@ def add_workspace_items(
 def remove_workspace_items(
     workspace_id: str,
     body: WorkspaceItemsRemove,
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Remove specific media items from a workspace."""
     ws = db.query(Workspace).filter(Workspace.id == workspace_id, Workspace.created_by == user.id).first()
     if not ws:
@@ -520,9 +527,10 @@ def list_workspace_items(
     workspace_id: str,
     page: int = Query(1, ge=1, description="Page number."),
     per_page: int = Query(50, ge=1, le=200, description="Items per page."),
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """List media items in a workspace with basic metadata, paginated."""
     ws = db.query(Workspace).filter(Workspace.id == workspace_id, Workspace.created_by == user.id).first()
     if not ws:
@@ -561,9 +569,10 @@ def list_workspace_items(
 
 @router.get("/apps", tags=["Apps"], summary="List available apps")
 def list_apps(
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """List all enabled apps available for processing.
 
     Each app defines what media types it accepts, what parameters it takes,
@@ -583,9 +592,10 @@ def list_apps(
 @router.get("/apps/{name}", tags=["Apps"], summary="Get app details")
 def get_app(
     name: str,
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Get full details for a registered app, including its parsed manifest."""
     app = db.query(AppDefinition).filter(AppDefinition.name == name).first()
     if not app:
@@ -600,9 +610,10 @@ def get_app(
 @router.post("/apps", tags=["Apps"], summary="Register a new app")
 def register_app(
     body: AppRegister,
-    admin: User = Depends(require_admin),
+    auth: tuple[User, str] = Depends(require_scope("admin")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Register a new app from a TOML manifest. Admin only.
 
     The manifest is parsed and validated, then stored. The app becomes
@@ -643,9 +654,10 @@ def register_app(
 def update_app(
     name: str,
     body: AppRegister,
-    admin: User = Depends(require_admin),
+    auth: tuple[User, str] = Depends(require_scope("admin")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Replace an app's manifest. Admin only."""
     app = db.query(AppDefinition).filter(AppDefinition.name == name).first()
     if not app:
@@ -667,9 +679,10 @@ def update_app(
 @router.delete("/apps/{name}", tags=["Apps"], summary="Disable or remove an app")
 def delete_app(
     name: str,
-    admin: User = Depends(require_admin),
+    auth: tuple[User, str] = Depends(require_scope("admin")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Disable an app so it no longer appears in the UI. Admin only.
 
     Existing jobs that used this app are not affected.
@@ -687,9 +700,10 @@ def delete_app(
 def validate_app_input(
     name: str,
     body: ValidateRequest,
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Dry-run validation: check if the given items and params would pass
     the app's manifest requirements. Returns 200 if valid, 422 with errors if not.
     """
@@ -720,9 +734,10 @@ def validate_app_input(
              responses={422: {"model": ValidationErrorResponse}})
 def create_job(
     body: JobCreate,
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Submit a job for processing.
 
     The input items and params are validated against the app's manifest.
@@ -806,9 +821,10 @@ def list_jobs(
     app_name: Optional[str] = Query(None, description="Filter by app name."),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """List jobs, newest first. Filterable by status and app name."""
     q = db.query(Job).options(joinedload(Job.outputs))
     if status:
@@ -841,9 +857,10 @@ def list_jobs(
 @router.get("/jobs/{job_id}", tags=["Jobs"], summary="Get job details")
 def get_job(
     job_id: str,
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Get full details for a job including status, params, log output, and output files."""
     job = db.query(Job).options(joinedload(Job.outputs)).filter(Job.id == job_id).first()
     if not job:
@@ -874,9 +891,10 @@ def get_job(
 @router.post("/jobs/{job_id}/cancel", tags=["Jobs"], summary="Cancel a job")
 def cancel_job(
     job_id: str,
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Cancel a pending or running job.
 
     Pending jobs are cancelled immediately. Running jobs are marked for
@@ -895,9 +913,10 @@ def cancel_job(
 @router.post("/jobs/{job_id}/retry", tags=["Jobs"], summary="Retry a failed job")
 def retry_job(
     job_id: str,
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Re-queue a failed job for another attempt.
 
     Resets the job status to ``pending`` and increments the retry count.
@@ -922,9 +941,10 @@ def retry_job(
 @router.delete("/jobs/{job_id}", tags=["Jobs"], summary="Delete a job and its outputs")
 def delete_job(
     job_id: str,
-    admin: User = Depends(require_admin),
+    auth: tuple[User, str] = Depends(require_scope("admin")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Permanently delete a job and all its output files. Admin only."""
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
@@ -951,9 +971,10 @@ def delete_job(
 @router.get("/jobs/{job_id}/outputs", tags=["Job Outputs"], summary="List job outputs")
 def list_job_outputs(
     job_id: str,
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """List all output files produced by a job."""
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
@@ -974,9 +995,10 @@ def list_job_outputs(
 def download_output(
     job_id: str,
     output_id: str,
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Download a single output file from a completed job."""
     from fastapi.responses import FileResponse
 
@@ -996,9 +1018,10 @@ def download_output(
 def index_output(
     output_id: str,
     job_id: str,
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Promote a job output to the search engine.
 
     This copies the file to the search media directory, creates a ``media_item``
@@ -1092,9 +1115,10 @@ def index_output(
 def bulk_index_outputs(
     job_id: str,
     body: BulkIndexRequest,
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Index multiple job outputs into the search engine at once."""
     results = []
     for output_id in body.output_ids:
@@ -1109,9 +1133,10 @@ def bulk_index_outputs(
 @router.delete("/jobs/{job_id}/outputs", tags=["Job Outputs"], summary="Discard all outputs")
 def discard_outputs(
     job_id: str,
-    user: User = Depends(get_current_user),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    user = auth[0]
     """Delete all output files for a job from disk and database.
 
     Outputs that have already been indexed into the search engine are not
