@@ -27,6 +27,7 @@ import Base from '../../layouts/Base.astro';
 
           <div class="release__actions">
             <button class="btn-play-all" id="play-all">&#9654; Play All</button>
+            <button class="btn-add-all" id="add-all">+ Add All</button>
             <button class="release__star" id="release-bm-star" style="display:none;" title="Bookmark release"></button>
           </div>
         </div>
@@ -204,6 +205,39 @@ import Base from '../../layouts/Base.astro';
   }
   .btn-play-all:hover {
     background: var(--color-accent);
+  }
+
+  .btn-add-all {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    padding: var(--space-xs) var(--space-md);
+    background: none;
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    margin-left: var(--space-xs);
+  }
+  .btn-add-all:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  .btn-track-add {
+    background: none;
+    border: 1px solid var(--color-border);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    cursor: pointer;
+    color: var(--color-muted);
+    margin-left: 2px;
+  }
+  .btn-track-add:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
   }
 
   .release__star, .track-star {
@@ -473,7 +507,7 @@ import Base from '../../layouts/Base.astro';
     } else {
       trackTbody.innerHTML = r.tracks.map((t, i) => `<tr>
         <td>${t.track_number || (i + 1)}</td>
-        <td><button class="btn-track-play" data-index="${i}" title="Play">&#9654;</button></td>
+        <td><button class="btn-track-play" data-index="${i}" title="Play">&#9654;</button><button class="btn-track-add" data-index="${i}" title="Add to queue">+</button></td>
         <td>${escapeHtml(t.title || `Track ${i + 1}`)}</td>
         <td>${formatDuration(t.duration_seconds)}</td>
         <td><button class="track-star" data-bm-type="track" data-bm-id="${t.id}" style="display:none;" title="Bookmark"></button></td>
@@ -485,12 +519,24 @@ import Base from '../../layouts/Base.astro';
       dispatchQueue(r, 0);
     });
 
-    // Individual track play buttons
+    // Add All button
+    document.getElementById('add-all')?.addEventListener('click', () => {
+      dispatchAdd(r, 0);
+    });
+
+    // Individual track play/add buttons
     trackTbody.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement).closest('.btn-track-play') as HTMLElement | null;
-      if (!btn) return;
-      const index = parseInt(btn.dataset.index || '0', 10);
-      dispatchQueue(r, index);
+      const playBtn = (e.target as HTMLElement).closest('.btn-track-play') as HTMLElement | null;
+      if (playBtn) {
+        const index = parseInt(playBtn.dataset.index || '0', 10);
+        dispatchQueue(r, index);
+        return;
+      }
+      const addBtn = (e.target as HTMLElement).closest('.btn-track-add') as HTMLElement | null;
+      if (addBtn) {
+        const index = parseInt(addBtn.dataset.index || '0', 10);
+        dispatchAdd(r, index, true);
+      }
     });
 
     // Bookmarks (only if logged in — __bookmarks set by Admin layout)
@@ -631,6 +677,27 @@ import Base from '../../layouts/Base.astro';
 
     document.dispatchEvent(new CustomEvent('player:queue', {
       detail: { tracks, startIndex }
+    }));
+  }
+
+  function dispatchAdd(r: ReleaseData, startIndex: number, singleTrack = false) {
+    const encoded = encodeURIComponent(r.product_code);
+    const entities = r.entities.map(e => e.name).join(', ') || 'Unknown';
+
+    const sourceTracks = singleTrack ? [r.tracks[startIndex]] : r.tracks.slice(startIndex);
+    const tracks = sourceTracks.map(t => ({
+      track_id: t.id,
+      title: t.title,
+      release_title: r.title,
+      release_code: r.product_code,
+      stream_url: t.stream_url,
+      cover_url: r.cover_art_url ? `/api/releases/${encoded}/cover?size=thumb` : null,
+      duration: t.duration_seconds,
+      entity_name: entities,
+    }));
+
+    document.dispatchEvent(new CustomEvent('player:add', {
+      detail: { tracks }
     }));
   }
 

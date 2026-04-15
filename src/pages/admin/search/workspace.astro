@@ -98,6 +98,29 @@ import Admin from '../../../layouts/Admin.astro';
     fill: #fff;
     filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
   }
+  .workspace-grid .ws-add {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: bold;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+    padding: 0;
+    z-index: 1;
+  }
+  .workspace-grid .ws-thumb:hover .ws-add { opacity: 1; }
+  .workspace-grid .ws-add:hover { background: rgba(184,134,11,0.8); border-color: #b8860b; }
   .workspace-grid .ws-duration {
     position: absolute;
     bottom: 3px;
@@ -253,7 +276,7 @@ import Admin from '../../../layouts/Admin.astro';
           : `<img src="/assets/default-cover.jpg" alt="${item.media_type}" loading="lazy" style="image-rendering: pixelated;" />`;
         const canPlay = item.media_type === 'audio' || item.media_type === 'video';
         const playBtn = canPlay
-          ? `<button class="ws-play" data-play-id="${item.media_item_id}" data-play-type="${item.media_type}" title="Play">${playSvg}</button>`
+          ? `<button class="ws-play" data-play-id="${item.media_item_id}" data-play-type="${item.media_type}" title="Play">${playSvg}</button><button class="ws-add" data-play-id="${item.media_item_id}" data-play-type="${item.media_type}" title="Add to queue">+</button>`
           : '';
         const dur = item.duration_seconds
           ? `<span class="ws-duration">${fmtDur(item.duration_seconds)}</span>`
@@ -307,6 +330,33 @@ import Admin from '../../../layouts/Admin.astro';
                 entity_name: '',
               }],
               startIndex: 0,
+            },
+          }));
+        });
+      });
+
+      // Add to queue buttons
+      gridEl.querySelectorAll('.ws-add').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const el = btn as HTMLElement;
+          const mediaId = el.dataset.playId!;
+          const item = data.items.find((i: any) => i.media_item_id === mediaId);
+          if (!item) return;
+          document.dispatchEvent(new CustomEvent('player:add', {
+            detail: {
+              tracks: [{
+                track_id: mediaId,
+                title: item.filename,
+                release_title: '',
+                release_code: '',
+                media_type: item.media_type,
+                stream_url: `/api/media/${mediaId}/file`,
+                cover_url: (item.media_type === 'image' || item.media_type === 'video')
+                  ? `/api/media/${mediaId}/thumbnail` : '/assets/default-cover.jpg',
+                duration: item.duration_seconds || 0,
+                entity_name: '',
+              }],
             },
           }));
         });

@@ -107,6 +107,29 @@ import Admin from '../../layouts/Admin.astro';
     fill: #fff;
     filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
   }
+  .bm-card__add {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: bold;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+    padding: 0;
+    z-index: 1;
+  }
+  .bm-card__thumb:hover .bm-card__add { opacity: 1; }
+  .bm-card__add:hover { background: rgba(184,134,11,0.8); border-color: #b8860b; }
   .bm-card__info {
     padding: 4px 6px;
     border-top: 1px solid var(--color-border);
@@ -287,7 +310,7 @@ import Admin from '../../layouts/Admin.astro';
         const selectedClass = selectedIds.has(item.target_id) ? ' selected' : '';
         const thumbStyle = m.thumb === '/assets/default-cover.jpg' ? ' style="image-rendering: pixelated;"' : '';
         const playBtn = m.playable
-          ? `<button class="bm-card__play" data-play-id="${item.target_id}" data-play-type="${m.media_type}" data-target-type="${item.target_type}" title="Play">${playSvg}</button>`
+          ? `<button class="bm-card__play" data-play-id="${item.target_id}" data-play-type="${m.media_type}" data-target-type="${item.target_type}" title="Play">${playSvg}</button><button class="bm-card__add" data-play-id="${item.target_id}" data-play-type="${m.media_type}" data-target-type="${item.target_type}" title="Add to queue">+</button>`
           : '';
         return `<div class="bm-card${selectedClass}" data-target-type="${item.target_type}" data-target-id="${item.target_id}" data-href="${m.href}">
           <input type="checkbox" class="bm-card__check" data-select="${item.target_id}" ${checked} />
@@ -364,6 +387,34 @@ import Admin from '../../layouts/Admin.astro';
               entity_name: '',
             }],
             startIndex: 0,
+          },
+        }));
+        return;
+      }
+
+      // Add to queue button
+      const addBtn = target.closest('.bm-card__add') as HTMLElement | null;
+      if (addBtn) {
+        e.stopPropagation();
+        const id = addBtn.dataset.playId!;
+        const mediaType = addBtn.dataset.playType!;
+        const targetType = addBtn.dataset.targetType!;
+        const item = allItems.find((i: any) => i.target_id === id && i.target_type === targetType);
+        if (!item) return;
+        const m = item.meta;
+        document.dispatchEvent(new CustomEvent('player:add', {
+          detail: {
+            tracks: [{
+              track_id: id,
+              title: m.name,
+              release_title: m.sub || '',
+              release_code: '',
+              media_type: mediaType,
+              stream_url: m.stream_url || `/api/media/${id}/file`,
+              cover_url: m.thumb,
+              duration: 0,
+              entity_name: '',
+            }],
           },
         }));
         return;
