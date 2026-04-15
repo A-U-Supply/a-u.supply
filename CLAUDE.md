@@ -104,17 +104,36 @@ Bots are Docker images. The worker mounts a job directory at `/work`:
 
 - `/work/input/` — input media files
 - `/work/job.json` — `{"job_id", "params", "input_files": [{filename, media_type, media_item_id}]}`
-- `/work/output/` — bot writes results here
+- `/work/output/` — bot must write all result files here
 
 Exit codes: `0` = success, `1` = expected failure, `2` = config error.
 
 Optional: write `/work/output/manifest.json` to describe outputs with media types and descriptions. If absent, types are inferred from extensions.
 
+### How the worker invokes bots
+
+The worker builds a Docker command from the manifest. Every bot receives input files and params as CLI arguments — there is no magic. The manifest controls exactly how:
+
+1. **`command`** — the subcommand passed to the entrypoint (e.g. `rave` → `rotten rave`)
+2. **`input_mode`** — how input files are passed:
+   - `"positional"` (default) — appended as positional args: `rotten rave /work/input/a.wav /work/input/b.wav`
+   - `"flag"` — passed via a named flag (set `input_flag` in manifest)
+3. **`params.*.flag`** — each param maps to a CLI flag (e.g. `flag = "-m"` → `-m vintage`)
+   - Bool params: flag is included when true, omitted when false (e.g. `-r` for reverse)
+   - Params at their default value are omitted to keep the command clean
+4. **`output_flag`** — static string appended to command (e.g. `"-o /work/output/output.wav"`)
+
+Example: a job with model=vintage, temperature=1.5, reverse=true produces:
+```
+rotten rave /work/input/drums.wav -m vintage -t 1.5 -r -o /work/output/output.wav
+```
+
 ### Adding a new bot
 
-1. Bot repo needs a `Dockerfile` and a GitHub Actions workflow that builds + pushes to GHCR
-2. Create `apps/<bot-name>.toml` manifest in this repo (see `apps/rottengenizdat.toml` for example)
+1. Bot repo needs a `Dockerfile` with an `ENTRYPOINT` and a GitHub Actions workflow that builds + pushes to GHCR
+2. Create `apps/<bot-name>.toml` manifest in this repo (see `apps/rottengenizdat.toml` for the full example)
 3. Register via `POST /api/apps` with the TOML as `manifest_toml` (requires admin API key)
+4. Update the DB copy: `PUT /api/apps/<name>` with the updated TOML when the manifest changes
 
 ### Dokku setup
 

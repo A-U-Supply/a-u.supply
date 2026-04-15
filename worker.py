@@ -140,14 +140,16 @@ def _prepare_input(job: Job, manifest: dict, db: Session) -> Path:
 
 
 def _build_docker_command(job: Job, manifest: dict, job_dir: Path) -> list[str]:
-    """Build the docker run command."""
+    """Build the docker run command with proper input files, params, and output flags."""
     image = manifest["image"]
     timeout = manifest.get("timeout_seconds", 600)
     command = manifest.get("command", "")
+    input_mode = manifest.get("input_mode", "positional")
+    output_flag = manifest.get("output_flag", "")
+    params = json.loads(job.params)
+    param_specs = manifest.get("params", {})
 
     # The job dir on the host filesystem — this is what Docker sees
-    # Since we mount /var/lib/dokku/data/storage/au-supply-jobs as /app/job-data,
-    # the host path is the storage path + job_id
     host_job_dir = f"/var/lib/dokku/data/storage/au-supply-jobs/{job.id}"
 
     cmd = [
@@ -160,8 +162,41 @@ def _build_docker_command(job: Job, manifest: dict, job_dir: Path) -> list[str]:
         image,
     ]
 
+    # Subcommand (e.g. "rave")
     if command:
         cmd.extend(command.split())
+
+    # Input files
+    input_dir = job_dir / "input"
+    input_files = sorted(input_dir.iterdir()) if input_dir.is_dir() else []
+    if input_mode == "positional":
+        for f in input_files:
+            cmd.append(f"/work/input/{f.name}")
+
+    # Params mapped to CLI flags
+    for param_name, spec in param_specs.items():
+        value = params.get(param_name)
+        flag = spec.get("flag")
+        if not flag or value is None:
+            continue
+
+        # Skip defaults to keep command clean
+        default = spec.get("default")
+        if value == default:
+            continue
+
+        param_type = spec.get("type", "string")
+        if param_type == "bool":
+            if value:
+                cmd.append(flag)
+            # False bools are just omitted
+        else:
+            cmd.append(flag)
+            cmd.append(str(value))
+
+    # Output flag (e.g. "-o /work/output/output.wav")
+    if output_flag:
+        cmd.extend(output_flag.split())
 
     return cmd
 
