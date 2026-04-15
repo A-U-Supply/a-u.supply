@@ -911,14 +911,22 @@ import Admin from '../../../layouts/Admin.astro';
           document.getElementById('config-section')!.style.display = 'none';
           window.location.href = `/admin/jobs?highlight=${job.id}`;
         } else {
-          const err = await res.json();
-          if (err.detail?.errors) {
-            (window as any).toast.error('Validation errors: ' + err.detail.errors.map((e: any) => `${e.field}: ${e.message}`).join(', '));
-          } else {
-            (window as any).toast.error(err.detail || 'Failed to create job');
+          try {
+            const err = await res.json();
+            const detail = err.detail;
+            if (detail?.errors && Array.isArray(detail.errors)) {
+              const msgs = detail.errors.map((e: any) => e.message || `${e.field}: unknown error`);
+              (window as any).toast.error(msgs.join(' | '), 10000);
+            } else if (typeof detail === 'string') {
+              (window as any).toast.error(detail);
+            } else {
+              (window as any).toast.error(detail?.detail || 'Job submission failed');
+            }
+          } catch {
+            (window as any).toast.error(`Job submission failed (HTTP ${res.status})`);
           }
         }
-      } catch { (window as any).toast.error('Failed to create job'); }
+      } catch (e) { (window as any).toast.error('Failed to create job: ' + (e as Error).message); }
     });
 
     loadItems();
