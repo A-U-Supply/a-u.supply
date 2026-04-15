@@ -50,18 +50,6 @@ import Admin from '../../../layouts/Admin.astro';
 </Admin>
 
 <style>
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: var(--space-sm);
-  }
-  .page-header h1 {
-    margin-bottom: 0;
-    border-bottom: none;
-    padding-bottom: 0;
-  }
   .detail-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
@@ -137,18 +125,6 @@ import Admin from '../../../layouts/Admin.astro';
     color: #40c040;
     font-size: 0.65rem;
   }
-  .status-badge {
-    display: inline-block;
-    padding: 1px 6px;
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    font-family: var(--font-mono);
-  }
-  .status-pending { color: var(--color-muted); border: 1px solid var(--color-border); }
-  .status-running { color: #f0c040; border: 1px solid #f0c040; }
-  .status-completed { color: #40c040; border: 1px solid #40c040; }
-  .status-failed { color: #e04040; border: 1px solid #e04040; }
-  .status-cancelled { color: var(--color-muted); border: 1px solid var(--color-border); text-decoration: line-through; }
 </style>
 
 <script>
@@ -246,25 +222,25 @@ import Admin from '../../../layouts/Admin.astro';
             const res = await fetch(`/api/jobs/${jobId}/outputs/${oid}/index`, {
               method: 'POST', credentials: 'include' });
             if (res.ok) { loadJob(); }
-            else { alert('Indexing failed'); }
+            else { (window as any).toast.error('Indexing failed'); }
           });
         });
 
         // Index all
         document.getElementById('index-all-btn')?.addEventListener('click', async () => {
           const unindexed = outputs.filter((o: any) => !o.indexed).map((o: any) => o.id);
-          if (unindexed.length === 0) { alert('All outputs already indexed'); return; }
+          if (unindexed.length === 0) { (window as any).toast.success('All outputs already indexed'); return; }
           const res = await fetch(`/api/jobs/${jobId}/outputs/index`, {
             method: 'POST', credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ output_ids: unindexed }) });
           if (res.ok) { loadJob(); }
-          else { alert('Bulk indexing failed'); }
+          else { (window as any).toast.error('Bulk indexing failed'); }
         });
 
         // Discard all
         document.getElementById('discard-all-btn')?.addEventListener('click', async () => {
-          if (!confirm('Delete all output files? Indexed items in search are not affected.')) return;
+          if (!await (window as any).confirmDialog('Delete all output files? Indexed items in search are not affected.', 'Delete All')) return;
           await fetch(`/api/jobs/${jobId}/outputs`, {
             method: 'DELETE', credentials: 'include' });
           loadJob();

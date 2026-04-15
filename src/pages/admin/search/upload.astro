@@ -82,30 +82,6 @@ import Admin from '../../../layouts/Admin.astro';
   .form-group {
     margin-bottom: var(--space-sm);
   }
-  .form-label {
-    display: block;
-    font-size: 0.65rem;
-    color: var(--color-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    margin-bottom: var(--space-xs);
-  }
-  .form-group input,
-  .form-group textarea {
-    width: 100%;
-    padding: var(--space-xs) var(--space-sm);
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    border: 1px solid var(--color-border);
-    background: #fff;
-    color: var(--color-text);
-    resize: vertical;
-  }
-  .form-group input:focus,
-  .form-group textarea:focus {
-    outline: 2px solid var(--color-accent);
-    outline-offset: -1px;
-  }
 
   .file-list {
     display: flex;
@@ -190,18 +166,6 @@ import Admin from '../../../layouts/Admin.astro';
   }
   .upload-btn:hover { background: #333; }
   .upload-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-  .action-btn {
-    background: none;
-    border: 1px solid var(--color-border);
-    color: var(--color-text);
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    padding: var(--space-xs) var(--space-sm);
-    cursor: pointer;
-    text-transform: uppercase;
-  }
-  .action-btn:hover { background: var(--color-text); color: var(--color-bg); }
 
   .upload-status {
     margin-top: var(--space-md);

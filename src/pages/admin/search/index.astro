@@ -3,7 +3,7 @@ import Admin from '../../../layouts/Admin.astro';
 ---
 
 <Admin title="Media Search" current="search">
-  <div class="search-header">
+  <div class="page-header">
     <h1>Media Search</h1>
     <div class="header-actions">
       <a class="workspace-badge" id="workspace-badge" href="/admin/search/workspace" style="display:none;" title="View workspace">Workspace: <span id="workspace-count">0</span></a>
@@ -128,7 +128,10 @@ import Admin from '../../../layouts/Admin.astro';
 
       <div id="loading" style="color: var(--color-muted);"><span class="loading-dots">Loading</span></div>
       <div id="error" class="login-error" style="display:none;"></div>
-      <div id="empty" style="display:none; color: var(--color-muted); padding: var(--space-md) 0;">No media found.</div>
+      <div id="empty" class="empty-state" style="display:none;">
+        <div class="empty-state__icon">&#128269;</div>
+        No media found.
+      </div>
 
       <div id="results-grid" class="results-grid" style="display:none;"></div>
 
@@ -185,23 +188,6 @@ import Admin from '../../../layouts/Admin.astro';
 </Admin>
 
 <style>
-  .search-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: var(--space-sm);
-  }
-  .search-header h1 {
-    margin-bottom: 0;
-    border-bottom: none;
-    padding-bottom: 0;
-  }
-  .header-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-  }
   .workspace-badge {
     padding: var(--space-xs) var(--space-sm);
     font-family: var(--font-mono);
@@ -559,79 +545,10 @@ import Admin from '../../../layouts/Admin.astro';
     justify-content: space-between;
   }
 
-  .pagination {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-sm);
-    margin-top: var(--space-md);
-    font-size: var(--text-sm);
-  }
-
-  .dialog-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 200;
-  }
-  .dialog {
-    background: #fff;
-    padding: var(--space-md);
-    border: 2px solid var(--color-text);
-    max-width: 400px;
-    width: 90%;
-    font-family: var(--font-mono);
-  }
-  .dialog-actions {
-    display: flex;
-    gap: var(--space-sm);
-    margin-top: var(--space-md);
-    justify-content: flex-end;
-  }
-  .btn-cancel {
-    padding: var(--space-xs) var(--space-sm);
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    text-transform: uppercase;
-    background: none;
-    border: 1px solid var(--color-border);
-    cursor: pointer;
-  }
-  .btn-cancel:hover { border-color: var(--color-text); }
-  .btn-danger {
-    padding: var(--space-xs) var(--space-sm);
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    font-weight: bold;
-    text-transform: uppercase;
-    background: #c00;
-    color: #fff;
-    border: none;
-    cursor: pointer;
-  }
-  .btn-danger:hover { background: #a00; }
-
-  .action-btn {
-    background: none;
-    border: 1px solid var(--color-border);
-    color: var(--color-text);
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    padding: 2px 6px;
-    cursor: pointer;
-    text-transform: uppercase;
-    text-decoration: none;
-    display: inline-block;
-  }
-  .action-btn:hover { background: var(--color-text); color: var(--color-bg); }
-  .action-btn--danger { border-color: #c00; color: #c00; }
-  .action-btn--danger:hover { background: #c00; color: #fff; }
+  .pagination { justify-content: center; }
 
   @media (max-width: 640px) {
-    .search-header { flex-direction: column; align-items: stretch; }
+    .page-header { flex-direction: column; align-items: stretch; }
     .header-actions { flex-wrap: wrap; }
     .search-bar input { font-size: 16px; } /* prevent iOS zoom */
     .search-layout {
@@ -842,7 +759,7 @@ import Admin from '../../../layouts/Admin.astro';
         document.getElementById('batch-tag-dialog')!.style.display = 'none';
         input.value = '';
         doSearch();
-      } catch { alert('Failed to apply tags'); }
+      } catch { (window as any).toast.error('Failed to apply tags'); }
     });
 
     // Delete dialog
@@ -860,7 +777,7 @@ import Admin from '../../../layouts/Admin.astro';
         document.getElementById('delete-dialog')!.style.display = 'none';
         selectedIds.clear();
         doSearch();
-      } catch { alert('Delete failed'); }
+      } catch { (window as any).toast.error('Delete failed'); }
     });
 
     async function batchReExtract() {
@@ -871,8 +788,8 @@ import Admin from '../../../layouts/Admin.astro';
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ media_ids: Array.from(selectedIds) }),
         });
-        alert('Re-extraction queued for ' + selectedIds.size + ' items');
-      } catch { alert('Re-extraction failed'); }
+        (window as any).toast.success('Re-extraction queued for ' + selectedIds.size + ' items');
+      } catch { (window as any).toast.error('Re-extraction failed'); }
     }
 
     async function batchExport() {
@@ -892,7 +809,7 @@ import Admin from '../../../layouts/Admin.astro';
           a.click();
           URL.revokeObjectURL(url);
         }
-      } catch { alert('Export failed'); }
+      } catch { (window as any).toast.error('Export failed'); }
     }
 
     // --- Workspace ---
@@ -930,10 +847,10 @@ import Admin from '../../../layouts/Admin.astro';
           body: JSON.stringify({ media_item_ids: Array.from(selectedIds) }) });
         const data = await res.json();
         if (data.ok) {
-          alert(`Added ${data.added} item(s) to workspace`);
+          (window as any).toast.success(`Added ${data.added} item(s) to workspace`);
           refreshWorkspaceBadge();
         }
-      } catch { alert('Failed to add to workspace'); }
+      } catch { (window as any).toast.error('Failed to add to workspace'); }
     }
 
     refreshWorkspaceBadge();

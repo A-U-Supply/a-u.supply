@@ -10,7 +10,8 @@ import Admin from '../../../layouts/Admin.astro';
     </div>
   </div>
 
-  <div id="empty" style="display:none; color: var(--color-muted); padding: var(--space-md) 0;">
+  <div id="empty" class="empty-state" style="display:none;">
+    <div class="empty-state__icon">&#128451;</div>
     Workspace is empty. Go to <a href="/admin/search">Search</a> and add items using the batch bar.
   </div>
 
@@ -45,18 +46,6 @@ import Admin from '../../../layouts/Admin.astro';
 </Admin>
 
 <style>
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: var(--space-sm);
-  }
-  .page-header h1 {
-    margin-bottom: 0;
-    border-bottom: none;
-    padding-bottom: 0;
-  }
   .workspace-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
@@ -132,14 +121,6 @@ import Admin from '../../../layouts/Admin.astro';
     border: 1px solid var(--color-border);
     background: var(--color-bg);
     color: var(--color-text);
-  }
-  .pagination {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    margin-top: var(--space-md);
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
   }
 </style>
 
@@ -222,7 +203,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     // Clear workspace
     document.getElementById('clear-workspace-btn')?.addEventListener('click', async () => {
-      if (!confirm('Remove all items from workspace?')) return;
+      if (!await (window as any).confirmDialog('Remove all items from workspace?', 'Clear All')) return;
       await fetch(`/api/workspaces/${wsId}`, { method: 'DELETE', credentials: 'include' });
       localStorage.removeItem('active_workspace_id');
       emptyEl.style.display = '';
@@ -344,12 +325,12 @@ import Admin from '../../../layouts/Admin.astro';
         } else {
           const err = await res.json();
           if (err.detail?.errors) {
-            alert('Validation errors:\n' + err.detail.errors.map((e: any) => `${e.field}: ${e.message}`).join('\n'));
+            (window as any).toast.error('Validation errors: ' + err.detail.errors.map((e: any) => `${e.field}: ${e.message}`).join(', '));
           } else {
-            alert(err.detail || 'Failed to create job');
+            (window as any).toast.error(err.detail || 'Failed to create job');
           }
         }
-      } catch { alert('Failed to create job'); }
+      } catch { (window as any).toast.error('Failed to create job'); }
     });
 
     loadItems();

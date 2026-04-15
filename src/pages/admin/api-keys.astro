@@ -20,7 +20,7 @@ import Admin from '../../layouts/Admin.astro';
           <option value="admin">Admin</option>
         </select>
       </div>
-      <button class="generate-btn" id="generate-btn">Generate Key</button>
+      <button class="btn-primary" id="generate-btn">Generate Key</button>
     </div>
   </div>
 
@@ -34,7 +34,10 @@ import Admin from '../../layouts/Admin.astro';
 
   <div id="loading" style="color: var(--color-muted); margin-top: var(--space-md);"><span class="loading-dots">Loading</span></div>
   <div id="error" class="login-error" style="display:none;"></div>
-  <div id="empty" style="display:none; color: var(--color-muted); padding: var(--space-md) 0;">No API keys found.</div>
+  <div id="empty" class="empty-state" style="display:none;">
+    <div class="empty-state__icon">&#128273;</div>
+    No API keys found. Generate one above.
+  </div>
 
   <div class="table-wrap" id="table-wrap" style="display:none;">
     <table class="release-table">
@@ -79,54 +82,6 @@ import Admin from '../../layouts/Admin.astro';
     padding-bottom: var(--space-xs);
     border-bottom: 2px solid var(--color-text);
   }
-  .form-row {
-    display: flex;
-    gap: var(--space-sm);
-    align-items: flex-end;
-    flex-wrap: wrap;
-  }
-  .form-group {
-    flex: 1;
-    min-width: 150px;
-  }
-  .form-label {
-    display: block;
-    font-size: 0.65rem;
-    color: var(--color-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    margin-bottom: var(--space-xs);
-  }
-  .form-group input,
-  .form-group select {
-    width: 100%;
-    padding: var(--space-xs) var(--space-sm);
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    border: 1px solid var(--color-border);
-    background: #fff;
-    color: var(--color-text);
-  }
-  .form-group input:focus,
-  .form-group select:focus {
-    outline: 2px solid var(--color-accent);
-    outline-offset: -1px;
-  }
-  .generate-btn {
-    padding: var(--space-xs) var(--space-md);
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 1pt;
-    background: #1a1a1a;
-    color: #fff;
-    border: none;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .generate-btn:hover { background: #333; }
-  .generate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .new-key-display {
     background: #fffbe6;
@@ -157,104 +112,7 @@ import Admin from '../../layouts/Admin.astro';
     user-select: all;
   }
 
-  .table-wrap {
-    overflow-x: auto;
-    margin-top: var(--space-md);
-  }
-  .release-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: var(--text-sm);
-  }
-  .release-table th {
-    text-align: left;
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    font-size: 0.7rem;
-    padding: var(--space-xs) var(--space-sm);
-    border-bottom: 2px solid var(--color-text);
-    color: var(--color-muted);
-    white-space: nowrap;
-  }
-  .release-table td {
-    padding: var(--space-xs) var(--space-sm);
-    border-bottom: 1px solid var(--color-border);
-    vertical-align: middle;
-  }
-
-  .badge {
-    display: inline-block;
-    padding: 2px 8px;
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    border: 1px solid;
-  }
-  .badge--read { color: #080; border-color: #080; }
-  .badge--write { color: var(--color-accent); border-color: var(--color-accent); }
-  .badge--admin { color: #c00; border-color: #c00; }
-
-  .action-btn {
-    background: none;
-    border: 1px solid var(--color-border);
-    color: var(--color-text);
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    padding: 2px 6px;
-    cursor: pointer;
-    text-transform: uppercase;
-    text-decoration: none;
-    display: inline-block;
-  }
-  .action-btn:hover { background: var(--color-text); color: var(--color-bg); }
-  .action-btn--danger { border-color: #c00; color: #c00; }
-  .action-btn--danger:hover { background: #c00; color: #fff; }
-
-  .dialog-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 200;
-  }
-  .dialog {
-    background: #fff;
-    padding: var(--space-md);
-    border: 2px solid var(--color-text);
-    max-width: 400px;
-    width: 90%;
-    font-family: var(--font-mono);
-  }
-  .dialog-actions {
-    display: flex;
-    gap: var(--space-sm);
-    margin-top: var(--space-md);
-    justify-content: flex-end;
-  }
-  .btn-cancel {
-    padding: var(--space-xs) var(--space-sm);
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    text-transform: uppercase;
-    background: none;
-    border: 1px solid var(--color-border);
-    cursor: pointer;
-  }
-  .btn-cancel:hover { border-color: var(--color-text); }
-  .btn-danger {
-    padding: var(--space-xs) var(--space-sm);
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    font-weight: bold;
-    text-transform: uppercase;
-    background: #c00;
-    color: #fff;
-    border: none;
-    cursor: pointer;
-  }
-  .btn-danger:hover { background: #a00; }
+  .table-wrap { margin-top: var(--space-md); }
 
   @media (max-width: 640px) {
     .form-row { flex-direction: column; }
@@ -334,7 +192,7 @@ import Admin from '../../layouts/Admin.astro';
       const scope = (document.getElementById('key-scope') as HTMLSelectElement).value;
 
       if (!label) {
-        alert('Please enter a label for the key');
+        (window as any).toast.error('Please enter a label for the key');
         return;
       }
 
@@ -350,7 +208,7 @@ import Admin from '../../layouts/Admin.astro';
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ detail: 'Failed to generate key' }));
-          alert(err.detail || 'Failed to generate key');
+          (window as any).toast.error(err.detail || 'Failed to generate key');
           return;
         }
         const data = await res.json();
@@ -362,7 +220,7 @@ import Admin from '../../layouts/Admin.astro';
         (document.getElementById('key-scope') as HTMLSelectElement).value = 'read';
 
         loadKeys();
-      } catch { alert('Network error'); }
+      } catch { (window as any).toast.error('Network error'); }
 
       generateBtn.disabled = false;
       generateBtn.textContent = 'Generate Key';
@@ -413,11 +271,11 @@ import Admin from '../../layouts/Admin.astro';
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ detail: 'Revoke failed' }));
-          alert(err.detail || 'Revoke failed');
+          (window as any).toast.error(err.detail || 'Revoke failed');
         } else {
           await loadKeys();
         }
-      } catch { alert('Network error'); }
+      } catch { (window as any).toast.error('Network error'); }
 
       document.getElementById('revoke-dialog')!.style.display = 'none';
       btn.disabled = false;

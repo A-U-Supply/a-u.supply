@@ -315,20 +315,6 @@ import Admin from '../../../layouts/Admin.astro';
     padding-top: var(--space-sm);
   }
 
-  .action-btn {
-    background: none;
-    border: 1px solid var(--color-border);
-    color: var(--color-text);
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    padding: 2px 6px;
-    cursor: pointer;
-    text-transform: uppercase;
-    text-decoration: none;
-    display: inline-block;
-  }
-  .action-btn:hover { background: var(--color-text); color: var(--color-bg); }
-
   .filter-label {
     font-size: 0.65rem;
     color: var(--color-muted);
@@ -516,7 +502,7 @@ import Admin from '../../../layouts/Admin.astro';
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tags: pendingTags }),
           });
-        } catch { alert('Failed to save tags'); return; }
+        } catch { (window as any).toast.error('Failed to save tags'); return; }
       }
       reviewed++;
       // Remove the tagged item from the list so it doesn't reappear
