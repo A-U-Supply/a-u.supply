@@ -34,6 +34,7 @@ logging.basicConfig(
 logger = logging.getLogger("worker")
 
 JOB_DATA_DIR = Path(os.environ.get("JOB_DATA_DIR", "/app/job-data"))
+SEARCH_MEDIA_DIR = Path(os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data"))
 POLL_INTERVAL = int(os.environ.get("WORKER_POLL_INTERVAL", "2"))
 LOG_TAIL_LINES = 50
 
@@ -104,6 +105,8 @@ def _prepare_input(job: Job, manifest: dict, db: Session) -> Path:
             continue
 
         src = Path(item.file_path)
+        if not src.is_absolute():
+            src = SEARCH_MEDIA_DIR / src
         if not src.is_file():
             logger.warning("File %s not found for item %s, skipping", src, mid)
             continue
@@ -301,14 +304,23 @@ def main():
 
     while not _shutdown:
         db = SessionLocal()
+        job = None
         try:
             job = _pick_job(db)
             if job:
                 _run_job(job, db)
             else:
                 time.sleep(POLL_INTERVAL)
-        except Exception:
+        except Exception as e:
             logger.exception("Worker loop error")
+            if job and job.status == "running":
+                job.status = "failed"
+                job.error_message = f"Worker crash: {e}"
+                job.completed_at = _utcnow()
+                try:
+                    db.commit()
+                except Exception:
+                    db.rollback()
             time.sleep(POLL_INTERVAL)
         finally:
             db.close()
