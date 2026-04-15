@@ -9,6 +9,7 @@ import Admin from '../../../layouts/Admin.astro';
   <div id="detail-content" style="display:none;">
     <div class="detail-header">
       <h1 id="detail-title">Media Detail</h1>
+      <button class="bm-star" id="detail-bm-star" style="display:none;" title="Bookmark"></button>
       <a href="/admin/search" class="action-btn">Back to Search</a>
     </div>
 
@@ -318,6 +319,23 @@ import Admin from '../../../layouts/Admin.astro';
         loadingEl.style.display = 'none';
         contentEl.style.display = 'block';
         renderDetail();
+        // Bookmark star
+        const bm = (window as any).__bookmarks;
+        const starEl = document.getElementById('detail-bm-star');
+        if (bm && starEl) {
+          starEl.dataset.bmType = 'media_item';
+          starEl.dataset.bmId = mediaId;
+          starEl.style.display = '';
+          bm.check('media_item', [mediaId]).then((set: Set<string>) => {
+            if (set.has(mediaId)) {
+              starEl.classList.add('bookmarked');
+              starEl.setAttribute('title', 'Remove bookmark');
+            }
+          });
+          starEl.addEventListener('click', () => {
+            bm.toggle('media_item', mediaId);
+          });
+        }
       } catch (err: any) {
         loadingEl.style.display = 'none';
         errorEl.textContent = err.message;

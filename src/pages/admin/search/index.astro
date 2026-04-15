@@ -580,6 +580,9 @@ import Admin from '../../../layouts/Admin.astro';
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    gap: 3px;
   }
   .results-grid .grid-item__meta {
     color: var(--color-muted);
@@ -1025,7 +1028,10 @@ import Admin from '../../../layouts/Admin.astro';
             <input type="checkbox" class="grid-item__check" data-select="${item.id}" ${checked} />
             <div class="grid-item__thumb">${thumb}${playBtn}</div>
             <div class="grid-item__info">
-              <div class="grid-item__name" title="${item.filename || ''}">${item.filename || 'Untitled'}</div>
+              <div class="grid-item__name" title="${item.filename || ''}">
+                <button class="bm-star bm-star--sm" data-bm-type="media_item" data-bm-id="${item.id}" title="Bookmark"></button>
+                ${item.filename || 'Untitled'}
+              </div>
               <div class="grid-item__meta">
                 ${poster ? `<span>${poster}</span>` : ''}
                 ${rxn > 0 ? `<span>${rxn} rxn</span>` : ''}
@@ -1068,11 +1074,36 @@ import Admin from '../../../layouts/Admin.astro';
       }
 
       updateSelection();
+
+      // Check bookmarks for visible items
+      const bm = (window as any).__bookmarks;
+      if (bm) {
+        const ids = allResults.map((i: any) => i.id);
+        bm.check('media_item', ids).then((set: Set<string>) => {
+          document.querySelectorAll('.bm-star[data-bm-type="media_item"]').forEach((el: Element) => {
+            const id = (el as HTMLElement).dataset.bmId!;
+            if (set.has(id)) {
+              el.classList.add('bookmarked');
+              el.setAttribute('title', 'Remove bookmark');
+            }
+          });
+        });
+      }
     }
 
     // Delegate click for grid items and checkboxes
     document.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
+
+      // Bookmark star click
+      const starBtn = target.closest('.bm-star') as HTMLElement | null;
+      if (starBtn) {
+        e.stopPropagation();
+        e.preventDefault();
+        const bm = (window as any).__bookmarks;
+        if (bm) bm.toggle(starBtn.dataset.bmType!, starBtn.dataset.bmId!);
+        return;
+      }
 
       // Play button click
       const playBtn = target.closest('.grid-item__play') as HTMLElement | null;

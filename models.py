@@ -366,3 +366,14 @@ class JobOutput(Base):
 
     job = relationship("Job", back_populates="outputs")
     media_item = relationship("MediaItem")
+
+
+class Bookmark(Base):
+    __tablename__ = "bookmarks"
+    __table_args__ = (UniqueConstraint("user_id", "target_type", "target_id"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    target_type = Column(String, nullable=False)  # media_item, release, track
+    target_id = Column(String, nullable=False)  # str to handle both int IDs and uuid strings
+    created_at = Column(DateTime, nullable=False, default=_utcnow)

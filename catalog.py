@@ -749,6 +749,34 @@ def reorder_tracks(code: str, body: TrackReorder, admin: User = Depends(require_
     return {"ok": True}
 
 
+@router.get("/tracks/{track_id}", tags=["Tracks"], summary="Get track by ID")
+def get_track_by_id(track_id: int, db: Session = Depends(get_db), user: User | None = Depends(optional_user)):
+    """Get a single track with release context. Public if release is published."""
+    track = db.query(Track).filter(Track.id == track_id).first()
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+
+    release = db.query(Release).filter(Release.id == track.release_id).first()
+    if not release:
+        raise HTTPException(status_code=404, detail="Release not found")
+    if release.status == "draft" and user is None:
+        raise HTTPException(status_code=404, detail="Track not found")
+
+    encoded = quote(release.product_code, safe="")
+    cover_url = f"/api/releases/{encoded}/cover?size=thumb" if release.cover_art_path else None
+
+    return {
+        "id": track.id,
+        "title": track.title,
+        "track_number": track.track_number,
+        "duration_seconds": track.duration_seconds,
+        "release_code": release.product_code,
+        "release_title": release.title,
+        "cover_url": cover_url,
+        "stream_url": track.audio_file_path and f"/api/releases/{encoded}/tracks/{track.id}/stream" or None,
+    }
+
+
 @router.get("/releases/{code}/tracks/{track_id}/stream", tags=["Tracks"], summary="Stream an audio track")
 def stream_track(code: str, track_id: int, request: Request, db: Session = Depends(get_db), user: User | None = Depends(optional_user)):
     """Stream an audio file with full HTTP Range request support for seeking.

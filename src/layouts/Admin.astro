@@ -35,6 +35,11 @@ const { title, current } = Astro.props;
         <li><a href="/admin/settings" aria-current={current === 'settings' ? 'page' : undefined}>Settings</a></li>
       </ul>
 
+      <div class="sidebar__section">Library</div>
+      <ul class="sidebar__nav">
+        <li><a href="/admin/bookmarks" aria-current={current === 'bookmarks' ? 'page' : undefined}>Bookmarks</a></li>
+      </ul>
+
       <div class="sidebar__section">Search Engine</div>
       <ul class="sidebar__nav">
         <li><a href="/admin/search" aria-current={current === 'search' ? 'page' : undefined}>Search</a></li>
@@ -108,6 +113,48 @@ const { title, current } = Astro.props;
       }
     }
     checkAuth();
+
+    // Bookmarks helper — shared across all admin pages
+    const bmCache = new Map<string, Set<string>>();
+    async function bmCheck(targetType: string, ids: string[]): Promise<Set<string>> {
+      if (ids.length === 0) return new Set();
+      const cached = bmCache.get(targetType);
+      if (cached) return cached;
+      try {
+        const res = await fetch('/api/bookmarks/check', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target_type: targetType, target_ids: ids }),
+        });
+        if (!res.ok) return new Set();
+        const data = await res.json();
+        const set = new Set<string>(data.bookmarked_ids);
+        bmCache.set(targetType, set);
+        return set;
+      } catch { return new Set(); }
+    }
+    async function bmToggle(targetType: string, targetId: string): Promise<boolean> {
+      try {
+        const res = await fetch('/api/bookmarks', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target_type: targetType, target_id: targetId }),
+        });
+        if (!res.ok) return false;
+        const data = await res.json();
+        const set = bmCache.get(targetType) || new Set<string>();
+        if (data.bookmarked) set.add(targetId);
+        else set.delete(targetId);
+        bmCache.set(targetType, set);
+        // Update all star elements on the page
+        document.querySelectorAll(`[data-bm-type="${targetType}"][data-bm-id="${targetId}"]`).forEach(el => {
+          el.classList.toggle('bookmarked', data.bookmarked);
+          el.setAttribute('title', data.bookmarked ? 'Remove bookmark' : 'Bookmark');
+        });
+        return data.bookmarked;
+      } catch { return false; }
+    }
+    (window as any).__bookmarks = { check: bmCheck, toggle: bmToggle, cache: bmCache };
 
     // Logout
     document.getElementById('logout-btn')?.addEventListener('click', async () => {

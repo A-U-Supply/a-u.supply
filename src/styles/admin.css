@@ -540,6 +540,35 @@
   to { opacity: 0; transform: translateX(20px); }
 }
 
+/* ─── Bookmark stars ─── */
+.bm-star {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--color-muted);
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+.bm-star::before {
+  content: '\2606'; /* empty star */
+}
+.bm-star:hover {
+  color: #b8860b;
+}
+.bm-star.bookmarked {
+  color: #b8860b;
+}
+.bm-star.bookmarked::before {
+  content: '\2605'; /* filled star */
+}
+/* Small variant for inline/grid use */
+.bm-star--sm {
+  font-size: 0.75rem;
+}
+
 /* ─── Empty states ─── */
 .empty-state {
   color: var(--color-muted);
