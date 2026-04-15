@@ -139,6 +139,15 @@ def _prepare_input(job: Job, manifest: dict, db: Session) -> Path:
     return job_dir
 
 
+def _param_active(spec: dict, params: dict) -> bool:
+    """Check if a param's depends_on condition is met."""
+    dep = spec.get("depends_on")
+    if not dep:
+        return True
+    dep_values = dep.get("values", [dep["value"]] if "value" in dep else [])
+    return params.get(dep.get("param")) in dep_values
+
+
 def _build_docker_command(job: Job, manifest: dict, job_dir: Path) -> list[str]:
     """Build the docker run command with proper input files, params, and output flags."""
     image = manifest["image"]
@@ -148,6 +157,13 @@ def _build_docker_command(job: Job, manifest: dict, job_dir: Path) -> list[str]:
     output_flag = manifest.get("output_flag", "")
     params = json.loads(job.params)
     param_specs = manifest.get("params", {})
+
+    # command_map: override command based on a param value
+    command_map = manifest.get("command_map")
+    if command_map:
+        map_param = command_map.get("param", "")
+        map_val = params.get(map_param, "")
+        command = command_map.get("values", {}).get(map_val, command)
 
     # The job dir on the host filesystem — this is what Docker sees
     host_job_dir = f"/var/lib/dokku/data/storage/au-supply-jobs/{job.id}"
@@ -169,7 +185,7 @@ def _build_docker_command(job: Job, manifest: dict, job_dir: Path) -> list[str]:
     # Positional params (inserted between command and input files)
     positional: list[tuple[int, str]] = []
     for pname, spec in param_specs.items():
-        if "position" not in spec:
+        if "position" not in spec or not _param_active(spec, params):
             continue
         val = params.get(pname)
         if val is None:
@@ -191,6 +207,10 @@ def _build_docker_command(job: Job, manifest: dict, job_dir: Path) -> list[str]:
         value = params.get(param_name)
         flag = spec.get("flag")
         if "position" in spec or not flag or value is None:
+            continue
+
+        # Skip params whose dependency isn't met
+        if not _param_active(spec, params):
             continue
 
         # Skip defaults to keep command clean
