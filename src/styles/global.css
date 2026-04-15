@@ -47,6 +47,12 @@ body.player-active {
   padding-bottom: 80px;
 }
 
+@media (max-width: 639px) {
+  body.player-active {
+    padding-bottom: 120px;
+  }
+}
+
 img {
   max-width: 100%;
   height: auto;
