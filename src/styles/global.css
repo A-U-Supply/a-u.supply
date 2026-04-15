@@ -43,20 +43,13 @@ body {
   background: var(--color-bg);
 }
 
-body.player-active {
-  padding-bottom: 80px;
-}
-
-body.player-active .site-footer {
-  padding-bottom: 80px;
+body.player-active .player-slot {
+  min-height: 72px;
 }
 
 @media (max-width: 639px) {
-  body.player-active {
-    padding-bottom: 120px;
-  }
-  body.player-active .site-footer {
-    padding-bottom: 120px;
+  body.player-active .player-slot {
+    min-height: 100px;
   }
 }
 
