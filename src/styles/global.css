@@ -43,16 +43,6 @@ body {
   background: var(--color-bg);
 }
 
-body.player-active .player-spacer {
-  height: 72px;
-}
-
-@media (max-width: 639px) {
-  body.player-active .player-spacer {
-    height: 100px;
-  }
-}
-
 img {
   max-width: 100%;
   height: auto;
