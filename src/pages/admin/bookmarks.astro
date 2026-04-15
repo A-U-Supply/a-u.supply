@@ -130,6 +130,28 @@ import Admin from '../../layouts/Admin.astro';
   }
   .bm-card__thumb:hover .bm-card__add { opacity: 1; }
   .bm-card__add:hover { background: rgba(184,134,11,0.8); border-color: #b8860b; }
+  .bm-card__ws {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+    font-size: 0.65rem;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+    padding: 0;
+    z-index: 1;
+  }
+  .bm-card__thumb:hover .bm-card__ws { opacity: 1; }
+  .bm-card__ws:hover { background: rgba(184,134,11,0.8); border-color: #b8860b; }
+  .bm-card__ws svg { width: 14px; height: 14px; fill: #fff; }
   .bm-card__info {
     padding: 4px 6px;
     border-top: 1px solid var(--color-border);
@@ -195,6 +217,7 @@ import Admin from '../../layouts/Admin.astro';
     let selectedIds = new Set<string>();
 
     const playSvg = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
+    const briefcaseSvg = `<svg viewBox="0 0 24 24"><path d="M20 7h-4V5c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zM10 5h4v2h-4V5z"/></svg>`;
 
     async function loadBookmarks() {
       loadingEl.style.display = 'block';
@@ -318,6 +341,7 @@ import Admin from '../../layouts/Admin.astro';
             <span class="bm-card__type-badge">${item.target_type.replace('_', ' ')}</span>
             <img src="${m.thumb}" alt="" loading="lazy"${thumbStyle} />
             ${playBtn}
+            ${item.target_type === 'media_item' ? `<button class="bm-card__ws" data-ws-id="${item.target_id}" title="Add to workspace">${briefcaseSvg}</button>` : ''}
           </div>
           <div class="bm-card__info">
             <div class="bm-card__name">
@@ -340,7 +364,7 @@ import Admin from '../../layouts/Admin.astro';
     }
 
     // Delegated click handling
-    gridEl.addEventListener('click', (e) => {
+    gridEl.addEventListener('click', async (e) => {
       const target = e.target as HTMLElement;
 
       // Star click — remove bookmark
@@ -420,6 +444,30 @@ import Admin from '../../layouts/Admin.astro';
         return;
       }
 
+      // Workspace button
+      const wsBtn = target.closest('.bm-card__ws') as HTMLElement | null;
+      if (wsBtn) {
+        e.stopPropagation();
+        const mediaId = wsBtn.dataset.wsId!;
+        const wsId = localStorage.getItem('active_workspace_id');
+        if (!wsId) {
+          (window as any).toast.error('No active workspace. Create one from the workspace page first.');
+          return;
+        }
+        try {
+          const res = await fetch(`/api/workspaces/${wsId}/items`, {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ media_item_ids: [mediaId] }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            (window as any).toast.success(data.already_present > 0 ? 'Already in workspace' : 'Added to workspace');
+          } else { (window as any).toast.error('Failed to add to workspace'); }
+        } catch { (window as any).toast.error('Failed to add to workspace'); }
+        return;
+      }
+
       // Checkbox
       const checkbox = target.closest('.bm-card__check') as HTMLInputElement | null;
       if (checkbox) {
@@ -433,7 +481,7 @@ import Admin from '../../layouts/Admin.astro';
 
       // Card click — navigate
       const card = target.closest('.bm-card') as HTMLElement | null;
-      if (card && !target.closest('.bm-card__check')) {
+      if (card && !target.closest('.bm-card__check') && !target.closest('.bm-card__ws')) {
         const href = card.dataset.href;
         if (href && href !== '#') window.location.href = href;
       }

@@ -80,6 +80,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     <!-- Actions -->
     <div class="detail-actions">
+      <button class="action-btn" id="add-to-workspace-btn">Add to Workspace</button>
       <a class="action-btn" id="download-btn" href="#" download style="display:none;">Download Source</a>
       <button class="action-btn" id="re-extract-btn">Re-extract Metadata</button>
       <button class="action-btn action-btn--danger" id="delete-btn">Delete Media</button>
@@ -555,6 +556,26 @@ import Admin from '../../../layouts/Admin.astro';
         currentItem.tags = (currentItem.tags || []).filter((t: string) => t !== tag);
         renderTags();
       } catch { (window as any).toast.error('Failed to remove tag'); }
+    });
+
+    // Add to workspace
+    document.getElementById('add-to-workspace-btn')?.addEventListener('click', async () => {
+      const wsId = localStorage.getItem('active_workspace_id');
+      if (!wsId) {
+        (window as any).toast.error('No active workspace. Create one from the workspace page first.');
+        return;
+      }
+      try {
+        const res = await fetch(`/api/workspaces/${wsId}/items`, {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ media_item_ids: [mediaId] }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          (window as any).toast.success(data.already_present > 0 ? 'Already in workspace' : 'Added to workspace');
+        } else { (window as any).toast.error('Failed to add to workspace'); }
+      } catch { (window as any).toast.error('Failed to add to workspace'); }
     });
 
     // Re-extract
