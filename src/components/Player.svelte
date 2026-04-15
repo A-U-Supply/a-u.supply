@@ -540,6 +540,7 @@
 <style>
   .player__spacer {
     height: 0;
+    background: #1a1a1a;
   }
   .player__spacer--active {
     height: 72px;
