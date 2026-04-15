@@ -531,13 +531,25 @@ def search_facets(
             pass
     uploaders = list(uploaders_set)
 
-    # Distinct output indexes
-    output_indexes = [
+    # Output indexes: from existing media items + from app manifests
+    output_indexes_set = set(
         r[0] for r in
         db.query(distinct(MediaItem.output_index))
         .filter(MediaItem.output_index.isnot(None))
         .all()
-    ]
+    )
+    # Also include indexes defined in app manifests (so they show before any outputs exist)
+    from models import AppDefinition
+    import tomllib as _tomllib
+    for (manifest_str,) in db.query(AppDefinition.manifest).filter(AppDefinition.enabled == True).all():
+        try:
+            m = _tomllib.loads(manifest_str)
+            idx = m.get("output", {}).get("index")
+            if idx:
+                output_indexes_set.add(idx)
+        except Exception:
+            pass
+    output_indexes = list(output_indexes_set)
 
     return {
         "channels": sorted(channels),
