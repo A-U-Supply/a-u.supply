@@ -2,7 +2,7 @@ name = "rottengenizdat"
 display_name = "RGZ-9 Latent Space Press"
 description = "Feed audio through RAVE neural networks. Latent space distortion from subtle to fever-dream."
 image = "ghcr.io/a-u-supply/rottengenizdat:latest"
-command = "rotten rave"
+command = "rave"
 timeout_seconds = 600
 
 [input]
