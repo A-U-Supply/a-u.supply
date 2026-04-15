@@ -299,6 +299,7 @@ import Admin from '../../../layouts/Admin.astro';
                 title: item.filename,
                 release_title: '',
                 release_code: '',
+                media_type: item.media_type,
                 stream_url: `/api/media/${mediaId}/file`,
                 cover_url: (item.media_type === 'image' || item.media_type === 'video')
                   ? `/api/media/${mediaId}/thumbnail` : '/assets/default-cover.jpg',

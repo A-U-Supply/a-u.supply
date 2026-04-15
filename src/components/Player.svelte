@@ -11,10 +11,12 @@
   let paused = $state(true);
   let volume = $state(0.8);
   let visible = $state(false);
+  let pipOpen = $state(true);
 
-  let audioEl = $state(undefined);
+  let mediaEl = $state(undefined);
 
   let currentTrack = $derived(currentIndex >= 0 && currentIndex < queue.length ? queue[currentIndex] : null);
+  let isVideo = $derived(currentTrack?.media_type === 'video');
 
   function fmt(secs) {
     if (!secs || !isFinite(secs)) return '0:00';
@@ -38,20 +40,21 @@
   function loadTrack(idx) {
     if (idx < 0 || idx >= queue.length) return;
     currentIndex = idx;
+    pipOpen = true;
     requestAnimationFrame(() => {
-      if (audioEl) {
-        audioEl.load();
-        audioEl.play().catch(() => {});
+      if (mediaEl) {
+        mediaEl.load();
+        mediaEl.play().catch(() => {});
       }
     });
   }
 
   function togglePlay() {
-    if (!audioEl || !currentTrack) return;
+    if (!mediaEl || !currentTrack) return;
     if (paused) {
-      audioEl.play().catch(() => {});
+      mediaEl.play().catch(() => {});
     } else {
-      audioEl.pause();
+      mediaEl.pause();
     }
   }
 
@@ -122,20 +125,49 @@
 </script>
 
 {#if visible}
-<div class="player">
-  <audio
-    bind:this={audioEl}
+
+{#if isVideo && pipOpen}
+<div class="player__pip">
+  <button class="player__pip-close" onclick={() => pipOpen = false} title="Close video">&times;</button>
+  <!-- svelte-ignore a11y_media_has_caption -->
+  <video
+    bind:this={mediaEl}
     bind:currentTime
     bind:duration
     bind:paused
     bind:volume
     onended={next}
     src={currentTrack?.stream_url}
+    poster={currentTrack?.cover_url}
     preload="metadata"
-  ></audio>
+  ></video>
+</div>
+{/if}
+
+<div class="player">
+  {#if !isVideo || !pipOpen}
+    <audio
+      bind:this={mediaEl}
+      bind:currentTime
+      bind:duration
+      bind:paused
+      bind:volume
+      onended={next}
+      src={currentTrack?.stream_url}
+      preload="metadata"
+    ></audio>
+  {/if}
 
   <div class="player__inner">
     <div class="player__info">
+      {#if isVideo && !pipOpen}
+        <button class="player__pip-reopen" onclick={() => pipOpen = true} title="Show video">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <rect x="1" y="2" width="14" height="11" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="8" y="7" width="6" height="5" rx="0.5"/>
+          </svg>
+        </button>
+      {/if}
       {#if currentTrack?.cover_url}
         <img
           class="player__cover"
@@ -380,6 +412,57 @@
 
   .player__range--vol { width: 80px; }
 
+  /* Video PiP panel */
+  .player__pip {
+    position: fixed;
+    bottom: 72px;
+    right: 1rem;
+    z-index: 9998;
+    width: 320px;
+    background: #000;
+    border: 1px solid #333;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+  }
+
+  .player__pip video {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .player__pip-close {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    z-index: 1;
+    background: rgba(0,0,0,0.6);
+    border: none;
+    color: #fff;
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1.2;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .player__pip:hover .player__pip-close { opacity: 1; }
+  .player__pip-close:hover { background: rgba(0,0,0,0.9); }
+
+  .player__pip-reopen {
+    background: none;
+    border: 1px solid #555;
+    color: #ccc;
+    cursor: pointer;
+    padding: 0.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .player__pip-reopen:hover { color: #fff; border-color: #b8860b; }
+
   @media (max-width: 639px) {
     .player { padding: 0.375rem 0.5rem; }
     .player__inner { flex-wrap: wrap; gap: 0.375rem; }
@@ -387,5 +470,10 @@
     .player__controls { order: 2; flex: 0 0 auto; }
     .player__scrubber { order: 3; flex: 1 1 auto; min-width: 0; }
     .player__volume { display: none; }
+
+    .player__pip {
+      width: 200px;
+      bottom: 96px;
+    }
   }
 </style>
