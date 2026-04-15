@@ -275,6 +275,66 @@ import Admin from '../../../layouts/Admin.astro';
     display: flex;
     justify-content: flex-end;
   }
+
+  /* Input count validation messages */
+  .config-input-count {
+    font-size: 0.75rem;
+    margin-top: 6px;
+    padding: 4px 8px;
+    font-family: var(--font-mono);
+  }
+  .input-count-ok { color: #6a9955; }
+  .input-count-fill { color: #dcdcaa; }
+  .input-count-over { color: #f44747; font-weight: bold; }
+
+  /* Multi-select chain picker */
+  .multi-select-wrap { margin-top: 4px; }
+  .ms-picker {
+    display: flex;
+    gap: var(--space-xs);
+  }
+  .ms-picker select {
+    flex: 1;
+    padding: var(--space-xs) var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    color: var(--color-text);
+  }
+  .ms-add-btn {
+    white-space: nowrap;
+    padding: var(--space-xs) var(--space-sm) !important;
+    font-size: var(--text-sm) !important;
+  }
+  .ms-list {
+    list-style: none;
+    padding: 0;
+    margin: var(--space-xs) 0 0 0;
+  }
+  .ms-list li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: 4px 8px;
+    border: 1px solid var(--color-border);
+    margin-bottom: -1px;
+    font-size: var(--text-sm);
+  }
+  .ms-num {
+    color: var(--color-muted);
+    min-width: 1.5em;
+  }
+  .ms-label { flex: 1; }
+  .ms-remove {
+    background: none;
+    border: none;
+    color: var(--color-muted);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0 4px;
+  }
+  .ms-remove:hover { color: #f44747; }
 </style>
 
 <style>
@@ -532,13 +592,52 @@ import Admin from '../../../layouts/Admin.astro';
         }
       };
 
+      // Helper: look up input_count for a selected option across all option_groups
+      const getInputCount = (spec: any, value: string): number | null => {
+        for (const g of (spec.option_groups || [])) {
+          for (const o of g.options) {
+            if (typeof o === 'object' && o.value === value && o.input_count != null) {
+              return o.input_count;
+            }
+          }
+        }
+        return null;
+      };
+
       for (const [name, spec] of Object.entries(paramSpecs) as [string, any][]) {
         const field = document.createElement('div');
         field.className = 'config-field';
         field.setAttribute('data-param-field', name);
 
         let inputHtml = '';
-        if (spec.type === 'select') {
+        if (spec.type === 'multi_select') {
+          // Multi-select: dropdown picker + ordered list of selections
+          let groupedOpts = '';
+          if (spec.option_groups) {
+            groupedOpts = spec.option_groups.map((g: any) => {
+              const opts = g.options.map((o: any) => {
+                const val = typeof o === 'string' ? o : o.value;
+                const label = typeof o === 'string' ? o : o.label;
+                const ic = typeof o === 'object' && o.input_count ? ` (${o.input_count} img)` : '';
+                return `<option value="${val}">${label}${ic}</option>`;
+              }).join('');
+              return `<optgroup label="${g.label}">${opts}</optgroup>`;
+            }).join('');
+          } else {
+            groupedOpts = (spec.options || []).map((o: string) =>
+              `<option value="${o}">${o}</option>`
+            ).join('');
+          }
+          inputHtml = `
+            <div class="multi-select-wrap" data-ms-name="${name}">
+              <div class="ms-picker">
+                <select class="ms-dropdown"><option value="">Add recipe to chain...</option>${groupedOpts}</select>
+                <button type="button" class="action-btn ms-add-btn">Add</button>
+              </div>
+              <ol class="ms-list"></ol>
+              <input type="hidden" name="${name}" value="[]" />
+            </div>`;
+        } else if (spec.type === 'select') {
           if (spec.option_groups) {
             const groups = spec.option_groups.map((g: any) => {
               const opts = g.options.map((o: any) => {
@@ -571,32 +670,101 @@ import Admin from '../../../layouts/Admin.astro';
           ${spec.description ? `<div class="config-desc">${spec.description}</div>` : ''}
           ${inputHtml}
           <div class="config-option-desc" data-option-desc="${name}" style="display:none;"></div>
+          <div class="config-input-count" data-input-count="${name}" style="display:none;"></div>
           <div class="param-error login-error" data-param="${name}" style="display:none; text-align:left;"></div>
         `;
         paramsContainer.appendChild(field);
 
-        // For grouped selects with option descriptions, show the selected option's description
+        // Wire up multi_select add/remove behavior
+        if (spec.type === 'multi_select') {
+          const wrap = field.querySelector(`.multi-select-wrap[data-ms-name="${name}"]`)!;
+          const dropdown = wrap.querySelector('.ms-dropdown') as HTMLSelectElement;
+          const addBtn = wrap.querySelector('.ms-add-btn')!;
+          const list = wrap.querySelector('.ms-list')!;
+          const hiddenInput = wrap.querySelector(`input[name="${name}"]`) as HTMLInputElement;
+          let selected: string[] = [];
+
+          const syncHidden = () => {
+            hiddenInput.value = JSON.stringify(selected);
+            hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+          };
+
+          const renderList = () => {
+            list.innerHTML = selected.map((val, i) => {
+              // Find label for this value
+              let label = val;
+              for (const g of (spec.option_groups || [])) {
+                for (const o of g.options) {
+                  if (typeof o === 'object' && o.value === val) { label = o.label || val; break; }
+                }
+              }
+              return `<li data-idx="${i}">
+                <span class="ms-num">${i + 1}.</span>
+                <span class="ms-label">${label}</span>
+                <button type="button" class="ms-remove" data-idx="${i}" title="Remove">&times;</button>
+              </li>`;
+            }).join('');
+            list.querySelectorAll('.ms-remove').forEach(btn => {
+              btn.addEventListener('click', () => {
+                const idx = parseInt((btn as HTMLElement).dataset.idx!);
+                selected.splice(idx, 1);
+                renderList();
+                syncHidden();
+              });
+            });
+          };
+
+          addBtn.addEventListener('click', () => {
+            if (!dropdown.value) return;
+            selected.push(dropdown.value);
+            dropdown.value = '';
+            renderList();
+            syncHidden();
+          });
+        }
+
+        // For grouped selects with option descriptions and input_count, show both
         if (spec.type === 'select' && spec.option_groups) {
           const selectEl = field.querySelector('select')!;
           const descEl = field.querySelector(`.config-option-desc[data-option-desc="${name}"]`) as HTMLElement;
+          const countEl = field.querySelector(`.config-input-count[data-input-count="${name}"]`) as HTMLElement;
           const updateOptionDesc = () => {
             const val = (selectEl as HTMLSelectElement).value;
             let desc = '';
+            let inputCount: number | null = null;
             for (const g of spec.option_groups) {
               for (const o of g.options) {
                 const oVal = typeof o === 'string' ? o : o.value;
-                if (oVal === val && typeof o === 'object' && o.description) {
-                  desc = o.description;
+                if (oVal === val && typeof o === 'object') {
+                  if (o.description) desc = o.description;
+                  if (o.input_count != null) inputCount = o.input_count;
                   break;
                 }
               }
-              if (desc) break;
+              if (desc || inputCount) break;
             }
             if (desc) {
               descEl.textContent = desc;
               descEl.style.display = 'block';
             } else {
               descEl.style.display = 'none';
+            }
+            // Show input count validation info
+            if (inputCount !== null) {
+              const diff = totalItems - inputCount;
+              if (diff === 0) {
+                countEl.textContent = `Requires ${inputCount} images. You have ${totalItems} selected. Ready.`;
+                countEl.className = 'config-input-count input-count-ok';
+              } else if (diff < 0) {
+                countEl.textContent = `Requires ${inputCount} images. You have ${totalItems} selected. ${-diff} more will be filled randomly from search.`;
+                countEl.className = 'config-input-count input-count-fill';
+              } else {
+                countEl.textContent = `Requires ${inputCount} images. You have ${totalItems} selected. Remove ${diff} item(s) before submitting.`;
+                countEl.className = 'config-input-count input-count-over';
+              }
+              countEl.style.display = 'block';
+            } else {
+              countEl.style.display = 'none';
             }
           };
           selectEl.addEventListener('change', updateOptionDesc);
@@ -649,6 +817,7 @@ import Admin from '../../../layouts/Admin.astro';
       };
 
       let hasFieldError = false;
+      let needsRandomFill = false;
       for (const [name, spec] of Object.entries(manifest.params || {}) as [string, any][]) {
         // Skip inactive (hidden) params
         if (!isActive(spec)) continue;
@@ -660,21 +829,62 @@ import Admin from '../../../layouts/Admin.astro';
         } else if (spec.type === 'float') {
           jobParams[name] = parseFloat(el.value);
         } else if (spec.type === 'int') {
+          if (el.value.trim() === '') {
+            // Optional int with no value — omit from params
+            continue;
+          }
           jobParams[name] = parseInt(el.value);
+        } else if (spec.type === 'multi_select') {
+          try { jobParams[name] = JSON.parse(el.value); } catch { jobParams[name] = []; }
         } else {
           jobParams[name] = el.value;
         }
 
         // Validate required params
         if (spec.required && spec.type !== 'bool') {
-          const val = String(el.value).trim();
-          if (!val) {
-            const errDiv = paramsContainer.querySelector(`.param-error[data-param="${name}"]`) as HTMLElement;
-            if (errDiv) {
-              errDiv.textContent = `${spec.label || name} is required`;
-              errDiv.style.display = 'block';
+          if (spec.type === 'multi_select') {
+            const arr = jobParams[name];
+            const minSel = spec.min_selections || 2;
+            if (!Array.isArray(arr) || arr.length < minSel) {
+              const errDiv = paramsContainer.querySelector(`.param-error[data-param="${name}"]`) as HTMLElement;
+              if (errDiv) {
+                errDiv.textContent = `${spec.label || name} requires at least ${minSel} selections`;
+                errDiv.style.display = 'block';
+              }
+              hasFieldError = true;
             }
-            hasFieldError = true;
+          } else {
+            const val = String(el.value).trim();
+            if (!val) {
+              const errDiv = paramsContainer.querySelector(`.param-error[data-param="${name}"]`) as HTMLElement;
+              if (errDiv) {
+                errDiv.textContent = `${spec.label || name} is required`;
+                errDiv.style.display = 'block';
+              }
+              hasFieldError = true;
+            }
+          }
+        }
+
+        // Check per-recipe input_count validation
+        if (spec.type === 'select' && spec.option_groups) {
+          const selectedVal = el.value;
+          for (const g of spec.option_groups) {
+            for (const o of g.options) {
+              if (typeof o === 'object' && o.value === selectedVal && o.input_count != null) {
+                const required = o.input_count as number;
+                if (totalItems > required) {
+                  const errDiv = paramsContainer.querySelector(`.param-error[data-param="${name}"]`) as HTMLElement;
+                  if (errDiv) {
+                    errDiv.textContent = `This recipe requires ${required} images but you have ${totalItems}. Remove ${totalItems - required} item(s).`;
+                    errDiv.style.display = 'block';
+                  }
+                  hasFieldError = true;
+                } else if (totalItems < required) {
+                  needsRandomFill = true;
+                }
+              }
+            }
           }
         }
       }
@@ -693,6 +903,7 @@ import Admin from '../../../layouts/Admin.astro';
             app_name: app.name,
             media_item_ids: mediaIds,
             params: jobParams,
+            random_fill: needsRandomFill,
           }) });
 
         if (res.ok) {

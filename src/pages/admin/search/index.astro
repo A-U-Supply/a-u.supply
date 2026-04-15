@@ -99,6 +99,7 @@ import Admin from '../../../layouts/Admin.astro';
           <select id="sort-by">
             <option value="newest">Newest</option>
             <option value="oldest">Oldest</option>
+            <option value="random">Random</option>
             <option value="most_reactions">Most Reactions</option>
             <option value="largest">Largest</option>
             <option value="longest">Longest</option>
@@ -998,6 +999,7 @@ import Admin from '../../../layouts/Admin.astro';
       const sortMap: Record<string, string> = {
         newest: 'created_at:desc',
         oldest: 'created_at:asc',
+        random: 'random',
         most_reactions: 'total_reaction_count:desc',
         largest: 'file_size_bytes:desc',
         longest: 'duration_seconds:desc',
