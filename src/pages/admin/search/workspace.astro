@@ -48,39 +48,101 @@ import Admin from '../../../layouts/Admin.astro';
 <style>
   .workspace-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: var(--space-sm);
     margin-top: var(--space-md);
   }
   .ws-item {
     border: 1px solid var(--color-border);
-    padding: var(--space-xs);
     font-size: var(--text-sm);
     font-family: var(--font-mono);
     position: relative;
+    transition: border-color 0.15s;
   }
-  .ws-item .ws-type {
-    color: var(--color-muted);
-    font-size: 0.65rem;
+  .ws-item:hover { border-color: var(--color-text); }
+  .ws-thumb {
+    width: 100%;
+    aspect-ratio: 1;
+    background: #111;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .ws-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .ws-thumb .ws-play {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.35);
+    opacity: 0;
+    transition: opacity 0.15s;
+    cursor: pointer;
+    border: none;
+    padding: 0;
+  }
+  .ws-thumb:hover .ws-play { opacity: 1; }
+  .ws-thumb .ws-play svg {
+    width: 32px;
+    height: 32px;
+    fill: #fff;
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
+  }
+  .ws-thumb .ws-duration {
+    position: absolute;
+    bottom: 3px;
+    right: 4px;
+    font-size: 0.6rem;
+    background: rgba(0,0,0,0.7);
+    color: #fff;
+    padding: 1px 4px;
+    font-family: var(--font-mono);
+  }
+  .ws-thumb .ws-type-badge {
+    position: absolute;
+    top: 3px;
+    left: 4px;
+    font-size: 0.55rem;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    padding: 1px 4px;
     text-transform: uppercase;
+    font-family: var(--font-mono);
+  }
+  .ws-info {
+    padding: 4px 6px;
+    border-top: 1px solid var(--color-border);
   }
   .ws-item .ws-name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-size: 0.65rem;
   }
   .ws-item .ws-remove {
     position: absolute;
     top: 2px;
     right: 4px;
-    background: none;
+    background: rgba(0,0,0,0.5);
     border: none;
-    color: var(--color-muted);
+    color: #fff;
     cursor: pointer;
     font-size: var(--text-sm);
-    padding: 0;
+    padding: 0 3px;
+    z-index: 2;
+    line-height: 1.2;
+    opacity: 0;
+    transition: opacity 0.15s;
   }
-  .ws-item .ws-remove:hover { color: var(--color-text); }
+  .ws-item:hover .ws-remove { opacity: 1; }
+  .ws-item .ws-remove:hover { background: rgba(0,0,0,0.8); }
   .process-bar {
     display: flex;
     align-items: center;
@@ -169,22 +231,76 @@ import Admin from '../../../layouts/Admin.astro';
       gridEl.style.display = 'grid';
       processBar.style.display = 'flex';
 
-      gridEl.innerHTML = data.items.map((item: any) => `
-        <div class="ws-item">
+      const playSvg = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
+
+      function fmtDur(s: number) {
+        const m = Math.floor(s / 60);
+        const sec = Math.floor(s % 60);
+        return `${m}:${sec.toString().padStart(2, '0')}`;
+      }
+
+      gridEl.innerHTML = data.items.map((item: any) => {
+        const hasThumb = item.media_type === 'image' || item.media_type === 'video';
+        const thumb = hasThumb
+          ? `<img src="/api/media/${item.media_item_id}/thumbnail" alt="" loading="lazy" />`
+          : `<img src="/assets/default-cover.jpg" alt="${item.media_type}" loading="lazy" style="image-rendering: pixelated;" />`;
+        const canPlay = item.media_type === 'audio' || item.media_type === 'video';
+        const playBtn = canPlay
+          ? `<button class="ws-play" data-play-id="${item.media_item_id}" data-play-type="${item.media_type}" title="Play">${playSvg}</button>`
+          : '';
+        const dur = item.duration_seconds
+          ? `<span class="ws-duration">${fmtDur(item.duration_seconds)}</span>`
+          : '';
+        return `<div class="ws-item">
           <button class="ws-remove" data-id="${item.media_item_id}" title="Remove">&times;</button>
-          <div class="ws-type">${item.media_type}</div>
-          <div class="ws-name" title="${item.filename}">${item.filename}</div>
-        </div>
-      `).join('');
+          <div class="ws-thumb">
+            <span class="ws-type-badge">${item.media_type}</span>
+            ${thumb}
+            ${playBtn}
+            ${dur}
+          </div>
+          <div class="ws-info">
+            <div class="ws-name" title="${item.filename}">${item.filename}</div>
+          </div>
+        </div>`;
+      }).join('');
 
       // Remove buttons
       gridEl.querySelectorAll('.ws-remove').forEach(btn => {
-        btn.addEventListener('click', async () => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
           const id = (btn as HTMLElement).dataset.id;
           await fetch(`/api/workspaces/${wsId}/items`, { method: 'DELETE', credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ media_item_ids: [id] }) });
           loadItems();
+        });
+      });
+
+      // Play buttons — dispatch to the persistent player
+      gridEl.querySelectorAll('.ws-play').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const el = btn as HTMLElement;
+          const mediaId = el.dataset.playId!;
+          const item = data.items.find((i: any) => i.media_item_id === mediaId);
+          if (!item) return;
+          document.dispatchEvent(new CustomEvent('player:queue', {
+            detail: {
+              tracks: [{
+                track_id: mediaId,
+                title: item.filename,
+                release_title: '',
+                release_code: '',
+                stream_url: `/api/media/${mediaId}/file`,
+                cover_url: (item.media_type === 'image' || item.media_type === 'video')
+                  ? `/api/media/${mediaId}/thumbnail` : '/assets/default-cover.jpg',
+                duration: item.duration_seconds || 0,
+                entity_name: '',
+              }],
+              startIndex: 0,
+            },
+          }));
         });
       });
 

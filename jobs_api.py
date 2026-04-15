@@ -33,7 +33,9 @@ from models import (
     AppDefinition,
     Job,
     JobOutput,
+    MediaAudioMeta,
     MediaItem,
+    MediaVideoMeta,
     User,
     Workspace,
     WorkspaceItem,
@@ -556,7 +558,10 @@ def list_workspace_items(
     total = db.query(func.count(WorkspaceItem.id)).filter(WorkspaceItem.workspace_id == ws.id).scalar()
     rows = (
         db.query(WorkspaceItem)
-        .options(joinedload(WorkspaceItem.media_item))
+        .options(
+            joinedload(WorkspaceItem.media_item).joinedload(MediaItem.audio_meta),
+            joinedload(WorkspaceItem.media_item).joinedload(MediaItem.video_meta),
+        )
         .filter(WorkspaceItem.workspace_id == ws.id)
         .order_by(WorkspaceItem.added_at.desc())
         .offset((page - 1) * per_page)
@@ -567,14 +572,22 @@ def list_workspace_items(
     items = []
     for wi in rows:
         mi = wi.media_item
-        items.append({
+        dur = None
+        if mi.media_type == "audio" and mi.audio_meta:
+            dur = mi.audio_meta.duration_seconds
+        elif mi.media_type == "video" and mi.video_meta:
+            dur = mi.video_meta.duration_seconds
+        entry: dict = {
             "workspace_item_id": wi.id,
             "media_item_id": mi.id,
             "filename": mi.filename,
             "media_type": mi.media_type,
             "file_size_bytes": mi.file_size_bytes,
             "added_at": wi.added_at.isoformat(),
-        })
+        }
+        if dur is not None:
+            entry["duration_seconds"] = dur
+        items.append(entry)
 
     return {"items": items, "total": total, "page": page, "per_page": per_page}
 
