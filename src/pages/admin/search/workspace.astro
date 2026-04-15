@@ -261,18 +261,30 @@ import Admin from '../../../layouts/Admin.astro';
           inputHtml = `<label style="display:inline;"><input type="checkbox" name="${name}" ${spec.default ? 'checked' : ''} /> Enabled</label>`;
         } else if (spec.type === 'float' || spec.type === 'int') {
           const step = spec.type === 'float' ? '0.1' : '1';
-          inputHtml = `<input type="number" name="${name}" value="${spec.default ?? ''}" min="${spec.min ?? ''}" max="${spec.max ?? ''}" step="${step}" />`;
+          const req = spec.required ? 'required' : '';
+          inputHtml = `<input type="number" name="${name}" value="${spec.default ?? ''}" min="${spec.min ?? ''}" max="${spec.max ?? ''}" step="${step}" ${req} />`;
         } else {
-          inputHtml = `<input type="text" name="${name}" value="${spec.default ?? ''}" />`;
+          const req = spec.required ? 'required' : '';
+          inputHtml = `<input type="text" name="${name}" value="${spec.default ?? ''}" ${req} />`;
         }
 
         field.innerHTML = `
           <label>${spec.label || name}${spec.required ? ' *' : ''}</label>
           ${spec.description ? `<div class="config-desc">${spec.description}</div>` : ''}
           ${inputHtml}
+          <div class="param-error login-error" data-param="${name}" style="display:none; text-align:left;"></div>
         `;
         paramsContainer.appendChild(field);
       }
+
+      // Clear inline errors on input
+      paramsContainer.querySelectorAll('input, select').forEach(el => {
+        el.addEventListener('input', () => {
+          const name = (el as HTMLInputElement).name;
+          const errDiv = paramsContainer.querySelector(`.param-error[data-param="${name}"]`) as HTMLElement;
+          if (errDiv) errDiv.style.display = 'none';
+        });
+      });
 
       document.getElementById('config-dialog')!.style.display = 'flex';
     });
@@ -290,6 +302,12 @@ import Admin from '../../../layouts/Admin.astro';
       const jobParams: Record<string, any> = {};
       const manifest = app.manifest;
 
+      // Clear previous inline errors
+      paramsContainer.querySelectorAll('.param-error').forEach(el => {
+        (el as HTMLElement).style.display = 'none';
+      });
+
+      let hasFieldError = false;
       for (const [name, spec] of Object.entries(manifest.params || {}) as [string, any][]) {
         const el = paramsContainer.querySelector(`[name="${name}"]`) as HTMLInputElement | HTMLSelectElement;
         if (!el) continue;
@@ -302,7 +320,22 @@ import Admin from '../../../layouts/Admin.astro';
         } else {
           jobParams[name] = el.value;
         }
+
+        // Validate required params
+        if (spec.required && spec.type !== 'bool') {
+          const val = String(el.value).trim();
+          if (!val) {
+            const errDiv = paramsContainer.querySelector(`.param-error[data-param="${name}"]`) as HTMLElement;
+            if (errDiv) {
+              errDiv.textContent = `${spec.label || name} is required`;
+              errDiv.style.display = 'block';
+            }
+            hasFieldError = true;
+          }
+        }
       }
+
+      if (hasFieldError) return;
 
       // Get all workspace item IDs
       const allRes = await fetch(`/api/workspaces/${wsId}/items?page=1&per_page=200`, { credentials: 'include' });
