@@ -19,7 +19,8 @@ import Admin from '../../../layouts/Admin.astro';
         <div class="form-row">
           <div class="form-group">
             <label for="title">Title</label>
-            <input type="text" id="title" placeholder="Release title" />
+            <input type="text" id="title" placeholder="Release title" required />
+            <div id="title-error" class="login-error" style="display:none; text-align:left;"></div>
           </div>
         </div>
 
@@ -1030,6 +1031,11 @@ import Admin from '../../../layouts/Admin.astro';
     renderFreeform();
   });
 
+  // Clear inline validation errors on input
+  document.getElementById('title')?.addEventListener('input', () => {
+    document.getElementById('title-error')!.style.display = 'none';
+  });
+
   // ---- Save ----
   document.getElementById('save-btn')?.addEventListener('click', () => saveChanges(false));
   document.getElementById('toggle-publish-btn')?.addEventListener('click', () => {
@@ -1062,9 +1068,12 @@ import Admin from '../../../layouts/Admin.astro';
     const formatSpecs = (document.getElementById('format-specs') as HTMLInputElement).value;
     const description = (document.getElementById('description') as HTMLTextAreaElement).value;
 
+    const titleError = document.getElementById('title-error')!;
+    titleError.style.display = 'none';
+
     if (!title) {
-      errorEl.textContent = 'Title is required.';
-      errorEl.style.display = 'block';
+      titleError.textContent = 'Title is required';
+      titleError.style.display = 'block';
       progressEl.style.display = 'none';
       saveBtn.disabled = false;
       toggleBtn.disabled = false;
