@@ -570,6 +570,29 @@ import Admin from '../../../layouts/Admin.astro';
     fill: #fff;
     filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
   }
+  .results-grid .grid-item__add {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: bold;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+    padding: 0;
+    z-index: 1;
+  }
+  .results-grid .grid-item__thumb:hover .grid-item__add { opacity: 1; }
+  .results-grid .grid-item__add:hover { background: rgba(184,134,11,0.8); border-color: #b8860b; }
   .results-grid .grid-item__info {
     padding: 4px 6px;
     font-size: 0.65rem;
@@ -1020,7 +1043,7 @@ import Admin from '../../../layouts/Admin.astro';
             : `<img src="/assets/default-cover.jpg" alt="${item.media_type || '?'}" loading="lazy" style="image-rendering: pixelated;" />`;
           const canPlay = item.media_type === 'audio' || item.media_type === 'video';
           const playBtn = canPlay
-            ? `<button class="grid-item__play" data-play-id="${item.id}" data-play-type="${item.media_type}" title="Play">${playSvg}</button>`
+            ? `<button class="grid-item__play" data-play-id="${item.id}" data-play-type="${item.media_type}" title="Play">${playSvg}</button><button class="grid-item__add" data-play-id="${item.id}" data-play-type="${item.media_type}" title="Add to queue">+</button>`
             : '';
           const poster = (item.sources || []).map((s: any) => s.uploader).filter(Boolean)[0] || '';
           const rxn = item.total_reaction_count ?? 0;
@@ -1134,6 +1157,34 @@ import Admin from '../../../layouts/Admin.astro';
         return;
       }
 
+      // Add to queue button click
+      const addBtn = target.closest('.grid-item__add') as HTMLElement | null;
+      if (addBtn) {
+        e.stopPropagation();
+        e.preventDefault();
+        const mediaId = addBtn.dataset.playId!;
+        const mediaType = addBtn.dataset.playType!;
+        const item = allResults.find((i: any) => i.id === mediaId);
+        if (!item) return;
+        document.dispatchEvent(new CustomEvent('player:add', {
+          detail: {
+            tracks: [{
+              track_id: mediaId,
+              title: item.filename || 'Untitled',
+              release_title: '',
+              release_code: '',
+              media_type: mediaType,
+              stream_url: `/api/media/${mediaId}/file`,
+              cover_url: (mediaType === 'image' || mediaType === 'video')
+                ? `/api/media/${mediaId}/thumbnail` : '/assets/default-cover.jpg',
+              duration: 0,
+              entity_name: '',
+            }],
+          },
+        }));
+        return;
+      }
+
       // Checkbox selection
       const checkbox = target.closest('[data-select]') as HTMLInputElement | null;
       if (checkbox) {
@@ -1147,7 +1198,7 @@ import Admin from '../../../layouts/Admin.astro';
 
       // Grid item click (navigate)
       const gridItem = target.closest('.grid-item') as HTMLElement | null;
-      if (gridItem && !target.closest('.grid-item__check') && !target.closest('.grid-item__play')) {
+      if (gridItem && !target.closest('.grid-item__check') && !target.closest('.grid-item__play') && !target.closest('.grid-item__add')) {
         const id = gridItem.dataset.id;
         if (id) window.location.href = `/admin/search/detail?id=${id}`;
       }
