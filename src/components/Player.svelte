@@ -18,6 +18,8 @@
   let queueOpen = $state(false);
 
   let mediaEl = $state(undefined);
+  let pipEl = $state(undefined);
+  let isFullscreen = $state(false);
 
   let currentTrack = $derived(currentIndex >= 0 && currentIndex < queue.length ? queue[currentIndex] : null);
   let isVideo = $derived(currentTrack?.media_type === 'video');
@@ -155,6 +157,19 @@
     queueOpen = !queueOpen;
   }
 
+  function toggleFullscreen() {
+    if (!pipEl) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      pipEl.requestFullscreen().catch(() => {});
+    }
+  }
+
+  function onFullscreenChange() {
+    isFullscreen = !!document.fullscreenElement;
+  }
+
   function onAdd(e) {
     const { tracks } = e.detail;
     queue = [...queue, ...tracks];
@@ -265,6 +280,7 @@
     document.addEventListener('player:queue', handler);
     document.addEventListener('player:add', addHandler);
     document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
     if ('mediaSession' in navigator) {
       navigator.mediaSession.setActionHandler('play', () => { if (mediaEl) mediaEl.play(); });
       navigator.mediaSession.setActionHandler('pause', () => { if (mediaEl) mediaEl.pause(); });
@@ -277,6 +293,7 @@
     if (handler) document.removeEventListener('player:queue', handler);
     if (addHandler) document.removeEventListener('player:add', addHandler);
     document.removeEventListener('keydown', onKeyDown);
+    document.removeEventListener('fullscreenchange', onFullscreenChange);
     document.body.classList.remove('player-active');
   });
 </script>
@@ -284,8 +301,21 @@
 {#if visible}
 
 {#if isVideo && pipOpen}
-<div class="player__pip">
-  <button class="player__pip-close" onclick={() => pipOpen = false} title="Close video">&times;</button>
+<div class="player__pip" class:player__pip--fs={isFullscreen} bind:this={pipEl}>
+  <div class="player__pip-controls">
+    <button class="player__pip-btn" onclick={toggleFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+      {#if isFullscreen}
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M5 1v4H1M11 1v4h4M5 15v-4H1M11 15v-4h4"/>
+        </svg>
+      {:else}
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M1 5V1h4M15 5V1h-4M1 11v4h4M15 11v4h-4"/>
+        </svg>
+      {/if}
+    </button>
+    <button class="player__pip-btn" onclick={() => pipOpen = false} title="Close video">&times;</button>
+  </div>
   <!-- svelte-ignore a11y_media_has_caption -->
   <video
     bind:this={mediaEl}
@@ -294,6 +324,7 @@
     bind:paused
     bind:volume
     onended={onEnded}
+    ondblclick={toggleFullscreen}
     src={currentTrack?.stream_url}
     poster={currentTrack?.cover_url}
     preload="metadata"
@@ -853,24 +884,50 @@
     height: auto;
   }
 
-  .player__pip-close {
+  .player__pip-controls {
     position: absolute;
     top: 4px;
     right: 6px;
     z-index: 1;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .player__pip:hover .player__pip-controls { opacity: 1; }
+
+  .player__pip-btn {
     background: rgba(0,0,0,0.6);
     border: none;
     color: #fff;
     font-size: 1.1rem;
     cursor: pointer;
-    padding: 0 4px;
-    line-height: 1.2;
-    opacity: 0;
-    transition: opacity 0.15s;
+    padding: 4px 6px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
+  .player__pip-btn:hover { background: rgba(0,0,0,0.9); }
 
-  .player__pip:hover .player__pip-close { opacity: 1; }
-  .player__pip-close:hover { background: rgba(0,0,0,0.9); }
+  /* Fullscreen mode */
+  .player__pip--fs {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+    box-shadow: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .player__pip--fs video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
 
   .player__pip-reopen {
     background: none;
