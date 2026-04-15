@@ -73,7 +73,7 @@ import Admin from '../../../layouts/Admin.astro';
         </div>
 
         <div class="filter-group">
-          <label class="filter-label">Output Index</label>
+          <label class="filter-label">Index</label>
           <select id="filter-output-index">
             <option value="">All</option>
           </select>
@@ -624,6 +624,28 @@ import Admin from '../../../layouts/Admin.astro';
   }
   .results-grid .grid-item__thumb:hover .grid-item__dl { opacity: 1; }
   .results-grid .grid-item__dl:hover { background: rgba(184,134,11,0.8); border-color: #b8860b; }
+  .results-grid .grid-item__ws {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+    font-size: 0.65rem;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+    padding: 0;
+    z-index: 1;
+  }
+  .results-grid .grid-item__thumb:hover .grid-item__ws { opacity: 1; }
+  .results-grid .grid-item__ws:hover { background: rgba(184,134,11,0.8); border-color: #b8860b; }
+  .results-grid .grid-item__ws svg { width: 14px; height: 14px; fill: #fff; }
   .results-grid .grid-item__info {
     padding: 4px 6px;
     font-size: 0.65rem;
@@ -1068,6 +1090,7 @@ import Admin from '../../../layouts/Admin.astro';
         tableEl.style.display = 'none';
         gridEl.style.display = 'grid';
         const playSvg = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
+        const briefcaseSvg = `<svg viewBox="0 0 24 24"><path d="M20 7h-4V5c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zM10 5h4v2h-4V5z"/></svg>`;
         gridEl.innerHTML = allResults.map(item => {
           const checked = selectedIds.has(item.id) ? 'checked' : '';
           const selectedClass = selectedIds.has(item.id) ? ' selected' : '';
@@ -1076,6 +1099,7 @@ import Admin from '../../../layouts/Admin.astro';
             : `<img src="/assets/default-cover.jpg" alt="${item.media_type || '?'}" loading="lazy" style="image-rendering: pixelated;" />`;
           const canPlay = item.media_type === 'audio' || item.media_type === 'video';
           const dlBtn = `<a class="grid-item__dl" href="/api/media/${item.id}/file" download title="Download">&#8615;</a>`;
+          const wsBtn = `<button class="grid-item__ws" data-ws-id="${item.id}" title="Add to workspace">${briefcaseSvg}</button>`;
           const playBtn = canPlay
             ? `<button class="grid-item__play" data-play-id="${item.id}" data-play-type="${item.media_type}" title="Play">${playSvg}</button><button class="grid-item__add" data-play-id="${item.id}" data-play-type="${item.media_type}" title="Add to queue">+</button>${dlBtn}`
             : dlBtn;
@@ -1083,7 +1107,7 @@ import Admin from '../../../layouts/Admin.astro';
           const rxn = item.total_reaction_count ?? 0;
           return `<div class="grid-item${selectedClass}" data-id="${item.id}">
             <input type="checkbox" class="grid-item__check" data-select="${item.id}" ${checked} />
-            <div class="grid-item__thumb">${thumb}${playBtn}</div>
+            <div class="grid-item__thumb">${thumb}${playBtn}${wsBtn}</div>
             <div class="grid-item__info">
               <div class="grid-item__name" title="${item.filename || ''}">
                 <button class="bm-star bm-star--sm" data-bm-type="media_item" data-bm-id="${item.id}" title="Bookmark"></button>
@@ -1149,7 +1173,7 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     // Delegate click for grid items and checkboxes
-    document.addEventListener('click', (e) => {
+    document.addEventListener('click', async (e) => {
       const target = e.target as HTMLElement;
 
       // Bookmark star click
@@ -1219,6 +1243,34 @@ import Admin from '../../../layouts/Admin.astro';
         return;
       }
 
+      // Add to workspace button click
+      const wsBtn = target.closest('.grid-item__ws') as HTMLElement | null;
+      if (wsBtn) {
+        e.stopPropagation();
+        e.preventDefault();
+        const mediaId = wsBtn.dataset.wsId!;
+        const wsId = localStorage.getItem('active_workspace_id');
+        if (!wsId) {
+          (window as any).toast.error('No active workspace. Create one from the workspace page first.');
+          return;
+        }
+        try {
+          const res = await fetch(`/api/workspaces/${wsId}/items`, {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ media_item_ids: [mediaId] }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.already_present > 0) (window as any).toast.success('Already in workspace');
+            else (window as any).toast.success('Added to workspace');
+          } else {
+            (window as any).toast.error('Failed to add to workspace');
+          }
+        } catch { (window as any).toast.error('Failed to add to workspace'); }
+        return;
+      }
+
       // Checkbox selection
       const checkbox = target.closest('[data-select]') as HTMLInputElement | null;
       if (checkbox) {
@@ -1232,7 +1284,7 @@ import Admin from '../../../layouts/Admin.astro';
 
       // Grid item click (navigate)
       const gridItem = target.closest('.grid-item') as HTMLElement | null;
-      if (gridItem && !target.closest('.grid-item__check') && !target.closest('.grid-item__play') && !target.closest('.grid-item__add') && !target.closest('.grid-item__dl')) {
+      if (gridItem && !target.closest('.grid-item__check') && !target.closest('.grid-item__play') && !target.closest('.grid-item__add') && !target.closest('.grid-item__dl') && !target.closest('.grid-item__ws')) {
         const id = gridItem.dataset.id;
         if (id) window.location.href = `/admin/search/detail?id=${id}`;
       }
