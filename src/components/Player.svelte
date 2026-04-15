@@ -298,6 +298,8 @@
   });
 </script>
 
+<div class="player__spacer" class:player__spacer--active={visible}></div>
+
 {#if visible}
 
 {#if isVideo && pipOpen}
@@ -536,6 +538,13 @@
 {/if}
 
 <style>
+  .player__spacer {
+    height: 0;
+  }
+  .player__spacer--active {
+    height: 72px;
+  }
+
   .player {
     position: fixed;
     bottom: 0;
@@ -957,6 +966,7 @@
   .player__pip-reopen:hover { color: #fff; border-color: #b8860b; }
 
   @media (max-width: 639px) {
+    .player__spacer--active { height: 100px; }
     .player { padding: 0.375rem 0.5rem; }
     .player__inner { flex-wrap: wrap; gap: 0.375rem; }
     .player__info { flex: 1 1 100%; order: 1; }
