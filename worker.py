@@ -162,9 +162,22 @@ def _build_docker_command(job: Job, manifest: dict, job_dir: Path) -> list[str]:
         image,
     ]
 
-    # Subcommand (e.g. "rave")
+    # Subcommand (e.g. "rave", "recipe run")
     if command:
         cmd.extend(command.split())
+
+    # Positional params (inserted between command and input files)
+    positional: list[tuple[int, str]] = []
+    for pname, spec in param_specs.items():
+        if "position" not in spec:
+            continue
+        val = params.get(pname)
+        if val is None:
+            continue
+        tmpl = spec.get("value_template")
+        positional.append((spec["position"], tmpl.replace("{}", str(val)) if tmpl else str(val)))
+    for _, v in sorted(positional):
+        cmd.append(v)
 
     # Input files
     input_dir = job_dir / "input"
@@ -177,7 +190,7 @@ def _build_docker_command(job: Job, manifest: dict, job_dir: Path) -> list[str]:
     for param_name, spec in param_specs.items():
         value = params.get(param_name)
         flag = spec.get("flag")
-        if not flag or value is None:
+        if "position" in spec or not flag or value is None:
             continue
 
         # Skip defaults to keep command clean

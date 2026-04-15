@@ -33,9 +33,10 @@ import Admin from '../../../layouts/Admin.astro';
 
   <!-- App config dialog -->
   <div class="dialog-overlay" id="config-dialog" style="display:none;">
-    <div class="dialog" style="max-width: 500px;">
+    <div class="dialog" style="max-width: 560px;">
       <h3 id="config-app-name"></h3>
       <p id="config-app-desc" style="color: var(--color-muted); font-size: var(--text-sm);"></p>
+      <div id="config-app-detail" class="config-detail" style="display:none;"></div>
       <div id="config-params"></div>
       <div class="dialog-actions">
         <button class="btn-cancel" id="config-cancel">Cancel</button>
@@ -200,10 +201,27 @@ import Admin from '../../../layouts/Admin.astro';
     font-size: var(--text-sm);
     margin-bottom: 2px;
   }
+  .config-detail {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    border-left: 2px solid var(--color-border);
+    padding: var(--space-xs) var(--space-sm);
+    margin-bottom: var(--space-sm);
+    white-space: pre-line;
+  }
   .config-field .config-desc {
     color: var(--color-muted);
-    font-size: 0.65rem;
-    margin-bottom: 2px;
+    font-size: 0.75rem;
+    margin-bottom: 4px;
+    line-height: 1.4;
+  }
+  .config-field .config-option-desc {
+    color: var(--color-muted);
+    font-size: 0.7rem;
+    font-style: italic;
+    margin-top: 4px;
+    line-height: 1.3;
   }
   .config-field input, .config-field select {
     width: 100%;
@@ -415,10 +433,18 @@ import Admin from '../../../layouts/Admin.astro';
       document.getElementById('config-app-name')!.textContent = app.display_name;
       document.getElementById('config-app-desc')!.textContent = app.description || '';
 
+      const detailEl = document.getElementById('config-app-detail')!;
+      const manifest = app.manifest;
+      if (manifest.long_description) {
+        detailEl.textContent = manifest.long_description;
+        detailEl.style.display = 'block';
+      } else {
+        detailEl.style.display = 'none';
+      }
+
       const paramsContainer = document.getElementById('config-params')!;
       paramsContainer.innerHTML = '';
 
-      const manifest = app.manifest;
       const params = manifest.params || {};
 
       for (const [name, spec] of Object.entries(params) as [string, any][]) {
@@ -427,10 +453,22 @@ import Admin from '../../../layouts/Admin.astro';
 
         let inputHtml = '';
         if (spec.type === 'select') {
-          const options = (spec.options || []).map((o: string) =>
-            `<option value="${o}" ${o === spec.default ? 'selected' : ''}>${o}</option>`
-          ).join('');
-          inputHtml = `<select name="${name}">${options}</select>`;
+          if (spec.option_groups) {
+            const groups = spec.option_groups.map((g: any) => {
+              const opts = g.options.map((o: any) => {
+                const val = typeof o === 'string' ? o : o.value;
+                const label = typeof o === 'string' ? o : o.label;
+                return `<option value="${val}" ${val === spec.default ? 'selected' : ''}>${label}</option>`;
+              }).join('');
+              return `<optgroup label="${g.label}">${opts}</optgroup>`;
+            }).join('');
+            inputHtml = `<select name="${name}">${groups}</select>`;
+          } else {
+            const options = (spec.options || []).map((o: string) =>
+              `<option value="${o}" ${o === spec.default ? 'selected' : ''}>${o}</option>`
+            ).join('');
+            inputHtml = `<select name="${name}">${options}</select>`;
+          }
         } else if (spec.type === 'bool') {
           inputHtml = `<label style="display:inline;"><input type="checkbox" name="${name}" ${spec.default ? 'checked' : ''} /> Enabled</label>`;
         } else if (spec.type === 'float' || spec.type === 'int') {
@@ -446,9 +484,38 @@ import Admin from '../../../layouts/Admin.astro';
           <label>${spec.label || name}${spec.required ? ' *' : ''}</label>
           ${spec.description ? `<div class="config-desc">${spec.description}</div>` : ''}
           ${inputHtml}
+          <div class="config-option-desc" data-option-desc="${name}" style="display:none;"></div>
           <div class="param-error login-error" data-param="${name}" style="display:none; text-align:left;"></div>
         `;
         paramsContainer.appendChild(field);
+
+        // For grouped selects with option descriptions, show the selected option's description
+        if (spec.type === 'select' && spec.option_groups) {
+          const selectEl = field.querySelector('select')!;
+          const descEl = field.querySelector(`.config-option-desc[data-option-desc="${name}"]`) as HTMLElement;
+          const updateOptionDesc = () => {
+            const val = (selectEl as HTMLSelectElement).value;
+            let desc = '';
+            for (const g of spec.option_groups) {
+              for (const o of g.options) {
+                const oVal = typeof o === 'string' ? o : o.value;
+                if (oVal === val && typeof o === 'object' && o.description) {
+                  desc = o.description;
+                  break;
+                }
+              }
+              if (desc) break;
+            }
+            if (desc) {
+              descEl.textContent = desc;
+              descEl.style.display = 'block';
+            } else {
+              descEl.style.display = 'none';
+            }
+          };
+          selectEl.addEventListener('change', updateOptionDesc);
+          updateOptionDesc();
+        }
       }
 
       // Clear inline errors on input

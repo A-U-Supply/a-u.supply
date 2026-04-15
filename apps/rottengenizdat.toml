@@ -1,6 +1,11 @@
 name = "rottengenizdat"
 display_name = "RGZ-9 Latent Space Press"
 description = "Feed audio through RAVE neural networks. Latent space distortion from subtle to fever-dream."
+long_description = """Single-pass audio processing through a RAVE variational autoencoder. Your audio is encoded into a latent space, manipulated, then decoded back into audio. The result depends on which model you choose and how you distort the latent representation.
+
+Each model was trained on a different audio domain — vintage vinyl, NASA transmissions, vocal datasets, percussion — and will imprint its learned character onto your input. Temperature controls how far the latent representation drifts from the original. Noise, shuffle, and quantize add additional latent-space distortions.
+
+This is a single-pass tool. For multi-step processing chains, use "RGZ-9 Recipe Chains" instead."""
 image = "ghcr.io/a-u-supply/rottengenizdat:latest"
 command = "rave"
 timeout_seconds = 600
@@ -23,7 +28,7 @@ allow_random_fill = true
 [params.model]
 type = "select"
 label = "RAVE Model"
-description = "Neural network trained on a specific audio domain."
+description = "Neural network trained on a specific audio domain. The model determines the timbral character imprinted on your audio. 'vintage' adds warm analog color, 'percussion' emphasizes rhythmic transients, 'nasa' introduces alien transmission artifacts, 'VCTK' makes everything sound like speech, 'musicnet' blends classical instrument timbres, 'isis' adds Middle Eastern string resonance, 'sol_ordinario/sol_full' impart bowed-string character, 'darbouka_onnx' adds hand-drum patterns."
 options = ["percussion", "vintage", "nasa", "VCTK", "musicnet", "isis", "sol_ordinario", "sol_full", "darbouka_onnx"]
 default = "vintage"
 required = true
@@ -32,7 +37,7 @@ flag = "-m"
 [params.temperature]
 type = "float"
 label = "Temperature"
-description = "0.3 = smooth, 1.0 = identity, 2.0+ = destruction"
+description = "Controls how far the latent representation drifts from the original encoding. At 0.3 the output is smoothed and softened. At 1.0 it's a faithful reconstruction through the model's lens. Above 1.5 the latent space starts hallucinating. At 2.0+ expect heavy distortion and artifacts."
 min = 0.1
 max = 3.0
 default = 1.0
@@ -41,7 +46,7 @@ flag = "-t"
 [params.noise]
 type = "float"
 label = "Noise Injection"
-description = "Amount of noise injected into the latent space. 0.0 = none, 1.0 = full."
+description = "Injects random noise into the latent space before decoding. At 0.0 the signal passes through cleanly. Small values (0.1-0.3) add texture and grain. Higher values progressively dissolve the original signal into the model's learned noise floor."
 min = 0.0
 max = 1.0
 default = 0.0
@@ -50,7 +55,7 @@ flag = "-n"
 [params.mix]
 type = "float"
 label = "Wet/Dry Mix"
-description = "Blend between original (0.0) and processed (1.0) audio."
+description = "Blends between your original audio (0.0) and the RAVE-processed output (1.0). Use values like 0.3-0.5 to keep your original recognizable with neural coloring on top. At 1.0 you hear only the processed result."
 min = 0.0
 max = 1.0
 default = 1.0
@@ -59,14 +64,14 @@ flag = "-w"
 [params.reverse]
 type = "bool"
 label = "Reverse"
-description = "Flip the temporal axis in latent space."
+description = "Flips the temporal axis in latent space before decoding. The audio plays forward but the latent trajectory runs backward, creating an uncanny reversal effect that sounds different from simply reversing the waveform."
 default = false
 flag = "-r"
 
 [params.shuffle]
 type = "float"
 label = "Shuffle"
-description = "Timeline fragmentation. Chunk size in frames. 0 = none, 4-8 = mild, 2-3 = heavy."
+description = "Fragments the latent timeline into chunks and reorders them randomly. The value sets the chunk size in frames. 0 = disabled. 4-8 = mild fragmentation (subtle glitchiness). 2-3 = heavy fragmentation (granular chaos). Higher values = longer chunks = more coherent segments in random order."
 min = 0.0
 max = 32.0
 default = 0.0
@@ -75,7 +80,7 @@ flag = "--shuffle"
 [params.quantize]
 type = "float"
 label = "Quantize"
-description = "Snap latent values to a grid. 0.0 = off, 0.1 = subtle, 0.5 = crunchy, 1.0 = obliterated."
+description = "Snaps continuous latent values to a discrete grid, like bit-crushing but in latent space. 0.0 = off. 0.1 = subtle stepping artifacts. 0.5 = audibly crunchy, reduced detail. 1.0 = extreme — the latent space collapses to a handful of values."
 min = 0.0
 max = 1.0
 default = 0.0

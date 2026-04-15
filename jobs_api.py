@@ -130,6 +130,10 @@ def _validate_job_input(
 
         if param_type == "select":
             options = spec.get("options", [])
+            if not options and "option_groups" in spec:
+                for group in spec["option_groups"]:
+                    for opt in group.get("options", []):
+                        options.append(opt["value"] if isinstance(opt, dict) else opt)
             if options and value not in options:
                 errors.append({
                     "field": f"params.{param_name}",
