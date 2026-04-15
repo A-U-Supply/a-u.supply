@@ -68,6 +68,7 @@ const { title, current } = Astro.props;
       <slot />
     </main>
   </div>
+  <div class="player-spacer"></div>
   <div class="player-slot" transition:persist="audio-player">
     <Player client:only="svelte" />
   </div>

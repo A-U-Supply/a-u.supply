@@ -43,13 +43,13 @@ body {
   background: var(--color-bg);
 }
 
-body.player-active .player-slot {
-  min-height: 72px;
+body.player-active .player-spacer {
+  height: 72px;
 }
 
 @media (max-width: 639px) {
-  body.player-active .player-slot {
-    min-height: 100px;
+  body.player-active .player-spacer {
+    height: 100px;
   }
 }
 
