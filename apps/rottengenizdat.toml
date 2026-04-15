@@ -380,8 +380,8 @@ depends_on = { param = "processing_mode", value = "single_pass" }
 [params.input_combination]
 type = "select"
 label = "Input Combination"
-description = "How multiple input files are combined before processing. Splice chops all inputs into segments and shuffles them together (collage). Concat joins them end-to-end. Independent processes each file separately (one output per input). Only matters with 2+ inputs — single inputs are passed through directly."
-options = ["splice", "concat", "independent"]
+description = "How multiple input files are combined before processing. Splice chops all inputs into segments and shuffles them together (collage). Concat joins them end-to-end. Blend processes each file separately then mixes the outputs together. Independent processes each file separately with one output per input. Only matters with 2+ inputs — single inputs are passed through directly."
+options = ["splice", "concat", "blend", "independent"]
 default = "splice"
 flag = "--mode"
 
