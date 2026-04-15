@@ -45,22 +45,25 @@ import Admin from '../../../layouts/Admin.astro';
   </div>
 </Admin>
 
-<style>
+<!-- Global styles for dynamically rendered grid items (innerHTML) -->
+<style is:global>
   .workspace-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: var(--space-sm);
     margin-top: var(--space-md);
   }
-  .ws-item {
+  .workspace-grid .ws-item {
     border: 1px solid var(--color-border);
     font-size: var(--text-sm);
     font-family: var(--font-mono);
     position: relative;
     transition: border-color 0.15s;
+    overflow: hidden;
+    min-width: 0;
   }
-  .ws-item:hover { border-color: var(--color-text); }
-  .ws-thumb {
+  .workspace-grid .ws-item:hover { border-color: var(--color-text); }
+  .workspace-grid .ws-thumb {
     width: 100%;
     aspect-ratio: 1;
     background: #111;
@@ -70,12 +73,12 @@ import Admin from '../../../layouts/Admin.astro';
     position: relative;
     overflow: hidden;
   }
-  .ws-thumb img {
+  .workspace-grid .ws-thumb img {
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
-  .ws-thumb .ws-play {
+  .workspace-grid .ws-play {
     position: absolute;
     inset: 0;
     display: flex;
@@ -88,14 +91,14 @@ import Admin from '../../../layouts/Admin.astro';
     border: none;
     padding: 0;
   }
-  .ws-thumb:hover .ws-play { opacity: 1; }
-  .ws-thumb .ws-play svg {
+  .workspace-grid .ws-thumb:hover .ws-play { opacity: 1; }
+  .workspace-grid .ws-play svg {
     width: 32px;
     height: 32px;
     fill: #fff;
     filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
   }
-  .ws-thumb .ws-duration {
+  .workspace-grid .ws-duration {
     position: absolute;
     bottom: 3px;
     right: 4px;
@@ -105,7 +108,7 @@ import Admin from '../../../layouts/Admin.astro';
     padding: 1px 4px;
     font-family: var(--font-mono);
   }
-  .ws-thumb .ws-type-badge {
+  .workspace-grid .ws-type-badge {
     position: absolute;
     top: 3px;
     left: 4px;
@@ -116,17 +119,18 @@ import Admin from '../../../layouts/Admin.astro';
     text-transform: uppercase;
     font-family: var(--font-mono);
   }
-  .ws-info {
+  .workspace-grid .ws-info {
     padding: 4px 6px;
     border-top: 1px solid var(--color-border);
+    min-width: 0;
   }
-  .ws-item .ws-name {
+  .workspace-grid .ws-name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 0.65rem;
   }
-  .ws-item .ws-remove {
+  .workspace-grid .ws-remove {
     position: absolute;
     top: 2px;
     right: 4px;
@@ -141,8 +145,11 @@ import Admin from '../../../layouts/Admin.astro';
     opacity: 0;
     transition: opacity 0.15s;
   }
-  .ws-item:hover .ws-remove { opacity: 1; }
-  .ws-item .ws-remove:hover { background: rgba(0,0,0,0.8); }
+  .workspace-grid .ws-item:hover .ws-remove { opacity: 1; }
+  .workspace-grid .ws-remove:hover { background: rgba(0,0,0,0.8); }
+</style>
+
+<style>
   .process-bar {
     display: flex;
     align-items: center;
