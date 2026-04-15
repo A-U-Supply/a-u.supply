@@ -4,6 +4,7 @@ import hmac
 import logging
 import os
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -51,6 +52,11 @@ SYNC_INTERVAL_SCRAPE = int(os.environ.get("SYNC_INTERVAL_SCRAPE", "120"))   # se
 SYNC_INTERVAL_REACTIONS = int(os.environ.get("SYNC_INTERVAL_REACTIONS", "300"))  # seconds
 
 
+# Dedicated thread pool for Slack sync so it can never starve the default
+# executor that uvicorn uses for serving requests.
+_sync_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="slack-sync")
+
+
 async def _auto_scrape_loop():
     """Periodically run incremental Slack scrapes."""
     await asyncio.sleep(30)  # let the app finish starting up
@@ -58,7 +64,7 @@ async def _auto_scrape_loop():
     while True:
         try:
             from slack_scraper import trigger_incremental_scrape
-            result = await loop.run_in_executor(None, trigger_incremental_scrape)
+            result = await loop.run_in_executor(_sync_executor, trigger_incremental_scrape)
             logger.info("Auto-sync scrape: %s", result.get("status"))
         except Exception:
             logger.exception("Auto-sync scrape failed")
@@ -72,8 +78,9 @@ async def _auto_reactions_loop():
     while True:
         try:
             from slack_scraper import trigger_reaction_refresh
-            result = await loop.run_in_executor(None, lambda: trigger_reaction_refresh(days_back=7))
-            logger.info("Auto-sync reactions: updated=%s errors=%s", result.get("updated"), result.get("errors"))
+            result = await loop.run_in_executor(_sync_executor, lambda: trigger_reaction_refresh(days_back=7))
+            logger.info("Auto-sync reactions: updated=%s errors=%s skipped=%s",
+                        result.get("updated"), result.get("errors"), result.get("skipped", 0))
         except Exception:
             logger.exception("Auto-sync reactions failed")
         await asyncio.sleep(SYNC_INTERVAL_REACTIONS)

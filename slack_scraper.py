@@ -128,6 +128,7 @@ def slack_api(method: str, params: dict | None = None, _retries: int = 3) -> dic
     """Call a Slack Web API method and return the parsed JSON response.
 
     Automatically retries on 429 (rate limited) using the Retry-After header.
+    Caps per-retry sleep at 30s to avoid blocking threads for too long.
     """
     url = f"{SLACK_API_BASE}{method}"
     if params:
@@ -144,10 +145,13 @@ def slack_api(method: str, params: dict | None = None, _retries: int = 3) -> dic
                 data = json.loads(resp.read().decode())
         except HTTPError as exc:
             if exc.code == 429 and attempt < _retries:
-                retry_after = int(exc.headers.get("Retry-After", 5))
+                retry_after = min(int(exc.headers.get("Retry-After", 5)), 30)
                 logger.info("Slack API %s rate limited, retrying in %ds", method, retry_after)
                 time.sleep(retry_after)
                 continue
+            if exc.code == 429:
+                logger.warning("Slack API %s rate limited, giving up after %d retries", method, _retries)
+                return {"ok": False, "error": "rate_limited"}
             logger.error("Slack API error calling %s: %s", method, exc)
             return {"ok": False, "error": str(exc)}
         except URLError as exc:
@@ -825,10 +829,17 @@ def scrape_channel(
 
 
 def refresh_reactions(days_back: int = 60) -> dict:
-    """Refresh reaction counts for media ingested in the last N days."""
+    """Refresh reaction counts for media ingested in the last N days.
+
+    Bails out early if hitting consecutive rate limits to avoid blocking
+    the thread pool and starving the web server.
+    """
     db = SessionLocal()
     updated = 0
     errors = 0
+    skipped = 0
+    consecutive_rate_limits = 0
+    max_consecutive_rate_limits = 3
     cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
 
     try:
@@ -849,11 +860,23 @@ def refresh_reactions(days_back: int = 60) -> dict:
 
             resp = get_reactions(channel_id, source.slack_message_ts)
             if not resp.get("ok"):
+                if resp.get("error") == "rate_limited":
+                    consecutive_rate_limits += 1
+                    if consecutive_rate_limits >= max_consecutive_rate_limits:
+                        skipped = len(sources) - updated - errors
+                        logger.warning(
+                            "Reaction refresh: bailing out after %d consecutive rate limits "
+                            "(%d updated, %d remaining)",
+                            consecutive_rate_limits, updated, skipped,
+                        )
+                        break
+                    continue
                 # "no_item_found" is normal for deleted messages
                 if resp.get("error") != "no_item_found":
                     errors += 1
                 continue
 
+            consecutive_rate_limits = 0
             msg = resp.get("message", {})
             reactions, total = _extract_reactions_from_message(msg)
 
@@ -869,7 +892,7 @@ def refresh_reactions(days_back: int = 60) -> dict:
     finally:
         db.close()
 
-    return {"updated": updated, "errors": errors}
+    return {"updated": updated, "errors": errors, "skipped": skipped}
 
 
 # ---------------------------------------------------------------------------
