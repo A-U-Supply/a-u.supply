@@ -39,6 +39,9 @@ SEARCHABLE_ATTRIBUTES = [
     "filename",
     "sources.source_title",
     "color_names",
+    "job_app",
+    "job_recipe",
+    "job_model",
 ]
 
 FILTERABLE_ATTRIBUTES = [
@@ -57,6 +60,10 @@ FILTERABLE_ATTRIBUTES = [
     "color_groups",
     "primary_color_group",
     "sources.uploader",
+    "output_index",
+    "job_app",
+    "job_recipe",
+    "job_model",
 ]
 
 SORTABLE_ATTRIBUTES = [
@@ -291,6 +298,26 @@ def _build_document(db: Session, media_item: MediaItem) -> dict:
             source_channels.add(src.source_channel)
         sources.append(source_doc)
 
+    # Extract job output metadata from sources
+    job_app = None
+    job_recipe = None
+    job_model = None
+    job_runtime_seconds = None
+    job_input_count = None
+    for src in media_item.sources:
+        if src.source_type == "job_output" and src.source_metadata:
+            try:
+                meta = json.loads(src.source_metadata)
+                if isinstance(meta, dict):
+                    job_app = meta.get("app_name")
+                    job_recipe = meta.get("recipe")
+                    job_model = meta.get("model")
+                    job_runtime_seconds = meta.get("runtime_seconds")
+                    job_input_count = meta.get("input_count")
+            except (json.JSONDecodeError, TypeError):
+                pass
+            break
+
     # Base document
     doc = {
         "id": media_item.id,
@@ -299,6 +326,12 @@ def _build_document(db: Session, media_item: MediaItem) -> dict:
         "file_size_bytes": media_item.file_size_bytes,
         "mime_type": media_item.mime_type,
         "description": media_item.description,
+        "output_index": media_item.output_index,
+        "job_app": job_app,
+        "job_recipe": job_recipe,
+        "job_model": job_model,
+        "job_runtime_seconds": job_runtime_seconds,
+        "job_input_count": job_input_count,
         "tags": tags,
         "tag_count": len(tags),
         "sources": sources,

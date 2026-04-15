@@ -383,9 +383,36 @@ class ValidateRequest(BaseModel):
     params: dict = Field(default_factory=dict, description="App-specific parameters to validate.")
 
 
+class IndexMetadata(BaseModel):
+    """Optional metadata to attach when indexing job outputs.
+
+    When indexing outputs, you can provide a description, additional tags, and
+    an output index override. If omitted, defaults are inferred from the app
+    manifest and job parameters:
+
+    - ``output_index``: defaults to the manifest's ``[output].index`` value
+    - ``description``: auto-generated summary from job context
+    - ``tags``: auto-generated from app name, recipe, model, etc.
+
+    Auto-generated tags include ``app:<name>``, ``recipe:<name>`` (if applicable),
+    ``model:<name>`` (if applicable), and ``index:<name>`` (if output_index is set).
+    User-supplied tags are added alongside auto-generated ones.
+    """
+    description: str | None = Field(None, description="Free-text description. If omitted, an auto-generated summary is used.")
+    tags: list[str] = Field(default_factory=list, description="Additional tags to apply alongside auto-generated tags.")
+    output_index: str | None = Field(None, description="Override the output index from the app manifest's ``[output].index``.")
+
+
 class BulkIndexRequest(BaseModel):
-    """Index selected job outputs into the search engine."""
+    """Index selected job outputs into the search engine.
+
+    All metadata fields are applied uniformly to every output in the batch.
+    See ``IndexMetadata`` for field descriptions.
+    """
     output_ids: list[str] = Field(..., description="List of output IDs to index.")
+    description: str | None = Field(None, description="Free-text description for all outputs.")
+    tags: list[str] = Field(default_factory=list, description="Additional tags for all outputs.")
+    output_index: str | None = Field(None, description="Override output index for all outputs.")
 
 
 # ---------------------------------------------------------------------------
@@ -652,6 +679,48 @@ def register_app(
 
     The manifest is parsed and validated, then stored. The app becomes
     available in the "Process with..." dropdown immediately.
+
+    **Manifest format** (TOML)::
+
+        name = "my-app"
+        display_name = "My App"
+        description = "Short description."
+        long_description = \"\"\"Detailed multi-line description shown in the config dialog.\"\"\"
+        image = "ghcr.io/org/image:latest"
+        command = "process"
+        timeout_seconds = 600
+        input_mode = "positional"
+        output_flag = "-o /work/output/output.wav"
+
+        [command_map]                   # Optional: dynamic command based on a param
+        param = "processing_mode"
+        [command_map.values]
+        single_pass = "rave"
+        recipe = "recipe run"
+
+        [input]
+        min_items = 1
+        max_items = 10
+        media_types = ["audio", "video"]
+
+        [output]                        # Optional: output indexing config
+        index = "my-outputs"            # Default output_index for indexed outputs
+
+        [params.my_param]
+        type = "select"                 # select, float, int, bool, string
+        label = "My Param"
+        description = "Help text."
+        options = ["a", "b", "c"]
+        default = "a"
+        required = true
+        flag = "-m"                     # CLI flag (omit for UI-only params)
+        position = 1                    # Positional arg instead of flag
+        value_template = "/path/{}.ext" # Transform value before passing to CLI
+        depends_on = { param = "mode", value = "advanced" }  # Conditional visibility
+        no_flag = true                  # UI-only, never passed to CLI
+
+    See ``/docs`` for the full API reference and the ``apps/*.toml`` files
+    in the repository for working examples.
     """
     try:
         manifest = _parse_manifest(body.manifest_toml)
@@ -900,6 +969,16 @@ def get_job(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    # Load manifest output config and resolve input filenames
+    app_def = db.query(AppDefinition).filter(AppDefinition.name == job.app_name).first()
+    manifest = _parse_manifest(app_def.manifest) if app_def else {}
+    output_config = manifest.get("output", {})
+
+    input_ids = json.loads(job.input_items)
+    input_filenames = [
+        r[0] for r in db.query(MediaItem.filename).filter(MediaItem.id.in_(input_ids)).all()
+    ] if input_ids else []
+
     return {
         "job": JobResponse(
             id=job.id, app_name=job.app_name, status=job.status,
@@ -911,6 +990,8 @@ def get_job(
             log_tail=job.log_tail, output_count=len(job.outputs),
         ),
         "input_items": json.loads(job.input_items),
+        "input_filenames": input_filenames,
+        "manifest_output": output_config,
         "outputs": [
             JobOutputResponse(
                 id=o.id, filename=o.filename, media_type=o.media_type,
@@ -1047,20 +1128,19 @@ def download_output(
     return FileResponse(file_path, filename=output.filename)
 
 
-@router.post("/jobs/{job_id}/outputs/{output_id}/index", tags=["Job Outputs"],
-             summary="Index an output into the search engine")
-def index_output(
-    output_id: str,
-    job_id: str,
-    auth: tuple[User, str] = Depends(require_scope("write")),
-    db: Session = Depends(get_db),
-):
-    user = auth[0]
-    """Promote a job output to the search engine.
+def _do_index_output(output_id: str, job_id: str, user, db: Session,
+                     metadata: IndexMetadata | None = None) -> dict:
+    """Internal: index a single job output into the search engine.
 
-    This copies the file to the search media directory, creates a ``media_item``
-    record, runs metadata extraction, and syncs to Meilisearch. The output is
-    tagged with ``job:<app_name>`` for discoverability.
+    Copies the file to the search media directory, creates a ``MediaItem``
+    with enriched metadata, runs extraction, and syncs to Meilisearch.
+
+    The app manifest's ``[output].index`` provides the default output index.
+    Auto-generated tags include ``app:<name>``, and conditionally
+    ``recipe:<name>``, ``model:<name>``, ``index:<name>``.
+
+    Indexed fields in Meilisearch: ``output_index``, ``job_app``, ``job_recipe``,
+    ``job_model``, ``job_runtime_seconds``, ``job_input_count`` — all filterable.
     """
     output = db.query(JobOutput).filter(JobOutput.id == output_id, JobOutput.job_id == job_id).first()
     if not output:
@@ -1073,23 +1153,29 @@ def index_output(
     if not source_path.is_file():
         raise HTTPException(status_code=404, detail="Output file missing from disk")
 
-    # Import here to avoid circular imports
     import hashlib
     import shutil
-    import uuid
     from datetime import datetime, timezone
 
     from models import MediaSource, MediaTag
 
+    # Load manifest for output config
+    app_def = db.query(AppDefinition).filter(AppDefinition.name == job.app_name).first()
+    manifest = _parse_manifest(app_def.manifest) if app_def else {}
+    output_config = manifest.get("output", {})
+
+    # Resolve output_index: user override > manifest default
+    resolved_index = (metadata.output_index if metadata and metadata.output_index
+                      else output_config.get("index"))
+
     search_media_dir = Path(os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data"))
     media_type = output.media_type or _infer_media_type(output.filename)
     if not media_type:
-        media_type = "audio"  # Default for unknown
+        media_type = "audio"
 
-    # Compute sha256
     sha256 = hashlib.sha256(source_path.read_bytes()).hexdigest()
 
-    # Check for duplicate
+    # Dedup
     existing = db.query(MediaItem).filter(MediaItem.sha256 == sha256).first()
     if existing:
         output.indexed = True
@@ -1097,7 +1183,7 @@ def index_output(
         db.commit()
         return {"ok": True, "media_item_id": existing.id, "duplicate": True}
 
-    # Copy file to search media dir
+    # Copy file
     now = datetime.now(timezone.utc)
     dest_dir = search_media_dir / media_type / now.strftime("%Y-%m")
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -1105,7 +1191,46 @@ def index_output(
     dest_path = dest_dir / dest_name
     shutil.copy2(source_path, dest_path)
 
-    # Create media item
+    # Build enriched source_metadata
+    params = json.loads(job.params)
+    input_ids = json.loads(job.input_items)
+    input_filenames = [
+        r[0] for r in db.query(MediaItem.filename).filter(MediaItem.id.in_(input_ids)).all()
+    ] if input_ids else []
+
+    runtime_seconds = None
+    if job.started_at and job.completed_at:
+        runtime_seconds = round((job.completed_at - job.started_at).total_seconds(), 1)
+
+    source_meta = {
+        "job_id": job_id,
+        "app_name": job.app_name,
+        "recipe": params.get("recipe"),
+        "model": params.get("model"),
+        "processing_mode": params.get("processing_mode"),
+        "input_combination": params.get("input_combination"),
+        "runtime_seconds": runtime_seconds,
+        "input_count": len(input_ids),
+        "input_filenames": input_filenames,
+        "params": params,
+    }
+
+    # Auto-generate description
+    parts = [app_def.display_name if app_def else job.app_name]
+    if params.get("recipe"):
+        parts.append(params["recipe"])
+    elif params.get("model"):
+        parts.append(params["model"])
+    if params.get("input_combination") and params["input_combination"] != "splice":
+        parts.append(params["input_combination"])
+    parts.append(f"{len(input_ids)} input{'s' if len(input_ids) != 1 else ''}")
+    if runtime_seconds is not None:
+        parts.append(f"{runtime_seconds}s")
+    auto_description = " / ".join(parts)
+
+    description = (metadata.description if metadata and metadata.description
+                   else auto_description)
+
     import mimetypes as mt
     mime, _ = mt.guess_type(output.filename)
 
@@ -1116,26 +1241,38 @@ def index_output(
         media_type=media_type,
         file_size_bytes=source_path.stat().st_size,
         mime_type=mime or "application/octet-stream",
+        description=description,
+        output_index=resolved_index,
     )
     db.add(media_item)
 
-    # Add source record
+    # Source record with full job context
     source = MediaSource(
         media_item_id=media_item.id,
         source_type="job_output",
-        source_metadata=json.dumps({"job_id": job_id, "app_name": job.app_name}),
+        source_metadata=json.dumps(source_meta),
     )
     db.add(source)
 
-    # Tag with app name
-    tag = MediaTag(media_item_id=media_item.id, tag=f"job:{job.app_name}", tagged_by=user.id)
-    db.add(tag)
+    # Auto-tags
+    auto_tags = [f"app:{job.app_name}"]
+    if params.get("recipe"):
+        auto_tags.append(f"recipe:{params['recipe']}")
+    if params.get("model"):
+        auto_tags.append(f"model:{params['model']}")
+    if resolved_index:
+        auto_tags.append(f"index:{resolved_index}")
+    # Add user-supplied tags
+    if metadata and metadata.tags:
+        auto_tags.extend(metadata.tags)
+
+    for t in auto_tags:
+        db.add(MediaTag(media_item_id=media_item.id, tag=t, tagged_by=user.id))
 
     output.indexed = True
     output.media_item_id = media_item.id
     db.commit()
 
-    # Run extraction + Meilisearch sync in background
     try:
         from extraction import run_extraction_async
         run_extraction_async(media_item.id, str(dest_path), media_type, db)
@@ -1145,6 +1282,34 @@ def index_output(
     return {"ok": True, "media_item_id": media_item.id}
 
 
+@router.post("/jobs/{job_id}/outputs/{output_id}/index", tags=["Job Outputs"],
+             summary="Index an output into the search engine")
+def index_output(
+    output_id: str,
+    job_id: str,
+    body: IndexMetadata | None = None,
+    auth: tuple[User, str] = Depends(require_scope("write")),
+    db: Session = Depends(get_db),
+):
+    """Promote a job output to the search engine with metadata.
+
+    Copies the file to the search media directory, creates a ``media_item``
+    with enriched metadata (app, recipe, model, runtime, input files),
+    runs extraction, and syncs to Meilisearch.
+
+    The app manifest's ``[output]`` section provides defaults::
+
+        [output]
+        index = "rgz9-outputs"    # default output_index for this app
+
+    Auto-generated tags: ``app:<name>``, ``recipe:<name>``, ``model:<name>``,
+    ``index:<name>``. Filterable Meilisearch fields: ``output_index``,
+    ``job_app``, ``job_recipe``, ``job_model``, ``job_runtime_seconds``,
+    ``job_input_count``.
+    """
+    return _do_index_output(output_id, job_id, auth[0], db, body)
+
+
 @router.post("/jobs/{job_id}/outputs/index", tags=["Job Outputs"], summary="Bulk index outputs")
 def bulk_index_outputs(
     job_id: str,
@@ -1152,12 +1317,22 @@ def bulk_index_outputs(
     auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
+    """Index multiple job outputs into the search engine at once.
+
+    All metadata fields are applied uniformly to every output in the batch.
+    See the single-output index endpoint for details on auto-tags, manifest
+    defaults, and Meilisearch fields.
+    """
     user = auth[0]
-    """Index multiple job outputs into the search engine at once."""
+    meta = IndexMetadata(
+        description=body.description,
+        tags=body.tags,
+        output_index=body.output_index,
+    )
     results = []
     for output_id in body.output_ids:
         try:
-            result = index_output(output_id=output_id, job_id=job_id, user=user, db=db)
+            result = _do_index_output(output_id, job_id, user, db, meta)
             results.append({"output_id": output_id, **result})
         except HTTPException as e:
             results.append({"output_id": output_id, "error": e.detail})

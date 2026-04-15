@@ -73,6 +73,13 @@ import Admin from '../../../layouts/Admin.astro';
         </div>
 
         <div class="filter-group">
+          <label class="filter-label">Output Index</label>
+          <select id="filter-output-index">
+            <option value="">All</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
           <label class="filter-label">Tags</label>
           <input type="text" id="filter-tags" placeholder="Comma-separated tags" />
         </div>
@@ -949,11 +956,12 @@ import Admin from '../../../layouts/Admin.astro';
       const dateTo = (document.getElementById('filter-date-to') as HTMLInputElement).value;
       const poster = (document.getElementById('filter-poster') as HTMLSelectElement).value;
       const colorGroups = Array.from(document.querySelectorAll('input[name="color-group"]:checked')).map(cb => (cb as HTMLInputElement).value);
+      const outputIndex = (document.getElementById('filter-output-index') as HTMLSelectElement).value;
       const tags = (document.getElementById('filter-tags') as HTMLInputElement).value;
       const reactionsMin = parseInt((document.getElementById('filter-reactions-min') as HTMLInputElement).value) || 0;
       const tagsMin = parseInt((document.getElementById('filter-tags-min') as HTMLInputElement).value) || 0;
       const sortBy = (document.getElementById('sort-by') as HTMLSelectElement).value;
-      return { types, channels, poster, colorGroups, dateFrom, dateTo, tags, reactionsMin, tagsMin, sortBy };
+      return { types, channels, poster, outputIndex, colorGroups, dateFrom, dateTo, tags, reactionsMin, tagsMin, sortBy };
     }
 
     async function doSearch() {
@@ -982,6 +990,7 @@ import Admin from '../../../layouts/Admin.astro';
       };
       if (filters.channels.length) body.filters.source_channels = filters.channels;
       if (filters.poster) body.filters.poster = filters.poster;
+      if (filters.outputIndex) body.filters.output_index = filters.outputIndex;
       if (filters.colorGroups.length) {
         body.filters.color_group = filters.colorGroups;
       }
@@ -1239,9 +1248,13 @@ import Admin from '../../../layouts/Admin.astro';
         const posterSelect = document.getElementById('filter-poster') as HTMLSelectElement;
         posterSelect.innerHTML = '<option value="">All</option>' +
           (data.uploaders || []).map((u: string) => `<option value="${u}">${u}</option>`).join('');
+        const outputIndexSelect = document.getElementById('filter-output-index') as HTMLSelectElement;
+        outputIndexSelect.innerHTML = '<option value="">All</option>' +
+          (data.output_indexes || []).map((idx: string) => `<option value="${idx}">${idx}</option>`).join('');
         // Restore from URL after dropdowns are populated
         const p = new URLSearchParams(window.location.search);
         if (p.get('poster')) posterSelect.value = p.get('poster')!;
+        if (p.get('output_index')) outputIndexSelect.value = p.get('output_index')!;
         if (p.get('channel')) {
           const chs = p.get('channel')!.split(',');
           Array.from(channelSelect.options).forEach(o => { o.selected = chs.includes(o.value); });

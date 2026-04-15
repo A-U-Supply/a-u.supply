@@ -41,10 +41,36 @@ import Admin from '../../../layouts/Admin.astro';
     <div id="job-outputs-section" style="display:none;">
       <h2>Outputs</h2>
       <div class="output-actions">
+        <button class="action-btn" id="play-all-btn" style="display:none;">Play All</button>
         <button class="action-btn" id="index-all-btn">Index All to Search</button>
         <button class="action-btn action-btn--danger" id="discard-all-btn">Discard All</button>
       </div>
       <div id="outputs-list" class="outputs-grid"></div>
+    </div>
+  </div>
+
+  <!-- Index metadata dialog -->
+  <div class="dialog-overlay" id="index-dialog" style="display:none;">
+    <div class="dialog" style="max-width: 560px;">
+      <h3>Index to Search</h3>
+      <div id="idx-job-info" class="idx-info"></div>
+      <div class="idx-field">
+        <label>Output Index</label>
+        <input id="idx-output-index" type="text" placeholder="Collection name" />
+      </div>
+      <div class="idx-field">
+        <label>Description</label>
+        <textarea id="idx-description" rows="2"></textarea>
+      </div>
+      <div class="idx-field">
+        <label>Additional Tags</label>
+        <input id="idx-tags" type="text" placeholder="comma-separated" />
+      </div>
+      <div id="idx-auto-tags" class="idx-info" style="margin-top: var(--space-xs);"></div>
+      <div class="dialog-actions">
+        <button class="btn-cancel" id="idx-cancel">Cancel</button>
+        <button class="action-btn" id="idx-confirm">Index</button>
+      </div>
     </div>
   </div>
 </Admin>
@@ -120,11 +146,42 @@ import Admin from '../../../layouts/Admin.astro';
     margin-top: var(--space-xs);
     display: flex;
     gap: var(--space-xs);
+    flex-wrap: wrap;
   }
   .output-indexed {
     color: #40c040;
     font-size: 0.65rem;
   }
+  .idx-info {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--color-muted);
+    border-left: 2px solid var(--color-border);
+    padding: var(--space-xs) var(--space-sm);
+    margin-bottom: var(--space-sm);
+    line-height: 1.5;
+    white-space: pre-line;
+  }
+  .idx-field {
+    margin-top: var(--space-sm);
+  }
+  .idx-field label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    margin-bottom: 2px;
+  }
+  .idx-field input, .idx-field textarea {
+    width: 100%;
+    padding: var(--space-xs);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    color: var(--color-text);
+    box-sizing: border-box;
+  }
+  .idx-field textarea { resize: vertical; }
 </style>
 
 <script>
@@ -138,6 +195,10 @@ import Admin from '../../../layouts/Admin.astro';
     const detailEl = document.getElementById('job-detail')!;
     const titleEl = document.getElementById('job-title')!;
 
+    // State for index dialog
+    let pendingIndexIds: string[] = [];
+    let currentJobData: any = null;
+
     function formatSize(bytes: number): string {
       if (bytes < 1024) return bytes + ' B';
       if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -149,6 +210,104 @@ import Admin from '../../../layouts/Admin.astro';
       return new Date(iso).toLocaleString();
     }
 
+    function streamUrl(o: any): string {
+      return o.indexed && o.media_item_id
+        ? `/api/media/${o.media_item_id}/file`
+        : `/api/jobs/${jobId}/outputs/${o.id}/download`;
+    }
+
+    function isPlayable(o: any): boolean {
+      return o.media_type === 'audio' || o.media_type === 'video';
+    }
+
+    // ---- Index dialog ----
+    function openIndexDialog(outputIds: string[]) {
+      pendingIndexIds = outputIds;
+      const data = currentJobData;
+      if (!data) return;
+
+      const job = data.job;
+      const params = job.params || {};
+      const manifestOutput = data.manifest_output || {};
+      const inputFilenames = data.input_filenames || [];
+
+      // Prepopulate output index
+      (document.getElementById('idx-output-index') as HTMLInputElement).value = manifestOutput.index || '';
+
+      // Build auto description
+      const parts = [job.app_name];
+      if (params.recipe) parts.push(params.recipe);
+      else if (params.model) parts.push(params.model);
+      if (params.input_combination && params.input_combination !== 'splice') parts.push(params.input_combination);
+      parts.push(`${job.input_item_count} input${job.input_item_count !== 1 ? 's' : ''}`);
+      if (job.started_at && job.completed_at) {
+        const runtime = ((new Date(job.completed_at).getTime() - new Date(job.started_at).getTime()) / 1000).toFixed(1);
+        parts.push(`${runtime}s`);
+      }
+      (document.getElementById('idx-description') as HTMLTextAreaElement).value = parts.join(' / ');
+
+      // Clear user tags
+      (document.getElementById('idx-tags') as HTMLInputElement).value = '';
+
+      // Job info
+      const infoLines = [`App: ${job.app_name}`];
+      if (params.processing_mode) infoLines.push(`Mode: ${params.processing_mode}`);
+      if (params.recipe) infoLines.push(`Recipe: ${params.recipe}`);
+      if (params.model) infoLines.push(`Model: ${params.model}`);
+      if (inputFilenames.length) infoLines.push(`Inputs: ${inputFilenames.join(', ')}`);
+      if (job.started_at && job.completed_at) {
+        const runtime = ((new Date(job.completed_at).getTime() - new Date(job.started_at).getTime()) / 1000).toFixed(1);
+        infoLines.push(`Runtime: ${runtime}s`);
+      }
+      document.getElementById('idx-job-info')!.textContent = infoLines.join('\n');
+
+      // Auto-tags preview
+      const autoTags = [`app:${job.app_name}`];
+      if (params.recipe) autoTags.push(`recipe:${params.recipe}`);
+      if (params.model) autoTags.push(`model:${params.model}`);
+      if (manifestOutput.index) autoTags.push(`index:${manifestOutput.index}`);
+      document.getElementById('idx-auto-tags')!.textContent = `Auto-tags: ${autoTags.join(', ')}`;
+
+      document.getElementById('index-dialog')!.style.display = 'flex';
+    }
+
+    document.getElementById('idx-cancel')?.addEventListener('click', () => {
+      document.getElementById('index-dialog')!.style.display = 'none';
+      pendingIndexIds = [];
+    });
+
+    document.getElementById('idx-confirm')?.addEventListener('click', async () => {
+      const description = (document.getElementById('idx-description') as HTMLTextAreaElement).value.trim() || undefined;
+      const outputIndex = (document.getElementById('idx-output-index') as HTMLInputElement).value.trim() || undefined;
+      const tagsStr = (document.getElementById('idx-tags') as HTMLInputElement).value.trim();
+      const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+      const meta = { description, tags, output_index: outputIndex };
+
+      let ok = true;
+      if (pendingIndexIds.length === 1) {
+        const res = await fetch(`/api/jobs/${jobId}/outputs/${pendingIndexIds[0]}/index`, {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(meta),
+        });
+        ok = res.ok;
+      } else {
+        const res = await fetch(`/api/jobs/${jobId}/outputs/index`, {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ output_ids: pendingIndexIds, ...meta }),
+        });
+        ok = res.ok;
+      }
+
+      document.getElementById('index-dialog')!.style.display = 'none';
+      pendingIndexIds = [];
+      if (ok) { loadJob(); }
+      else { (window as any).toast.error('Indexing failed'); }
+    });
+
+    // ---- Load job ----
     async function loadJob() {
       const res = await fetch(`/api/jobs/${jobId}`, { credentials: 'include' });
       loadingEl.style.display = 'none';
@@ -160,6 +319,7 @@ import Admin from '../../../layouts/Admin.astro';
       }
 
       const data = await res.json();
+      currentJobData = data;
       const job = data.job;
       const outputs = data.outputs;
 
@@ -201,6 +361,11 @@ import Admin from '../../../layouts/Admin.astro';
         outputsSection.style.display = '';
         const listEl = document.getElementById('outputs-list')!;
 
+        // Show Play All if there are playable outputs
+        const playable = outputs.filter(isPlayable);
+        const playAllBtn = document.getElementById('play-all-btn')!;
+        playAllBtn.style.display = playable.length > 0 ? '' : 'none';
+
         listEl.innerHTML = outputs.map((o: any) => `
           <div class="output-card">
             <div class="output-name" title="${o.filename}">${o.filename}</div>
@@ -209,33 +374,69 @@ import Admin from '../../../layouts/Admin.astro';
             </div>
             ${o.indexed ? '<div class="output-indexed">indexed</div>' : ''}
             <div class="output-actions">
+              ${isPlayable(o) ? `<button class="action-btn" data-play="${o.id}">Play</button>` : ''}
               <a href="/api/jobs/${jobId}/outputs/${o.id}/download" class="action-btn" style="text-decoration:none;">Download</a>
               ${!o.indexed ? `<button class="action-btn" data-index="${o.id}">Index</button>` : ''}
             </div>
           </div>
         `).join('');
 
-        // Index buttons
-        listEl.querySelectorAll('[data-index]').forEach(btn => {
-          btn.addEventListener('click', async () => {
-            const oid = (btn as HTMLElement).dataset.index;
-            const res = await fetch(`/api/jobs/${jobId}/outputs/${oid}/index`, {
-              method: 'POST', credentials: 'include' });
-            if (res.ok) { loadJob(); }
-            else { (window as any).toast.error('Indexing failed'); }
+        // Play buttons
+        listEl.querySelectorAll('[data-play]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const oid = (btn as HTMLElement).dataset.play;
+            const o = outputs.find((x: any) => x.id === oid);
+            if (!o) return;
+            document.dispatchEvent(new CustomEvent('player:queue', {
+              detail: {
+                tracks: [{
+                  track_id: o.media_item_id || o.id,
+                  title: o.filename,
+                  release_title: '',
+                  release_code: '',
+                  media_type: o.media_type,
+                  stream_url: streamUrl(o),
+                  cover_url: '',
+                  duration: 0,
+                  entity_name: job.app_name,
+                }],
+                startIndex: 0,
+              },
+            }));
           });
         });
 
-        // Index all
-        document.getElementById('index-all-btn')?.addEventListener('click', async () => {
+        // Play All
+        playAllBtn.onclick = () => {
+          const tracks = playable.map((o: any) => ({
+            track_id: o.media_item_id || o.id,
+            title: o.filename,
+            release_title: '',
+            release_code: '',
+            media_type: o.media_type,
+            stream_url: streamUrl(o),
+            cover_url: '',
+            duration: 0,
+            entity_name: job.app_name,
+          }));
+          document.dispatchEvent(new CustomEvent('player:queue', {
+            detail: { tracks, startIndex: 0 },
+          }));
+        };
+
+        // Index buttons → open dialog
+        listEl.querySelectorAll('[data-index]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const oid = (btn as HTMLElement).dataset.index!;
+            openIndexDialog([oid]);
+          });
+        });
+
+        // Index all → open dialog
+        document.getElementById('index-all-btn')?.addEventListener('click', () => {
           const unindexed = outputs.filter((o: any) => !o.indexed).map((o: any) => o.id);
           if (unindexed.length === 0) { (window as any).toast.success('All outputs already indexed'); return; }
-          const res = await fetch(`/api/jobs/${jobId}/outputs/index`, {
-            method: 'POST', credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ output_ids: unindexed }) });
-          if (res.ok) { loadJob(); }
-          else { (window as any).toast.error('Bulk indexing failed'); }
+          openIndexDialog(unindexed);
         });
 
         // Discard all
