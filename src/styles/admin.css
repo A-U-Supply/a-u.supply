@@ -113,6 +113,16 @@
   max-width: 960px;
 }
 
+body.player-active .admin-main {
+  padding-bottom: 80px;
+}
+
+@media (max-width: 639px) {
+  body.player-active .admin-main {
+    padding-bottom: 120px;
+  }
+}
+
 .admin-main h1 {
   font-size: var(--text-xl);
   letter-spacing: 2pt;

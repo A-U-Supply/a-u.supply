@@ -47,8 +47,15 @@ body.player-active {
   padding-bottom: 80px;
 }
 
+body.player-active .site-footer {
+  padding-bottom: 80px;
+}
+
 @media (max-width: 639px) {
   body.player-active {
+    padding-bottom: 120px;
+  }
+  body.player-active .site-footer {
     padding-bottom: 120px;
   }
 }

@@ -475,7 +475,7 @@
     </div>
 
     {#if currentTrack?.stream_url}
-      <a class="player__btn player__btn--download" href={currentTrack.stream_url} download title="Download">
+      <a class="player__btn player__btn--download" href={currentTrack.stream_url} download={currentTrack.title || 'download'} title="Download">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
           <path d="M8 1v9M4 7l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="square"/>
           <rect x="2" y="13" width="12" height="1.5"/>
@@ -489,6 +489,13 @@
         <rect x="1" y="6" width="10" height="1.5"/>
         <rect x="1" y="10" width="7" height="1.5"/>
         <polygon points="11,9 11,14 15,11.5"/>
+      </svg>
+    </button>
+
+    <button class="player__btn player__btn--close" onclick={clearQueue} title="Close">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <line x1="3" y1="3" x2="13" y2="13"/>
+        <line x1="13" y1="3" x2="3" y2="13"/>
       </svg>
     </button>
   </div>
@@ -722,6 +729,12 @@
   .player__btn--queue {
     flex-shrink: 0;
   }
+
+  .player__btn--close {
+    flex-shrink: 0;
+    color: #666;
+  }
+  .player__btn--close:hover { color: #c00; }
 
   .player__repeat-one {
     position: absolute;

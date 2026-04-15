@@ -808,6 +808,7 @@ def stream_track(code: str, track_id: int, request: Request, db: Session = Depen
     from fastapi.responses import Response, StreamingResponse
     mime_type = mimetypes.guess_type(str(fpath))[0] or "application/octet-stream"
     file_size = fpath.stat().st_size
+    filename = fpath.name
 
     range_header = request.headers.get("range")
     if range_header:
@@ -838,11 +839,53 @@ def stream_track(code: str, track_id: int, request: Request, db: Session = Depen
                 "Content-Range": f"bytes {start}-{end}/{file_size}",
                 "Accept-Ranges": "bytes",
                 "Content-Length": str(length),
+                "Content-Disposition": f'inline; filename="{filename}"',
             },
         )
 
     from fastapi.responses import FileResponse
-    return FileResponse(fpath, media_type=mime_type, headers={"Accept-Ranges": "bytes", "Content-Length": str(file_size)})
+    return FileResponse(fpath, media_type=mime_type, filename=filename, headers={"Accept-Ranges": "bytes", "Content-Length": str(file_size)})
+
+
+@router.get("/releases/{code}/download", tags=["Tracks"], summary="Download all tracks as ZIP")
+def download_release_zip(code: str, db: Session = Depends(get_db), user: User | None = Depends(optional_user)):
+    """Download all tracks of a release as a ZIP archive.
+
+    **Visibility:** Public if the release is published. Returns 404 for drafts
+    unless the user is authenticated.
+    """
+    release = db.query(Release).filter(Release.product_code == code).first()
+    if not release:
+        raise HTTPException(status_code=404, detail="Release not found")
+    if release.status == "draft" and user is None:
+        raise HTTPException(status_code=404, detail="Release not found")
+
+    tracks = db.query(Track).filter(Track.release_id == release.id).order_by(Track.track_number).all()
+    if not tracks:
+        raise HTTPException(status_code=404, detail="No tracks found")
+
+    import io
+    import zipfile
+    from fastapi.responses import StreamingResponse
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for t in tracks:
+            if not t.audio_file_path:
+                continue
+            fpath = MEDIA_DIR / t.audio_file_path
+            if not fpath.exists():
+                continue
+            zf.write(fpath, fpath.name)
+
+    buf.seek(0)
+    safe_code = code.replace("/", "_").replace("\\", "_")
+    zip_filename = f"{safe_code}.zip"
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_filename}"'},
+    )
 
 
 # --- Cover art endpoints ---
