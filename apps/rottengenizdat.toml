@@ -5,6 +5,15 @@ image = "ghcr.io/a-u-supply/rottengenizdat:latest"
 command = "rave"
 timeout_seconds = 600
 
+# How input files are passed to the command:
+#   "positional" = appended as positional args before flags
+#   "flag"       = passed via a named flag (set input_flag)
+#   "stdin"      = piped via stdin
+input_mode = "positional"
+
+# Static flags always appended to the command
+output_flag = "-o /work/output/output.wav"
+
 [input]
 min_items = 1
 max_items = 10
@@ -15,9 +24,10 @@ allow_random_fill = true
 type = "select"
 label = "RAVE Model"
 description = "Neural network trained on a specific audio domain."
-options = ["percussion", "vintage", "nasa", "vctk", "orchestral", "instrumental", "strings"]
+options = ["percussion", "vintage", "nasa", "VCTK", "musicnet", "isis", "sol_ordinario", "sol_full", "darbouka_onnx"]
 default = "vintage"
 required = true
+flag = "-m"
 
 [params.temperature]
 type = "float"
@@ -26,6 +36,7 @@ description = "0.3 = smooth, 1.0 = identity, 2.0+ = destruction"
 min = 0.1
 max = 3.0
 default = 1.0
+flag = "-t"
 
 [params.noise]
 type = "float"
@@ -34,6 +45,7 @@ description = "Amount of noise injected into the latent space. 0.0 = none, 1.0 =
 min = 0.0
 max = 1.0
 default = 0.0
+flag = "-n"
 
 [params.mix]
 type = "float"
@@ -42,25 +54,29 @@ description = "Blend between original (0.0) and processed (1.0) audio."
 min = 0.0
 max = 1.0
 default = 1.0
+flag = "-w"
 
 [params.reverse]
 type = "bool"
 label = "Reverse"
 description = "Flip the temporal axis in latent space."
 default = false
+flag = "-r"
 
 [params.shuffle]
 type = "float"
 label = "Shuffle"
-description = "Timeline fragmentation amount. 0.0 = none."
+description = "Timeline fragmentation. Chunk size in frames. 0 = none, 4-8 = mild, 2-3 = heavy."
 min = 0.0
-max = 1.0
+max = 32.0
 default = 0.0
+flag = "--shuffle"
 
 [params.quantize]
 type = "float"
 label = "Quantize"
-description = "Discretize continuous latent values. 0.0 = none."
+description = "Snap latent values to a grid. 0.0 = off, 0.1 = subtle, 0.5 = crunchy, 1.0 = obliterated."
 min = 0.0
 max = 1.0
 default = 0.0
+flag = "-q"

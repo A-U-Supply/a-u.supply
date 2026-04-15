@@ -264,6 +264,23 @@ class AppRegister(BaseModel):
     - ``min`` / ``max`` — numeric bounds (for ``float`` and ``int``)
     - ``min_selections`` — minimum selections required (for ``multi_select``)
     - ``depends_on`` — conditional: ``{param = "mode", value = "chain"}``
+    - ``flag`` — CLI flag the worker uses when invoking the container
+      (e.g. ``"-m"`` for model). Bool params: flag included when true, omitted
+      when false. Params at their default value are omitted.
+
+    ## Command building
+
+    The worker builds the full ``docker run`` command from the manifest:
+
+    1. ``command`` — subcommand (e.g. ``rave``)
+    2. Input files — passed as positional args (``input_mode = "positional"``,
+       the default) or via a named flag (``input_mode = "flag"``, set ``input_flag``)
+    3. Params — each param with a ``flag`` field is mapped to a CLI flag + value
+    4. ``output_flag`` — static string appended (e.g. ``"-o /work/output/output.wav"``)
+
+    Example result::
+
+        rotten rave /work/input/drums.wav -m vintage -t 1.5 -r -o /work/output/output.wav
 
     ## Container contract
 
