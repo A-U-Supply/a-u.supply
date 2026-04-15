@@ -1,0 +1,454 @@
+---
+import Admin from '../../layouts/Admin.astro';
+---
+
+<Admin title="Bookmarks" current="bookmarks">
+  <div class="page-header">
+    <h1>Bookmarks</h1>
+    <div class="header-actions">
+      <select class="filter-select" id="type-filter">
+        <option value="">All Types</option>
+        <option value="media_item">Media Items</option>
+        <option value="release">Releases</option>
+        <option value="track">Tracks</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="batch-bar" class="batch-bar" style="display:none;">
+    <span id="selected-count">0 selected</span>
+    <button class="action-btn" data-batch="workspace">+ Workspace</button>
+    <button class="action-btn action-btn--danger" data-batch="remove">Remove</button>
+    <button class="action-btn" id="clear-selection">Clear</button>
+  </div>
+
+  <div id="loading" class="page-loading"><span class="loading-dots">Loading</span></div>
+  <div id="empty" class="empty-state" style="display:none;">
+    <div class="empty-state__icon">&#9734;</div>
+    No bookmarks yet. Star items from Search, Workspace, or Releases.
+  </div>
+
+  <div id="bookmarks-grid" class="bm-grid" style="display:none;"></div>
+
+  <div class="pagination" id="pagination" style="display:none;">
+    <button class="action-btn" id="prev-page">Prev</button>
+    <span id="page-info">Page 1</span>
+    <button class="action-btn" id="next-page">Next</button>
+  </div>
+</Admin>
+
+<!-- Global styles for dynamically rendered grid items -->
+<style is:global>
+  .bm-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+  }
+  .bm-card {
+    border: 1px solid var(--color-border);
+    position: relative;
+    overflow: hidden;
+    min-width: 0;
+    transition: border-color 0.15s;
+    cursor: pointer;
+  }
+  .bm-card:hover { border-color: var(--color-text); }
+  .bm-card.selected { border-color: var(--color-accent); border-width: 2px; }
+  .bm-card__check {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    z-index: 1;
+  }
+  .bm-card__thumb {
+    width: 100%;
+    aspect-ratio: 1;
+    background: #111;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+  .bm-card__thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .bm-card__type-badge {
+    position: absolute;
+    top: 3px;
+    right: 4px;
+    font-size: 0.55rem;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    padding: 1px 4px;
+    text-transform: uppercase;
+    font-family: var(--font-mono);
+  }
+  .bm-card__play {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.35);
+    opacity: 0;
+    transition: opacity 0.15s;
+    cursor: pointer;
+    border: none;
+    padding: 0;
+  }
+  .bm-card__thumb:hover .bm-card__play { opacity: 1; }
+  .bm-card__play svg {
+    width: 32px;
+    height: 32px;
+    fill: #fff;
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
+  }
+  .bm-card__info {
+    padding: 4px 6px;
+    border-top: 1px solid var(--color-border);
+    min-width: 0;
+    font-size: 0.65rem;
+    font-family: var(--font-mono);
+  }
+  .bm-card__name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .bm-card__sub {
+    color: var(--color-muted);
+    font-size: 0.55rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+</style>
+
+<style>
+  .batch-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    background: #f5f5f5;
+    border: 1px solid var(--color-border);
+    margin-bottom: var(--space-sm);
+    flex-wrap: wrap;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+  .batch-bar span {
+    color: var(--color-muted);
+    margin-right: auto;
+  }
+</style>
+
+<script>
+  document.addEventListener('astro:page-load', async () => {
+    const gridEl = document.getElementById('bookmarks-grid');
+    if (!gridEl) return;
+
+    await (window as any).__authReady;
+
+    const loadingEl = document.getElementById('loading')!;
+    const emptyEl = document.getElementById('empty')!;
+    const paginationEl = document.getElementById('pagination')!;
+    const pageInfo = document.getElementById('page-info')!;
+    const batchBar = document.getElementById('batch-bar')!;
+    const selectedCount = document.getElementById('selected-count')!;
+    const typeFilter = document.getElementById('type-filter') as HTMLSelectElement;
+
+    let currentPage = 1;
+    const pageSize = 48;
+    let totalItems = 0;
+    let allItems: any[] = [];
+    let selectedIds = new Set<string>();
+
+    const playSvg = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
+
+    async function loadBookmarks() {
+      loadingEl.style.display = 'block';
+      emptyEl.style.display = 'none';
+      gridEl.style.display = 'none';
+
+      const typeParam = typeFilter.value ? `&target_type=${typeFilter.value}` : '';
+      const res = await fetch(`/api/bookmarks?page=${currentPage}&per_page=${pageSize}${typeParam}`, { credentials: 'include' });
+      if (!res.ok) { loadingEl.style.display = 'none'; emptyEl.style.display = ''; return; }
+
+      const data = await res.json();
+      totalItems = data.total;
+      loadingEl.style.display = 'none';
+
+      if (totalItems === 0) {
+        emptyEl.style.display = '';
+        paginationEl.style.display = 'none';
+        return;
+      }
+
+      // Enrich bookmarks with metadata
+      allItems = await enrichBookmarks(data.items);
+      renderGrid();
+
+      const totalPages = Math.ceil(totalItems / pageSize);
+      paginationEl.style.display = totalPages > 1 ? 'flex' : 'none';
+      pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+    }
+
+    async function enrichBookmarks(bookmarks: any[]) {
+      // Group by type and batch-fetch metadata
+      const mediaIds = bookmarks.filter(b => b.target_type === 'media_item').map(b => b.target_id);
+      const releaseIds = bookmarks.filter(b => b.target_type === 'release').map(b => b.target_id);
+      const trackIds = bookmarks.filter(b => b.target_type === 'track').map(b => b.target_id);
+
+      const metaMap = new Map<string, any>();
+
+      // Fetch media items
+      for (const id of mediaIds) {
+        try {
+          const res = await fetch(`/api/media/${id}`, { credentials: 'include' });
+          if (res.ok) {
+            const item = await res.json();
+            metaMap.set(`media_item:${id}`, {
+              name: item.filename || 'Untitled',
+              sub: item.media_type,
+              media_type: item.media_type,
+              thumb: (item.media_type === 'image' || item.media_type === 'video') ? `/api/media/${id}/thumbnail` : '/assets/default-cover.jpg',
+              href: `/admin/search/detail?id=${id}`,
+              playable: item.media_type === 'audio' || item.media_type === 'video',
+            });
+          }
+        } catch {}
+      }
+
+      // Fetch releases
+      for (const code of releaseIds) {
+        try {
+          const res = await fetch(`/api/releases/${encodeURIComponent(code)}`);
+          if (res.ok) {
+            const rel = await res.json();
+            const encoded = encodeURIComponent(code);
+            metaMap.set(`release:${code}`, {
+              name: rel.title || code,
+              sub: (rel.entities || []).map((e: any) => e.name).join(', '),
+              media_type: 'release',
+              thumb: rel.cover_art_url ? `/api/releases/${encoded}/cover?size=thumb` : '/assets/default-cover.jpg',
+              href: `/catalog/release?code=${encoded}`,
+              playable: false,
+            });
+          }
+        } catch {}
+      }
+
+      // Fetch tracks
+      for (const id of trackIds) {
+        try {
+          const res = await fetch(`/api/tracks/${id}`, { credentials: 'include' });
+          if (res.ok) {
+            const t = await res.json();
+            const encoded = encodeURIComponent(t.release_code || '');
+            metaMap.set(`track:${id}`, {
+              name: t.title || `Track ${id}`,
+              sub: t.release_title || '',
+              media_type: 'audio',
+              thumb: t.cover_url || '/assets/default-cover.jpg',
+              href: `/catalog/release?code=${encoded}`,
+              playable: !!t.stream_url,
+              stream_url: t.stream_url,
+            });
+          }
+        } catch {}
+      }
+
+      return bookmarks.map(b => ({
+        ...b,
+        meta: metaMap.get(`${b.target_type}:${b.target_id}`) || {
+          name: b.target_id,
+          sub: b.target_type,
+          media_type: b.target_type,
+          thumb: '/assets/default-cover.jpg',
+          href: '#',
+          playable: false,
+        },
+      }));
+    }
+
+    function renderGrid() {
+      gridEl.style.display = 'grid';
+      gridEl.innerHTML = allItems.map(item => {
+        const m = item.meta;
+        const checked = selectedIds.has(item.target_id) ? 'checked' : '';
+        const selectedClass = selectedIds.has(item.target_id) ? ' selected' : '';
+        const thumbStyle = m.thumb === '/assets/default-cover.jpg' ? ' style="image-rendering: pixelated;"' : '';
+        const playBtn = m.playable
+          ? `<button class="bm-card__play" data-play-id="${item.target_id}" data-play-type="${m.media_type}" data-target-type="${item.target_type}" title="Play">${playSvg}</button>`
+          : '';
+        return `<div class="bm-card${selectedClass}" data-target-type="${item.target_type}" data-target-id="${item.target_id}" data-href="${m.href}">
+          <input type="checkbox" class="bm-card__check" data-select="${item.target_id}" ${checked} />
+          <div class="bm-card__thumb">
+            <span class="bm-card__type-badge">${item.target_type.replace('_', ' ')}</span>
+            <img src="${m.thumb}" alt="" loading="lazy"${thumbStyle} />
+            ${playBtn}
+          </div>
+          <div class="bm-card__info">
+            <div class="bm-card__name">
+              <button class="bm-star bm-star--sm bookmarked" data-bm-type="${item.target_type}" data-bm-id="${item.target_id}" title="Remove bookmark"></button>
+              ${m.name}
+            </div>
+            ${m.sub ? `<div class="bm-card__sub">${m.sub}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function updateSelection() {
+      if (selectedIds.size > 0) {
+        batchBar.style.display = 'flex';
+        selectedCount.textContent = selectedIds.size + ' selected';
+      } else {
+        batchBar.style.display = 'none';
+      }
+    }
+
+    // Delegated click handling
+    gridEl.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+
+      // Star click — remove bookmark
+      const star = target.closest('.bm-star') as HTMLElement | null;
+      if (star) {
+        e.stopPropagation();
+        const bm = (window as any).__bookmarks;
+        if (bm) {
+          bm.toggle(star.dataset.bmType!, star.dataset.bmId!).then((bookmarked: boolean) => {
+            if (!bookmarked) {
+              // Remove from view
+              allItems = allItems.filter(i => !(i.target_type === star.dataset.bmType && i.target_id === star.dataset.bmId));
+              totalItems--;
+              if (allItems.length === 0 && currentPage > 1) { currentPage--; loadBookmarks(); }
+              else if (allItems.length === 0) { gridEl.style.display = 'none'; emptyEl.style.display = ''; }
+              else renderGrid();
+            }
+          });
+        }
+        return;
+      }
+
+      // Play button
+      const playBtn = target.closest('.bm-card__play') as HTMLElement | null;
+      if (playBtn) {
+        e.stopPropagation();
+        const id = playBtn.dataset.playId!;
+        const mediaType = playBtn.dataset.playType!;
+        const targetType = playBtn.dataset.targetType!;
+        const item = allItems.find((i: any) => i.target_id === id && i.target_type === targetType);
+        if (!item) return;
+        const m = item.meta;
+        document.dispatchEvent(new CustomEvent('player:queue', {
+          detail: {
+            tracks: [{
+              track_id: id,
+              title: m.name,
+              release_title: m.sub || '',
+              release_code: '',
+              media_type: mediaType,
+              stream_url: m.stream_url || `/api/media/${id}/file`,
+              cover_url: m.thumb,
+              duration: 0,
+              entity_name: '',
+            }],
+            startIndex: 0,
+          },
+        }));
+        return;
+      }
+
+      // Checkbox
+      const checkbox = target.closest('.bm-card__check') as HTMLInputElement | null;
+      if (checkbox) {
+        e.stopPropagation();
+        const id = checkbox.dataset.select!;
+        if (checkbox.checked) selectedIds.add(id);
+        else selectedIds.delete(id);
+        updateSelection();
+        return;
+      }
+
+      // Card click — navigate
+      const card = target.closest('.bm-card') as HTMLElement | null;
+      if (card && !target.closest('.bm-card__check')) {
+        const href = card.dataset.href;
+        if (href && href !== '#') window.location.href = href;
+      }
+    });
+
+    // Batch actions
+    document.querySelectorAll('[data-batch]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const action = (btn as HTMLElement).dataset.batch;
+        if (action === 'workspace') {
+          // Only add media_items to workspace
+          const mediaIds = allItems
+            .filter(i => selectedIds.has(i.target_id) && i.target_type === 'media_item')
+            .map(i => i.target_id);
+          if (mediaIds.length === 0) {
+            (window as any).toast.error('Only media items can be added to workspace');
+            return;
+          }
+          let wsId = localStorage.getItem('active_workspace_id');
+          if (!wsId) {
+            const res = await fetch('/api/workspaces', { method: 'POST', credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: 'My Workspace' }) });
+            const ws = await res.json();
+            wsId = ws.id;
+            localStorage.setItem('active_workspace_id', wsId!);
+          }
+          try {
+            const res = await fetch(`/api/workspaces/${wsId}/items`, { method: 'POST', credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ media_item_ids: mediaIds }) });
+            const data = await res.json();
+            if (data.ok) (window as any).toast.success(`Added ${data.added} item(s) to workspace`);
+          } catch { (window as any).toast.error('Failed to add to workspace'); }
+        } else if (action === 'remove') {
+          const bm = (window as any).__bookmarks;
+          if (!bm) return;
+          for (const id of selectedIds) {
+            const item = allItems.find((i: any) => i.target_id === id);
+            if (item) await bm.toggle(item.target_type, item.target_id);
+          }
+          selectedIds.clear();
+          updateSelection();
+          loadBookmarks();
+        }
+      });
+    });
+
+    document.getElementById('clear-selection')?.addEventListener('click', () => {
+      selectedIds.clear();
+      updateSelection();
+      renderGrid();
+    });
+
+    typeFilter.addEventListener('change', () => {
+      currentPage = 1;
+      loadBookmarks();
+    });
+
+    document.getElementById('prev-page')?.addEventListener('click', () => {
+      if (currentPage > 1) { currentPage--; loadBookmarks(); }
+    });
+    document.getElementById('next-page')?.addEventListener('click', () => {
+      if (currentPage * pageSize < totalItems) { currentPage++; loadBookmarks(); }
+    });
+
+    loadBookmarks();
+  });
+</script>

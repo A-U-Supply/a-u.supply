@@ -104,6 +104,38 @@
   }
 
   let handler = null;
+  let bookmarked = $state(false);
+  let hasBookmarks = $state(false);
+
+  function getBookmarkInfo(track) {
+    if (!track) return null;
+    // Determine target type: media_item for search items, track for release tracks
+    if (track.media_type) return { type: 'media_item', id: String(track.track_id) };
+    if (track.release_code) return { type: 'track', id: String(track.track_id) };
+    return null;
+  }
+
+  async function checkBookmark() {
+    const bm = window.__bookmarks;
+    if (!bm) { hasBookmarks = false; return; }
+    hasBookmarks = true;
+    const info = getBookmarkInfo(currentTrack);
+    if (!info) { bookmarked = false; return; }
+    const set = await bm.check(info.type, [info.id]);
+    bookmarked = set.has(info.id);
+  }
+
+  async function toggleBookmark() {
+    const bm = window.__bookmarks;
+    if (!bm) return;
+    const info = getBookmarkInfo(currentTrack);
+    if (!info) return;
+    bookmarked = await bm.toggle(info.type, info.id);
+  }
+
+  $effect(() => {
+    if (currentTrack) checkBookmark();
+  });
 
   $effect(() => {
     if (visible) {
@@ -184,6 +216,13 @@
           {#if currentTrack?.entity_name}&mdash; {currentTrack.entity_name}{/if}
         </div>
       </div>
+      {#if hasBookmarks}
+        <button
+          class="player__star {bookmarked ? 'bookmarked' : ''}"
+          onclick={toggleBookmark}
+          title={bookmarked ? 'Remove bookmark' : 'Bookmark'}
+        ></button>
+      {/if}
     </div>
 
     <div class="player__controls">
@@ -316,6 +355,22 @@
     color: #888;
     font-size: 0.75rem;
   }
+
+  .player__star {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    font-size: 1.1rem;
+    line-height: 1;
+    color: #555;
+    transition: color 0.15s;
+    flex-shrink: 0;
+  }
+  .player__star::before { content: '\2606'; }
+  .player__star:hover { color: #b8860b; }
+  .player__star.bookmarked { color: #b8860b; }
+  .player__star.bookmarked::before { content: '\2605'; }
 
   .player__controls {
     display: flex;

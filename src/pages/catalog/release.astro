@@ -27,6 +27,7 @@ import Base from '../../layouts/Base.astro';
 
           <div class="release__actions">
             <button class="btn-play-all" id="play-all">&#9654; Play All</button>
+            <button class="release__star" id="release-bm-star" style="display:none;" title="Bookmark release"></button>
           </div>
         </div>
       </div>
@@ -204,6 +205,21 @@ import Base from '../../layouts/Base.astro';
   .btn-play-all:hover {
     background: var(--color-accent);
   }
+
+  .release__star, .track-star {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    font-size: 1.1rem;
+    line-height: 1;
+    color: var(--color-muted);
+    transition: color 0.15s;
+  }
+  .release__star::before, .track-star::before { content: '\2606'; }
+  .release__star:hover, .track-star:hover { color: #b8860b; }
+  .release__star.bookmarked, .track-star.bookmarked { color: #b8860b; }
+  .release__star.bookmarked::before, .track-star.bookmarked::before { content: '\2605'; }
 
   .release__section {
     margin-bottom: var(--space-lg);
@@ -460,6 +476,7 @@ import Base from '../../layouts/Base.astro';
         <td><button class="btn-track-play" data-index="${i}" title="Play">&#9654;</button></td>
         <td>${escapeHtml(t.title || `Track ${i + 1}`)}</td>
         <td>${formatDuration(t.duration_seconds)}</td>
+        <td><button class="track-star" data-bm-type="track" data-bm-id="${t.id}" style="display:none;" title="Bookmark"></button></td>
       </tr>`).join('');
     }
 
@@ -475,6 +492,9 @@ import Base from '../../layouts/Base.astro';
       const index = parseInt(btn.dataset.index || '0', 10);
       dispatchQueue(r, index);
     });
+
+    // Bookmarks (only if logged in — __bookmarks set by Admin layout)
+    initBookmarks(r);
 
     // Distribution links
     if (r.distribution_links.length > 0) {
@@ -504,6 +524,93 @@ import Base from '../../layouts/Base.astro';
       const descSection = document.getElementById('desc-section')!;
       descSection.style.display = 'block';
       document.getElementById('description')!.textContent = r.description;
+    }
+  }
+
+  async function initBookmarks(r: ReleaseData) {
+    // Try to detect if user is logged in by checking for __bookmarks or calling /api/me
+    let bm = (window as any).__bookmarks;
+    if (!bm) {
+      // On public pages, try to set up a minimal bookmarks helper if user is logged in
+      try {
+        const meRes = await fetch('/api/me', { credentials: 'include' });
+        if (!meRes.ok) return; // Not logged in
+        // Set up a minimal helper
+        const bmCache = new Map<string, Set<string>>();
+        async function bmCheck(targetType: string, ids: string[]): Promise<Set<string>> {
+          if (ids.length === 0) return new Set();
+          const cached = bmCache.get(targetType);
+          if (cached) return cached;
+          try {
+            const res = await fetch('/api/bookmarks/check', {
+              method: 'POST', credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ target_type: targetType, target_ids: ids }),
+            });
+            if (!res.ok) return new Set();
+            const data = await res.json();
+            const set = new Set<string>(data.bookmarked_ids);
+            bmCache.set(targetType, set);
+            return set;
+          } catch { return new Set(); }
+        }
+        async function bmToggle(targetType: string, targetId: string): Promise<boolean> {
+          try {
+            const res = await fetch('/api/bookmarks', {
+              method: 'POST', credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ target_type: targetType, target_id: targetId }),
+            });
+            if (!res.ok) return false;
+            const data = await res.json();
+            const set = bmCache.get(targetType) || new Set<string>();
+            if (data.bookmarked) set.add(targetId); else set.delete(targetId);
+            bmCache.set(targetType, set);
+            document.querySelectorAll(`[data-bm-type="${targetType}"][data-bm-id="${targetId}"]`).forEach(el => {
+              el.classList.toggle('bookmarked', data.bookmarked);
+            });
+            return data.bookmarked;
+          } catch { return false; }
+        }
+        bm = { check: bmCheck, toggle: bmToggle, cache: bmCache };
+      } catch { return; }
+    }
+
+    // Show release star
+    const releaseStar = document.getElementById('release-bm-star');
+    const releaseId = String(r.product_code);
+    if (releaseStar) {
+      releaseStar.dataset.bmType = 'release';
+      releaseStar.dataset.bmId = releaseId;
+      releaseStar.style.display = '';
+      releaseStar.addEventListener('click', () => bm.toggle('release', releaseId));
+    }
+
+    // Show track stars
+    document.querySelectorAll('.track-star').forEach((el: Element) => {
+      (el as HTMLElement).style.display = '';
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        bm.toggle((el as HTMLElement).dataset.bmType!, (el as HTMLElement).dataset.bmId!);
+      });
+    });
+
+    // Check release bookmark
+    bm.check('release', [releaseId]).then((set: Set<string>) => {
+      if (set.has(releaseId) && releaseStar) {
+        releaseStar.classList.add('bookmarked');
+      }
+    });
+
+    // Check track bookmarks
+    const trackIds = r.tracks.map(t => String(t.id));
+    if (trackIds.length > 0) {
+      bm.check('track', trackIds).then((set: Set<string>) => {
+        document.querySelectorAll('.track-star').forEach((el: Element) => {
+          const id = (el as HTMLElement).dataset.bmId!;
+          if (set.has(id)) el.classList.add('bookmarked');
+        });
+      });
     }
   }
 
