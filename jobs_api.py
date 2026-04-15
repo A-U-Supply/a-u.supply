@@ -1146,7 +1146,13 @@ def _do_index_output(output_id: str, job_id: str, user, db: Session,
     if not output:
         raise HTTPException(status_code=404, detail="Output not found")
     if output.indexed:
-        raise HTTPException(status_code=400, detail="Already indexed")
+        # If the linked media item was deleted, allow re-indexing
+        if output.media_item_id and not db.query(MediaItem).filter(MediaItem.id == output.media_item_id).first():
+            output.indexed = False
+            output.media_item_id = None
+            db.flush()
+        else:
+            raise HTTPException(status_code=400, detail="Already indexed")
 
     job = db.query(Job).filter(Job.id == job_id).first()
     source_path = JOB_DATA_DIR / job_id / "output" / output.file_path
