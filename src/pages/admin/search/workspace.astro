@@ -445,11 +445,32 @@ import Admin from '../../../layouts/Admin.astro';
       const paramsContainer = document.getElementById('config-params')!;
       paramsContainer.innerHTML = '';
 
-      const params = manifest.params || {};
+      const paramSpecs = manifest.params || {};
 
-      for (const [name, spec] of Object.entries(params) as [string, any][]) {
+      // Check if a param's depends_on condition is met given current form values
+      const isParamActive = (spec: any): boolean => {
+        const dep = spec.depends_on;
+        if (!dep) return true;
+        const depEl = paramsContainer.querySelector(`[name="${dep.param}"]`) as HTMLInputElement | HTMLSelectElement;
+        if (!depEl) return true;
+        const depVal = depEl.value;
+        if (dep.values) return dep.values.includes(depVal);
+        return depVal === dep.value;
+      };
+
+      // Update visibility of all param fields based on depends_on
+      const updateVisibility = () => {
+        for (const [name, spec] of Object.entries(paramSpecs) as [string, any][]) {
+          const field = paramsContainer.querySelector(`[data-param-field="${name}"]`) as HTMLElement;
+          if (!field) continue;
+          field.style.display = isParamActive(spec) ? '' : 'none';
+        }
+      };
+
+      for (const [name, spec] of Object.entries(paramSpecs) as [string, any][]) {
         const field = document.createElement('div');
         field.className = 'config-field';
+        field.setAttribute('data-param-field', name);
 
         let inputHtml = '';
         if (spec.type === 'select') {
@@ -518,14 +539,16 @@ import Admin from '../../../layouts/Admin.astro';
         }
       }
 
-      // Clear inline errors on input
+      // Wire up depends_on visibility: any select/input change re-evaluates visibility
       paramsContainer.querySelectorAll('input, select').forEach(el => {
+        el.addEventListener('change', updateVisibility);
         el.addEventListener('input', () => {
           const name = (el as HTMLInputElement).name;
           const errDiv = paramsContainer.querySelector(`.param-error[data-param="${name}"]`) as HTMLElement;
           if (errDiv) errDiv.style.display = 'none';
         });
       });
+      updateVisibility();
 
       document.getElementById('config-dialog')!.style.display = 'flex';
     });
@@ -548,8 +571,22 @@ import Admin from '../../../layouts/Admin.astro';
         (el as HTMLElement).style.display = 'none';
       });
 
+      // Check if a param's depends_on is met (mirrors the visibility logic)
+      const isActive = (spec: any): boolean => {
+        const dep = spec.depends_on;
+        if (!dep) return true;
+        const depEl = paramsContainer.querySelector(`[name="${dep.param}"]`) as HTMLInputElement | HTMLSelectElement;
+        if (!depEl) return true;
+        const depVal = depEl.value;
+        if (dep.values) return dep.values.includes(depVal);
+        return depVal === dep.value;
+      };
+
       let hasFieldError = false;
       for (const [name, spec] of Object.entries(manifest.params || {}) as [string, any][]) {
+        // Skip inactive (hidden) params
+        if (!isActive(spec)) continue;
+
         const el = paramsContainer.querySelector(`[name="${name}"]`) as HTMLInputElement | HTMLSelectElement;
         if (!el) continue;
         if (spec.type === 'bool') {

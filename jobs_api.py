@@ -113,8 +113,8 @@ def _validate_job_input(
         depends_on = spec.get("depends_on")
         if depends_on:
             dep_param = depends_on.get("param")
-            dep_value = depends_on.get("value")
-            if params.get(dep_param) != dep_value:
+            dep_values = depends_on.get("values", [depends_on["value"]] if "value" in depends_on else [])
+            if params.get(dep_param) not in dep_values:
                 continue
 
         required = spec.get("required", False)

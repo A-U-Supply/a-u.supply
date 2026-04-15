@@ -1,29 +1,300 @@
 name = "rottengenizdat"
 display_name = "RGZ-9 Latent Space Press"
-description = "Feed audio through RAVE neural networks. Latent space distortion from subtle to fever-dream."
-long_description = """Single-pass audio processing through a RAVE variational autoencoder. Your audio is encoded into a latent space, manipulated, then decoded back into audio. The result depends on which model you choose and how you distort the latent representation.
+description = "Feed audio through RAVE neural networks. Single-pass processing or multi-step recipe chains."
+long_description = """Audio processing through RAVE variational autoencoders. Your audio is encoded into a latent space, manipulated, then decoded back.
 
-Each model was trained on a different audio domain — vintage vinyl, NASA transmissions, vocal datasets, percussion — and will imprint its learned character onto your input. Temperature controls how far the latent representation drifts from the original. Noise, shuffle, and quantize add additional latent-space distortions.
+In Single Pass mode, you control every parameter directly — pick a model, set the temperature, inject noise, shuffle the timeline. Each model was trained on a different audio domain (vintage vinyl, NASA transmissions, vocal datasets, percussion) and imprints its learned character onto your input.
 
-This is a single-pass tool. For multi-step processing chains, use "RGZ-9 Recipe Chains" instead."""
+In Recipe mode, you choose from 41 pre-built multi-step chains. Recipes define sequences of RAVE passes with curated parameter curves — applied either in series (sequential: each step feeds the next) or in parallel (branch: multiple paths mixed by weight). They range from barely-perceptible enhancement to total signal destruction.
+
+When processing multiple inputs, choose how they're combined: splice (chop and shuffle segments together), concat (join end-to-end), or independent (process each file separately)."""
 image = "ghcr.io/a-u-supply/rottengenizdat:latest"
 command = "rave"
-timeout_seconds = 600
+timeout_seconds = 900
 
-# How input files are passed to the command:
-#   "positional" = appended as positional args before flags
-#   "flag"       = passed via a named flag (set input_flag)
-#   "stdin"      = piped via stdin
+# How input files are passed to the command
 input_mode = "positional"
 
 # Static flags always appended to the command
 output_flag = "-o /work/output/output.wav"
+
+# Dynamic command: override based on processing_mode param
+[command_map]
+param = "processing_mode"
+[command_map.values]
+single_pass = "rave"
+recipe = "recipe run"
 
 [input]
 min_items = 1
 max_items = 10
 media_types = ["audio", "video"]
 allow_random_fill = true
+
+# --- Processing mode ---
+
+[params.processing_mode]
+type = "select"
+label = "Processing Mode"
+description = "Single Pass gives you direct control over every parameter. Recipe runs a pre-built multi-step chain."
+options = ["single_pass", "recipe"]
+default = "single_pass"
+required = true
+no_flag = true
+
+# --- Recipe params (visible when mode = recipe) ---
+
+[params.recipe]
+type = "select"
+label = "Recipe"
+description = "Multi-step processing chain to apply. Each recipe defines a sequence of RAVE passes with specific models, temperatures, and effects."
+required = true
+position = 1
+value_template = "/app/recipes/{}.toml"
+depends_on = { param = "processing_mode", value = "recipe" }
+
+[[params.recipe.option_groups]]
+label = "Lo-Fi / Analog"
+
+[[params.recipe.option_groups.options]]
+value = "barely-there"
+label = "Barely There"
+description = "90% original + 10% vintage whisper. The gentlest touch. (branch, 2 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "needle-drop"
+label = "Needle Drop"
+description = "Like playing a well-worn record. Warm vintage at low temp. (sequential, 1 step)"
+
+[[params.recipe.option_groups.options]]
+value = "haunted-dub"
+label = "Haunted Dub"
+description = "Your track + a vintage ghost with noise. Reverb tail of an unplayed song. (branch, 2 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "tape-hiss"
+label = "Tape Hiss"
+description = "Cassette dubbed too many times. Three vintage passes, rising noise. (sequential, 3 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "amber"
+label = "Amber"
+description = "Preserved in amber. Very low temp smoothing — a century-old recording. (sequential, 1 step)"
+
+[[params.recipe.option_groups.options]]
+value = "ribs"
+label = "Ribs"
+description = "The roentgenizdat effect. Noisy, degraded, pressed onto an X-ray. (sequential, 3 steps)"
+
+[[params.recipe.option_groups]]
+label = "Ambient / Drone"
+
+[[params.recipe.option_groups.options]]
+value = "slow-nerve"
+label = "Slow Nerve"
+description = "Any input becomes a drone. Low temp strings + orchestral = warm pad. (branch, 2 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "prayer-wheel"
+label = "Prayer Wheel"
+description = "Four models at identical low settings. Meditative shimmer. (branch, 4 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "underwater"
+label = "Underwater"
+description = "Submerged. Low dims, low temp. Hearing music through water. (branch, 2 steps)"
+
+[[params.recipe.option_groups]]
+label = "Spatial / Uncanny"
+
+[[params.recipe.option_groups.options]]
+value = "ghost-in-the-machine"
+label = "Ghost in the Machine"
+description = "Heard through a wall. Timbre goes wrong, structure stays. (branch, 2 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "phantom-limb"
+label = "Phantom Limb"
+description = "The original is gone but you feel it. 2% dry whisper under heavy RAVE. (branch, 2 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "sleep-paralysis"
+label = "Sleep Paralysis"
+description = "Reversed voices pin you down. Original at a whisper. (branch, 2 steps)"
+
+[[params.recipe.option_groups]]
+label = "Rhythmic / Percussive"
+
+[[params.recipe.option_groups.options]]
+value = "darbouka-dream"
+label = "Darbouka Dream"
+description = "Middle Eastern hand-drum color + isis resonance. (branch, 2 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "skull-radio"
+label = "Skull Radio"
+description = "Bone conduction. Percussive skeleton + vintage warmth + faint voice. (branch, 3 steps)"
+
+[[params.recipe.option_groups]]
+label = "Vocal / Choir"
+
+[[params.recipe.option_groups.options]]
+value = "drunk-choir"
+label = "Drunk Choir"
+description = "Two VCTK voices + isis. Your track sung back by confused networks. (branch, 3 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "choir-practice"
+label = "Choir Practice"
+description = "Five VCTK voices at staggered temps. Dense and warm. (branch, 5 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "congregation"
+label = "Congregation"
+description = "Seven voices from four models. A wall of neural singers. (branch, 7 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "speaking-in-tongues"
+label = "Speaking in Tongues"
+description = "Drunk-choir at blackout. Six voices, high temp, shuffle, reverse. (branch, 6 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "choir-of-ghosts"
+label = "Choir of Ghosts"
+description = "Three drunk-choir runs layered. Voices built on voices. (nested, 3 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "motor-mouth"
+label = "Motor Mouth"
+description = "Three sequential VCTK passes. Everything becomes speech. (sequential, 3 steps)"
+
+[[params.recipe.option_groups]]
+label = "Space / Cosmic"
+
+[[params.recipe.option_groups.options]]
+value = "space-sickness"
+label = "Space Sickness"
+description = "60% original + reversed NASA ghosts + faint percussion shadow. (branch, 3 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "nature-documentary"
+label = "Nature Documentary"
+description = "NASA + orchestral strings = alien wildlife soundtrack. (branch, 2 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "event-horizon"
+label = "Event Horizon"
+description = "Sucked into a black hole. Shrinking dims, rising temp. (sequential, 3 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "shortwave"
+label = "Shortwave"
+description = "Numbers station vibes. Quantized NASA + ghostly VCTK speech. (branch, 3 steps)"
+
+[[params.recipe.option_groups]]
+label = "Glitch / Temporal"
+
+[[params.recipe.option_groups.options]]
+value = "time-sick"
+label = "Time Sick"
+description = "Temporal nausea. Reverse, shuffle, quantize. Timeline having a seizure. (sequential, 2 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "granular"
+label = "Granular"
+description = "Tiny shuffle chunks = granular synthesis. Audio as micro-particles. (sequential, 2 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "bad-reception"
+label = "Bad Reception"
+description = "TV losing signal. Shuffle + noise + quantize = glitchy dropouts. (sequential, 2 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "seizure-ward"
+label = "Seizure Ward"
+description = "Reverse, shuffle, reverse again. Timeline folded back on itself. (sequential, 3 steps)"
+
+[[params.recipe.option_groups]]
+label = "Multi-Model Blends"
+
+[[params.recipe.option_groups.options]]
+value = "bone-xray"
+label = "Bone X-Ray"
+description = "Three models fighting over your track. The namesake. (branch, 3 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "parallel-universe"
+label = "Parallel Universe"
+description = "Four models, each touching 4 dims. Four alternate realities. (branch, 4 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "swarm"
+label = "Swarm"
+description = "Seven models at equal weight. A consensus hallucination. (branch, 7 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "dimension-skip"
+label = "Dimension Skip"
+description = "Eight models, 2 dims each. Eight slivers of reality superimposed. (branch, 8 steps)"
+
+[[params.recipe.option_groups]]
+label = "Harsh / Industrial"
+
+[[params.recipe.option_groups.options]]
+value = "hall-of-mirrors"
+label = "Hall of Mirrors"
+description = "Same model three times, temp rising. Photocopy of a photocopy. (sequential, 3 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "bitcrushed-god"
+label = "Bitcrushed God"
+description = "Extreme quantization through two models. Coarsest neural skeleton. (sequential, 2 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "sludge"
+label = "Sludge"
+description = "Thick, heavy, ground down. Three models with quantize and high temp. (sequential, 3 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "glass-teeth"
+label = "Glass Teeth"
+description = "Descending quantization through three models. Crystalline shards. (sequential, 3 steps)"
+
+[[params.recipe.option_groups]]
+label = "Destruction"
+
+[[params.recipe.option_groups.options]]
+value = "fever-dream"
+label = "Fever Dream"
+description = "Every knob cranked. Three models, reverse, shuffle, noise. Barely audio. (sequential, 3 steps)"
+
+[[params.recipe.option_groups]]
+label = "Cinematic / Found-Sound"
+
+[[params.recipe.option_groups.options]]
+value = "organ-donor"
+label = "Organ Donor"
+description = "50% original + orchestral string DNA. Transplanted. (branch, 2 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "concrete-music"
+label = "Concrete Music"
+description = "Musique concrete. Four models as found-object textures. (branch, 4 steps)"
+
+[[params.recipe.option_groups]]
+label = "Nested / Recursive"
+
+[[params.recipe.option_groups.options]]
+value = "deja-vu"
+label = "Deja Vu"
+description = "haunted-dub into ghost-in-the-machine. A memory of a memory. (nested, 2 steps)"
+
+[[params.recipe.option_groups.options]]
+value = "muscle-memory"
+label = "Muscle Memory"
+description = "bone-xray twice. The body remembers less each pass. (nested, 2 steps)"
+
+# --- Single pass params (visible when mode = single_pass) ---
 
 [params.model]
 type = "select"
@@ -33,6 +304,7 @@ options = ["percussion", "vintage", "nasa", "VCTK", "musicnet", "isis", "sol_ord
 default = "vintage"
 required = true
 flag = "-m"
+depends_on = { param = "processing_mode", value = "single_pass" }
 
 [params.temperature]
 type = "float"
@@ -42,6 +314,7 @@ min = 0.1
 max = 3.0
 default = 1.0
 flag = "-t"
+depends_on = { param = "processing_mode", value = "single_pass" }
 
 [params.noise]
 type = "float"
@@ -51,6 +324,7 @@ min = 0.0
 max = 1.0
 default = 0.0
 flag = "-n"
+depends_on = { param = "processing_mode", value = "single_pass" }
 
 [params.mix]
 type = "float"
@@ -60,6 +334,15 @@ min = 0.0
 max = 1.0
 default = 1.0
 flag = "-w"
+depends_on = { param = "processing_mode", value = "single_pass" }
+
+[params.dims]
+type = "string"
+label = "Latent Dimensions"
+description = "Comma-separated list of latent dimensions to manipulate (e.g. '0,1,2,3'). Unselected dimensions keep their original values, letting the model's character bleed through only on specific axes. Leave empty to manipulate all dimensions."
+default = ""
+flag = "-d"
+depends_on = { param = "processing_mode", value = "single_pass" }
 
 [params.reverse]
 type = "bool"
@@ -67,6 +350,7 @@ label = "Reverse"
 description = "Flips the temporal axis in latent space before decoding. The audio plays forward but the latent trajectory runs backward, creating an uncanny reversal effect that sounds different from simply reversing the waveform."
 default = false
 flag = "-r"
+depends_on = { param = "processing_mode", value = "single_pass" }
 
 [params.shuffle]
 type = "float"
@@ -76,6 +360,7 @@ min = 0.0
 max = 32.0
 default = 0.0
 flag = "--shuffle"
+depends_on = { param = "processing_mode", value = "single_pass" }
 
 [params.quantize]
 type = "float"
@@ -85,3 +370,34 @@ min = 0.0
 max = 1.0
 default = 0.0
 flag = "-q"
+depends_on = { param = "processing_mode", value = "single_pass" }
+
+# --- Multi-input options (both modes, only relevant with 2+ inputs) ---
+
+[params.input_combination]
+type = "select"
+label = "Input Combination"
+description = "How multiple input files are combined before processing. Splice chops all inputs into segments and shuffles them together (collage). Concat joins them end-to-end. Independent processes each file separately (one output per input). Only matters with 2+ inputs — single inputs are passed through directly."
+options = ["splice", "concat", "independent"]
+default = "splice"
+flag = "--mode"
+
+[params.splice_min]
+type = "float"
+label = "Splice Min (seconds)"
+description = "Minimum duration of each spliced segment in seconds. Shorter = choppier, more granular collage. Only used in splice mode."
+min = 0.01
+max = 30.0
+default = 0.25
+flag = "--splice-min"
+depends_on = { param = "input_combination", value = "splice" }
+
+[params.splice_max]
+type = "float"
+label = "Splice Max (seconds)"
+description = "Maximum duration of each spliced segment in seconds. Longer = more coherent phrases between cuts. Only used in splice mode."
+min = 0.01
+max = 60.0
+default = 4.0
+flag = "--splice-max"
+depends_on = { param = "input_combination", value = "splice" }
