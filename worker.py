@@ -175,8 +175,15 @@ def _build_docker_command(job: Job, manifest: dict, job_dir: Path) -> list[str]:
         "--memory", "4g",
         "--cpus", "2",
         "-v", f"{host_job_dir}:/work",
-        image,
     ]
+
+    # Forward environment variables declared in manifest
+    for var_name in manifest.get("env", {}).get("pass_through", []):
+        val = os.environ.get(var_name)
+        if val:
+            cmd.extend(["-e", f"{var_name}={val}"])
+
+    cmd.append(image)
 
     # Subcommand (e.g. "rave", "recipe run")
     if command:
@@ -201,6 +208,11 @@ def _build_docker_command(job: Job, manifest: dict, job_dir: Path) -> list[str]:
     if input_mode == "positional":
         for f in input_files:
             cmd.append(f"/work/input/{f.name}")
+    elif input_mode == "flag":
+        input_flag = manifest.get("input_flag", "--input")
+        cmd.append(input_flag)
+        for f in input_files:
+            cmd.append(f"/work/input/{f.name}")
 
     # Params mapped to CLI flags
     for param_name, spec in param_specs.items():
@@ -223,6 +235,10 @@ def _build_docker_command(job: Job, manifest: dict, job_dir: Path) -> list[str]:
             if value:
                 cmd.append(flag)
             # False bools are just omitted
+        elif param_type == "multi_select":
+            if isinstance(value, list) and value:
+                cmd.append(flag)
+                cmd.append(",".join(str(v) for v in value))
         else:
             cmd.append(flag)
             cmd.append(str(value))

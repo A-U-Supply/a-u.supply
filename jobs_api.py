@@ -67,6 +67,30 @@ def _parse_manifest(toml_text: str) -> dict:
     return tomllib.loads(toml_text)
 
 
+def _get_required_input_count(manifest: dict, params: dict) -> int | None:
+    """Look up per-option input_count from manifest param metadata.
+
+    Scans all params for options with ``input_count`` metadata.  If the user's
+    selected value has an ``input_count``, return it.  Returns ``None`` if
+    no per-option input_count is defined (fall back to global min/max).
+    """
+    param_specs = manifest.get("params", {})
+    for pname, spec in param_specs.items():
+        value = params.get(pname)
+        if value is None:
+            continue
+        # Check flat options
+        for opt in spec.get("options", []):
+            if isinstance(opt, dict) and opt.get("value") == value and "input_count" in opt:
+                return opt["input_count"]
+        # Check option_groups
+        for group in spec.get("option_groups", []):
+            for opt in group.get("options", []):
+                if isinstance(opt, dict) and opt.get("value") == value and "input_count" in opt:
+                    return opt["input_count"]
+    return None
+
+
 def _validate_job_input(
     manifest: dict,
     media_items: list[MediaItem],
@@ -142,6 +166,10 @@ def _validate_job_input(
 
         elif param_type == "multi_select":
             options = spec.get("options", [])
+            if not options and "option_groups" in spec:
+                for group in spec["option_groups"]:
+                    for opt in group.get("options", []):
+                        options.append(opt["value"] if isinstance(opt, dict) else opt)
             if not isinstance(value, list):
                 errors.append({
                     "field": f"params.{param_name}",
@@ -154,7 +182,7 @@ def _validate_job_input(
                         "field": f"params.{param_name}",
                         "message": f"Invalid options: {', '.join(str(v) for v in invalid)}",
                     })
-            min_sel = spec.get("min_selections")
+            min_sel = spec.get("min_selections", 2 if param_type == "multi_select" else None)
             if min_sel and isinstance(value, list) and len(value) < min_sel:
                 errors.append({
                     "field": f"params.{param_name}",
@@ -864,12 +892,16 @@ def create_job(
         missing = [mid for mid in body.media_item_ids if mid not in found_ids]
         raise HTTPException(status_code=422, detail=f"Media items not found: {', '.join(missing)}")
 
+    # Determine required input count: per-recipe input_count overrides global min/max
+    required_count = _get_required_input_count(manifest, body.params)
+    min_items = input_spec.get("min_items", 1)
+
     # Random fill if requested and allowed
     filled_ids = []
-    min_items = input_spec.get("min_items", 1)
-    if body.random_fill and input_spec.get("allow_random_fill") and len(items) < min_items:
+    fill_target = required_count or min_items
+    if body.random_fill and input_spec.get("allow_random_fill") and len(items) < fill_target:
         allowed_types = input_spec.get("media_types", [])
-        need = min_items - len(items)
+        need = fill_target - len(items)
         existing_ids = {i.id for i in items}
 
         candidates = (
@@ -885,6 +917,31 @@ def create_job(
         chosen = random.sample(candidates, need)
         items.extend(chosen)
         filled_ids = [c.id for c in chosen]
+
+    # Per-recipe input count validation (after random fill)
+    if required_count is not None:
+        if len(items) > required_count:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "detail": "Validation failed",
+                    "errors": [{
+                        "field": "input_items",
+                        "message": f"This recipe requires exactly {required_count} image(s), but {len(items)} selected. Remove {len(items) - required_count} item(s).",
+                    }],
+                },
+            )
+        if len(items) < required_count:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "detail": "Validation failed",
+                    "errors": [{
+                        "field": "input_items",
+                        "message": f"This recipe requires {required_count} image(s), but only {len(items)} available (including random fill).",
+                    }],
+                },
+            )
 
     # Validate
     errors = _validate_job_input(manifest, items, body.params)

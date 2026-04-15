@@ -1,0 +1,1765 @@
+name = "sparagmos"
+display_name = "Sparagmos — Image Destruction"
+description = "Feed images through destruction recipes: glitch, decay, neural hallucination, geometric compositing. 150 recipes, 2-5 input images."
+image = "ghcr.io/a-u-supply/sparagmos:latest"
+timeout_seconds = 900
+input_mode = "flag"
+input_flag = "--input"
+output_flag = "--output /work/output/output.png"
+
+[env]
+pass_through = ["HF_TOKEN"]
+
+[output]
+index = "sparagmos-outputs"
+
+[input]
+min_items = 2
+max_items = 5
+media_types = ["image"]
+allow_random_fill = true
+
+[command_map]
+param = "processing_mode"
+[command_map.values]
+recipe = ""
+random = ""
+chain = ""
+
+# --- Processing Mode ---
+[params.processing_mode]
+type = "select"
+label = "Mode"
+description = "Choose a specific recipe, let sparagmos pick randomly, or chain multiple recipes."
+options = ["recipe", "random", "chain"]
+default = "recipe"
+required = true
+no_flag = true
+
+# --- Recipe Selection ---
+[params.recipe]
+type = "select"
+label = "Recipe"
+description = "Each recipe defines a chain of destruction effects. Input count shown per group."
+required = true
+flag = "--recipe"
+depends_on = { param = "processing_mode", value = "recipe" }
+
+[[params.recipe.option_groups]]
+label = "2 Images — Neural"
+[[params.recipe.option_groups.options]]
+value = "dream-dissolve"
+label = "Dream Dissolve"
+input_count = 2
+description = "Two images each sent through deep neural hallucination — the network finds eyes and feathers in everything, turning surfaces into living architectures"
+
+[[params.recipe.option_groups]]
+label = "2 Images — Hybrid"
+[[params.recipe.option_groups.options]]
+value = "double-exposure"
+label = "Double Exposure"
+input_count = 2
+description = "Two images burned onto the same film. Screen blending lets the light accumulate, multiply adds depth in the shadows. The double-exposed image is sonif"
+
+[[params.recipe.option_groups.options]]
+value = "feedback-loop"
+label = "Feedback Loop"
+input_count = 2
+description = "Compose, destroy, re-compose the wreckage, destroy again. Two images blended, distorted, fragmented back together with originals. The output feeds con"
+
+[[params.recipe.option_groups.options]]
+value = "ghost-overlay"
+label = "Ghost Overlay"
+input_count = 2
+description = "A haunting: A's edges become a soft veil cast over B with high feathering, so the transition is a smear rather than a cut. Screen blending then adds A"
+
+[[params.recipe.option_groups.options]]
+value = "phantom-limb"
+label = "Phantom Limb"
+input_count = 2
+description = "One image's edge structure is cut out and laid over another — not the image itself, only its outline, its ghost. The screen blend lets the haunting sh"
+
+[[params.recipe.option_groups.options]]
+value = "simple-cutout"
+label = "Simple Cutout"
+input_count = 2
+description = "The most direct use of masking: A's edge skeleton is cut clean into B. Wherever A has strong edges, B shows through; everywhere else, A holds. A chann"
+
+[[params.recipe.option_groups.options]]
+value = "spectral-merge"
+label = "Spectral Merge"
+input_count = 2
+description = "Two signals in frequency space, destructively interfered. Each image is spectrally filtered to different ranges. Difference blending cancels shared fr"
+
+[[params.recipe.option_groups.options]]
+value = "two-face"
+label = "Two Face"
+input_count = 2
+description = "A luminance mask splits image A at its median brightness — the bright half stays A, the dark half becomes B. With auto-normalization, threshold=128 al"
+
+[[params.recipe.option_groups.options]]
+value = "x-ray-composite"
+label = "X-Ray Composite"
+input_count = 2
+description = "One image is decomposed to its principal components — stripped to structural essentials, the eigenfaces of matter. Its edge skeleton is then masked ov"
+
+[[params.recipe.option_groups]]
+label = "3 Images — Ancients"
+[[params.recipe.option_groups.options]]
+value = "ancients-bullethole"
+label = "Ancients Bullet Hole"
+input_count = 3
+description = "Random circular cut-and-rotate holes punched into two images at high chaos before stencil compositing. Many small holes create a riddled, perforated s"
+
+[[params.recipe.option_groups.options]]
+value = "ancients-bullseye"
+label = "Ancients Bullseye"
+input_count = 3
+description = "Concentric circle cut-and-rotate applied to two images before stencil compositing. Each image gets its own bullseye pattern — rings extracted, indepen"
+
+[[params.recipe.option_groups.options]]
+value = "ancients-curvylinescreen"
+label = "Ancients Curvy Line Screen"
+input_count = 3
+description = "Edge-following line screen stencil. Lines curve along image contours using a gradient direction field with double-angle smoothing, falling back to a d"
+
+[[params.recipe.option_groups.options]]
+value = "ancients-cyanotype"
+label = "Ancients Cyanotype"
+input_count = 3
+description = "Prussian blue cyanotype treatment before stencil compositing. All three images get cyanotype toning — tonal curve, highlight bloom, blue LUT, paper gr"
+
+[[params.recipe.option_groups.options]]
+value = "ancients-displacement"
+label = "Ancients Displacement"
+input_count = 3
+description = "Gradient-based displacement stencil. The stencil image's gradient field warps both the mask boundary and the fill images. The boundary tears and the f"
+
+[[params.recipe.option_groups.options]]
+value = "ancients-halationedge"
+label = "Ancients Halation Edge"
+input_count = 3
+description = "Stencil compositing with organic grain at edge boundaries. The hard binary mask edge is replaced with halftone noise in the transition zone, creating "
+
+[[params.recipe.option_groups.options]]
+value = "ancients-halftone"
+label = "Ancients Halftone"
+input_count = 3
+description = "AM halftone dot screen stencil. Each image's tonal map is converted to a cosine dot grid — bright areas produce dense white dots, dark areas dense bla"
+
+[[params.recipe.option_groups.options]]
+value = "ancients-kaleidoscope"
+label = "Ancients Kaleidoscope"
+input_count = 3
+description = "N-fold radial symmetry applied to bullseye ring structure on two images before stencil compositing. Each ring gets kaleidoscope folding, creating mand"
+
+[[params.recipe.option_groups.options]]
+value = "ancients-lathe"
+label = "Ancients Lathe"
+input_count = 3
+description = "Dozens of thin concentric ring bands, each independently rotated, applied to two images before stencil compositing. Creates a sliced-wood or agate-lik"
+
+[[params.recipe.option_groups.options]]
+value = "ancients-linescreen"
+label = "Ancients Line Screen"
+input_count = 3
+description = "Fixed-angle parallel line screen stencil. Lines run at a constant angle with width varying by image tone — thick in shadows, thin in highlights, like "
+
+[[params.recipe.option_groups.options]]
+value = "ancients-reducedlinescreen"
+label = "Ancients Reduced Line Screen"
+input_count = 3
+description = "Adaptive-frequency horizontal line screen stencil. Line frequency shifts — finer in edge/text regions detected by Laplacian, coarser in flat areas. Ph"
+
+[[params.recipe.option_groups.options]]
+value = "ancients-silver"
+label = "Ancients Silver"
+input_count = 3
+description = "Silver gelatin print treatment before stencil compositing. All three images get silver halation — tonal curve with crushed blacks, highlight bloom, fi"
+
+[[params.recipe.option_groups.options]]
+value = "ancients-sixshooter"
+label = "Ancients Six Shooter"
+input_count = 3
+description = "Six circular cut-and-rotate operations in grid or hexagonal layout applied to two images. Crop positions are shuffled before pasting back, creating a "
+
+[[params.recipe.option_groups.options]]
+value = "ancients-stencil"
+label = "Ancients Stencil"
+input_count = 3
+description = "Binary mask compositing via Otsu's thresholding. Three source images take turns as the stencil mask, producing six variations of foreground/background"
+
+[[params.recipe.option_groups.options]]
+value = "ancients-wobbleeye"
+label = "Ancients Wobble Eye"
+input_count = 3
+description = "Off-axis concentric ring cut-and-rotate applied to two images before stencil compositing. Each ring drifts from the previous center, creating a misreg"
+
+[[params.recipe.option_groups]]
+label = "3 Images — Neural"
+[[params.recipe.option_groups.options]]
+value = "dream-cutout"
+label = "Dream Cutout"
+input_count = 3
+description = "Image A is deepdreamed heavily — the network projects its hallucinations across every surface. The dreamed A's edge skeleton then cuts into B: the neu"
+
+[[params.recipe.option_groups.options]]
+value = "dream-halftone"
+label = "Dream Halftone"
+input_count = 3
+description = "Three images deepdreamed until dense with neural hallucinations, then composited through AM halftone dot screens. The hallucinated surfaces show throu"
+
+[[params.recipe.option_groups.options]]
+value = "dream-within-dream"
+label = "Dream Within Dream"
+input_count = 3
+description = "Recursive hallucination in three passes. A is deepdreamed until the network's preferred forms — its eyes and feathers and fractal architectures — full"
+
+[[params.recipe.option_groups.options]]
+value = "neural-chimera"
+label = "Neural Chimera"
+input_count = 3
+description = "Three images deepdreamed at different neural layers then Voronoi-fragmented together. Style transfer re-hallucinates the composite. JPEG destruction f"
+
+[[params.recipe.option_groups.options]]
+value = "voronoi-chimera"
+label = "Voronoi Chimera"
+input_count = 3
+description = "Faces and forms fused at Voronoi cell boundaries. Each image gets a different neural/glitch treatment before being fragmented together. The Voronoi te"
+
+[[params.recipe.option_groups.options]]
+value = "wax-museum"
+label = "Wax Museum"
+input_count = 3
+description = "Three images each passed through style transfer — their surfaces repainted in the manner of some other image, some other logic. The styled sources are"
+
+[[params.recipe.option_groups]]
+label = "3 Images — Hybrid"
+[[params.recipe.option_groups.options]]
+value = "acid-wash"
+label = "Acid Wash"
+input_count = 3
+description = "Three images run through spectral transformation — their frequencies scrambled and redistributed — before being multiplied together in a deepening of "
+
+[[params.recipe.option_groups.options]]
+value = "broadcast-static"
+label = "Broadcast Static"
+input_count = 3
+description = "Three images converted to sound and back — each through a different acoustic treatment, each emerging distorted in its own frequency range. Arranged i"
+
+[[params.recipe.option_groups.options]]
+value = "data-rot"
+label = "Data Rot"
+input_count = 3
+description = "Three images subjected to byte-level corruption before any composition — the damage is baked in from the start, not applied as finish. The corrupted s"
+
+[[params.recipe.option_groups.options]]
+value = "edge-ghosts"
+label = "Edge Ghosts"
+input_count = 3
+description = "Phantom outlines from one image haunting another. Edge detection extracts the structural skeleton of each source. Two rounds of edge-masking create la"
+
+[[params.recipe.option_groups.options]]
+value = "exquisite-corpse"
+label = "Exquisite Corpse"
+input_count = 3
+description = "The surrealist parlor game. Three images divided into horizontal strips. Each source gets different pre-processing to heighten the disjunction. Seam c"
+
+[[params.recipe.option_groups.options]]
+value = "fossil-record"
+label = "Fossil Record"
+input_count = 3
+description = "Geological strata. Each image PCA-decomposed to different component counts. Opacity-blended as layers like sedimentary rock. Dithering creates stone t"
+
+[[params.recipe.option_groups.options]]
+value = "holographic-interference"
+label = "Holographic Interference"
+input_count = 3
+description = "Three images processed through spectral decomposition and channel aberration, then stacked via difference and screen blending to simulate the interfer"
+
+[[params.recipe.option_groups.options]]
+value = "mask-and-glitch"
+label = "Mask and Glitch"
+input_count = 3
+description = "Image A is edge-masked onto B, producing a clean structural composite. That composite is then run through CRT/VHS processing — scan lines, color bleed"
+
+[[params.recipe.option_groups.options]]
+value = "sediment-core"
+label = "Sediment Core"
+input_count = 3
+description = "Three images arranged as horizontal strata — the slow accumulation of time rendered as a geological cross-section pulled from the earth. Seam carving "
+
+[[params.recipe.option_groups.options]]
+value = "signal-bleed"
+label = "Signal Bleed"
+input_count = 3
+description = "Three VHS signals bleeding into each other on a bad splitter. Each source gets its own flavor of analog decay. Vertical strip collage interleaves the "
+
+[[params.recipe.option_groups.options]]
+value = "sorted-mask"
+label = "Sorted Mask"
+input_count = 3
+description = "Image A is pixel-sorted by brightness, generating long streaks that streak upward through the frame. A luminance mask then uses the sorted A's own bri"
+
+[[params.recipe.option_groups.options]]
+value = "spectral-stencil"
+label = "Spectral Stencil"
+input_count = 3
+description = "Image A is bandpass-filtered in frequency space, stripping its low and high frequencies to leave only the mid-range structure — a ghost of the origina"
+
+[[params.recipe.option_groups.options]]
+value = "triple-mask"
+label = "Triple Mask"
+input_count = 3
+description = "Three images, two mask operations. First A's edges cut into B, producing a composite where B lives in A's structural skeleton. Then that composite's o"
+
+[[params.recipe.option_groups]]
+label = "3 Images — Glitch"
+[[params.recipe.option_groups.options]]
+value = "bullseye-cyanotype"
+label = "Bullseye Cyanotype"
+input_count = 3
+description = "Two images bullseyed — concentric rings cut and independently rotated — then all three composited through cyanotype stencil. The ring patterns get pru"
+
+[[params.recipe.option_groups.options]]
+value = "curvy-corruption"
+label = "Curvy Corruption"
+input_count = 3
+description = "Three images composited through edge-following curvy line screens, then the result is byte-corrupted and CRT/VHS filtered. The curving engraved lines "
+
+[[params.recipe.option_groups.options]]
+value = "cyanotype-corruption"
+label = "Cyanotype Corruption"
+input_count = 3
+description = "Three images composited through cyanotype stencil — prussian blue toning with highlight bloom — then the composite is byte-corrupted and channel-shift"
+
+[[params.recipe.option_groups.options]]
+value = "reducedscreen-datamosh"
+label = "Reduced Screen Datamosh"
+input_count = 3
+description = "Three images composited through adaptive-frequency line screens — finer lines in detail regions, coarser in flat areas — then datamoshed. The adaptive"
+
+[[params.recipe.option_groups.options]]
+value = "shifted-linescreen"
+label = "Shifted Line Screen"
+input_count = 3
+description = "Three images channel-shifted until their color registers separate, then composited through parallel line screen stencils. The misregistered colors sho"
+
+[[params.recipe.option_groups.options]]
+value = "sixshooter-linescreen"
+label = "Six Shooter Line Screen"
+input_count = 3
+description = "Two images six-shootered — six circular regions cut, shuffled, and rotated — then composited through parallel line screen stencil. The scattered circu"
+
+[[params.recipe.option_groups.options]]
+value = "sorted-displacement"
+label = "Sorted Displacement"
+input_count = 3
+description = "Two images pixel-sorted to extreme thresholds — their surfaces sheared into vertical streaks — then displacement-stenciled against a third. The displa"
+
+[[params.recipe.option_groups.options]]
+value = "spectral-silver"
+label = "Spectral Silver"
+input_count = 3
+description = "Three images bandpass-filtered in frequency space — stripped to their mid-range structure, ghostly spectral remnants — then composited through silver "
+
+[[params.recipe.option_groups.options]]
+value = "vhs-halation"
+label = "VHS Halation"
+input_count = 3
+description = "Three images CRT/VHS filtered — scan lines, color bleed, tracking errors — then composited through halation edge stencil. The organic grain boundary b"
+
+[[params.recipe.option_groups]]
+label = "3 Images — Composite"
+[[params.recipe.option_groups.options]]
+value = "bullethole-silver"
+label = "Bullet Hole Silver"
+input_count = 3
+description = "Two images riddled with circular punch holes at high chaos — perforated surfaces — then composited through silver gelatin stencil. The silver halation"
+
+[[params.recipe.option_groups.options]]
+value = "bullseye-wobble-displacement"
+label = "Bullseye Wobble Displacement"
+input_count = 3
+description = "Double concentric destruction: one image bullseyed into clean rings, another wobble-eyed into drifting off-axis rings. The third image's gradient fiel"
+
+[[params.recipe.option_groups.options]]
+value = "halftone-curvyscreen"
+label = "Halftone Curvy Screen"
+input_count = 3
+description = "Two-pass screen compositing: first, halftone dot screen composites two images. Then the dot-screened result and a third image are composited through c"
+
+[[params.recipe.option_groups.options]]
+value = "kaleidoscope-halftone"
+label = "Kaleidoscope Halftone"
+input_count = 3
+description = "Two images kaleidoscoped into mandala patterns — radial symmetry folding their surfaces into repeating wedges — then a third image's halftone dot scre"
+
+[[params.recipe.option_groups.options]]
+value = "lathe-displacement"
+label = "Lathe Displacement"
+input_count = 3
+description = "Two images lathe-turned — dozens of thin concentric rings each independently rotated into agate-like surfaces — then displacement- stenciled against a"
+
+[[params.recipe.option_groups.options]]
+value = "lathe-kaleidoscope-stencil"
+label = "Lathe Kaleidoscope Stencil"
+input_count = 3
+description = "Double geometric destruction: one image lathe-turned into agate rings, another kaleidoscoped into mandala symmetry, a third wobble-eyed into drifting "
+
+[[params.recipe.option_groups.options]]
+value = "wobble-halation"
+label = "Wobble Halation"
+input_count = 3
+description = "Two images wobble-eyed — off-axis concentric rings drifting from center — then composited through halation edge stencil. The organic grain boundary me"
+
+[[params.recipe.option_groups]]
+label = "4 Images — Ancients"
+[[params.recipe.option_groups.options]]
+value = "ancients-collage"
+label = "Ancients Collage"
+input_count = 4
+description = "Quadrant-mixed composites with geometric transformation and neural seam inpainting. Four source images are cut into quadrants, shuffled across four ou"
+
+[[params.recipe.option_groups.options]]
+value = "ancients-quad"
+label = "Ancients Quad"
+input_count = 4
+description = "Three-level stencil compositing. The stencil image is split into three brightness bands by percentile thresholding (black/grey/white), and each zone i"
+
+[[params.recipe.option_groups]]
+label = "4 Images — Neural"
+[[params.recipe.option_groups.options]]
+value = "dream-erosion"
+label = "Dream Erosion"
+input_count = 4
+description = "A is deepdreamed heavily, colonized by neural hallucinations until the original photograph is barely legible beneath the network's obsessions. That dr"
+
+[[params.recipe.option_groups.options]]
+value = "dream-mask"
+label = "Dream Mask"
+input_count = 4
+description = "Image A is deepdreamed heavily — the network hallucinates eyes, pagodas, dog-faces across every surface. The dreamed A's edge skeleton becomes a stenc"
+
+[[params.recipe.option_groups.options]]
+value = "dream-mask-dream"
+label = "Dream Mask Dream"
+input_count = 4
+description = "A triple dream-mask cycle. First, A is deepdreamed — hallucinations project across its surface. Dreamed-A's edges cut into B, producing a composite wh"
+
+[[params.recipe.option_groups.options]]
+value = "dream-quad"
+label = "Dream Quad"
+input_count = 4
+description = "Four images deepdreamed to varying intensities, then composited through three-level stencil. The stencil image's brightness bands — dark, mid, bright "
+
+[[params.recipe.option_groups.options]]
+value = "dream-stencil"
+label = "Dream Stencil"
+input_count = 4
+description = "A is deepdreamed at high intensity until its surface is dense with hallucinated forms — eyes inside eyes, architectural fractals, dog-faced flowers. T"
+
+[[params.recipe.option_groups.options]]
+value = "kaleidoscope-dream-displacement"
+label = "Kaleidoscope Dream Displacement"
+input_count = 4
+description = "Four images: two kaleidoscoped into mandala symmetry, one deepdreamed until colonized by neural hallucinations. The fourth image's gradient displaceme"
+
+[[params.recipe.option_groups.options]]
+value = "neural-mask-cascade"
+label = "Neural Mask Cascade"
+input_count = 4
+description = "Four images, each deepdreamed independently, then chained through a cascade of dream-as-mask operations. Dreamed A cuts into raw B using A's hallucina"
+
+[[params.recipe.option_groups.options]]
+value = "noise-cathedral"
+label = "Noise Cathedral"
+input_count = 4
+description = "Three noise masks at escalating thresholds cut random windows between four images, building layered stochastic revelation. Each mask threshold is high"
+
+[[params.recipe.option_groups.options]]
+value = "phantom-dream"
+label = "Phantom Dream"
+input_count = 4
+description = "A and B are both deepdreamed — two photographs each colonized by the network's hallucinations independently. Those two dreamed surfaces are screen-ble"
+
+[[params.recipe.option_groups.options]]
+value = "silver-displacement-dream"
+label = "Silver Displacement Dream"
+input_count = 4
+description = "Four images: one deepdreamed heavily, silver-stenciled with two others. The silver-toned hallucinated surface is then displacement-warped against the "
+
+[[params.recipe.option_groups.options]]
+value = "tectonic-overlap"
+label = "Tectonic Overlap"
+input_count = 4
+description = "Continental plates of image data, shifted and overlapping. Four images shattered into irregular polygons, scatter-collaged with rotation. Seam carving"
+
+[[params.recipe.option_groups]]
+label = "4 Images — Hybrid"
+[[params.recipe.option_groups.options]]
+value = "binary-archaeology"
+label = "Binary Archaeology"
+input_count = 4
+description = "Each of the four images is dithered to a different binary palette — different dithering algorithms reducing each to its own distinct pattern of black "
+
+[[params.recipe.option_groups.options]]
+value = "collage-mask-collage"
+label = "Collage Mask Collage"
+input_count = 4
+description = "Two images collaged into a mosaic grid, then a third used as an edge stencil to cut through the grid — the mosaic surfaces are revealed only where C's"
+
+[[params.recipe.option_groups.options]]
+value = "collage-surgery"
+label = "Collage Surgery"
+input_count = 4
+description = "Four images cut into strips and edge-masked three times in alternating rounds — each pass strips away context to reveal what lies beneath the surface."
+
+[[params.recipe.option_groups.options]]
+value = "collage-through-glass"
+label = "Collage Through Glass"
+input_count = 4
+description = "Three images are mosaiced into a composite grid — an even tiling of three borrowed worlds. Image D, PCA-reduced to a single structural component, prov"
+
+[[params.recipe.option_groups.options]]
+value = "contrast-surgery"
+label = "Contrast Surgery"
+input_count = 4
+description = "Image A undergoes extreme channel surgery — massive RGB offsets pull its color registers apart until the content nearly dissolves into chromatic aberr"
+
+[[params.recipe.option_groups.options]]
+value = "cyanotype-bullethole-mask"
+label = "Cyanotype Bullet Hole Mask"
+input_count = 4
+description = "Four images: two riddled with bullet holes, then cyanotype-stenciled. The result is edge-masked against a fourth image — the bullet-punched cyanotype "
+
+[[params.recipe.option_groups.options]]
+value = "displacement-blend-spectral"
+label = "Displacement Blend Spectral"
+input_count = 4
+description = "Four images: displacement-stenciled, then screen-blended with a fourth. The blended surface is spectral-filtered to strip frequencies. Warped stencil "
+
+[[params.recipe.option_groups.options]]
+value = "dissolve-cascade"
+label = "Dissolve Cascade"
+input_count = 4
+description = "Four images dissolved in waves: screen blend accumulates the light, gradient masking carves the excess, multiply blend deepens the shadows, luminance "
+
+[[params.recipe.option_groups.options]]
+value = "double-masked-collage"
+label = "Double Masked Collage"
+input_count = 4
+description = "A double masking sandwich: fragment, edge-mask, scatter-collage, luminance- mask again. Images A and B are Voronoi-fragmented — broken into organic ce"
+
+[[params.recipe.option_groups.options]]
+value = "fracture-and-mask"
+label = "Fracture and Mask"
+input_count = 4
+description = "A shatter-fragment sandwich with edge and luminance masking on either side. Images A and B are shatter-fragmented together — broken into irregular sha"
+
+[[params.recipe.option_groups.options]]
+value = "gradient-reveal"
+label = "Gradient Reveal"
+input_count = 4
+description = "A three-stage revelation where each step peels back a different layer. Images A and B are blended at overlay mode, their tonal geometries multiplied t"
+
+[[params.recipe.option_groups.options]]
+value = "interference-mask"
+label = "Interference Mask"
+input_count = 4
+description = "Images A and B are blended at difference mode — each pixel becomes the absolute distance between the two images, a map of where they diverge. That div"
+
+[[params.recipe.option_groups.options]]
+value = "layered-cutwork"
+label = "Layered Cutwork"
+input_count = 4
+description = "Three sequential rounds of mask then collage then mask: the image accumulates wounds with each pass. First, A's luminance cuts into B — bright areas i"
+
+[[params.recipe.option_groups.options]]
+value = "letterpress"
+label = "Letterpress"
+input_count = 4
+description = "Image A is dithered with Atkinson, which creates the tight, typographic dot-and-space pattern that letterpress printing once left in paper. The dither"
+
+[[params.recipe.option_groups.options]]
+value = "luminance-layers"
+label = "Luminance Layers"
+input_count = 4
+description = "Four images revealed through four different luminance thresholds of the same reference source. Image A is processed and used as the mask for all four "
+
+[[params.recipe.option_groups.options]]
+value = "mask-cascade"
+label = "Mask Cascade"
+input_count = 4
+description = "Four images layered through four successive mask operations, each using a different mask source — luminance, then edges, then noise, then a gradient i"
+
+[[params.recipe.option_groups.options]]
+value = "mask-erosion"
+label = "Mask Erosion"
+input_count = 4
+description = "Three sequential edge masks with increasing feather — a progressive erosion where each pass softens the structural cuts further and further. The first"
+
+[[params.recipe.option_groups.options]]
+value = "negative-space"
+label = "Negative Space"
+input_count = 4
+description = "Two masking operations, each using the opposite of what the other reveals. Image A's dark regions cut out shapes and fill them with B: the negative sp"
+
+[[params.recipe.option_groups.options]]
+value = "palimpsest"
+label = "Palimpsest"
+input_count = 4
+description = "A manuscript overwritten and overwritten again. Each layer bleeds through based on luminance. Four images layered through progressively lower threshol"
+
+[[params.recipe.option_groups.options]]
+value = "photogram"
+label = "Photogram"
+input_count = 4
+description = "In the darkroom, a photogram is made by placing objects directly on light-sensitive paper and exposing it. The object's silhouette burns into the emul"
+
+[[params.recipe.option_groups.options]]
+value = "silhouette-collage"
+label = "Silhouette Collage"
+input_count = 4
+description = "Image A is PCA-decomposed to 2 principal components — stripped to the barest structural silhouette, a ghost-blueprint of itself. That silhouette is im"
+
+[[params.recipe.option_groups.options]]
+value = "sixshooter-halation-corrupt"
+label = "Six Shooter Halation Corrupt"
+input_count = 4
+description = "Four images: two six-shootered into scattered circular displacements, halation-edge composited through the third. The organic grain boundary dissolves"
+
+[[params.recipe.option_groups.options]]
+value = "spectral-mask"
+label = "Spectral Mask"
+input_count = 4
+description = "Four images processed spectrally and then masked in pairs, with the pair results blended and dithered. Image A is spectrally shifted to emphasize its "
+
+[[params.recipe.option_groups.options]]
+value = "stencil-burn"
+label = "Stencil Burn"
+input_count = 4
+description = "Image A is dithered to a near-binary stencil — its shapes reduced to stark positive and negative space. That stencil is used as a hard luminance mask "
+
+[[params.recipe.option_groups.options]]
+value = "stratum-shift"
+label = "Stratum Shift"
+input_count = 4
+description = "Four images built into geological strata through strip collage, then seam-carved to warp the fault lines. Luminance masking cuts the first geological "
+
+[[params.recipe.option_groups.options]]
+value = "structural-echo"
+label = "Structural Echo"
+input_count = 4
+description = "Image A's edge structure is applied three times to create a progressive echo effect. The first application uses a tight feather of 5, cutting B sharpl"
+
+[[params.recipe.option_groups.options]]
+value = "surveillance-decay"
+label = "Surveillance Decay"
+input_count = 4
+description = "Four feeds arranged in the classic CCTV quad-view — the administrative gaze that watches everything and remembers nothing. Each feed has already been "
+
+[[params.recipe.option_groups.options]]
+value = "text-ghost"
+label = "Text Ghost"
+input_count = 4
+description = "Image A is PCA-decomposed to just 1-2 principal components — its texture and color stripped away until only the structural ghost remains, nearly monoc"
+
+[[params.recipe.option_groups.options]]
+value = "threshold-cascade"
+label = "Threshold Cascade"
+input_count = 4
+description = "Four mask_composite operations at four ascending threshold bands — 40, 80, 150, and 200 — each cutting a different pair of images at a different tonal"
+
+[[params.recipe.option_groups.options]]
+value = "torn-collage"
+label = "Torn Collage"
+input_count = 4
+description = "Four images shattered like a mirror dropped on concrete. Each fragment gets the sickly hum of magnetic tape artifacts before being scattered into a lo"
+
+[[params.recipe.option_groups.options]]
+value = "wobble-curvyscreen-dither"
+label = "Wobble Curvy Screen Dither"
+input_count = 4
+description = "Four images: two wobble-eyed into drifting off-axis rings, then curvy-line-screened against a third. The fourth image provides an edge mask over the r"
+
+[[params.recipe.option_groups]]
+label = "4 Images — Glitch"
+[[params.recipe.option_groups.options]]
+value = "pca-quad"
+label = "PCA Quad"
+input_count = 4
+description = "Four images PCA-decomposed to varying depths — stripped to structural ghosts — then composited through three-level stencil. The brightness bands fill "
+
+[[params.recipe.option_groups.options]]
+value = "quad-sort-destroy"
+label = "Quad Sort Destroy"
+input_count = 4
+description = "Four images three-level stenciled — brightness bands filling with different sources — then the composite is pixel-sorted and byte-corrupted. The three"
+
+[[params.recipe.option_groups.options]]
+value = "stencil-into-displacement"
+label = "Stencil Into Displacement"
+input_count = 4
+description = "Four images in two stages: first, Otsu stencil composites images A and B using C as the mask. Then the stencil composite is displacement-warped agains"
+
+[[params.recipe.option_groups]]
+label = "4 Images — Composite"
+[[params.recipe.option_groups.options]]
+value = "kaleidoscope-cyanotype-pca"
+label = "Kaleidoscope Cyanotype PCA"
+input_count = 4
+description = "Four images: two kaleidoscoped into mandala patterns, PCA-decomposed to structural ghosts, then cyanotype-stenciled. The kaleidoscope symmetry dissolv"
+
+[[params.recipe.option_groups.options]]
+value = "lathe-silver-sonify"
+label = "Lathe Silver Sonify"
+input_count = 4
+description = "Four images: two lathe-turned into agate ring surfaces, silver-stenciled through a third. The silver-toned lathe composite is sonified — converted to "
+
+[[params.recipe.option_groups]]
+label = "5 Images — Neural"
+[[params.recipe.option_groups.options]]
+value = "chimera-engine"
+label = "Chimera Engine"
+input_count = 5
+description = "Three images Voronoi-fragmented into organic cells, blended with a fourth, then edge-masked against a fifth to carve new seams through the hybrid body"
+
+[[params.recipe.option_groups.options]]
+value = "displacement-dream-collage"
+label = "Displacement Dream Collage"
+input_count = 5
+description = "Five images: two deepdreamed into neural hallucinations, displacement- stenciled through a third. The displacement-torn dreamed surface is mosaiced wi"
+
+[[params.recipe.option_groups.options]]
+value = "dream-archaeology"
+label = "Dream Archaeology"
+input_count = 5
+description = "Each image is PCA-decomposed to different component depths — A stripped to near-structural ghost, B to a richer skeleton, C to a mid-density signal, D"
+
+[[params.recipe.option_groups.options]]
+value = "dream-fragment-storm"
+label = "Dream Fragment Storm"
+input_count = 5
+description = "Three images are deepdreamed — A, B, and C each acquiring dense neural hallucinations. All three dreamed surfaces are shattered together into a field "
+
+[[params.recipe.option_groups.options]]
+value = "entropy-garden"
+label = "Entropy Garden"
+input_count = 5
+description = "Five images each deepdreamed into proliferating hallucinations before being assembled into a mosaic. Edge masking cuts the dream-mosaic against one of"
+
+[[params.recipe.option_groups.options]]
+value = "hallucinated-quilt"
+label = "Hallucinated Quilt"
+input_count = 5
+description = "Five images dreamed at different iteration counts — 5, 10, 15, 20, and 25 — creating a spectrum from barely-touched to fully colonized by the network'"
+
+[[params.recipe.option_groups.options]]
+value = "hallucination-collage"
+label = "Hallucination Collage"
+input_count = 5
+description = "All five inputs are deepdreamed at escalating intensities — A barely touched at 5 iterations, B at 10, C at 15, D at 20, E pushed to 25 where the netw"
+
+[[params.recipe.option_groups.options]]
+value = "kaleidoscope-dream"
+label = "Kaleidoscope Dream"
+input_count = 5
+description = "All five inputs are deepdreamed independently, each colonized by the network's preferred hallucinations — eyes, pagodas, fractal dogs, feathered archi"
+
+[[params.recipe.option_groups.options]]
+value = "mosaic-rebirth"
+label = "Mosaic Rebirth"
+input_count = 5
+description = "Five sources assembled into a mosaic, sorted by pixel luminance into streaming vertical rivers, then shattered. Noise masking cuts random windows into"
+
+[[params.recipe.option_groups.options]]
+value = "neural-tapestry"
+label = "Neural Tapestry"
+input_count = 5
+description = "Three of the five inputs are deepdreamed — A, B, and C each acquire the network's hallucinated forms at slightly different intensities. Those three dr"
+
+[[params.recipe.option_groups.options]]
+value = "total-chaos"
+label = "Total Chaos"
+input_count = 5
+description = "Every technique thrown into one sequence. A is deepdreamed; its hallucinations are edge-masked onto B. That composite is collaged in strips with C. Th"
+
+[[params.recipe.option_groups]]
+label = "5 Images — Hybrid"
+[[params.recipe.option_groups.options]]
+value = "broken-mirror"
+label = "Broken Mirror"
+input_count = 5
+description = "Five images shattered along Voronoi seams with deliberate gaps, as if the mirror holding all five reflections has been dropped and the pieces have sca"
+
+[[params.recipe.option_groups.options]]
+value = "bullseye-halftone-fragment"
+label = "Bullseye Halftone Fragment"
+input_count = 5
+description = "Five images: two bullseyed into concentric ring targets, halftone- stenciled through a third. The dot-screened bullseye surface is then Voronoi-fragme"
+
+[[params.recipe.option_groups.options]]
+value = "collage-veil"
+label = "Collage Veil"
+input_count = 5
+description = "All five images are first mosaiced into a single tiled composite — five worlds locked into one grid. Then three successive edge-mask veils are pulled "
+
+[[params.recipe.option_groups.options]]
+value = "composite-quilt"
+label = "Composite Quilt"
+input_count = 5
+description = "Images A and B are grid-fragmented into rectangular patches — a quilt of borrowed tiles from two different worlds. Image C's luminance then cuts throu"
+
+[[params.recipe.option_groups.options]]
+value = "cross-pollinate"
+label = "Cross Pollinate"
+input_count = 5
+description = "Two parallel edge-mask chains cross-pollinate their results. A's edges cut into B, making a composite of A's structure filled with B's content. C's ed"
+
+[[params.recipe.option_groups.options]]
+value = "cut-paste-repeat"
+label = "Cut Paste Repeat"
+input_count = 5
+description = "The name is the recipe: mask, paste, cut, paste, mask again. Five images, three rounds of mask_composite interleaved with fragment and collage. First,"
+
+[[params.recipe.option_groups.options]]
+value = "cutout-mosaic"
+label = "Cutout Mosaic"
+input_count = 5
+description = "Three images are mosaiced into a grid composite — fragments locked into cells, a surface of borrowed pictures. Image four is then dithered to binary a"
+
+[[params.recipe.option_groups.options]]
+value = "edge-lattice"
+label = "Edge Lattice"
+input_count = 5
+description = "Edge masking applied to every consecutive pair of five images — a cascades into b, b into c, c into d, d into e — building a lattice where the structu"
+
+[[params.recipe.option_groups.options]]
+value = "edge-weave"
+label = "Edge Weave"
+input_count = 5
+description = "Five images woven together through their own structural edges. A's edge skeleton cuts B into A's silhouette — the first weave. B's edges then cut C th"
+
+[[params.recipe.option_groups.options]]
+value = "fragment-displacement"
+label = "Fragment Displacement"
+input_count = 5
+description = "Five images: three Voronoi-fragmented into a shattered mosaic, then displacement-stenciled against the remaining two. The displacement field tears thr"
+
+[[params.recipe.option_groups.options]]
+value = "fragment-storm"
+label = "Fragment Storm"
+input_count = 5
+description = "Five images shattered twice with different piece counts — first a coarse shattering, then edge masking between the two rounds to cut new seams through"
+
+[[params.recipe.option_groups.options]]
+value = "geometric-chaos"
+label = "Geometric Chaos"
+input_count = 5
+description = "Five images each hit with a different geometric destruction — bullseye, wobbleeye, sixshooter, kaleidoscope, lathe — then all five mosaiced into a gri"
+
+[[params.recipe.option_groups.options]]
+value = "halftone-collage-shift"
+label = "Halftone Collage Shift"
+input_count = 5
+description = "Five images: halftone-stenciled three ways, then mosaiced with the remaining two into a grid composite. Channel shift tears the dot patterns apart. Ne"
+
+[[params.recipe.option_groups.options]]
+value = "kaleidoscope-collapse"
+label = "Kaleidoscope Collapse"
+input_count = 5
+description = "Five sources collaged into a mosaic, then the mosaic is shattered and edge-masked against one of its own parents. The resulting fragments are sorted b"
+
+[[params.recipe.option_groups.options]]
+value = "mask-and-scatter"
+label = "Mask and Scatter"
+input_count = 5
+description = "Image A is luminance-masked onto B, cutting A's bright silhouette into B's flesh. The masked composite is then shattered — broken into irregular shard"
+
+[[params.recipe.option_groups.options]]
+value = "mask-collage-fusion"
+label = "Mask Collage Fusion"
+input_count = 5
+description = "Image A is luminance-masked onto B — A's bright zones punch through to reveal B beneath, a hard stencil of one world over another. That composite is m"
+
+[[params.recipe.option_groups.options]]
+value = "mask-everything"
+label = "Mask Everything"
+input_count = 5
+description = "Maximum masking: every image pair gets composited through a mask before anything else happens. A's edges cut into B, producing pair-AB. C's luminance "
+
+[[params.recipe.option_groups.options]]
+value = "mask-feedback"
+label = "Mask Feedback"
+input_count = 5
+description = "A chain of masks where each output becomes the input mask for the next stage. Image A is masked onto B using A's luminance — B's content cut into A's "
+
+[[params.recipe.option_groups.options]]
+value = "mask-fragment-cycle"
+label = "Mask Fragment Cycle"
+input_count = 5
+description = "A full cycle: mask, then cut, then mask again, then paste. Image A's luminance cuts into B, creating a stenciled composite where A's bright zones reve"
+
+[[params.recipe.option_groups.options]]
+value = "masked-archaeology"
+label = "Masked Archaeology"
+input_count = 5
+description = "Each input is PCA-decomposed to a different depth — A stripped to 1 principal component (near-pure structure), B to 3, C to 6, D to 10, E left raw. Th"
+
+[[params.recipe.option_groups.options]]
+value = "masked-tapestry"
+label = "Masked Tapestry"
+input_count = 5
+description = "Five images woven into a layered tapestry through successive masking. Images A, B, and C are mosaic-collaged into a grid — three worlds tiled into one"
+
+[[params.recipe.option_groups.options]]
+value = "mosaic-dissolution"
+label = "Mosaic Dissolution"
+input_count = 5
+description = "Five sources tiled into a mosaic, then the mosaic itself is fragmented and pixel-sorted into dust. Maximum input count, maximum chaos."
+
+[[params.recipe.option_groups.options]]
+value = "palimpsest-ii"
+label = "Palimpsest II"
+input_count = 5
+description = "The manuscript overwritten so many times the original is unreadable. Five sources, four mask layers, each threshold deeper than the last — luminance, "
+
+[[params.recipe.option_groups.options]]
+value = "recursive-stencil"
+label = "Recursive Stencil"
+input_count = 5
+description = "Five-deep recursive stenciling where each image's PCA structure is used as a luminance mask for the next. Each image is first PCA-decomposed to 5 comp"
+
+[[params.recipe.option_groups.options]]
+value = "shape-imposition"
+label = "Shape Imposition"
+input_count = 5
+description = "Image A is PCA-reduced to a single principal component — its entire visual complexity collapsed to one axis of variation, a near-monochrome blueprint."
+
+[[params.recipe.option_groups.options]]
+value = "silhouette-swap"
+label = "Silhouette Swap"
+input_count = 5
+description = "A chain of five images where each one's PCA silhouette is used as the hard mask to cut the next. Image A reduced to 2 components becomes the stencil t"
+
+[[params.recipe.option_groups.options]]
+value = "silver-lathe-fragment"
+label = "Silver Lathe Fragment"
+input_count = 5
+description = "Five images: two lathe-turned into agate rings, three Voronoi-fragmented into shattered cells. Silver stencil composites the lathe surfaces, then the "
+
+[[params.recipe.option_groups.options]]
+value = "stamp-collection"
+label = "Stamp Collection"
+input_count = 5
+description = "Five images are each fragmented into irregular pieces — the first pass shatters them into raw fragments. Then each fragment's luminance becomes a hard"
+
+[[params.recipe.option_groups.options]]
+value = "stencil-mosaic"
+label = "Stencil Mosaic"
+input_count = 5
+description = "Image A is dithered to thermal — reduced to pure heat-map extremes — then used as a hard threshold stencil to cut its own bright zones into B, burning"
+
+[[params.recipe.option_groups]]
+label = "5 Images — Glitch"
+[[params.recipe.option_groups.options]]
+value = "triple-stencil-cascade"
+label = "Triple Stencil Cascade"
+input_count = 5
+description = "Five images in three stencil passes: first, Otsu stencil composites A and B through C. Then halftone stencil composites the result and D through C's d"
+
+# --- Recipe Chain ---
+[params.chain]
+type = "multi_select"
+label = "Recipe Chain"
+description = "Select recipes in order. Output of each feeds into the next."
+required = true
+flag = "--chain"
+min_selections = 2
+depends_on = { param = "processing_mode", value = "chain" }
+
+[[params.chain.option_groups]]
+label = "2 Images — Neural"
+[[params.chain.option_groups.options]]
+value = "dream-dissolve"
+label = "Dream Dissolve"
+input_count = 2
+
+[[params.chain.option_groups]]
+label = "2 Images — Hybrid"
+[[params.chain.option_groups.options]]
+value = "double-exposure"
+label = "Double Exposure"
+input_count = 2
+
+[[params.chain.option_groups.options]]
+value = "feedback-loop"
+label = "Feedback Loop"
+input_count = 2
+
+[[params.chain.option_groups.options]]
+value = "ghost-overlay"
+label = "Ghost Overlay"
+input_count = 2
+
+[[params.chain.option_groups.options]]
+value = "phantom-limb"
+label = "Phantom Limb"
+input_count = 2
+
+[[params.chain.option_groups.options]]
+value = "simple-cutout"
+label = "Simple Cutout"
+input_count = 2
+
+[[params.chain.option_groups.options]]
+value = "spectral-merge"
+label = "Spectral Merge"
+input_count = 2
+
+[[params.chain.option_groups.options]]
+value = "two-face"
+label = "Two Face"
+input_count = 2
+
+[[params.chain.option_groups.options]]
+value = "x-ray-composite"
+label = "X-Ray Composite"
+input_count = 2
+
+[[params.chain.option_groups]]
+label = "3 Images — Ancients"
+[[params.chain.option_groups.options]]
+value = "ancients-bullethole"
+label = "Ancients Bullet Hole"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "ancients-bullseye"
+label = "Ancients Bullseye"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "ancients-curvylinescreen"
+label = "Ancients Curvy Line Screen"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "ancients-cyanotype"
+label = "Ancients Cyanotype"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "ancients-displacement"
+label = "Ancients Displacement"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "ancients-halationedge"
+label = "Ancients Halation Edge"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "ancients-halftone"
+label = "Ancients Halftone"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "ancients-kaleidoscope"
+label = "Ancients Kaleidoscope"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "ancients-lathe"
+label = "Ancients Lathe"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "ancients-linescreen"
+label = "Ancients Line Screen"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "ancients-reducedlinescreen"
+label = "Ancients Reduced Line Screen"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "ancients-silver"
+label = "Ancients Silver"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "ancients-sixshooter"
+label = "Ancients Six Shooter"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "ancients-stencil"
+label = "Ancients Stencil"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "ancients-wobbleeye"
+label = "Ancients Wobble Eye"
+input_count = 3
+
+[[params.chain.option_groups]]
+label = "3 Images — Neural"
+[[params.chain.option_groups.options]]
+value = "dream-cutout"
+label = "Dream Cutout"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "dream-halftone"
+label = "Dream Halftone"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "dream-within-dream"
+label = "Dream Within Dream"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "neural-chimera"
+label = "Neural Chimera"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "voronoi-chimera"
+label = "Voronoi Chimera"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "wax-museum"
+label = "Wax Museum"
+input_count = 3
+
+[[params.chain.option_groups]]
+label = "3 Images — Hybrid"
+[[params.chain.option_groups.options]]
+value = "acid-wash"
+label = "Acid Wash"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "broadcast-static"
+label = "Broadcast Static"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "data-rot"
+label = "Data Rot"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "edge-ghosts"
+label = "Edge Ghosts"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "exquisite-corpse"
+label = "Exquisite Corpse"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "fossil-record"
+label = "Fossil Record"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "holographic-interference"
+label = "Holographic Interference"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "mask-and-glitch"
+label = "Mask and Glitch"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "sediment-core"
+label = "Sediment Core"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "signal-bleed"
+label = "Signal Bleed"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "sorted-mask"
+label = "Sorted Mask"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "spectral-stencil"
+label = "Spectral Stencil"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "triple-mask"
+label = "Triple Mask"
+input_count = 3
+
+[[params.chain.option_groups]]
+label = "3 Images — Glitch"
+[[params.chain.option_groups.options]]
+value = "bullseye-cyanotype"
+label = "Bullseye Cyanotype"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "curvy-corruption"
+label = "Curvy Corruption"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "cyanotype-corruption"
+label = "Cyanotype Corruption"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "reducedscreen-datamosh"
+label = "Reduced Screen Datamosh"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "shifted-linescreen"
+label = "Shifted Line Screen"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "sixshooter-linescreen"
+label = "Six Shooter Line Screen"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "sorted-displacement"
+label = "Sorted Displacement"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "spectral-silver"
+label = "Spectral Silver"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "vhs-halation"
+label = "VHS Halation"
+input_count = 3
+
+[[params.chain.option_groups]]
+label = "3 Images — Composite"
+[[params.chain.option_groups.options]]
+value = "bullethole-silver"
+label = "Bullet Hole Silver"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "bullseye-wobble-displacement"
+label = "Bullseye Wobble Displacement"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "halftone-curvyscreen"
+label = "Halftone Curvy Screen"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "kaleidoscope-halftone"
+label = "Kaleidoscope Halftone"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "lathe-displacement"
+label = "Lathe Displacement"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "lathe-kaleidoscope-stencil"
+label = "Lathe Kaleidoscope Stencil"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "wobble-halation"
+label = "Wobble Halation"
+input_count = 3
+
+[[params.chain.option_groups]]
+label = "4 Images — Ancients"
+[[params.chain.option_groups.options]]
+value = "ancients-collage"
+label = "Ancients Collage"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "ancients-quad"
+label = "Ancients Quad"
+input_count = 4
+
+[[params.chain.option_groups]]
+label = "4 Images — Neural"
+[[params.chain.option_groups.options]]
+value = "dream-erosion"
+label = "Dream Erosion"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "dream-mask"
+label = "Dream Mask"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "dream-mask-dream"
+label = "Dream Mask Dream"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "dream-quad"
+label = "Dream Quad"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "dream-stencil"
+label = "Dream Stencil"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "kaleidoscope-dream-displacement"
+label = "Kaleidoscope Dream Displacement"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "neural-mask-cascade"
+label = "Neural Mask Cascade"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "noise-cathedral"
+label = "Noise Cathedral"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "phantom-dream"
+label = "Phantom Dream"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "silver-displacement-dream"
+label = "Silver Displacement Dream"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "tectonic-overlap"
+label = "Tectonic Overlap"
+input_count = 4
+
+[[params.chain.option_groups]]
+label = "4 Images — Hybrid"
+[[params.chain.option_groups.options]]
+value = "binary-archaeology"
+label = "Binary Archaeology"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "collage-mask-collage"
+label = "Collage Mask Collage"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "collage-surgery"
+label = "Collage Surgery"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "collage-through-glass"
+label = "Collage Through Glass"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "contrast-surgery"
+label = "Contrast Surgery"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "cyanotype-bullethole-mask"
+label = "Cyanotype Bullet Hole Mask"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "displacement-blend-spectral"
+label = "Displacement Blend Spectral"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "dissolve-cascade"
+label = "Dissolve Cascade"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "double-masked-collage"
+label = "Double Masked Collage"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "fracture-and-mask"
+label = "Fracture and Mask"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "gradient-reveal"
+label = "Gradient Reveal"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "interference-mask"
+label = "Interference Mask"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "layered-cutwork"
+label = "Layered Cutwork"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "letterpress"
+label = "Letterpress"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "luminance-layers"
+label = "Luminance Layers"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "mask-cascade"
+label = "Mask Cascade"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "mask-erosion"
+label = "Mask Erosion"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "negative-space"
+label = "Negative Space"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "palimpsest"
+label = "Palimpsest"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "photogram"
+label = "Photogram"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "silhouette-collage"
+label = "Silhouette Collage"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "sixshooter-halation-corrupt"
+label = "Six Shooter Halation Corrupt"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "spectral-mask"
+label = "Spectral Mask"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "stencil-burn"
+label = "Stencil Burn"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "stratum-shift"
+label = "Stratum Shift"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "structural-echo"
+label = "Structural Echo"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "surveillance-decay"
+label = "Surveillance Decay"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "text-ghost"
+label = "Text Ghost"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "threshold-cascade"
+label = "Threshold Cascade"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "torn-collage"
+label = "Torn Collage"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "wobble-curvyscreen-dither"
+label = "Wobble Curvy Screen Dither"
+input_count = 4
+
+[[params.chain.option_groups]]
+label = "4 Images — Glitch"
+[[params.chain.option_groups.options]]
+value = "pca-quad"
+label = "PCA Quad"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "quad-sort-destroy"
+label = "Quad Sort Destroy"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "stencil-into-displacement"
+label = "Stencil Into Displacement"
+input_count = 4
+
+[[params.chain.option_groups]]
+label = "4 Images — Composite"
+[[params.chain.option_groups.options]]
+value = "kaleidoscope-cyanotype-pca"
+label = "Kaleidoscope Cyanotype PCA"
+input_count = 4
+
+[[params.chain.option_groups.options]]
+value = "lathe-silver-sonify"
+label = "Lathe Silver Sonify"
+input_count = 4
+
+[[params.chain.option_groups]]
+label = "5 Images — Neural"
+[[params.chain.option_groups.options]]
+value = "chimera-engine"
+label = "Chimera Engine"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "displacement-dream-collage"
+label = "Displacement Dream Collage"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "dream-archaeology"
+label = "Dream Archaeology"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "dream-fragment-storm"
+label = "Dream Fragment Storm"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "entropy-garden"
+label = "Entropy Garden"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "hallucinated-quilt"
+label = "Hallucinated Quilt"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "hallucination-collage"
+label = "Hallucination Collage"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "kaleidoscope-dream"
+label = "Kaleidoscope Dream"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "mosaic-rebirth"
+label = "Mosaic Rebirth"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "neural-tapestry"
+label = "Neural Tapestry"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "total-chaos"
+label = "Total Chaos"
+input_count = 5
+
+[[params.chain.option_groups]]
+label = "5 Images — Hybrid"
+[[params.chain.option_groups.options]]
+value = "broken-mirror"
+label = "Broken Mirror"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "bullseye-halftone-fragment"
+label = "Bullseye Halftone Fragment"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "collage-veil"
+label = "Collage Veil"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "composite-quilt"
+label = "Composite Quilt"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "cross-pollinate"
+label = "Cross Pollinate"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "cut-paste-repeat"
+label = "Cut Paste Repeat"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "cutout-mosaic"
+label = "Cutout Mosaic"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "edge-lattice"
+label = "Edge Lattice"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "edge-weave"
+label = "Edge Weave"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "fragment-displacement"
+label = "Fragment Displacement"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "fragment-storm"
+label = "Fragment Storm"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "geometric-chaos"
+label = "Geometric Chaos"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "halftone-collage-shift"
+label = "Halftone Collage Shift"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "kaleidoscope-collapse"
+label = "Kaleidoscope Collapse"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "mask-and-scatter"
+label = "Mask and Scatter"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "mask-collage-fusion"
+label = "Mask Collage Fusion"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "mask-everything"
+label = "Mask Everything"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "mask-feedback"
+label = "Mask Feedback"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "mask-fragment-cycle"
+label = "Mask Fragment Cycle"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "masked-archaeology"
+label = "Masked Archaeology"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "masked-tapestry"
+label = "Masked Tapestry"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "mosaic-dissolution"
+label = "Mosaic Dissolution"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "palimpsest-ii"
+label = "Palimpsest II"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "recursive-stencil"
+label = "Recursive Stencil"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "shape-imposition"
+label = "Shape Imposition"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "silhouette-swap"
+label = "Silhouette Swap"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "silver-lathe-fragment"
+label = "Silver Lathe Fragment"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "stamp-collection"
+label = "Stamp Collection"
+input_count = 5
+
+[[params.chain.option_groups.options]]
+value = "stencil-mosaic"
+label = "Stencil Mosaic"
+input_count = 5
+
+[[params.chain.option_groups]]
+label = "5 Images — Glitch"
+[[params.chain.option_groups.options]]
+value = "triple-stencil-cascade"
+label = "Triple Stencil Cascade"
+input_count = 5
+
+# --- Seed ---
+[params.seed]
+type = "int"
+label = "Seed"
+description = "RNG seed for reproducible results. Leave empty for random."
+required = false
+flag = "--seed"
+min = 0
+max = 2147483647

@@ -478,7 +478,7 @@ def multi_search(
         }
         if filters:
             q["filter"] = filters
-        if sort:
+        if sort and sort != ["random"]:
             q["sort"] = sort
         queries.append(q)
 
@@ -529,7 +529,10 @@ def multi_search(
                     existing["max"] = max(existing.get("max", float("-inf")), stat_values["max"])
 
     # Interleave results from different indexes by the active sort field
-    if sort and all_hits:
+    if sort and all_hits and sort[0] == "random":
+        import random as _random
+        _random.shuffle(all_hits)
+    elif sort and all_hits:
         sort_field = sort[0].split(":")[0]
         sort_dir = sort[0].split(":")[-1] if ":" in sort[0] else "asc"
         reverse = sort_dir == "desc"
