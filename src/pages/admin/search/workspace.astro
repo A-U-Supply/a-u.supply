@@ -31,17 +31,20 @@ import Admin from '../../../layouts/Admin.astro';
     <button class="action-btn" id="configure-btn" disabled>Configure & Run</button>
   </div>
 
-  <!-- App config dialog -->
-  <div class="dialog-overlay" id="config-dialog" style="display:none;">
-    <div class="dialog" style="max-width: 560px;">
-      <h3 id="config-app-name"></h3>
-      <p id="config-app-desc" style="color: var(--color-muted); font-size: var(--text-sm);"></p>
-      <div id="config-app-detail" class="config-detail" style="display:none;"></div>
-      <div id="config-params"></div>
-      <div class="dialog-actions">
-        <button class="btn-cancel" id="config-cancel">Cancel</button>
-        <button class="action-btn" id="config-submit">Submit Job</button>
-      </div>
+  <!-- Inline app config section -->
+  <div id="config-section" class="config-section" style="display:none;">
+    <div class="config-header">
+      <h2 id="config-app-name"></h2>
+      <button class="btn-cancel" id="config-cancel">Cancel</button>
+    </div>
+    <p id="config-app-desc" class="config-app-desc"></p>
+    <details id="config-app-detail-wrap" class="config-detail-wrap">
+      <summary>About this app</summary>
+      <div id="config-app-detail" class="config-detail"></div>
+    </details>
+    <div id="config-params"></div>
+    <div class="config-actions">
+      <button class="action-btn" id="config-submit">Submit Job</button>
     </div>
   </div>
 </Admin>
@@ -192,14 +195,38 @@ import Admin from '../../../layouts/Admin.astro';
     color: var(--color-text);
     border: 1px solid var(--color-border);
   }
-  .config-field {
-    margin-top: var(--space-sm);
-  }
-  .config-field label {
-    display: block;
+  .config-section {
+    margin-top: var(--space-md);
+    border: 1px solid var(--color-border);
+    padding: var(--space-md);
     font-family: var(--font-mono);
+  }
+  .config-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-sm);
+  }
+  .config-header h2 {
+    margin: 0;
+    border: none;
+    padding: 0;
+    font-size: var(--text-base);
+  }
+  .config-app-desc {
+    color: var(--color-muted);
     font-size: var(--text-sm);
-    margin-bottom: 2px;
+    margin: 0 0 var(--space-sm) 0;
+  }
+  .config-detail-wrap {
+    margin-bottom: var(--space-md);
+    font-size: var(--text-sm);
+  }
+  .config-detail-wrap summary {
+    cursor: pointer;
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    margin-bottom: var(--space-xs);
   }
   .config-detail {
     color: var(--color-muted);
@@ -207,13 +234,26 @@ import Admin from '../../../layouts/Admin.astro';
     line-height: 1.5;
     border-left: 2px solid var(--color-border);
     padding: var(--space-xs) var(--space-sm);
-    margin-bottom: var(--space-sm);
     white-space: pre-line;
+  }
+  .config-field {
+    padding: var(--space-sm) 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .config-field:last-of-type {
+    border-bottom: none;
+  }
+  .config-field label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: bold;
+    margin-bottom: 4px;
   }
   .config-field .config-desc {
     color: var(--color-muted);
     font-size: 0.75rem;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     line-height: 1.4;
   }
   .config-field .config-option-desc {
@@ -231,6 +271,12 @@ import Admin from '../../../layouts/Admin.astro';
     border: 1px solid var(--color-border);
     background: var(--color-bg);
     color: var(--color-text);
+    box-sizing: border-box;
+  }
+  .config-actions {
+    margin-top: var(--space-md);
+    display: flex;
+    justify-content: flex-end;
   }
 </style>
 
@@ -434,12 +480,13 @@ import Admin from '../../../layouts/Admin.astro';
       document.getElementById('config-app-desc')!.textContent = app.description || '';
 
       const detailEl = document.getElementById('config-app-detail')!;
+      const detailWrap = document.getElementById('config-app-detail-wrap')!;
       const manifest = app.manifest;
       if (manifest.long_description) {
         detailEl.textContent = manifest.long_description;
-        detailEl.style.display = 'block';
+        detailWrap.style.display = '';
       } else {
-        detailEl.style.display = 'none';
+        detailWrap.style.display = 'none';
       }
 
       const paramsContainer = document.getElementById('config-params')!;
@@ -550,11 +597,12 @@ import Admin from '../../../layouts/Admin.astro';
       });
       updateVisibility();
 
-      document.getElementById('config-dialog')!.style.display = 'flex';
+      document.getElementById('config-section')!.style.display = '';
+      document.getElementById('config-section')!.scrollIntoView({ behavior: 'smooth' });
     });
 
     document.getElementById('config-cancel')?.addEventListener('click', () => {
-      document.getElementById('config-dialog')!.style.display = 'none';
+      document.getElementById('config-section')!.style.display = 'none';
     });
 
     document.getElementById('config-submit')?.addEventListener('click', async () => {
@@ -631,7 +679,7 @@ import Admin from '../../../layouts/Admin.astro';
 
         if (res.ok) {
           const job = await res.json();
-          document.getElementById('config-dialog')!.style.display = 'none';
+          document.getElementById('config-section')!.style.display = 'none';
           window.location.href = `/admin/jobs?highlight=${job.id}`;
         } else {
           const err = await res.json();
