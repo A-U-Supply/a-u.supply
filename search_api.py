@@ -51,6 +51,7 @@ class SearchFilters(BaseModel):
     date_range: dict | None = Field(None, description="Date range filter: `{\"from\": \"YYYY-MM-DD\", \"to\": \"YYYY-MM-DD\"}`. Both are optional.")
     reaction_count: dict | None = Field(None, description="Minimum reaction count: `{\"min\": 3}`.")
     tag_count: dict | None = Field(None, description="Tag count filter: `{\"min\": 1}` and/or `{\"max\": 5}`.")
+    output_index: str | None = Field(None, description="Filter by output index/collection name (e.g. `rgz9-outputs`).")
 
     @field_validator("color_group", mode="before")
     @classmethod
@@ -272,6 +273,9 @@ def _build_meili_filter(filters: SearchFilters | None) -> str | None:
             parts.append(f"tag_count >= {filters.tag_count['min']}")
         if filters.tag_count.get("max") is not None:
             parts.append(f"tag_count <= {filters.tag_count['max']}")
+
+    if filters.output_index:
+        parts.append(f'output_index = "{_escape_filter_value(filters.output_index)}"')
 
     return " AND ".join(parts) if parts else None
 
@@ -498,7 +502,7 @@ def search_facets(
 
     **Scope required:** `read`
     """
-    from models import MediaSource
+    from models import MediaItem, MediaSource
     from sqlalchemy import distinct, func
 
     # Distinct channels
@@ -527,9 +531,18 @@ def search_facets(
             pass
     uploaders = list(uploaders_set)
 
+    # Distinct output indexes
+    output_indexes = [
+        r[0] for r in
+        db.query(distinct(MediaItem.output_index))
+        .filter(MediaItem.output_index.isnot(None))
+        .all()
+    ]
+
     return {
         "channels": sorted(channels),
         "uploaders": sorted(uploaders),
+        "output_indexes": sorted(output_indexes),
     }
 
 

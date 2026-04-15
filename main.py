@@ -41,6 +41,13 @@ Path("data").mkdir(exist_ok=True)
 
 Base.metadata.create_all(bind=engine)
 
+# Migrate existing DB: add output_index column if missing
+from sqlalchemy import inspect as _sa_inspect, text as _sa_text
+_cols = [c["name"] for c in _sa_inspect(engine).get_columns("media_items")]
+if "output_index" not in _cols:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE media_items ADD COLUMN output_index TEXT"))
+
 
 # ---------------------------------------------------------------------------
 # Background auto-sync scheduler

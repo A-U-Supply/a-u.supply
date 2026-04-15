@@ -158,6 +158,7 @@ class MediaItem(Base):
     file_size_bytes = Column(Integer, nullable=False)
     mime_type = Column(String, nullable=False)
     description = Column(String, nullable=True)
+    output_index = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=_utcnow)
     updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
 
