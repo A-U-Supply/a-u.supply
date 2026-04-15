@@ -227,6 +227,17 @@ def _run_job(job: Job, db: Session):
         db.commit()
         return
 
+    # Authenticate with GHCR if credentials are set
+    ghcr_user = os.environ.get("GHCR_USER")
+    ghcr_token = os.environ.get("GHCR_TOKEN")
+    if ghcr_user and ghcr_token:
+        login_result = subprocess.run(
+            ["docker", "login", "ghcr.io", "-u", ghcr_user, "--password-stdin"],
+            input=ghcr_token, capture_output=True, text=True, timeout=30,
+        )
+        if login_result.returncode != 0:
+            logger.warning("GHCR login failed: %s", login_result.stderr.strip())
+
     # Pull image
     image = manifest["image"]
     logger.info("Pulling image %s", image)
