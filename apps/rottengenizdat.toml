@@ -26,7 +26,7 @@ single_pass = "rave"
 recipe = "recipe run"
 
 [output]
-index = "rgz9-outputs"
+index = "outputs"
 
 [input]
 min_items = 1
