@@ -1245,6 +1245,7 @@ def _do_index_output(output_id: str, job_id: str, user, db: Session,
         output_index=resolved_index,
     )
     db.add(media_item)
+    db.flush()
 
     # Source record with full job context
     source = MediaSource(
