@@ -51,16 +51,18 @@ import Admin from '../../../layouts/Admin.astro';
 
   <!-- Index metadata dialog -->
   <div class="dialog-overlay" id="index-dialog" style="display:none;">
-    <div class="dialog" style="max-width: 560px;">
+    <div class="dialog" style="max-width: 560px; max-height: 90vh; overflow-y: auto;">
       <h3>Index to Search</h3>
       <div id="idx-job-info" class="idx-info"></div>
+      <input id="idx-output-index" type="hidden" />
       <div class="idx-field">
-        <label>Output Index</label>
-        <input id="idx-output-index" type="text" placeholder="Collection name" />
+        <label>Title</label>
+        <input id="idx-description" type="text" placeholder="Editable — auto-generated from job context" />
+        <div class="idx-hint">Searchable title for these outputs. Edit freely.</div>
       </div>
       <div class="idx-field">
-        <label>Description</label>
-        <textarea id="idx-description" rows="2"></textarea>
+        <label>Notes</label>
+        <textarea id="idx-notes" rows="2" placeholder="Optional freeform notes"></textarea>
       </div>
       <div class="idx-field">
         <label>Additional Tags</label>
@@ -182,6 +184,11 @@ import Admin from '../../../layouts/Admin.astro';
     box-sizing: border-box;
   }
   .idx-field textarea { resize: vertical; }
+  .idx-hint {
+    color: var(--color-muted);
+    font-size: 0.65rem;
+    margin-top: 2px;
+  }
 </style>
 
 <script>
@@ -244,13 +251,15 @@ import Admin from '../../../layouts/Admin.astro';
         const runtime = ((new Date(job.completed_at).getTime() - new Date(job.started_at).getTime()) / 1000).toFixed(1);
         parts.push(`${runtime}s`);
       }
-      (document.getElementById('idx-description') as HTMLTextAreaElement).value = parts.join(' / ');
+      (document.getElementById('idx-description') as HTMLInputElement).value = parts.join(' / ');
+      (document.getElementById('idx-notes') as HTMLTextAreaElement).value = '';
 
       // Clear user tags
       (document.getElementById('idx-tags') as HTMLInputElement).value = '';
 
       // Job info
       const infoLines = [`App: ${job.app_name}`];
+      if (manifestOutput.index) infoLines.push(`Index: ${manifestOutput.index}`);
       if (params.processing_mode) infoLines.push(`Mode: ${params.processing_mode}`);
       if (params.recipe) infoLines.push(`Recipe: ${params.recipe}`);
       if (params.model) infoLines.push(`Model: ${params.model}`);
@@ -277,7 +286,9 @@ import Admin from '../../../layouts/Admin.astro';
     });
 
     document.getElementById('idx-confirm')?.addEventListener('click', async () => {
-      const description = (document.getElementById('idx-description') as HTMLTextAreaElement).value.trim() || undefined;
+      const title = (document.getElementById('idx-description') as HTMLInputElement).value.trim();
+      const notes = (document.getElementById('idx-notes') as HTMLTextAreaElement).value.trim();
+      const description = [title, notes].filter(Boolean).join('\n\n') || undefined;
       const outputIndex = (document.getElementById('idx-output-index') as HTMLInputElement).value.trim() || undefined;
       const tagsStr = (document.getElementById('idx-tags') as HTMLInputElement).value.trim();
       const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
