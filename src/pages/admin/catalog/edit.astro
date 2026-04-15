@@ -222,6 +222,7 @@ import Admin from '../../../layouts/Admin.astro';
   /* Form elements */
   .form-row {
     margin-bottom: var(--space-sm);
+    display: block;
   }
   .form-row--multi {
     display: grid;
@@ -236,28 +237,9 @@ import Admin from '../../../layouts/Admin.astro';
     letter-spacing: 0.5pt;
     margin-bottom: var(--space-xs);
   }
-  .form-group input[type="text"],
-  .form-group input[type="date"],
-  .form-group input[type="url"],
-  .form-group select,
-  .form-group textarea {
-    width: 100%;
-    padding: var(--space-xs) var(--space-sm);
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    border: 1px solid var(--color-border);
-    background: #fff;
-    color: var(--color-text);
-  }
   .form-group textarea {
     resize: vertical;
     min-height: 80px;
-  }
-  .form-group input:focus,
-  .form-group select:focus,
-  .form-group textarea:focus {
-    outline: 2px solid var(--color-accent);
-    outline-offset: -1px;
   }
 
   /* Entity multi-select */
@@ -330,24 +312,6 @@ import Admin from '../../../layouts/Admin.astro';
   .entity-option--create {
     color: var(--color-accent);
     font-style: italic;
-  }
-
-  /* Badges */
-  .badge {
-    display: inline-block;
-    padding: 2px 8px;
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    border: 1px solid;
-  }
-  .badge--draft {
-    color: var(--color-muted);
-    border-color: var(--color-border);
-  }
-  .badge--published {
-    color: var(--color-accent);
-    border-color: var(--color-accent);
   }
 
   /* Buttons */
@@ -741,7 +705,7 @@ import Admin from '../../../layouts/Admin.astro';
         entities.push(newEntity);
         selectedEntities.push(newEntity);
       } catch (err: any) {
-        alert(err.message);
+        (window as any).toast.error(err.message);
         return;
       }
     } else {

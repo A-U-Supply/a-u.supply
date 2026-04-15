@@ -8,7 +8,7 @@ import Admin from '../../layouts/Admin.astro';
   <section id="user-management" style="display:none;">
     <h3 style="margin-top: var(--space-md); margin-bottom: var(--space-sm); font-size: var(--text-base); text-transform: uppercase; letter-spacing: 1pt;">Users</h3>
 
-    <table class="user-table" id="user-table">
+    <table class="release-table" id="release-table">
       <thead>
         <tr>
           <th>Name</th>
@@ -55,36 +55,6 @@ import Admin from '../../layouts/Admin.astro';
 </Admin>
 
 <style>
-  .user-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: var(--text-sm);
-  }
-  .user-table th {
-    text-align: left;
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    font-size: 0.7rem;
-    padding: var(--space-xs) var(--space-sm);
-    border-bottom: 2px solid var(--color-text);
-    color: var(--color-muted);
-  }
-  .user-table td {
-    padding: var(--space-xs) var(--space-sm);
-    border-bottom: 1px solid var(--color-border);
-  }
-  .user-table button {
-    background: none;
-    border: 1px solid #c00;
-    color: #c00;
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    padding: 2px 8px;
-    cursor: pointer;
-    text-transform: uppercase;
-  }
-  .user-table button:hover { background: #c00; color: #fff; }
-
   .invite-form input,
   .invite-form select {
     padding: var(--space-xs) var(--space-sm);
@@ -147,7 +117,7 @@ import Admin from '../../layouts/Admin.astro';
     }
 
     (window as any).deleteUser = async (id: number) => {
-      if (!confirm('Delete this user?')) return;
+      if (!await (window as any).confirmDialog('Delete this user?', 'Delete')) return;
       const res = await fetch(`/api/admin/users/${id}`, {
         method: 'DELETE',
         credentials: 'include',

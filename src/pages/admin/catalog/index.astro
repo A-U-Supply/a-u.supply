@@ -3,12 +3,12 @@ import Admin from '../../../layouts/Admin.astro';
 ---
 
 <Admin title="Catalog" current="catalog">
-  <div class="catalog-header">
+  <div class="page-header">
     <h1>Catalog</h1>
-    <a href="/admin/catalog/new" class="btn-new">+ New Release</a>
+    <a href="/admin/catalog/new" class="btn-primary">+ New Release</a>
   </div>
 
-  <div class="status-tabs" id="status-tabs">
+  <div class="status-tabs" id="status-tabs" style="margin-top: var(--space-md);">
     <button class="tab active" data-status="all">All</button>
     <button class="tab" data-status="draft">Draft</button>
     <button class="tab" data-status="published">Published</button>
@@ -16,7 +16,10 @@ import Admin from '../../../layouts/Admin.astro';
 
   <div id="loading" style="color: var(--color-muted);"><span class="loading-dots">Loading releases</span></div>
   <div id="error" class="login-error" style="display:none;"></div>
-  <div id="empty" style="display:none; color: var(--color-muted); padding: var(--space-md) 0;">No releases found.</div>
+  <div id="empty" class="empty-state" style="display:none;">
+    <div class="empty-state__icon">&#9744;</div>
+    No releases found.
+  </div>
 
   <div class="table-wrap" id="table-wrap" style="display:none;">
     <table class="release-table">
@@ -50,168 +53,6 @@ import Admin from '../../../layouts/Admin.astro';
 </Admin>
 
 <style>
-  .catalog-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: var(--space-sm);
-  }
-  .catalog-header h1 {
-    margin-bottom: 0;
-    border-bottom: none;
-    padding-bottom: 0;
-  }
-  .btn-new {
-    display: inline-block;
-    padding: var(--space-xs) var(--space-sm);
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 1pt;
-    background: #1a1a1a;
-    color: #fff;
-    border: none;
-    cursor: pointer;
-    text-decoration: none;
-  }
-  .btn-new:hover { background: #333; }
-
-  .status-tabs {
-    display: flex;
-    gap: 0;
-    margin: var(--space-md) 0;
-    border-bottom: 2px solid var(--color-text);
-  }
-  .tab {
-    padding: var(--space-xs) var(--space-sm);
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    background: none;
-    border: 1px solid var(--color-border);
-    border-bottom: none;
-    cursor: pointer;
-    color: var(--color-muted);
-    margin-bottom: -2px;
-  }
-  .tab:hover { color: var(--color-text); }
-  .tab.active {
-    color: var(--color-text);
-    font-weight: bold;
-    border-color: var(--color-text);
-    border-bottom: 2px solid var(--color-bg);
-  }
-
-  .table-wrap {
-    overflow-x: auto;
-  }
-  .release-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: var(--text-sm);
-  }
-  .release-table th {
-    text-align: left;
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    font-size: 0.7rem;
-    padding: var(--space-xs) var(--space-sm);
-    border-bottom: 2px solid var(--color-text);
-    color: var(--color-muted);
-    white-space: nowrap;
-  }
-  .release-table td {
-    padding: var(--space-xs) var(--space-sm);
-    border-bottom: 1px solid var(--color-border);
-    vertical-align: middle;
-  }
-
-  .badge {
-    display: inline-block;
-    padding: 2px 8px;
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    border: 1px solid;
-  }
-  .badge--draft {
-    color: var(--color-muted);
-    border-color: var(--color-border);
-  }
-  .badge--published {
-    color: var(--color-accent);
-    border-color: var(--color-accent);
-  }
-
-  .action-btn {
-    background: none;
-    border: 1px solid var(--color-border);
-    color: var(--color-text);
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    padding: 2px 6px;
-    cursor: pointer;
-    text-transform: uppercase;
-    text-decoration: none;
-    display: inline-block;
-    margin-right: 2px;
-    margin-bottom: 2px;
-  }
-  .action-btn:hover { background: var(--color-text); color: var(--color-bg); }
-  .action-btn--danger { border-color: #c00; color: #c00; }
-  .action-btn--danger:hover { background: #c00; color: #fff; }
-  .action-btn--publish { border-color: var(--color-accent); color: var(--color-accent); }
-  .action-btn--publish:hover { background: var(--color-accent); color: #fff; }
-
-  .dialog-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 200;
-  }
-  .dialog {
-    background: #fff;
-    padding: var(--space-md);
-    border: 2px solid var(--color-text);
-    max-width: 400px;
-    width: 90%;
-    font-family: var(--font-mono);
-  }
-  .dialog-actions {
-    display: flex;
-    gap: var(--space-sm);
-    margin-top: var(--space-md);
-    justify-content: flex-end;
-  }
-  .btn-cancel {
-    padding: var(--space-xs) var(--space-sm);
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    text-transform: uppercase;
-    background: none;
-    border: 1px solid var(--color-border);
-    cursor: pointer;
-  }
-  .btn-cancel:hover { border-color: var(--color-text); }
-  .btn-danger {
-    padding: var(--space-xs) var(--space-sm);
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    font-weight: bold;
-    text-transform: uppercase;
-    background: #c00;
-    color: #fff;
-    border: none;
-    cursor: pointer;
-  }
-  .btn-danger:hover { background: #a00; }
-
   @media (max-width: 640px) {
     .release-table th:nth-child(6),
     .release-table td:nth-child(6),
@@ -325,12 +166,12 @@ import Admin from '../../../layouts/Admin.astro';
           });
           if (!res.ok) {
             const err = await res.json().catch(() => ({ detail: 'Request failed' }));
-            alert(err.detail || 'Request failed');
+            (window as any).toast.error(err.detail || 'Request failed');
             return;
           }
           await loadReleases();
         } catch {
-          alert('Network error');
+          (window as any).toast.error('Network error');
         }
       }
 
@@ -360,12 +201,12 @@ import Admin from '../../../layouts/Admin.astro';
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ detail: 'Delete failed' }));
-          alert(err.detail || 'Delete failed');
+          (window as any).toast.error(err.detail || 'Delete failed');
         } else {
           await loadReleases();
         }
       } catch {
-        alert('Network error');
+        (window as any).toast.error('Network error');
       }
 
       document.getElementById('delete-dialog')!.style.display = 'none';

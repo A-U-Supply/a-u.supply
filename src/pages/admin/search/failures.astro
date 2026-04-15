@@ -3,7 +3,7 @@ import Admin from '../../../layouts/Admin.astro';
 ---
 
 <Admin title="Extraction Failures" current="failures">
-  <div class="failures-header">
+  <div class="page-header">
     <h1>Extraction Failures</h1>
     <div class="failures-controls">
       <select id="filter-type">
@@ -21,7 +21,10 @@ import Admin from '../../../layouts/Admin.astro';
 
   <div id="loading" style="color: var(--color-muted);"><span class="loading-dots">Loading</span></div>
   <div id="error" class="login-error" style="display:none;"></div>
-  <div id="empty" style="display:none; color: var(--color-muted); padding: var(--space-md) 0;">No extraction failures found.</div>
+  <div id="empty" class="empty-state" style="display:none;">
+    <div class="empty-state__icon">&#10003;</div>
+    No extraction failures found.
+  </div>
 
   <div class="table-wrap" id="table-wrap" style="display:none;">
     <table class="release-table">
@@ -42,23 +45,6 @@ import Admin from '../../../layouts/Admin.astro';
 </Admin>
 
 <style>
-  .failures-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: var(--space-sm);
-  }
-  .failures-header h1 {
-    margin-bottom: 0;
-    border-bottom: none;
-    padding-bottom: 0;
-  }
-  .failures-controls {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-  }
   .failures-controls select {
     padding: 4px 6px;
     font-family: var(--font-mono);
@@ -67,30 +53,6 @@ import Admin from '../../../layouts/Admin.astro';
     background: #fff;
     color: var(--color-text);
   }
-
-  .table-wrap {
-    overflow-x: auto;
-  }
-  .release-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: var(--text-sm);
-  }
-  .release-table th {
-    text-align: left;
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    font-size: 0.7rem;
-    padding: var(--space-xs) var(--space-sm);
-    border-bottom: 2px solid var(--color-text);
-    color: var(--color-muted);
-    white-space: nowrap;
-  }
-  .release-table td {
-    padding: var(--space-xs) var(--space-sm);
-    border-bottom: 1px solid var(--color-border);
-    vertical-align: middle;
-  }
   .release-table td.error-cell {
     max-width: 250px;
     overflow: hidden;
@@ -98,33 +60,6 @@ import Admin from '../../../layouts/Admin.astro';
     white-space: nowrap;
     color: #c00;
     font-size: 0.7rem;
-  }
-
-  .action-btn {
-    background: none;
-    border: 1px solid var(--color-border);
-    color: var(--color-text);
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    padding: 2px 6px;
-    cursor: pointer;
-    text-transform: uppercase;
-    text-decoration: none;
-    display: inline-block;
-    margin-right: 2px;
-    margin-bottom: 2px;
-  }
-  .action-btn:hover { background: var(--color-text); color: var(--color-bg); }
-  .action-btn--success { border-color: #080; color: #080; }
-  .action-btn--success:hover { background: #080; color: #fff; }
-
-  .badge {
-    display: inline-block;
-    padding: 2px 8px;
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    border: 1px solid;
   }
 
   @media (max-width: 640px) {
@@ -181,7 +116,7 @@ import Admin from '../../../layouts/Admin.astro';
         }
         selectedIds.clear();
         await loadFailures();
-      } catch { alert('Batch retry failed'); }
+      } catch { (window as any).toast.error('Batch retry failed'); }
       batchRetryBtn.disabled = false;
       batchRetryBtn.textContent = 'Retry Selected';
     });
@@ -277,7 +212,7 @@ import Admin from '../../../layouts/Admin.astro';
             credentials: 'include',
           });
           await loadFailures();
-        } catch { alert('Retry failed'); }
+        } catch { (window as any).toast.error('Retry failed'); }
         return;
       }
 
@@ -291,7 +226,7 @@ import Admin from '../../../layouts/Admin.astro';
             credentials: 'include',
           });
           await loadFailures();
-        } catch { alert('Resolve failed'); }
+        } catch { (window as any).toast.error('Resolve failed'); }
       }
     });
 

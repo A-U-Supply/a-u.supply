@@ -281,68 +281,6 @@ import Admin from '../../../layouts/Admin.astro';
     border-top: 2px solid var(--color-text);
   }
 
-  .action-btn {
-    background: none;
-    border: 1px solid var(--color-border);
-    color: var(--color-text);
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    padding: 2px 6px;
-    cursor: pointer;
-    text-transform: uppercase;
-    text-decoration: none;
-    display: inline-block;
-  }
-  .action-btn:hover { background: var(--color-text); color: var(--color-bg); }
-  .action-btn--danger { border-color: #c00; color: #c00; }
-  .action-btn--danger:hover { background: #c00; color: #fff; }
-
-  .dialog-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 200;
-  }
-  .dialog {
-    background: #fff;
-    padding: var(--space-md);
-    border: 2px solid var(--color-text);
-    max-width: 400px;
-    width: 90%;
-    font-family: var(--font-mono);
-  }
-  .dialog-actions {
-    display: flex;
-    gap: var(--space-sm);
-    margin-top: var(--space-md);
-    justify-content: flex-end;
-  }
-  .btn-cancel {
-    padding: var(--space-xs) var(--space-sm);
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    text-transform: uppercase;
-    background: none;
-    border: 1px solid var(--color-border);
-    cursor: pointer;
-  }
-  .btn-cancel:hover { border-color: var(--color-text); }
-  .btn-danger {
-    padding: var(--space-xs) var(--space-sm);
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    font-weight: bold;
-    text-transform: uppercase;
-    background: #c00;
-    color: #fff;
-    border: none;
-    cursor: pointer;
-  }
-  .btn-danger:hover { background: #a00; }
-
   @media (max-width: 640px) {
     .detail-layout {
       grid-template-columns: 1fr;
@@ -577,7 +515,7 @@ import Admin from '../../../layouts/Admin.astro';
         if (!currentItem.tags) currentItem.tags = [];
         if (!currentItem.tags.includes(tag)) currentItem.tags.push(tag);
         renderTags();
-      } catch { alert('Failed to add tag'); }
+      } catch { (window as any).toast.error('Failed to add tag'); }
     }
 
     // Remove tag
@@ -592,7 +530,7 @@ import Admin from '../../../layouts/Admin.astro';
         });
         currentItem.tags = (currentItem.tags || []).filter((t: string) => t !== tag);
         renderTags();
-      } catch { alert('Failed to remove tag'); }
+      } catch { (window as any).toast.error('Failed to remove tag'); }
     });
 
     // Re-extract
@@ -604,9 +542,9 @@ import Admin from '../../../layouts/Admin.astro';
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ media_ids: [mediaId] }),
         });
-        alert('Re-extraction queued');
+        (window as any).toast.success('Re-extraction queued');
         loadMedia();
-      } catch { alert('Re-extraction failed'); }
+      } catch { (window as any).toast.error('Re-extraction failed'); }
     });
 
     // Delete
@@ -625,9 +563,9 @@ import Admin from '../../../layouts/Admin.astro';
         if (res.ok) {
           window.location.href = '/admin/search';
         } else {
-          alert('Delete failed');
+          (window as any).toast.error('Delete failed');
         }
-      } catch { alert('Delete failed'); }
+      } catch { (window as any).toast.error('Delete failed'); }
       document.getElementById('delete-dialog')!.style.display = 'none';
     });
 

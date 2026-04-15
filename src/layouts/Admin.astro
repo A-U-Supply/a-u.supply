@@ -66,6 +66,7 @@ const { title, current } = Astro.props;
   <div class="player-slot" transition:persist="audio-player">
     <Player client:only="svelte" />
   </div>
+  <div class="toast-container" id="toast-container"></div>
 </body>
 </html>
 
@@ -129,5 +130,69 @@ const { title, current } = Astro.props;
         sidebar.classList.remove('open');
       }
     });
+
+    // Dialog dismiss: Escape key and click-outside
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const open = document.querySelector('.dialog-overlay[style*="flex"]') as HTMLElement | null;
+        if (open) { open.style.display = 'none'; e.preventDefault(); }
+      }
+    });
+    document.addEventListener('click', (e) => {
+      const overlay = (e.target as HTMLElement).closest('.dialog-overlay');
+      if (overlay && e.target === overlay) {
+        (overlay as HTMLElement).style.display = 'none';
+      }
+    });
+
+    // Toast notification system
+    const toastContainer = document.getElementById('toast-container')!;
+    function showToast(message: string, type: 'success' | 'error' = 'success') {
+      const toast = document.createElement('div');
+      toast.className = `toast toast--${type}`;
+      toast.innerHTML = `<span>${message}</span><button class="toast__close">&times;</button>`;
+      toast.querySelector('.toast__close')!.addEventListener('click', () => removeToast(toast));
+      toastContainer.appendChild(toast);
+      setTimeout(() => removeToast(toast), 4000);
+    }
+    function removeToast(toast: HTMLElement) {
+      if (toast.classList.contains('removing')) return;
+      toast.classList.add('removing');
+      toast.addEventListener('animationend', () => toast.remove());
+    }
+    (window as any).toast = {
+      success: (msg: string) => showToast(msg, 'success'),
+      error: (msg: string) => showToast(msg, 'error'),
+    };
+
+    // Confirm dialog: returns a Promise<boolean>
+    (window as any).confirmDialog = (message: string, dangerLabel = 'Confirm') => {
+      return new Promise<boolean>((resolve) => {
+        let overlay = document.getElementById('shared-confirm-dialog');
+        if (!overlay) {
+          overlay = document.createElement('div');
+          overlay.id = 'shared-confirm-dialog';
+          overlay.className = 'dialog-overlay';
+          overlay.innerHTML = `<div class="dialog">
+            <p id="confirm-message"></p>
+            <div class="dialog-actions">
+              <button class="btn-cancel" id="confirm-no">Cancel</button>
+              <button class="btn-danger" id="confirm-yes"></button>
+            </div>
+          </div>`;
+          document.body.appendChild(overlay);
+        }
+        document.getElementById('confirm-message')!.textContent = message;
+        document.getElementById('confirm-yes')!.textContent = dangerLabel;
+        overlay.style.display = 'flex';
+
+        const cleanup = (result: boolean) => {
+          overlay!.style.display = 'none';
+          resolve(result);
+        };
+        document.getElementById('confirm-no')!.onclick = () => cleanup(false);
+        document.getElementById('confirm-yes')!.onclick = () => cleanup(true);
+      });
+    };
   });
 </script>
