@@ -77,6 +77,60 @@ document.dispatchEvent(new CustomEvent('player:queue', {
 }));
 ```
 
+## App Runner
+
+The app runner processes media through containerized apps (bots). Users select media into workspaces, pick an app, configure parameters, and submit jobs. A separate worker process polls for pending jobs and runs them in Docker containers.
+
+### Architecture
+
+- **Manifests**: `apps/*.toml` — each file defines an app (Docker image, accepted inputs, parameter schema). These are pointers, not code. Bot code lives in its own repo.
+- **API**: `jobs_api.py` — workspace CRUD, app registry, job queue, output management. All endpoints use `require_scope()` so they work with both cookies and API keys.
+- **Worker**: `worker.py` — runs as a separate Dokku process type (`Procfile: worker`). Polls for pending jobs, pulls Docker images, mounts input/output dirs, runs containers.
+- **Models**: Workspace, WorkspaceItem, AppDefinition, Job, JobOutput (in `models.py`)
+
+### How jobs work
+
+1. Worker picks a pending job from the `jobs` table (priority order)
+2. Copies input media files from `/app/search-data/` into `/app/job-data/{job_id}/input/`
+3. Writes `/app/job-data/{job_id}/job.json` with params and input file list
+4. Runs `docker run` with the job dir mounted at `/work` inside the container
+5. Bot reads from `/work/input/`, writes to `/work/output/`
+6. Worker collects outputs, creates `job_output` rows
+7. Admin reviews outputs, indexes good ones into the search engine or discards
+
+### Bot container contract
+
+Bots are Docker images. The worker mounts a job directory at `/work`:
+
+- `/work/input/` — input media files
+- `/work/job.json` — `{"job_id", "params", "input_files": [{filename, media_type, media_item_id}]}`
+- `/work/output/` — bot writes results here
+
+Exit codes: `0` = success, `1` = expected failure, `2` = config error.
+
+Optional: write `/work/output/manifest.json` to describe outputs with media types and descriptions. If absent, types are inferred from extensions.
+
+### Adding a new bot
+
+1. Bot repo needs a `Dockerfile` and a GitHub Actions workflow that builds + pushes to GHCR
+2. Create `apps/<bot-name>.toml` manifest in this repo (see `apps/rottengenizdat.toml` for example)
+3. Register via `POST /api/apps` with the TOML as `manifest_toml` (requires admin API key)
+
+### Dokku setup
+
+- Docker socket: `dokku storage:mount au-supply /var/run/docker.sock:/var/run/docker.sock`
+- Job data volume: `dokku storage:mount au-supply /var/lib/dokku/data/storage/au-supply-jobs:/app/job-data`
+- Worker scaling: `dokku ps:scale au-supply worker=1`
+- GHCR auth: set `GHCR_USER` and `GHCR_TOKEN` via `dokku config:set` (worker uses these to `docker login` before pulling)
+
+### Key pages
+
+- `/admin/search` — "+ Workspace" button in batch bar to add selected items
+- `/admin/search/workspace` — workspace management, "Process with..." app selector
+- `/admin/jobs` — job list with status, cancel, retry
+- `/admin/jobs/detail?id=X` — job detail with logs, outputs, index/discard
+- `/docs` — full API documentation including manifest format and container contract
+
 ## Dev
 
 ```sh
