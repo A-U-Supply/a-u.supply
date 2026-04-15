@@ -593,6 +593,30 @@ import Admin from '../../../layouts/Admin.astro';
   }
   .results-grid .grid-item__thumb:hover .grid-item__add { opacity: 1; }
   .results-grid .grid-item__add:hover { background: rgba(184,134,11,0.8); border-color: #b8860b; }
+  .results-grid .grid-item__dl {
+    position: absolute;
+    bottom: 4px;
+    left: 4px;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: bold;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+    padding: 0;
+    z-index: 1;
+    text-decoration: none;
+  }
+  .results-grid .grid-item__thumb:hover .grid-item__dl { opacity: 1; }
+  .results-grid .grid-item__dl:hover { background: rgba(184,134,11,0.8); border-color: #b8860b; }
   .results-grid .grid-item__info {
     padding: 4px 6px;
     font-size: 0.65rem;
@@ -1042,9 +1066,10 @@ import Admin from '../../../layouts/Admin.astro';
             ? `<img src="/api/media/${item.id}/thumbnail" alt="" loading="lazy" />`
             : `<img src="/assets/default-cover.jpg" alt="${item.media_type || '?'}" loading="lazy" style="image-rendering: pixelated;" />`;
           const canPlay = item.media_type === 'audio' || item.media_type === 'video';
+          const dlBtn = `<a class="grid-item__dl" href="/api/media/${item.id}/file" download title="Download">&#8615;</a>`;
           const playBtn = canPlay
-            ? `<button class="grid-item__play" data-play-id="${item.id}" data-play-type="${item.media_type}" title="Play">${playSvg}</button><button class="grid-item__add" data-play-id="${item.id}" data-play-type="${item.media_type}" title="Add to queue">+</button>`
-            : '';
+            ? `<button class="grid-item__play" data-play-id="${item.id}" data-play-type="${item.media_type}" title="Play">${playSvg}</button><button class="grid-item__add" data-play-id="${item.id}" data-play-type="${item.media_type}" title="Add to queue">+</button>${dlBtn}`
+            : dlBtn;
           const poster = (item.sources || []).map((s: any) => s.uploader).filter(Boolean)[0] || '';
           const rxn = item.total_reaction_count ?? 0;
           return `<div class="grid-item${selectedClass}" data-id="${item.id}">
@@ -1198,7 +1223,7 @@ import Admin from '../../../layouts/Admin.astro';
 
       // Grid item click (navigate)
       const gridItem = target.closest('.grid-item') as HTMLElement | null;
-      if (gridItem && !target.closest('.grid-item__check') && !target.closest('.grid-item__play') && !target.closest('.grid-item__add')) {
+      if (gridItem && !target.closest('.grid-item__check') && !target.closest('.grid-item__play') && !target.closest('.grid-item__add') && !target.closest('.grid-item__dl')) {
         const id = gridItem.dataset.id;
         if (id) window.location.href = `/admin/search/detail?id=${id}`;
       }

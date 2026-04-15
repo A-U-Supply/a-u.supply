@@ -80,6 +80,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     <!-- Actions -->
     <div class="detail-actions">
+      <a class="action-btn" id="download-btn" href="#" download style="display:none;">Download Source</a>
       <button class="action-btn" id="re-extract-btn">Re-extract Metadata</button>
       <button class="action-btn action-btn--danger" id="delete-btn">Delete Media</button>
     </div>
@@ -361,9 +362,14 @@ import Admin from '../../../layouts/Admin.astro';
       document.getElementById('meta-created')!.textContent = item.created_at ? new Date(item.created_at).toLocaleString() : '--';
       document.getElementById('meta-updated')!.textContent = item.updated_at ? new Date(item.updated_at).toLocaleString() : '--';
 
+      // Download button
+      const downloadBtn = document.getElementById('download-btn') as HTMLAnchorElement;
+      const fileUrl = `/api/media/${mediaId}/file`;
+      downloadBtn.href = fileUrl;
+      downloadBtn.style.display = '';
+
       // Preview
       const previewEl = document.getElementById('detail-preview')!;
-      const fileUrl = `/api/media/${mediaId}/file`;
       const thumbUrl = `/api/media/${mediaId}/thumbnail`;
       if (item.media_type === 'image') {
         previewEl.innerHTML = `<img src="${fileUrl}" alt="${item.filename || ''}" />`;

@@ -443,6 +443,15 @@
       />
     </div>
 
+    {#if currentTrack?.stream_url}
+      <a class="player__btn player__btn--download" href={currentTrack.stream_url} download title="Download">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M8 1v9M4 7l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="square"/>
+          <rect x="2" y="13" width="12" height="1.5"/>
+        </svg>
+      </a>
+    {/if}
+
     <button class="player__btn player__btn--queue {queueOpen ? 'player__btn--active' : ''}" onclick={toggleQueue} title="Queue">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
         <rect x="1" y="2" width="10" height="1.5"/>
@@ -672,6 +681,11 @@
 
   .player__btn--mute-mobile {
     display: none;
+  }
+
+  .player__btn--download {
+    text-decoration: none;
+    flex-shrink: 0;
   }
 
   .player__btn--queue {
