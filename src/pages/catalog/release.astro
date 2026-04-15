@@ -28,6 +28,7 @@ import Base from '../../layouts/Base.astro';
           <div class="release__actions">
             <button class="btn-play-all" id="play-all">&#9654; Play All</button>
             <button class="btn-add-all" id="add-all">+ Add All</button>
+            <a class="btn-download-all" id="download-all" href="#" download>&#8615; Download All</a>
             <button class="release__star" id="release-bm-star" style="display:none;" title="Bookmark release"></button>
           </div>
         </div>
@@ -221,6 +222,43 @@ import Base from '../../layouts/Base.astro';
     margin-left: var(--space-xs);
   }
   .btn-add-all:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  .btn-download-all {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    padding: var(--space-xs) var(--space-md);
+    background: none;
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    margin-left: var(--space-xs);
+    text-decoration: none;
+  }
+  .btn-download-all:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  .btn-track-dl {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--color-border);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    cursor: pointer;
+    color: var(--color-muted);
+    margin-left: 2px;
+    text-decoration: none;
+  }
+  .btn-track-dl:hover {
     border-color: var(--color-accent);
     color: var(--color-accent);
   }
@@ -507,12 +545,16 @@ import Base from '../../layouts/Base.astro';
     } else {
       trackTbody.innerHTML = r.tracks.map((t, i) => `<tr>
         <td>${t.track_number || (i + 1)}</td>
-        <td><button class="btn-track-play" data-index="${i}" title="Play">&#9654;</button><button class="btn-track-add" data-index="${i}" title="Add to queue">+</button></td>
+        <td><button class="btn-track-play" data-index="${i}" title="Play">&#9654;</button><button class="btn-track-add" data-index="${i}" title="Add to queue">+</button><a class="btn-track-dl" href="${t.stream_url}" download="${escapeHtml(t.title || `Track ${i + 1}`)}" title="Download">&#8615;</a></td>
         <td>${escapeHtml(t.title || `Track ${i + 1}`)}</td>
         <td>${formatDuration(t.duration_seconds)}</td>
         <td><button class="track-star" data-bm-type="track" data-bm-id="${t.id}" style="display:none;" title="Bookmark"></button></td>
       </tr>`).join('');
     }
+
+    // Download All link
+    const downloadAll = document.getElementById('download-all') as HTMLAnchorElement;
+    downloadAll.href = `/api/releases/${encoded}/download`;
 
     // Play All button
     document.getElementById('play-all')?.addEventListener('click', () => {
