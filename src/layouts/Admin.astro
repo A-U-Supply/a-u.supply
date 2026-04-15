@@ -194,13 +194,13 @@ const { title, current } = Astro.props;
 
     // Toast notification system
     const toastContainer = document.getElementById('toast-container')!;
-    function showToast(message: string, type: 'success' | 'error' = 'success') {
+    function showToast(message: string, type: 'success' | 'error' = 'success', duration = 4000) {
       const toast = document.createElement('div');
       toast.className = `toast toast--${type}`;
       toast.innerHTML = `<span>${message}</span><button class="toast__close">&times;</button>`;
       toast.querySelector('.toast__close')!.addEventListener('click', () => removeToast(toast));
       toastContainer.appendChild(toast);
-      setTimeout(() => removeToast(toast), 4000);
+      setTimeout(() => removeToast(toast), duration);
     }
     function removeToast(toast: HTMLElement) {
       if (toast.classList.contains('removing')) return;
@@ -208,8 +208,8 @@ const { title, current } = Astro.props;
       toast.addEventListener('animationend', () => toast.remove());
     }
     (window as any).toast = {
-      success: (msg: string) => showToast(msg, 'success'),
-      error: (msg: string) => showToast(msg, 'error'),
+      success: (msg: string, ms?: number) => showToast(msg, 'success', ms ?? 4000),
+      error: (msg: string, ms?: number) => showToast(msg, 'error', ms ?? 6000),
     };
 
     // Confirm dialog: returns a Promise<boolean>
