@@ -26,6 +26,7 @@
 - **Persistent storage**: `/var/lib/dokku/data/storage/au-supply-data:/app/data` (SQLite DB + media files survive deploys)
 - **Legacy site storage**: `/var/lib/dokku/data/storage/au-supply-legacy:/srv/legacy-site`
 - **Run commands on server**: `ssh dokku@204.168.201.89 enter au-supply web <command>` (use `enter`, not `run` — `run` creates a disposable container)
+- **Dokku CLI pitfalls**: Dokku's argument parser uses xargs internally, which mangles quotes and special characters. Never pass inline Python (`-c "..."`) or multiline strings through `ssh dokku run`. For one-off management tasks, use `manage.py` commands. For scripts that need to run on-server, use the API or add a manage.py subcommand.
 - **ffmpeg** is installed in the Docker image for audio duration extraction
 - **No Caddy/external proxy**: Dokku's built-in nginx handles reverse proxying and SSL termination
 
