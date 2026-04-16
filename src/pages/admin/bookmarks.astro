@@ -18,11 +18,15 @@ import Admin from '../../layouts/Admin.astro';
   <div id="batch-bar" class="batch-bar" style="display:none;">
     <span id="selected-count">0 selected</span>
     <button class="action-btn" data-batch="workspace">+ Workspace</button>
-    <button class="action-btn action-btn--danger" data-batch="remove">Remove</button>
+    <button class="action-btn action-btn--danger" data-batch="remove"
+      >Remove</button
+    >
     <button class="action-btn" id="clear-selection">Clear</button>
   </div>
 
-  <div id="loading" class="page-loading"><span class="loading-dots">Loading</span></div>
+  <div id="loading" class="page-loading">
+    <span class="loading-dots">Loading</span>
+  </div>
   <div id="empty" class="empty-state" style="display:none;">
     <div class="empty-state__icon">&#9734;</div>
     No bookmarks yet. Star items from Search, Workspace, or Releases.
@@ -53,8 +57,13 @@ import Admin from '../../layouts/Admin.astro';
     transition: border-color 0.15s;
     cursor: pointer;
   }
-  .bm-card:hover { border-color: var(--color-text); }
-  .bm-card.selected { border-color: var(--color-accent); border-width: 2px; }
+  .bm-card:hover {
+    border-color: var(--color-text);
+  }
+  .bm-card.selected {
+    border-color: var(--color-accent);
+    border-width: 2px;
+  }
   .bm-card__check {
     position: absolute;
     top: 4px;
@@ -81,7 +90,7 @@ import Admin from '../../layouts/Admin.astro';
     top: 3px;
     right: 4px;
     font-size: 0.55rem;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0, 0, 0, 0.6);
     color: #fff;
     padding: 1px 4px;
     text-transform: uppercase;
@@ -93,27 +102,29 @@ import Admin from '../../layouts/Admin.astro';
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0,0,0,0.35);
+    background: rgba(0, 0, 0, 0.35);
     opacity: 0;
     transition: opacity 0.15s;
     cursor: pointer;
     border: none;
     padding: 0;
   }
-  .bm-card__thumb:hover .bm-card__play { opacity: 1; }
+  .bm-card__thumb:hover .bm-card__play {
+    opacity: 1;
+  }
   .bm-card__play svg {
     width: 32px;
     height: 32px;
     fill: #fff;
-    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
   }
   .bm-card__add {
     position: absolute;
     bottom: 4px;
     right: 4px;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0, 0, 0, 0.6);
     color: #fff;
-    border: 1px solid rgba(255,255,255,0.3);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     font-family: var(--font-mono);
     font-size: 0.85rem;
     font-weight: bold;
@@ -128,15 +139,20 @@ import Admin from '../../layouts/Admin.astro';
     padding: 0;
     z-index: 1;
   }
-  .bm-card__thumb:hover .bm-card__add { opacity: 1; }
-  .bm-card__add:hover { background: rgba(184,134,11,0.8); border-color: #b8860b; }
+  .bm-card__thumb:hover .bm-card__add {
+    opacity: 1;
+  }
+  .bm-card__add:hover {
+    background: rgba(184, 134, 11, 0.8);
+    border-color: #b8860b;
+  }
   .bm-card__ws {
     position: absolute;
     top: 4px;
     right: 4px;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0, 0, 0, 0.6);
     color: #fff;
-    border: 1px solid rgba(255,255,255,0.3);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     font-size: 0.65rem;
     width: 24px;
     height: 24px;
@@ -149,9 +165,18 @@ import Admin from '../../layouts/Admin.astro';
     padding: 0;
     z-index: 1;
   }
-  .bm-card__thumb:hover .bm-card__ws { opacity: 1; }
-  .bm-card__ws:hover { background: rgba(184,134,11,0.8); border-color: #b8860b; }
-  .bm-card__ws svg { width: 14px; height: 14px; fill: #fff; }
+  .bm-card__thumb:hover .bm-card__ws {
+    opacity: 1;
+  }
+  .bm-card__ws:hover {
+    background: rgba(184, 134, 11, 0.8);
+    border-color: #b8860b;
+  }
+  .bm-card__ws svg {
+    width: 14px;
+    height: 14px;
+    fill: #fff;
+  }
   .bm-card__info {
     padding: 4px 6px;
     border-top: 1px solid var(--color-border);
@@ -208,7 +233,9 @@ import Admin from '../../layouts/Admin.astro';
     const pageInfo = document.getElementById('page-info')!;
     const batchBar = document.getElementById('batch-bar')!;
     const selectedCount = document.getElementById('selected-count')!;
-    const typeFilter = document.getElementById('type-filter') as HTMLSelectElement;
+    const typeFilter = document.getElementById(
+      'type-filter',
+    ) as HTMLSelectElement;
 
     let currentPage = 1;
     const pageSize = 48;
@@ -224,9 +251,18 @@ import Admin from '../../layouts/Admin.astro';
       emptyEl.style.display = 'none';
       gridEl.style.display = 'none';
 
-      const typeParam = typeFilter.value ? `&target_type=${typeFilter.value}` : '';
-      const res = await fetch(`/api/bookmarks?page=${currentPage}&per_page=${pageSize}${typeParam}`, { credentials: 'include' });
-      if (!res.ok) { loadingEl.style.display = 'none'; emptyEl.style.display = ''; return; }
+      const typeParam = typeFilter.value
+        ? `&target_type=${typeFilter.value}`
+        : '';
+      const res = await fetch(
+        `/api/bookmarks?page=${currentPage}&per_page=${pageSize}${typeParam}`,
+        { credentials: 'include' },
+      );
+      if (!res.ok) {
+        loadingEl.style.display = 'none';
+        emptyEl.style.display = '';
+        return;
+      }
 
       const data = await res.json();
       totalItems = data.total;
@@ -249,25 +285,37 @@ import Admin from '../../layouts/Admin.astro';
 
     async function enrichBookmarks(bookmarks: any[]) {
       // Group by type and batch-fetch metadata
-      const mediaIds = bookmarks.filter(b => b.target_type === 'media_item').map(b => b.target_id);
-      const releaseIds = bookmarks.filter(b => b.target_type === 'release').map(b => b.target_id);
-      const trackIds = bookmarks.filter(b => b.target_type === 'track').map(b => b.target_id);
+      const mediaIds = bookmarks
+        .filter((b) => b.target_type === 'media_item')
+        .map((b) => b.target_id);
+      const releaseIds = bookmarks
+        .filter((b) => b.target_type === 'release')
+        .map((b) => b.target_id);
+      const trackIds = bookmarks
+        .filter((b) => b.target_type === 'track')
+        .map((b) => b.target_id);
 
       const metaMap = new Map<string, any>();
 
       // Fetch media items
       for (const id of mediaIds) {
         try {
-          const res = await fetch(`/api/media/${id}`, { credentials: 'include' });
+          const res = await fetch(`/api/media/${id}`, {
+            credentials: 'include',
+          });
           if (res.ok) {
             const item = await res.json();
             metaMap.set(`media_item:${id}`, {
               name: item.filename || 'Untitled',
               sub: item.media_type,
               media_type: item.media_type,
-              thumb: (item.media_type === 'image' || item.media_type === 'video') ? `/api/media/${id}/thumbnail` : '/assets/default-cover.jpg',
+              thumb:
+                item.media_type === 'image' || item.media_type === 'video'
+                  ? `/api/media/${id}/thumbnail`
+                  : '/assets/default-cover.jpg',
               href: `/admin/search/detail?id=${id}`,
-              playable: item.media_type === 'audio' || item.media_type === 'video',
+              playable:
+                item.media_type === 'audio' || item.media_type === 'video',
             });
           }
         } catch {}
@@ -284,7 +332,9 @@ import Admin from '../../layouts/Admin.astro';
               name: rel.title || code,
               sub: (rel.entities || []).map((e: any) => e.name).join(', '),
               media_type: 'release',
-              thumb: rel.cover_art_url ? `/api/releases/${encoded}/cover?size=thumb` : '/assets/default-cover.jpg',
+              thumb: rel.cover_art_url
+                ? `/api/releases/${encoded}/cover?size=thumb`
+                : '/assets/default-cover.jpg',
               href: `/catalog/release?code=${encoded}`,
               playable: false,
             });
@@ -295,7 +345,9 @@ import Admin from '../../layouts/Admin.astro';
       // Fetch tracks
       for (const id of trackIds) {
         try {
-          const res = await fetch(`/api/tracks/${id}`, { credentials: 'include' });
+          const res = await fetch(`/api/tracks/${id}`, {
+            credentials: 'include',
+          });
           if (res.ok) {
             const t = await res.json();
             const encoded = encodeURIComponent(t.release_code || '');
@@ -312,7 +364,7 @@ import Admin from '../../layouts/Admin.astro';
         } catch {}
       }
 
-      return bookmarks.map(b => ({
+      return bookmarks.map((b) => ({
         ...b,
         meta: metaMap.get(`${b.target_type}:${b.target_id}`) || {
           name: b.target_id,
@@ -327,15 +379,21 @@ import Admin from '../../layouts/Admin.astro';
 
     function renderGrid() {
       gridEl.style.display = 'grid';
-      gridEl.innerHTML = allItems.map(item => {
-        const m = item.meta;
-        const checked = selectedIds.has(item.target_id) ? 'checked' : '';
-        const selectedClass = selectedIds.has(item.target_id) ? ' selected' : '';
-        const thumbStyle = m.thumb === '/assets/default-cover.jpg' ? ' style="image-rendering: pixelated;"' : '';
-        const playBtn = m.playable
-          ? `<button class="bm-card__play" data-play-id="${item.target_id}" data-play-type="${m.media_type}" data-target-type="${item.target_type}" title="Play">${playSvg}</button><button class="bm-card__add" data-play-id="${item.target_id}" data-play-type="${m.media_type}" data-target-type="${item.target_type}" title="Add to queue">+</button>`
-          : '';
-        return `<div class="bm-card${selectedClass}" data-target-type="${item.target_type}" data-target-id="${item.target_id}" data-href="${m.href}">
+      gridEl.innerHTML = allItems
+        .map((item) => {
+          const m = item.meta;
+          const checked = selectedIds.has(item.target_id) ? 'checked' : '';
+          const selectedClass = selectedIds.has(item.target_id)
+            ? ' selected'
+            : '';
+          const thumbStyle =
+            m.thumb === '/assets/default-cover.jpg'
+              ? ' style="image-rendering: pixelated;"'
+              : '';
+          const playBtn = m.playable
+            ? `<button class="bm-card__play" data-play-id="${item.target_id}" data-play-type="${m.media_type}" data-target-type="${item.target_type}" title="Play">${playSvg}</button><button class="bm-card__add" data-play-id="${item.target_id}" data-play-type="${m.media_type}" data-target-type="${item.target_type}" title="Add to queue">+</button>`
+            : '';
+          return `<div class="bm-card${selectedClass}" data-target-type="${item.target_type}" data-target-id="${item.target_id}" data-href="${m.href}">
           <input type="checkbox" class="bm-card__check" data-select="${item.target_id}" ${checked} />
           <div class="bm-card__thumb">
             <span class="bm-card__type-badge">${item.target_type.replace('_', ' ')}</span>
@@ -351,7 +409,8 @@ import Admin from '../../layouts/Admin.astro';
             ${m.sub ? `<div class="bm-card__sub">${m.sub}</div>` : ''}
           </div>
         </div>`;
-      }).join('');
+        })
+        .join('');
     }
 
     function updateSelection() {
@@ -373,16 +432,28 @@ import Admin from '../../layouts/Admin.astro';
         e.stopPropagation();
         const bm = (window as any).__bookmarks;
         if (bm) {
-          bm.toggle(star.dataset.bmType!, star.dataset.bmId!).then((bookmarked: boolean) => {
-            if (!bookmarked) {
-              // Remove from view
-              allItems = allItems.filter(i => !(i.target_type === star.dataset.bmType && i.target_id === star.dataset.bmId));
-              totalItems--;
-              if (allItems.length === 0 && currentPage > 1) { currentPage--; loadBookmarks(); }
-              else if (allItems.length === 0) { gridEl.style.display = 'none'; emptyEl.style.display = ''; }
-              else renderGrid();
-            }
-          });
+          bm.toggle(star.dataset.bmType!, star.dataset.bmId!).then(
+            (bookmarked: boolean) => {
+              if (!bookmarked) {
+                // Remove from view
+                allItems = allItems.filter(
+                  (i) =>
+                    !(
+                      i.target_type === star.dataset.bmType &&
+                      i.target_id === star.dataset.bmId
+                    ),
+                );
+                totalItems--;
+                if (allItems.length === 0 && currentPage > 1) {
+                  currentPage--;
+                  loadBookmarks();
+                } else if (allItems.length === 0) {
+                  gridEl.style.display = 'none';
+                  emptyEl.style.display = '';
+                } else renderGrid();
+              }
+            },
+          );
         }
         return;
       }
@@ -394,25 +465,31 @@ import Admin from '../../layouts/Admin.astro';
         const id = playBtn.dataset.playId!;
         const mediaType = playBtn.dataset.playType!;
         const targetType = playBtn.dataset.targetType!;
-        const item = allItems.find((i: any) => i.target_id === id && i.target_type === targetType);
+        const item = allItems.find(
+          (i: any) => i.target_id === id && i.target_type === targetType,
+        );
         if (!item) return;
         const m = item.meta;
-        document.dispatchEvent(new CustomEvent('player:queue', {
-          detail: {
-            tracks: [{
-              track_id: id,
-              title: m.name,
-              release_title: m.sub || '',
-              release_code: '',
-              media_type: mediaType,
-              stream_url: m.stream_url || `/api/media/${id}/file`,
-              cover_url: m.thumb,
-              duration: 0,
-              entity_name: '',
-            }],
-            startIndex: 0,
-          },
-        }));
+        document.dispatchEvent(
+          new CustomEvent('player:queue', {
+            detail: {
+              tracks: [
+                {
+                  track_id: id,
+                  title: m.name,
+                  release_title: m.sub || '',
+                  release_code: '',
+                  media_type: mediaType,
+                  stream_url: m.stream_url || `/api/media/${id}/file`,
+                  cover_url: m.thumb,
+                  duration: 0,
+                  entity_name: '',
+                },
+              ],
+              startIndex: 0,
+            },
+          }),
+        );
         return;
       }
 
@@ -423,24 +500,30 @@ import Admin from '../../layouts/Admin.astro';
         const id = addBtn.dataset.playId!;
         const mediaType = addBtn.dataset.playType!;
         const targetType = addBtn.dataset.targetType!;
-        const item = allItems.find((i: any) => i.target_id === id && i.target_type === targetType);
+        const item = allItems.find(
+          (i: any) => i.target_id === id && i.target_type === targetType,
+        );
         if (!item) return;
         const m = item.meta;
-        document.dispatchEvent(new CustomEvent('player:add', {
-          detail: {
-            tracks: [{
-              track_id: id,
-              title: m.name,
-              release_title: m.sub || '',
-              release_code: '',
-              media_type: mediaType,
-              stream_url: m.stream_url || `/api/media/${id}/file`,
-              cover_url: m.thumb,
-              duration: 0,
-              entity_name: '',
-            }],
-          },
-        }));
+        document.dispatchEvent(
+          new CustomEvent('player:add', {
+            detail: {
+              tracks: [
+                {
+                  track_id: id,
+                  title: m.name,
+                  release_title: m.sub || '',
+                  release_code: '',
+                  media_type: mediaType,
+                  stream_url: m.stream_url || `/api/media/${id}/file`,
+                  cover_url: m.thumb,
+                  duration: 0,
+                  entity_name: '',
+                },
+              ],
+            },
+          }),
+        );
         return;
       }
 
@@ -451,25 +534,38 @@ import Admin from '../../layouts/Admin.astro';
         const mediaId = wsBtn.dataset.wsId!;
         const wsId = localStorage.getItem('active_workspace_id');
         if (!wsId) {
-          (window as any).toast.error('No active workspace. Create one from the workspace page first.');
+          (window as any).toast.error(
+            'No active workspace. Create one from the workspace page first.',
+          );
           return;
         }
         try {
           const res = await fetch(`/api/workspaces/${wsId}/items`, {
-            method: 'POST', credentials: 'include',
+            method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ media_item_ids: [mediaId] }),
           });
           if (res.ok) {
             const data = await res.json();
-            (window as any).toast.success(data.already_present > 0 ? 'Already in workspace' : 'Added to workspace');
-          } else { (window as any).toast.error('Failed to add to workspace'); }
-        } catch { (window as any).toast.error('Failed to add to workspace'); }
+            (window as any).toast.success(
+              data.already_present > 0
+                ? 'Already in workspace'
+                : 'Added to workspace',
+            );
+          } else {
+            (window as any).toast.error('Failed to add to workspace');
+          }
+        } catch {
+          (window as any).toast.error('Failed to add to workspace');
+        }
         return;
       }
 
       // Checkbox
-      const checkbox = target.closest('.bm-card__check') as HTMLInputElement | null;
+      const checkbox = target.closest(
+        '.bm-card__check',
+      ) as HTMLInputElement | null;
       if (checkbox) {
         e.stopPropagation();
         const id = checkbox.dataset.select!;
@@ -481,41 +577,61 @@ import Admin from '../../layouts/Admin.astro';
 
       // Card click — navigate
       const card = target.closest('.bm-card') as HTMLElement | null;
-      if (card && !target.closest('.bm-card__check') && !target.closest('.bm-card__ws')) {
+      if (
+        card &&
+        !target.closest('.bm-card__check') &&
+        !target.closest('.bm-card__ws')
+      ) {
         const href = card.dataset.href;
         if (href && href !== '#') window.location.href = href;
       }
     });
 
     // Batch actions
-    document.querySelectorAll('[data-batch]').forEach(btn => {
+    document.querySelectorAll('[data-batch]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const action = (btn as HTMLElement).dataset.batch;
         if (action === 'workspace') {
           // Only add media_items to workspace
           const mediaIds = allItems
-            .filter(i => selectedIds.has(i.target_id) && i.target_type === 'media_item')
-            .map(i => i.target_id);
+            .filter(
+              (i) =>
+                selectedIds.has(i.target_id) && i.target_type === 'media_item',
+            )
+            .map((i) => i.target_id);
           if (mediaIds.length === 0) {
-            (window as any).toast.error('Only media items can be added to workspace');
+            (window as any).toast.error(
+              'Only media items can be added to workspace',
+            );
             return;
           }
           let wsId = localStorage.getItem('active_workspace_id');
           if (!wsId) {
-            const res = await fetch('/api/workspaces', { method: 'POST', credentials: 'include',
+            const res = await fetch('/api/workspaces', {
+              method: 'POST',
+              credentials: 'include',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name: 'My Workspace' }) });
+              body: JSON.stringify({ name: 'My Workspace' }),
+            });
             const ws = await res.json();
             wsId = ws.id;
             localStorage.setItem('active_workspace_id', wsId!);
           }
           try {
-            const res = await fetch(`/api/workspaces/${wsId}/items`, { method: 'POST', credentials: 'include',
+            const res = await fetch(`/api/workspaces/${wsId}/items`, {
+              method: 'POST',
+              credentials: 'include',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ media_item_ids: mediaIds }) });
+              body: JSON.stringify({ media_item_ids: mediaIds }),
+            });
             const data = await res.json();
-            if (data.ok) (window as any).toast.success(`Added ${data.added} item(s) to workspace`);
-          } catch { (window as any).toast.error('Failed to add to workspace'); }
+            if (data.ok)
+              (window as any).toast.success(
+                `Added ${data.added} item(s) to workspace`,
+              );
+          } catch {
+            (window as any).toast.error('Failed to add to workspace');
+          }
         } else if (action === 'remove') {
           const bm = (window as any).__bookmarks;
           if (!bm) return;
@@ -530,11 +646,13 @@ import Admin from '../../layouts/Admin.astro';
       });
     });
 
-    document.getElementById('clear-selection')?.addEventListener('click', () => {
-      selectedIds.clear();
-      updateSelection();
-      renderGrid();
-    });
+    document
+      .getElementById('clear-selection')
+      ?.addEventListener('click', () => {
+        selectedIds.clear();
+        updateSelection();
+        renderGrid();
+      });
 
     typeFilter.addEventListener('change', () => {
       currentPage = 1;
@@ -542,10 +660,16 @@ import Admin from '../../layouts/Admin.astro';
     });
 
     document.getElementById('prev-page')?.addEventListener('click', () => {
-      if (currentPage > 1) { currentPage--; loadBookmarks(); }
+      if (currentPage > 1) {
+        currentPage--;
+        loadBookmarks();
+      }
     });
     document.getElementById('next-page')?.addEventListener('click', () => {
-      if (currentPage * pageSize < totalItems) { currentPage++; loadBookmarks(); }
+      if (currentPage * pageSize < totalItems) {
+        currentPage++;
+        loadBookmarks();
+      }
     });
 
     loadBookmarks();

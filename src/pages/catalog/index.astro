@@ -33,13 +33,21 @@ import Base from '../../layouts/Base.astro';
       </div>
     </div>
 
-    <div id="loading" class="catalog__status"><span class="loading-dots">Loading catalog</span></div>
-    <div id="error" class="catalog__status catalog__status--error" style="display:none;"></div>
-    <div id="empty" class="catalog__status" style="display:none;">No releases found.</div>
+    <div id="loading" class="catalog__status">
+      <span class="loading-dots">Loading catalog</span>
+    </div>
+    <div
+      id="error"
+      class="catalog__status catalog__status--error"
+      style="display:none;"
+    >
+    </div>
+    <div id="empty" class="catalog__status" style="display:none;">
+      No releases found.
+    </div>
 
     <div id="grid" class="catalog__grid" style="display:none;"></div>
   </main>
-
 </Base>
 
 <style>
@@ -154,14 +162,18 @@ import Base from '../../layouts/Base.astro';
       const res = await fetch('/api/entities');
       if (!res.ok) return;
       const entities = await res.json();
-      const select = document.getElementById('filter-entity') as HTMLSelectElement;
+      const select = document.getElementById(
+        'filter-entity',
+      ) as HTMLSelectElement;
       entities.forEach((e: any) => {
         const opt = document.createElement('option');
         opt.value = e.slug;
         opt.textContent = e.name;
         select.appendChild(opt);
       });
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   async function loadReleases() {
@@ -180,13 +192,18 @@ import Base from '../../layouts/Base.astro';
       allReleases.forEach((r: any) => {
         if (r.release_date) years.add(r.release_date.substring(0, 4));
       });
-      const yearSelect = document.getElementById('filter-year') as HTMLSelectElement;
-      Array.from(years).sort().reverse().forEach(y => {
-        const opt = document.createElement('option');
-        opt.value = y;
-        opt.textContent = y;
-        yearSelect.appendChild(opt);
-      });
+      const yearSelect = document.getElementById(
+        'filter-year',
+      ) as HTMLSelectElement;
+      Array.from(years)
+        .sort()
+        .reverse()
+        .forEach((y) => {
+          const opt = document.createElement('option');
+          opt.value = y;
+          opt.textContent = y;
+          yearSelect.appendChild(opt);
+        });
 
       renderGrid();
     } catch (err: any) {
@@ -197,7 +214,9 @@ import Base from '../../layouts/Base.astro';
   }
 
   function setupFilters() {
-    const entitySel = document.getElementById('filter-entity') as HTMLSelectElement;
+    const entitySel = document.getElementById(
+      'filter-entity',
+    ) as HTMLSelectElement;
     const yearSel = document.getElementById('filter-year') as HTMLSelectElement;
     const sortSel = document.getElementById('filter-sort') as HTMLSelectElement;
 
@@ -254,22 +273,24 @@ import Base from '../../layouts/Base.astro';
     emptyEl.style.display = 'none';
     grid.style.display = 'grid';
 
-    grid.innerHTML = allReleases.map((r: any) => {
-      const code = r.product_code;
-      const encoded = encodeURIComponent(code);
-      const entities = (r.entities || []).map((e: any) => e.name).join(', ') || 'Unknown';
-      const date = r.release_date || '----';
-      const tracks = r.track_count ?? 0;
-      const duration = formatDuration(r.total_duration_seconds || 0);
-      const coverUrl = r.cover_art_url
-        ? `/api/releases/${encoded}/cover?size=thumb`
-        : '';
+    grid.innerHTML = allReleases
+      .map((r: any) => {
+        const code = r.product_code;
+        const encoded = encodeURIComponent(code);
+        const entities =
+          (r.entities || []).map((e: any) => e.name).join(', ') || 'Unknown';
+        const date = r.release_date || '----';
+        const tracks = r.track_count ?? 0;
+        const duration = formatDuration(r.total_duration_seconds || 0);
+        const coverUrl = r.cover_art_url
+          ? `/api/releases/${encoded}/cover?size=thumb`
+          : '';
 
-      const coverHtml = coverUrl
-        ? `<img class="card__cover" src="${coverUrl}" alt="${r.title || code}" loading="lazy">`
-        : `<div class="card__cover card__cover--empty">NO COVER</div>`;
+        const coverHtml = coverUrl
+          ? `<img class="card__cover" src="${coverUrl}" alt="${r.title || code}" loading="lazy">`
+          : `<div class="card__cover card__cover--empty">NO COVER</div>`;
 
-      return `<a href="/catalog/release?code=${encoded}" class="card">
+        return `<a href="/catalog/release?code=${encoded}" class="card">
         ${coverHtml}
         <div class="card__body">
           <span class="card__code">${code}</span>
@@ -281,7 +302,8 @@ import Base from '../../layouts/Base.astro';
           </div>
         </div>
       </a>`;
-    }).join('');
+      })
+      .join('');
   }
 
   // Run on initial load and on View Transition navigations.

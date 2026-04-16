@@ -4,10 +4,16 @@ import Base from '../../layouts/Base.astro';
 
 <Base title="A-U.SUPPLY — Release">
   <main class="release">
-    <div id="loading" class="release__status"><span class="loading-dots">Loading product specification</span></div>
-    <div id="error" class="release__status release__status--error" style="display:none;"></div>
+    <div id="loading" class="release__status">
+      <span class="loading-dots">Loading product specification</span>
+    </div>
+    <div
+      id="error"
+      class="release__status release__status--error"
+      style="display:none;"
+    >
+    </div>
     <div id="content" style="display:none;">
-
       <header class="release__header">
         <a href="/catalog" class="release__back">&larr; Back to Catalog</a>
         <div class="release__masthead">
@@ -19,7 +25,13 @@ import Base from '../../layouts/Base.astro';
       <div class="release__layout">
         <div class="release__cover-wrap">
           <img id="cover-img" class="release__cover" src="" alt="" />
-          <div id="cover-empty" class="release__cover release__cover--empty" style="display:none;">NO COVER ART</div>
+          <div
+            id="cover-empty"
+            class="release__cover release__cover--empty"
+            style="display:none;"
+          >
+            NO COVER ART
+          </div>
         </div>
 
         <div class="release__info">
@@ -28,8 +40,14 @@ import Base from '../../layouts/Base.astro';
           <div class="release__actions">
             <button class="btn-play-all" id="play-all">&#9654; Play All</button>
             <button class="btn-add-all" id="add-all">+ Add All</button>
-            <a class="btn-download-all" id="download-all" href="#" download>&#8615; Download All</a>
-            <button class="release__star" id="release-bm-star" style="display:none;" title="Bookmark release"></button>
+            <a class="btn-download-all" id="download-all" href="#" download
+              >&#8615; Download All</a
+            >
+            <button
+              class="release__star"
+              id="release-bm-star"
+              style="display:none;"
+              title="Bookmark release"></button>
           </div>
         </div>
       </div>
@@ -71,10 +89,8 @@ import Base from '../../layouts/Base.astro';
         <h2 class="release__section-title">Description</h2>
         <div class="release__description" id="description"></div>
       </section>
-
     </div>
   </main>
-
 </Base>
 
 <style>
@@ -278,7 +294,8 @@ import Base from '../../layouts/Base.astro';
     color: var(--color-accent);
   }
 
-  .release__star, .track-star {
+  .release__star,
+  .track-star {
     background: none;
     border: none;
     cursor: pointer;
@@ -288,10 +305,22 @@ import Base from '../../layouts/Base.astro';
     color: var(--color-muted);
     transition: color 0.15s;
   }
-  .release__star::before, .track-star::before { content: '\2606'; }
-  .release__star:hover, .track-star:hover { color: #b8860b; }
-  .release__star.bookmarked, .track-star.bookmarked { color: #b8860b; }
-  .release__star.bookmarked::before, .track-star.bookmarked::before { content: '\2605'; }
+  .release__star::before,
+  .track-star::before {
+    content: '\2606';
+  }
+  .release__star:hover,
+  .track-star:hover {
+    color: #b8860b;
+  }
+  .release__star.bookmarked,
+  .track-star.bookmarked {
+    color: #b8860b;
+  }
+  .release__star.bookmarked::before,
+  .track-star.bookmarked::before {
+    content: '\2605';
+  }
 
   .release__section {
     margin-bottom: var(--space-lg);
@@ -446,7 +475,12 @@ import Base from '../../layouts/Base.astro';
     description: string | null;
     format_specs: string | null;
     tracks: Track[];
-    distribution_links: { id: number; platform: string; url: string; label: string | null }[];
+    distribution_links: {
+      id: number;
+      platform: string;
+      url: string;
+      label: string | null;
+    }[];
     metadata: { id: number; key: string; value: string; sort_order: number }[];
   }
 
@@ -506,7 +540,7 @@ import Base from '../../layouts/Base.astro';
 
   function renderRelease(r: ReleaseData) {
     const encoded = encodeURIComponent(r.product_code);
-    const entities = r.entities.map(e => e.name).join(', ') || 'Unknown';
+    const entities = r.entities.map((e) => e.name).join(', ') || 'Unknown';
 
     // Cover
     const coverImg = document.getElementById('cover-img') as HTMLImageElement;
@@ -532,28 +566,41 @@ import Base from '../../layouts/Base.astro';
     if (r.format_specs) {
       specs.push(['Format', r.format_specs]);
     }
-    specs.push(['Tracks', `${r.track_count} items, ${formatDuration(r.total_duration_seconds)} total`]);
+    specs.push([
+      'Tracks',
+      `${r.track_count} items, ${formatDuration(r.total_duration_seconds)} total`,
+    ]);
 
-    specTable.innerHTML = specs.map(([label, val]) =>
-      `<div class="spec-row"><dt>${escapeHtml(label)}:</dt><dd>${escapeHtml(val)}</dd></div>`
-    ).join('');
+    specTable.innerHTML = specs
+      .map(
+        ([label, val]) =>
+          `<div class="spec-row"><dt>${escapeHtml(label)}:</dt><dd>${escapeHtml(val)}</dd></div>`,
+      )
+      .join('');
 
     // Track table
     const trackTbody = document.getElementById('track-tbody')!;
     if (r.tracks.length === 0) {
-      trackTbody.innerHTML = '<tr><td colspan="4" style="color:var(--color-muted);">No tracks.</td></tr>';
+      trackTbody.innerHTML =
+        '<tr><td colspan="4" style="color:var(--color-muted);">No tracks.</td></tr>';
     } else {
-      trackTbody.innerHTML = r.tracks.map((t, i) => `<tr>
-        <td>${t.track_number || (i + 1)}</td>
+      trackTbody.innerHTML = r.tracks
+        .map(
+          (t, i) => `<tr>
+        <td>${t.track_number || i + 1}</td>
         <td><button class="btn-track-play" data-index="${i}" title="Play">&#9654;</button><button class="btn-track-add" data-index="${i}" title="Add to queue">+</button><a class="btn-track-dl" href="${t.stream_url}" download="${escapeHtml(t.title || `Track ${i + 1}`)}" title="Download">&#8615;</a></td>
         <td>${escapeHtml(t.title || `Track ${i + 1}`)}</td>
         <td>${formatDuration(t.duration_seconds)}</td>
         <td><button class="track-star" data-bm-type="track" data-bm-id="${t.id}" style="display:none;" title="Bookmark"></button></td>
-      </tr>`).join('');
+      </tr>`,
+        )
+        .join('');
     }
 
     // Download All link
-    const downloadAll = document.getElementById('download-all') as HTMLAnchorElement;
+    const downloadAll = document.getElementById(
+      'download-all',
+    ) as HTMLAnchorElement;
     downloadAll.href = `/api/releases/${encoded}/download`;
 
     // Play All button
@@ -568,13 +615,17 @@ import Base from '../../layouts/Base.astro';
 
     // Individual track play/add buttons
     trackTbody.addEventListener('click', (e) => {
-      const playBtn = (e.target as HTMLElement).closest('.btn-track-play') as HTMLElement | null;
+      const playBtn = (e.target as HTMLElement).closest(
+        '.btn-track-play',
+      ) as HTMLElement | null;
       if (playBtn) {
         const index = parseInt(playBtn.dataset.index || '0', 10);
         dispatchQueue(r, index);
         return;
       }
-      const addBtn = (e.target as HTMLElement).closest('.btn-track-add') as HTMLElement | null;
+      const addBtn = (e.target as HTMLElement).closest(
+        '.btn-track-add',
+      ) as HTMLElement | null;
       if (addBtn) {
         const index = parseInt(addBtn.dataset.index || '0', 10);
         dispatchAdd(r, index, true);
@@ -589,12 +640,15 @@ import Base from '../../layouts/Base.astro';
       const distSection = document.getElementById('dist-section')!;
       distSection.style.display = 'block';
       const distTbody = document.getElementById('dist-tbody')!;
-      distTbody.innerHTML = r.distribution_links.map(dl =>
-        `<tr>
+      distTbody.innerHTML = r.distribution_links
+        .map(
+          (dl) =>
+            `<tr>
           <td>${escapeHtml(dl.platform)}</td>
           <td><a href="${escapeHtml(dl.url)}" target="_blank" rel="noopener">${escapeHtml(dl.label || dl.url)}</a></td>
-        </tr>`
-      ).join('');
+        </tr>`,
+        )
+        .join('');
     }
 
     // Metadata
@@ -602,9 +656,12 @@ import Base from '../../layouts/Base.astro';
       const metaSection = document.getElementById('meta-section')!;
       metaSection.style.display = 'block';
       const metaTable = document.getElementById('meta-table')!;
-      metaTable.innerHTML = r.metadata.map(m =>
-        `<div class="meta-row"><dt>${escapeHtml(m.key)}</dt><dd>${escapeHtml(m.value)}</dd></div>`
-      ).join('');
+      metaTable.innerHTML = r.metadata
+        .map(
+          (m) =>
+            `<div class="meta-row"><dt>${escapeHtml(m.key)}</dt><dd>${escapeHtml(m.value)}</dd></div>`,
+        )
+        .join('');
     }
 
     // Description
@@ -625,43 +682,68 @@ import Base from '../../layouts/Base.astro';
         if (!meRes.ok) return; // Not logged in
         // Set up a minimal helper
         const bmCache = new Map<string, Set<string>>();
-        async function bmCheck(targetType: string, ids: string[]): Promise<Set<string>> {
+        async function bmCheck(
+          targetType: string,
+          ids: string[],
+        ): Promise<Set<string>> {
           if (ids.length === 0) return new Set();
           const cached = bmCache.get(targetType);
           if (cached) return cached;
           try {
             const res = await fetch('/api/bookmarks/check', {
-              method: 'POST', credentials: 'include',
+              method: 'POST',
+              credentials: 'include',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ target_type: targetType, target_ids: ids }),
+              body: JSON.stringify({
+                target_type: targetType,
+                target_ids: ids,
+              }),
             });
             if (!res.ok) return new Set();
             const data = await res.json();
             const set = new Set<string>(data.bookmarked_ids);
             bmCache.set(targetType, set);
             return set;
-          } catch { return new Set(); }
+          } catch {
+            return new Set();
+          }
         }
-        async function bmToggle(targetType: string, targetId: string): Promise<boolean> {
+        async function bmToggle(
+          targetType: string,
+          targetId: string,
+        ): Promise<boolean> {
           try {
             const res = await fetch('/api/bookmarks', {
-              method: 'POST', credentials: 'include',
+              method: 'POST',
+              credentials: 'include',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ target_type: targetType, target_id: targetId }),
+              body: JSON.stringify({
+                target_type: targetType,
+                target_id: targetId,
+              }),
             });
             if (!res.ok) return false;
             const data = await res.json();
             const set = bmCache.get(targetType) || new Set<string>();
-            if (data.bookmarked) set.add(targetId); else set.delete(targetId);
+            if (data.bookmarked) set.add(targetId);
+            else set.delete(targetId);
             bmCache.set(targetType, set);
-            document.querySelectorAll(`[data-bm-type="${targetType}"][data-bm-id="${targetId}"]`).forEach(el => {
-              el.classList.toggle('bookmarked', data.bookmarked);
-            });
+            document
+              .querySelectorAll(
+                `[data-bm-type="${targetType}"][data-bm-id="${targetId}"]`,
+              )
+              .forEach((el) => {
+                el.classList.toggle('bookmarked', data.bookmarked);
+              });
             return data.bookmarked;
-          } catch { return false; }
+          } catch {
+            return false;
+          }
         }
         bm = { check: bmCheck, toggle: bmToggle, cache: bmCache };
-      } catch { return; }
+      } catch {
+        return;
+      }
     }
 
     // Show release star
@@ -671,7 +753,9 @@ import Base from '../../layouts/Base.astro';
       releaseStar.dataset.bmType = 'release';
       releaseStar.dataset.bmId = releaseId;
       releaseStar.style.display = '';
-      releaseStar.addEventListener('click', () => bm.toggle('release', releaseId));
+      releaseStar.addEventListener('click', () =>
+        bm.toggle('release', releaseId),
+      );
     }
 
     // Show track stars
@@ -679,7 +763,10 @@ import Base from '../../layouts/Base.astro';
       (el as HTMLElement).style.display = '';
       el.addEventListener('click', (e) => {
         e.stopPropagation();
-        bm.toggle((el as HTMLElement).dataset.bmType!, (el as HTMLElement).dataset.bmId!);
+        bm.toggle(
+          (el as HTMLElement).dataset.bmType!,
+          (el as HTMLElement).dataset.bmId!,
+        );
       });
     });
 
@@ -691,7 +778,7 @@ import Base from '../../layouts/Base.astro';
     });
 
     // Check track bookmarks
-    const trackIds = r.tracks.map(t => String(t.id));
+    const trackIds = r.tracks.map((t) => String(t.id));
     if (trackIds.length > 0) {
       bm.check('track', trackIds).then((set: Set<string>) => {
         document.querySelectorAll('.track-star').forEach((el: Element) => {
@@ -704,60 +791,74 @@ import Base from '../../layouts/Base.astro';
 
   function dispatchQueue(r: ReleaseData, startIndex: number) {
     const encoded = encodeURIComponent(r.product_code);
-    const entities = r.entities.map(e => e.name).join(', ') || 'Unknown';
+    const entities = r.entities.map((e) => e.name).join(', ') || 'Unknown';
 
-    const tracks = r.tracks.map(t => ({
+    const tracks = r.tracks.map((t) => ({
       track_id: t.id,
       title: t.title,
       release_title: r.title,
       release_code: r.product_code,
       stream_url: t.stream_url,
-      cover_url: r.cover_art_url ? `/api/releases/${encoded}/cover?size=thumb` : null,
+      cover_url: r.cover_art_url
+        ? `/api/releases/${encoded}/cover?size=thumb`
+        : null,
       duration: t.duration_seconds,
       entity_name: entities,
     }));
 
-    document.dispatchEvent(new CustomEvent('player:queue', {
-      detail: { tracks, startIndex }
-    }));
+    document.dispatchEvent(
+      new CustomEvent('player:queue', {
+        detail: { tracks, startIndex },
+      }),
+    );
   }
 
-  function dispatchAdd(r: ReleaseData, startIndex: number, singleTrack = false) {
+  function dispatchAdd(
+    r: ReleaseData,
+    startIndex: number,
+    singleTrack = false,
+  ) {
     const encoded = encodeURIComponent(r.product_code);
-    const entities = r.entities.map(e => e.name).join(', ') || 'Unknown';
+    const entities = r.entities.map((e) => e.name).join(', ') || 'Unknown';
 
-    const sourceTracks = singleTrack ? [r.tracks[startIndex]] : r.tracks.slice(startIndex);
-    const tracks = sourceTracks.map(t => ({
+    const sourceTracks = singleTrack
+      ? [r.tracks[startIndex]]
+      : r.tracks.slice(startIndex);
+    const tracks = sourceTracks.map((t) => ({
       track_id: t.id,
       title: t.title,
       release_title: r.title,
       release_code: r.product_code,
       stream_url: t.stream_url,
-      cover_url: r.cover_art_url ? `/api/releases/${encoded}/cover?size=thumb` : null,
+      cover_url: r.cover_art_url
+        ? `/api/releases/${encoded}/cover?size=thumb`
+        : null,
       duration: t.duration_seconds,
       entity_name: entities,
     }));
 
-    document.dispatchEvent(new CustomEvent('player:add', {
-      detail: { tracks }
-    }));
+    document.dispatchEvent(
+      new CustomEvent('player:add', {
+        detail: { tracks },
+      }),
+    );
   }
 
   function injectJsonLd(r: ReleaseData) {
     const encoded = encodeURIComponent(r.product_code);
-    const entities = r.entities.map(e => e.name).join(', ') || 'Unknown';
+    const entities = r.entities.map((e) => e.name).join(', ') || 'Unknown';
 
     const jsonLd: any = {
       '@context': 'https://schema.org',
       '@type': 'MusicRelease',
-      'name': r.title || r.product_code,
-      'catalogNumber': r.product_code,
-      'byArtist': r.entities.map(e => ({
+      name: r.title || r.product_code,
+      catalogNumber: r.product_code,
+      byArtist: r.entities.map((e) => ({
         '@type': 'MusicGroup',
-        'name': e.name,
+        name: e.name,
       })),
-      'datePublished': r.release_date || undefined,
-      'numTracks': r.track_count,
+      datePublished: r.release_date || undefined,
+      numTracks: r.track_count,
     };
 
     if (r.cover_art_url) {
@@ -767,9 +868,11 @@ import Base from '../../layouts/Base.astro';
     if (r.tracks.length > 0) {
       jsonLd.track = r.tracks.map((t, i) => ({
         '@type': 'MusicRecording',
-        'name': t.title,
-        'position': t.track_number || (i + 1),
-        'duration': t.duration_seconds ? `PT${Math.floor(t.duration_seconds / 60)}M${Math.floor(t.duration_seconds % 60)}S` : undefined,
+        name: t.title,
+        position: t.track_number || i + 1,
+        duration: t.duration_seconds
+          ? `PT${Math.floor(t.duration_seconds / 60)}M${Math.floor(t.duration_seconds % 60)}S`
+          : undefined,
       }));
     }
 

@@ -3,13 +3,19 @@ import Admin from '../../../layouts/Admin.astro';
 ---
 
 <Admin title="Media Detail" current="search">
-  <div id="detail-loading" style="color: var(--color-muted);"><span class="loading-dots">Loading</span></div>
+  <div id="detail-loading" style="color: var(--color-muted);">
+    <span class="loading-dots">Loading</span>
+  </div>
   <div id="detail-error" class="login-error" style="display:none;"></div>
 
   <div id="detail-content" style="display:none;">
     <div class="detail-header">
       <h1 id="detail-title">Media Detail</h1>
-      <button class="bm-star" id="detail-bm-star" style="display:none;" title="Bookmark"></button>
+      <button
+        class="bm-star"
+        id="detail-bm-star"
+        style="display:none;"
+        title="Bookmark"></button>
       <a href="/admin/search" class="action-btn">Back to Search</a>
     </div>
 
@@ -60,8 +66,14 @@ import Admin from '../../../layouts/Admin.astro';
       <h2>Tags</h2>
       <div class="tags-list" id="tags-list"></div>
       <div class="tag-add">
-        <input type="text" id="tag-input" placeholder="Add tag..." autocomplete="off" />
-        <div class="tag-suggestions" id="tag-suggestions" style="display:none;"></div>
+        <input
+          type="text"
+          id="tag-input"
+          placeholder="Add tag..."
+          autocomplete="off"
+        />
+        <div class="tag-suggestions" id="tag-suggestions" style="display:none;">
+        </div>
         <button class="action-btn" id="add-tag-btn">Add</button>
       </div>
     </div>
@@ -92,10 +104,21 @@ import Admin from '../../../layouts/Admin.astro';
 
     <!-- Actions -->
     <div class="detail-actions">
-      <button class="action-btn" id="add-to-workspace-btn">Add to Workspace</button>
-      <a class="action-btn" id="download-btn" href="#" download style="display:none;">Download Source</a>
-      <button class="action-btn" id="re-extract-btn">Re-extract Metadata</button>
-      <button class="action-btn action-btn--danger" id="delete-btn">Delete Media</button>
+      <button class="action-btn" id="add-to-workspace-btn"
+        >Add to Workspace</button
+      >
+      <a
+        class="action-btn"
+        id="download-btn"
+        href="#"
+        download
+        style="display:none;">Download Source</a
+      >
+      <button class="action-btn" id="re-extract-btn">Re-extract Metadata</button
+      >
+      <button class="action-btn action-btn--danger" id="delete-btn"
+        >Delete Media</button
+      >
     </div>
   </div>
 
@@ -103,7 +126,11 @@ import Admin from '../../../layouts/Admin.astro';
   <div class="dialog-overlay" id="delete-dialog" style="display:none;">
     <div class="dialog">
       <p>Delete this media item?</p>
-      <p style="color: var(--color-muted); font-size: var(--text-sm); margin-top: var(--space-xs);">This action cannot be undone.</p>
+      <p
+        style="color: var(--color-muted); font-size: var(--text-sm); margin-top: var(--space-xs);"
+      >
+        This action cannot be undone.
+      </p>
       <div class="dialog-actions">
         <button class="btn-cancel" id="delete-cancel">Cancel</button>
         <button class="btn-danger" id="delete-confirm">Delete</button>
@@ -219,7 +246,9 @@ import Admin from '../../../layouts/Admin.astro';
     padding: 0;
     line-height: 1;
   }
-  .tag-chip button:hover { color: #a00; }
+  .tag-chip button:hover {
+    color: #a00;
+  }
 
   .tag-add {
     display: flex;
@@ -254,7 +283,9 @@ import Admin from '../../../layouts/Admin.astro';
     font-size: var(--text-sm);
     cursor: pointer;
   }
-  .tag-suggestion:hover { background: #f0f0f0; }
+  .tag-suggestion:hover {
+    background: #f0f0f0;
+  }
 
   .inputs-grid {
     display: grid;
@@ -311,9 +342,15 @@ import Admin from '../../../layouts/Admin.astro';
     border-bottom: 1px dotted var(--color-border);
     font-size: var(--text-sm);
   }
-  .extraction-item .status-ok { color: #080; }
-  .extraction-item .status-fail { color: #c00; }
-  .extraction-item .status-pending { color: var(--color-muted); }
+  .extraction-item .status-ok {
+    color: #080;
+  }
+  .extraction-item .status-fail {
+    color: #c00;
+  }
+  .extraction-item .status-pending {
+    color: var(--color-muted);
+  }
 
   .detail-actions {
     display: flex;
@@ -354,7 +391,9 @@ import Admin from '../../../layouts/Admin.astro';
 
     async function loadMedia() {
       try {
-        const res = await fetch(`/api/media/${mediaId}`, { credentials: 'include' });
+        const res = await fetch(`/api/media/${mediaId}`, {
+          credentials: 'include',
+        });
         if (!res.ok) throw new Error('Failed to load media');
         currentItem = await res.json();
         loadingEl.style.display = 'none';
@@ -391,7 +430,8 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     function renderRelatedCard(r: any): string {
-      const thumbUrl = r.media_type === 'image' ? `/api/media/${r.id}/thumbnail` : null;
+      const thumbUrl =
+        r.media_type === 'image' ? `/api/media/${r.id}/thumbnail` : null;
       return `
       <div class="input-card">
         ${thumbUrl ? `<a href="/admin/search/detail?id=${r.id}"><img class="input-thumb" src="${thumbUrl}" alt="${r.filename}"></a>` : ''}
@@ -405,18 +445,31 @@ import Admin from '../../../layouts/Admin.astro';
 
     async function renderDetail() {
       const item = currentItem;
-      document.getElementById('detail-title')!.textContent = item.filename || 'Untitled';
-      document.getElementById('meta-filename')!.textContent = item.filename || '--';
-      document.getElementById('meta-type')!.textContent = item.media_type || '--';
-      document.getElementById('meta-mime')!.textContent = item.mime_type || '--';
-      document.getElementById('meta-size')!.textContent = item.file_size_bytes ? formatSize(item.file_size_bytes) : '--';
+      document.getElementById('detail-title')!.textContent =
+        item.filename || 'Untitled';
+      document.getElementById('meta-filename')!.textContent =
+        item.filename || '--';
+      document.getElementById('meta-type')!.textContent =
+        item.media_type || '--';
+      document.getElementById('meta-mime')!.textContent =
+        item.mime_type || '--';
+      document.getElementById('meta-size')!.textContent = item.file_size_bytes
+        ? formatSize(item.file_size_bytes)
+        : '--';
       document.getElementById('meta-hash')!.textContent = item.sha256 || '--';
-      document.getElementById('meta-description')!.textContent = item.description || '--';
-      document.getElementById('meta-created')!.textContent = item.created_at ? new Date(item.created_at).toLocaleString() : '--';
-      document.getElementById('meta-updated')!.textContent = item.updated_at ? new Date(item.updated_at).toLocaleString() : '--';
+      document.getElementById('meta-description')!.textContent =
+        item.description || '--';
+      document.getElementById('meta-created')!.textContent = item.created_at
+        ? new Date(item.created_at).toLocaleString()
+        : '--';
+      document.getElementById('meta-updated')!.textContent = item.updated_at
+        ? new Date(item.updated_at).toLocaleString()
+        : '--';
 
       // Download button
-      const downloadBtn = document.getElementById('download-btn') as HTMLAnchorElement;
+      const downloadBtn = document.getElementById(
+        'download-btn',
+      ) as HTMLAnchorElement;
       const fileUrl = `/api/media/${mediaId}/file`;
       downloadBtn.href = fileUrl;
       downloadBtn.style.display = '';
@@ -441,29 +494,65 @@ import Admin from '../../../layouts/Admin.astro';
         typeMeta.innerHTML = `
           <div class="meta-section"><div class="meta-label">Dimensions</div><div class="meta-value">${m.width || '?'} x ${m.height || '?'}</div></div>
           <div class="meta-section"><div class="meta-label">Format</div><div class="meta-value">${m.format || '--'}</div></div>
-          ${m.dominant_colors ? (() => {
-            const colors = typeof m.dominant_colors === 'string' ? JSON.parse(m.dominant_colors) : (m.dominant_colors || []);
-            function hexToGroup(c: string): string {
-              const hex = c.replace('#','');
-              const r = parseInt(hex.substring(0,2),16), g = parseInt(hex.substring(2,4),16), b = parseInt(hex.substring(4,6),16);
-              const max = Math.max(r,g,b), min = Math.min(r,g,b);
-              const l = (r+g+b)/(3*255), sat = max>0?(max-min)/max:0;
-              if (l<0.10) return 'black'; if (l>0.90) return 'white';
-              if (sat<0.10) return 'gray';
-              let h=0; if(max!==min){if(max===r)h=60*((g-b)/(max-min)%6);else if(max===g)h=60*((b-r)/(max-min)+2);else h=60*((r-g)/(max-min)+4);}if(h<0)h+=360;
-              if(sat<0.30&&h>10&&h<50) return l<0.45?'brown':'beige';
-              if(sat<0.20) return 'gray';
-              if(h<10||h>=350)return 'red';if(h<35)return 'orange';if(h<55)return 'yellow';if(h<160)return 'green';if(h<195)return 'teal';if(h<260)return 'blue';if(h<300)return 'purple';return 'pink';
-            }
-            // Deduplicate groups
-            const groups = [...new Set(colors.map(hexToGroup))];
-            const swatches = colors.map((c: string) =>
-              `<span style="display:inline-block;width:28px;height:28px;background:${c};border:1px solid #ccc;border-radius:3px;vertical-align:middle;"></span>`
-            ).join(' ');
-            const groupLinks = groups.map((g: string) => `<a href="/admin/search?colorgroup=${g}" class="tag-chip" style="text-decoration:none;">${g}</a>`).join(' ');
-            return `<div class="meta-section"><div class="meta-label">Palette</div><div class="meta-value" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">${swatches}</div></div>` +
-                   `<div class="meta-section"><div class="meta-label">Color Groups</div><div class="meta-value">${groupLinks}</div></div>`;
-          })() : ''}
+          ${
+            m.dominant_colors
+              ? (() => {
+                  const colors =
+                    typeof m.dominant_colors === 'string'
+                      ? JSON.parse(m.dominant_colors)
+                      : m.dominant_colors || [];
+                  function hexToGroup(c: string): string {
+                    const hex = c.replace('#', '');
+                    const r = parseInt(hex.substring(0, 2), 16),
+                      g = parseInt(hex.substring(2, 4), 16),
+                      b = parseInt(hex.substring(4, 6), 16);
+                    const max = Math.max(r, g, b),
+                      min = Math.min(r, g, b);
+                    const l = (r + g + b) / (3 * 255),
+                      sat = max > 0 ? (max - min) / max : 0;
+                    if (l < 0.1) return 'black';
+                    if (l > 0.9) return 'white';
+                    if (sat < 0.1) return 'gray';
+                    let h = 0;
+                    if (max !== min) {
+                      if (max === r) h = 60 * (((g - b) / (max - min)) % 6);
+                      else if (max === g) h = 60 * ((b - r) / (max - min) + 2);
+                      else h = 60 * ((r - g) / (max - min) + 4);
+                    }
+                    if (h < 0) h += 360;
+                    if (sat < 0.3 && h > 10 && h < 50)
+                      return l < 0.45 ? 'brown' : 'beige';
+                    if (sat < 0.2) return 'gray';
+                    if (h < 10 || h >= 350) return 'red';
+                    if (h < 35) return 'orange';
+                    if (h < 55) return 'yellow';
+                    if (h < 160) return 'green';
+                    if (h < 195) return 'teal';
+                    if (h < 260) return 'blue';
+                    if (h < 300) return 'purple';
+                    return 'pink';
+                  }
+                  // Deduplicate groups
+                  const groups = [...new Set(colors.map(hexToGroup))];
+                  const swatches = colors
+                    .map(
+                      (c: string) =>
+                        `<span style="display:inline-block;width:28px;height:28px;background:${c};border:1px solid #ccc;border-radius:3px;vertical-align:middle;"></span>`,
+                    )
+                    .join(' ');
+                  const groupLinks = groups
+                    .map(
+                      (g: string) =>
+                        `<a href="/admin/search?colorgroup=${g}" class="tag-chip" style="text-decoration:none;">${g}</a>`,
+                    )
+                    .join(' ');
+                  return (
+                    `<div class="meta-section"><div class="meta-label">Palette</div><div class="meta-value" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">${swatches}</div></div>` +
+                    `<div class="meta-section"><div class="meta-label">Color Groups</div><div class="meta-value">${groupLinks}</div></div>`
+                  );
+                })()
+              : ''
+          }
         `;
       } else if (item.media_type === 'audio' && item.audio_meta) {
         const m = item.audio_meta;
@@ -490,13 +579,25 @@ import Admin from '../../../layouts/Admin.astro';
       const sourcesEl = document.getElementById('sources-list')!;
       const sources = item.sources || [];
       if (sources.length === 0) {
-        sourcesEl.innerHTML = '<p style="color: var(--color-muted); font-size: var(--text-sm);">No source information.</p>';
+        sourcesEl.innerHTML =
+          '<p style="color: var(--color-muted); font-size: var(--text-sm);">No source information.</p>';
       } else {
-        sourcesEl.innerHTML = sources.map((s: any) => {
-          const sourceLabel = {slack_file: 'Slack File', slack_link: 'Slack Link', upload: 'Upload', job_output: 'Job Output'}[s.source_type] || s.source_type || 'Unknown';
-          let meta: any = null;
-          try { meta = s.source_metadata ? JSON.parse(s.source_metadata) : null; } catch {}
-          return `
+        sourcesEl.innerHTML = sources
+          .map((s: any) => {
+            const sourceLabel =
+              {
+                slack_file: 'Slack File',
+                slack_link: 'Slack Link',
+                upload: 'Upload',
+                job_output: 'Job Output',
+              }[s.source_type] ||
+              s.source_type ||
+              'Unknown';
+            let meta: any = null;
+            try {
+              meta = s.source_metadata ? JSON.parse(s.source_metadata) : null;
+            } catch {}
+            return `
           <div class="source-card">
             <div class="source-card__field"><span class="source-card__label">Source:</span> ${sourceLabel}</div>
             ${s.source_channel ? `<div class="source-card__field"><span class="source-card__label">Channel:</span> ${s.source_channel}</div>` : ''}
@@ -507,25 +608,33 @@ import Admin from '../../../layouts/Admin.astro';
             ${meta?.job_id ? `<div class="source-card__field"><span class="source-card__label">Job:</span> <a href="/admin/jobs/detail?id=${meta.job_id}" style="color: var(--color-accent);">${meta.app_name}${meta.recipe ? ' / ' + meta.recipe : ''}</a></div>` : ''}
             <div class="source-card__field"><span class="source-card__label">Added:</span> ${s.created_at ? new Date(s.created_at).toLocaleString() : '--'}</div>
           </div>
-        `}).join('');
+        `;
+          })
+          .join('');
       }
 
       // Related items (inputs/outputs) via job linkage
       try {
-        const relResp = await fetch(`/api/media/${mediaId}/related`, { credentials: 'include' });
+        const relResp = await fetch(`/api/media/${mediaId}/related`, {
+          credentials: 'include',
+        });
         if (relResp.ok) {
           const related = await relResp.json();
           if (related.inputs?.length > 0) {
             const inputsSection = document.getElementById('inputs-section')!;
             const inputsList = document.getElementById('inputs-list')!;
             inputsSection.style.display = '';
-            inputsList.innerHTML = related.inputs.map((inp: any) => renderRelatedCard(inp)).join('');
+            inputsList.innerHTML = related.inputs
+              .map((inp: any) => renderRelatedCard(inp))
+              .join('');
           }
           if (related.outputs?.length > 0) {
             const outputsSection = document.getElementById('outputs-section')!;
             const outputsList = document.getElementById('outputs-list')!;
             outputsSection.style.display = '';
-            outputsList.innerHTML = related.outputs.map((out: any) => renderRelatedCard(out)).join('');
+            outputsList.innerHTML = related.outputs
+              .map((out: any) => renderRelatedCard(out))
+              .join('');
           }
         }
       } catch {}
@@ -534,17 +643,22 @@ import Admin from '../../../layouts/Admin.astro';
       const extractionEl = document.getElementById('extraction-status')!;
       const failures = item.extraction_failures || [];
       if (failures.length === 0) {
-        extractionEl.innerHTML = '<p style="color: var(--color-muted); font-size: var(--text-sm);">No extraction failures.</p>';
+        extractionEl.innerHTML =
+          '<p style="color: var(--color-muted); font-size: var(--text-sm);">No extraction failures.</p>';
       } else {
-        extractionEl.innerHTML = failures.map((f: any) => {
-          const statusClass = f.resolved ? 'status-ok' : 'status-fail';
-          const statusText = f.resolved ? 'resolved' : `failed (${f.attempts} attempts)`;
-          return `<div class="extraction-item">
+        extractionEl.innerHTML = failures
+          .map((f: any) => {
+            const statusClass = f.resolved ? 'status-ok' : 'status-fail';
+            const statusText = f.resolved
+              ? 'resolved'
+              : `failed (${f.attempts} attempts)`;
+            return `<div class="extraction-item">
             <span>${f.extraction_type || 'Unknown'}</span>
             <span class="${statusClass}">${statusText}</span>
             ${f.error_message ? `<span style="color: #c00; font-size: 0.65rem;">${f.error_message}</span>` : ''}
           </div>`;
-        }).join('');
+          })
+          .join('');
       }
     }
 
@@ -552,11 +666,15 @@ import Admin from '../../../layouts/Admin.astro';
       const tagsEl = document.getElementById('tags-list')!;
       const tags = currentItem.tags || [];
       if (tags.length === 0) {
-        tagsEl.innerHTML = '<span style="color: var(--color-muted); font-size: var(--text-sm);">No tags</span>';
+        tagsEl.innerHTML =
+          '<span style="color: var(--color-muted); font-size: var(--text-sm);">No tags</span>';
       } else {
-        tagsEl.innerHTML = tags.map((tag: string) =>
-          `<span class="tag-chip"><a href="/admin/search?tag=${encodeURIComponent(tag)}" style="color:inherit;text-decoration:none;">${tag}</a><button data-remove-tag="${tag}" title="Remove">&times;</button></span>`
-        ).join('');
+        tagsEl.innerHTML = tags
+          .map(
+            (tag: string) =>
+              `<span class="tag-chip"><a href="/admin/search?tag=${encodeURIComponent(tag)}" style="color:inherit;text-decoration:none;">${tag}</a><button data-remove-tag="${tag}" title="Remove">&times;</button></span>`,
+          )
+          .join('');
       }
     }
 
@@ -568,25 +686,40 @@ import Admin from '../../../layouts/Admin.astro';
     tagInput?.addEventListener('input', () => {
       clearTimeout(suggestTimeout);
       const q = tagInput.value.trim();
-      if (q.length < 1) { suggestionsEl.style.display = 'none'; return; }
+      if (q.length < 1) {
+        suggestionsEl.style.display = 'none';
+        return;
+      }
       suggestTimeout = setTimeout(async () => {
         try {
-          const res = await fetch(`/api/tags/suggest?q=${encodeURIComponent(q)}`, { credentials: 'include' });
+          const res = await fetch(
+            `/api/tags/suggest?q=${encodeURIComponent(q)}`,
+            { credentials: 'include' },
+          );
           if (res.ok) {
             const suggestions: any[] = await res.json();
             if (suggestions.length > 0) {
-              suggestionsEl.innerHTML = suggestions.map(s => `<div class="tag-suggestion" data-tag="${s.tag}">${s.tag} (${s.usage_count})</div>`).join('');
+              suggestionsEl.innerHTML = suggestions
+                .map(
+                  (s) =>
+                    `<div class="tag-suggestion" data-tag="${s.tag}">${s.tag} (${s.usage_count})</div>`,
+                )
+                .join('');
               suggestionsEl.style.display = 'block';
             } else {
               suggestionsEl.style.display = 'none';
             }
           }
-        } catch { suggestionsEl.style.display = 'none'; }
+        } catch {
+          suggestionsEl.style.display = 'none';
+        }
       }, 200);
     });
 
     suggestionsEl?.addEventListener('click', (e) => {
-      const el = (e.target as HTMLElement).closest('.tag-suggestion') as HTMLElement | null;
+      const el = (e.target as HTMLElement).closest(
+        '.tag-suggestion',
+      ) as HTMLElement | null;
       if (el) {
         addTag(el.dataset.tag!);
         suggestionsEl.style.display = 'none';
@@ -596,14 +729,22 @@ import Admin from '../../../layouts/Admin.astro';
 
     document.getElementById('add-tag-btn')?.addEventListener('click', () => {
       const tag = tagInput.value.trim();
-      if (tag) { addTag(tag); tagInput.value = ''; suggestionsEl.style.display = 'none'; }
+      if (tag) {
+        addTag(tag);
+        tagInput.value = '';
+        suggestionsEl.style.display = 'none';
+      }
     });
 
     tagInput?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         const tag = tagInput.value.trim();
-        if (tag) { addTag(tag); tagInput.value = ''; suggestionsEl.style.display = 'none'; }
+        if (tag) {
+          addTag(tag);
+          tagInput.value = '';
+          suggestionsEl.style.display = 'none';
+        }
       }
     });
 
@@ -618,57 +759,84 @@ import Admin from '../../../layouts/Admin.astro';
         if (!currentItem.tags) currentItem.tags = [];
         if (!currentItem.tags.includes(tag)) currentItem.tags.push(tag);
         renderTags();
-      } catch { (window as any).toast.error('Failed to add tag'); }
+      } catch {
+        (window as any).toast.error('Failed to add tag');
+      }
     }
 
     // Remove tag
-    document.getElementById('tags-list')?.addEventListener('click', async (e) => {
-      const btn = (e.target as HTMLElement).closest('[data-remove-tag]') as HTMLElement | null;
-      if (!btn) return;
-      const tag = btn.dataset.removeTag!;
-      try {
-        await fetch(`/api/media/${mediaId}/tags/${encodeURIComponent(tag)}`, {
-          method: 'DELETE',
-          credentials: 'include',
-        });
-        currentItem.tags = (currentItem.tags || []).filter((t: string) => t !== tag);
-        renderTags();
-      } catch { (window as any).toast.error('Failed to remove tag'); }
-    });
+    document
+      .getElementById('tags-list')
+      ?.addEventListener('click', async (e) => {
+        const btn = (e.target as HTMLElement).closest(
+          '[data-remove-tag]',
+        ) as HTMLElement | null;
+        if (!btn) return;
+        const tag = btn.dataset.removeTag!;
+        try {
+          await fetch(`/api/media/${mediaId}/tags/${encodeURIComponent(tag)}`, {
+            method: 'DELETE',
+            credentials: 'include',
+          });
+          currentItem.tags = (currentItem.tags || []).filter(
+            (t: string) => t !== tag,
+          );
+          renderTags();
+        } catch {
+          (window as any).toast.error('Failed to remove tag');
+        }
+      });
 
     // Add to workspace
-    document.getElementById('add-to-workspace-btn')?.addEventListener('click', async () => {
-      const wsId = localStorage.getItem('active_workspace_id');
-      if (!wsId) {
-        (window as any).toast.error('No active workspace. Create one from the workspace page first.');
-        return;
-      }
-      try {
-        const res = await fetch(`/api/workspaces/${wsId}/items`, {
-          method: 'POST', credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ media_item_ids: [mediaId] }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          (window as any).toast.success(data.already_present > 0 ? 'Already in workspace' : 'Added to workspace');
-        } else { (window as any).toast.error('Failed to add to workspace'); }
-      } catch { (window as any).toast.error('Failed to add to workspace'); }
-    });
+    document
+      .getElementById('add-to-workspace-btn')
+      ?.addEventListener('click', async () => {
+        const wsId = localStorage.getItem('active_workspace_id');
+        if (!wsId) {
+          (window as any).toast.error(
+            'No active workspace. Create one from the workspace page first.',
+          );
+          return;
+        }
+        try {
+          const res = await fetch(`/api/workspaces/${wsId}/items`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ media_item_ids: [mediaId] }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            (window as any).toast.success(
+              data.already_present > 0
+                ? 'Already in workspace'
+                : 'Added to workspace',
+            );
+          } else {
+            (window as any).toast.error('Failed to add to workspace');
+          }
+        } catch {
+          (window as any).toast.error('Failed to add to workspace');
+        }
+      });
 
     // Re-extract
-    document.getElementById('re-extract-btn')?.addEventListener('click', async () => {
-      try {
-        await fetch('/api/media/batch/re-extract', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ media_ids: [mediaId] }),
-        });
-        (window as any).toast.success('Re-extraction queued');
-        loadMedia();
-      } catch { (window as any).toast.error('Re-extraction failed'); }
-    });
+    document
+      .getElementById('re-extract-btn')
+      ?.addEventListener('click', async () => {
+        try {
+          await fetch('/api/media/batch/re-extract', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ media_ids: [mediaId] }),
+          });
+          (window as any).toast.success('Re-extraction queued');
+          loadMedia();
+        } catch {
+          (window as any).toast.error('Re-extraction failed');
+        }
+      });
 
     // Delete
     document.getElementById('delete-btn')?.addEventListener('click', () => {
@@ -677,20 +845,24 @@ import Admin from '../../../layouts/Admin.astro';
     document.getElementById('delete-cancel')?.addEventListener('click', () => {
       document.getElementById('delete-dialog')!.style.display = 'none';
     });
-    document.getElementById('delete-confirm')?.addEventListener('click', async () => {
-      try {
-        const res = await fetch(`/api/media/${mediaId}`, {
-          method: 'DELETE',
-          credentials: 'include',
-        });
-        if (res.ok) {
-          window.location.href = '/admin/search';
-        } else {
+    document
+      .getElementById('delete-confirm')
+      ?.addEventListener('click', async () => {
+        try {
+          const res = await fetch(`/api/media/${mediaId}`, {
+            method: 'DELETE',
+            credentials: 'include',
+          });
+          if (res.ok) {
+            window.location.href = '/admin/search';
+          } else {
+            (window as any).toast.error('Delete failed');
+          }
+        } catch {
           (window as any).toast.error('Delete failed');
         }
-      } catch { (window as any).toast.error('Delete failed'); }
-      document.getElementById('delete-dialog')!.style.display = 'none';
-    });
+        document.getElementById('delete-dialog')!.style.display = 'none';
+      });
 
     loadMedia();
   });

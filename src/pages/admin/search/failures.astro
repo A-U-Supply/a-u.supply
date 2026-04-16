@@ -15,11 +15,15 @@ import Admin from '../../../layouts/Admin.astro';
         <option value="thumbnail">Thumbnail</option>
         <option value="yt-dlp">yt-dlp</option>
       </select>
-      <button class="action-btn" id="batch-retry-btn" style="display:none;">Retry Selected</button>
+      <button class="action-btn" id="batch-retry-btn" style="display:none;"
+        >Retry Selected</button
+      >
     </div>
   </div>
 
-  <div id="loading" style="color: var(--color-muted);"><span class="loading-dots">Loading</span></div>
+  <div id="loading" style="color: var(--color-muted);">
+    <span class="loading-dots">Loading</span>
+  </div>
   <div id="error" class="login-error" style="display:none;"></div>
   <div id="empty" class="empty-state" style="display:none;">
     <div class="empty-state__icon">&#10003;</div>
@@ -84,8 +88,12 @@ import Admin from '../../../layouts/Admin.astro';
     const errorEl = document.getElementById('error')!;
     const emptyEl = document.getElementById('empty')!;
     const tableWrap = document.getElementById('table-wrap')!;
-    const batchRetryBtn = document.getElementById('batch-retry-btn') as HTMLButtonElement;
-    const filterType = document.getElementById('filter-type') as HTMLSelectElement;
+    const batchRetryBtn = document.getElementById(
+      'batch-retry-btn',
+    ) as HTMLButtonElement;
+    const filterType = document.getElementById(
+      'filter-type',
+    ) as HTMLSelectElement;
 
     let allFailures: any[] = [];
     let selectedIds = new Set<string>();
@@ -95,7 +103,7 @@ import Admin from '../../../layouts/Admin.astro';
     // Select all
     document.getElementById('select-all')?.addEventListener('change', (e) => {
       const checked = (e.target as HTMLInputElement).checked;
-      getFilteredFailures().forEach(f => {
+      getFilteredFailures().forEach((f) => {
         if (checked) selectedIds.add(f.id);
         else selectedIds.delete(f.id);
       });
@@ -116,7 +124,9 @@ import Admin from '../../../layouts/Admin.astro';
         }
         selectedIds.clear();
         await loadFailures();
-      } catch { (window as any).toast.error('Batch retry failed'); }
+      } catch {
+        (window as any).toast.error('Batch retry failed');
+      }
       batchRetryBtn.disabled = false;
       batchRetryBtn.textContent = 'Retry Selected';
     });
@@ -124,11 +134,12 @@ import Admin from '../../../layouts/Admin.astro';
     function getFilteredFailures() {
       const typeFilter = filterType.value;
       if (!typeFilter) return allFailures;
-      return allFailures.filter(f => f.extraction_type === typeFilter);
+      return allFailures.filter((f) => f.extraction_type === typeFilter);
     }
 
     function updateBatchBtn() {
-      batchRetryBtn.style.display = selectedIds.size > 0 ? 'inline-block' : 'none';
+      batchRetryBtn.style.display =
+        selectedIds.size > 0 ? 'inline-block' : 'none';
     }
 
     async function loadFailures() {
@@ -138,7 +149,9 @@ import Admin from '../../../layouts/Admin.astro';
       tableWrap.style.display = 'none';
 
       try {
-        const res = await fetch('/api/extraction-failures', { credentials: 'include' });
+        const res = await fetch('/api/extraction-failures', {
+          credentials: 'include',
+        });
         if (!res.ok) throw new Error('Failed to load failures');
         const data = await res.json();
         allFailures = data.failures || data;
@@ -163,10 +176,13 @@ import Admin from '../../../layouts/Admin.astro';
       emptyEl.style.display = 'none';
       tableWrap.style.display = 'block';
 
-      tbody.innerHTML = filtered.map(f => {
-        const checked = selectedIds.has(f.id) ? 'checked' : '';
-        const lastAttempt = f.last_attempt_at ? new Date(f.last_attempt_at).toLocaleString() : '--';
-        return `<tr>
+      tbody.innerHTML = filtered
+        .map((f) => {
+          const checked = selectedIds.has(f.id) ? 'checked' : '';
+          const lastAttempt = f.last_attempt_at
+            ? new Date(f.last_attempt_at).toLocaleString()
+            : '--';
+          return `<tr>
           <td><input type="checkbox" data-select="${f.id}" ${checked} /></td>
           <td>
             <a href="/admin/search/detail?id=${f.media_item_id}" style="color: var(--color-text); text-decoration: underline;">
@@ -182,7 +198,8 @@ import Admin from '../../../layouts/Admin.astro';
             <button class="action-btn action-btn--success" data-resolve="${f.id}">Resolve</button>
           </td>
         </tr>`;
-      }).join('');
+        })
+        .join('');
 
       updateBatchBtn();
     }
@@ -192,7 +209,9 @@ import Admin from '../../../layouts/Admin.astro';
       const target = e.target as HTMLElement;
 
       // Checkbox
-      const checkbox = target.closest('[data-select]') as HTMLInputElement | null;
+      const checkbox = target.closest(
+        '[data-select]',
+      ) as HTMLInputElement | null;
       if (checkbox) {
         const id = checkbox.dataset.select!;
         if (checkbox.checked) selectedIds.add(id);
@@ -212,7 +231,9 @@ import Admin from '../../../layouts/Admin.astro';
             credentials: 'include',
           });
           await loadFailures();
-        } catch { (window as any).toast.error('Retry failed'); }
+        } catch {
+          (window as any).toast.error('Retry failed');
+        }
         return;
       }
 
@@ -226,7 +247,9 @@ import Admin from '../../../layouts/Admin.astro';
             credentials: 'include',
           });
           await loadFailures();
-        } catch { (window as any).toast.error('Resolve failed'); }
+        } catch {
+          (window as any).toast.error('Resolve failed');
+        }
       }
     });
 

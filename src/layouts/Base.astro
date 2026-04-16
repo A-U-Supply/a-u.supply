@@ -7,50 +7,54 @@ interface Props {
 }
 const { title } = Astro.props;
 ---
-<!DOCTYPE html>
+
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <link rel="icon" type="image/jpeg" href="/favicon.jpg">
-  <title>{title}</title>
-  <ViewTransitions />
-</head>
-<body>
-  <div class="nav-progress" id="nav-progress"></div>
-  <header class="header">
-    <div class="header__inner">
-      <a href="/" class="header__logo">
-        <img src="/assets/logo.png" alt="A-U.Supply" />
-      </a>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <link rel="icon" type="image/jpeg" href="/favicon.jpg" />
+    <title>{title}</title>
+    <ViewTransitions />
+  </head>
+  <body>
+    <div class="nav-progress" id="nav-progress"></div>
+    <header class="header">
+      <div class="header__inner">
+        <a href="/" class="header__logo">
+          <img src="/assets/logo.png" alt="A-U.Supply" />
+        </a>
+      </div>
+    </header>
+    <div class="content-wrap">
+      <slot />
     </div>
-  </header>
-  <div class="content-wrap">
-    <slot />
-  </div>
-  <footer class="site-footer">
-    <nav class="site-footer__nav">
-      <a href="/catalog">AU-CAT</a>
-      <span class="site-footer__dot">&middot;</span>
-      <a href="/profile">AU-CP</a>
-      <span class="site-footer__dot">&middot;</span>
-      <a href="/personnel">AU-PD</a>
-      <span class="site-footer__dot">&middot;</span>
-      <a href="/channels">AU-DC</a>
-      <span class="site-footer__dot">&middot;</span>
-      <a href="/entities">AU-AE</a>
-      <span class="site-footer__dot">&middot;</span>
-      <a href="/infrastructure">AU-PI</a>
-      <span class="site-footer__dot">&middot;</span>
-      <a href="/the-expenditure">AU-EXP</a>
-      <span class="site-footer__dot">&middot;</span>
-      <a href="/admin/dashboard">AUP-1</a>
-    </nav>
-  </footer>
-  <div class="player-slot" transition:persist="audio-player">
-    <Player client:only="svelte" />
-  </div>
-</body>
+    <footer class="site-footer">
+      <nav class="site-footer__nav">
+        <a href="/catalog">AU-CAT</a>
+        <span class="site-footer__dot">&middot;</span>
+        <a href="/profile">AU-CP</a>
+        <span class="site-footer__dot">&middot;</span>
+        <a href="/personnel">AU-PD</a>
+        <span class="site-footer__dot">&middot;</span>
+        <a href="/channels">AU-DC</a>
+        <span class="site-footer__dot">&middot;</span>
+        <a href="/entities">AU-AE</a>
+        <span class="site-footer__dot">&middot;</span>
+        <a href="/infrastructure">AU-PI</a>
+        <span class="site-footer__dot">&middot;</span>
+        <a href="/the-expenditure">AU-EXP</a>
+        <span class="site-footer__dot">&middot;</span>
+        <a href="/admin/dashboard">AUP-1</a>
+      </nav>
+    </footer>
+    <div class="player-slot" transition:persist="audio-player">
+      <Player client:only="svelte" />
+    </div>
+  </body>
 </html>
 
 <style is:global>
@@ -126,7 +130,9 @@ const { title } = Astro.props;
     z-index: 9999;
     width: 0;
     opacity: 0;
-    transition: width 0.3s ease, opacity 0.2s;
+    transition:
+      width 0.3s ease,
+      opacity 0.2s;
   }
 
   .nav-progress.active {
@@ -135,9 +141,15 @@ const { title } = Astro.props;
   }
 
   @keyframes progress-grow {
-    0% { width: 0; }
-    50% { width: 60%; }
-    100% { width: 90%; }
+    0% {
+      width: 0;
+    }
+    50% {
+      width: 60%;
+    }
+    100% {
+      width: 90%;
+    }
   }
 
   @media (max-width: 640px) {

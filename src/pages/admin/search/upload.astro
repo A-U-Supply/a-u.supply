@@ -23,7 +23,10 @@ import Admin from '../../../layouts/Admin.astro';
     </div>
     <div class="form-group">
       <label class="form-label">Description</label>
-      <textarea id="shared-description" rows="3" placeholder="Optional description..."></textarea>
+      <textarea
+        id="shared-description"
+        rows="3"
+        placeholder="Optional description..."></textarea>
     </div>
   </div>
 
@@ -43,7 +46,9 @@ import Admin from '../../../layouts/Admin.astro';
     padding: var(--space-xl);
     text-align: center;
     margin: var(--space-md) 0;
-    transition: border-color 0.15s, background 0.15s;
+    transition:
+      border-color 0.15s,
+      background 0.15s;
     cursor: pointer;
   }
   .upload-zone.dragover {
@@ -74,7 +79,9 @@ import Admin from '../../../layouts/Admin.astro';
     border: none;
     cursor: pointer;
   }
-  .upload-zone__btn:hover { background: #333; }
+  .upload-zone__btn:hover {
+    background: #333;
+  }
 
   .upload-shared {
     margin: var(--space-md) 0;
@@ -132,10 +139,18 @@ import Admin from '../../../layouts/Admin.astro';
     font-size: 0.65rem;
     text-transform: uppercase;
   }
-  .file-item__status--pending { color: var(--color-muted); }
-  .file-item__status--uploading { color: var(--color-accent); }
-  .file-item__status--done { color: #080; }
-  .file-item__status--error { color: #c00; }
+  .file-item__status--pending {
+    color: var(--color-muted);
+  }
+  .file-item__status--uploading {
+    color: var(--color-accent);
+  }
+  .file-item__status--done {
+    color: #080;
+  }
+  .file-item__status--error {
+    color: #c00;
+  }
   .file-item__remove {
     background: none;
     border: none;
@@ -145,7 +160,9 @@ import Admin from '../../../layouts/Admin.astro';
     padding: 0 4px;
     line-height: 1;
   }
-  .file-item__remove:hover { color: #a00; }
+  .file-item__remove:hover {
+    color: #a00;
+  }
 
   .upload-actions {
     display: flex;
@@ -164,8 +181,13 @@ import Admin from '../../../layouts/Admin.astro';
     border: none;
     cursor: pointer;
   }
-  .upload-btn:hover { background: #333; }
-  .upload-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .upload-btn:hover {
+    background: #333;
+  }
+  .upload-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 
   .upload-status {
     margin-top: var(--space-md);
@@ -175,8 +197,13 @@ import Admin from '../../../layouts/Admin.astro';
   }
 
   @media (max-width: 640px) {
-    .upload-zone { padding: var(--space-md); }
-    .file-item__preview { width: 40px; height: 40px; }
+    .upload-zone {
+      padding: var(--space-md);
+    }
+    .file-item__preview {
+      width: 40px;
+      height: 40px;
+    }
   }
 </style>
 
@@ -191,7 +218,9 @@ import Admin from '../../../layouts/Admin.astro';
     const fileInput = document.getElementById('file-input') as HTMLInputElement;
     const fileListEl = document.getElementById('file-list')!;
     const actionsEl = document.getElementById('upload-actions')!;
-    const uploadBtn = document.getElementById('upload-btn') as HTMLButtonElement;
+    const uploadBtn = document.getElementById(
+      'upload-btn',
+    ) as HTMLButtonElement;
     const statusEl = document.getElementById('upload-status')!;
 
     let files: File[] = [];
@@ -211,7 +240,11 @@ import Admin from '../../../layouts/Admin.astro';
 
     function addFiles(newFiles: FileList | File[]) {
       for (const f of newFiles) {
-        if (!files.some(existing => existing.name === f.name && existing.size === f.size)) {
+        if (
+          !files.some(
+            (existing) => existing.name === f.name && existing.size === f.size,
+          )
+        ) {
           files.push(f);
         }
       }
@@ -226,10 +259,11 @@ import Admin from '../../../layouts/Admin.astro';
     function renderFileList() {
       actionsEl.style.display = files.length > 0 ? 'flex' : 'none';
 
-      fileListEl.innerHTML = files.map((f, i) => {
-        const type = getFileType(f);
-        const previewId = `preview-${i}`;
-        return `<div class="file-item" data-index="${i}">
+      fileListEl.innerHTML = files
+        .map((f, i) => {
+          const type = getFileType(f);
+          const previewId = `preview-${i}`;
+          return `<div class="file-item" data-index="${i}">
           <div class="file-item__preview" id="${previewId}">${type === 'image' ? '' : type}</div>
           <div class="file-item__info">
             <div class="file-item__name" title="${f.name}">${f.name}</div>
@@ -238,7 +272,8 @@ import Admin from '../../../layouts/Admin.astro';
           <span class="file-item__status file-item__status--pending" id="status-${i}">Pending</span>
           <button class="file-item__remove" data-remove="${i}" title="Remove">&times;</button>
         </div>`;
-      }).join('');
+        })
+        .join('');
 
       // Generate image previews
       files.forEach((f, i) => {
@@ -255,7 +290,9 @@ import Admin from '../../../layouts/Admin.astro';
 
     // Remove file handler
     fileListEl.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement).closest('[data-remove]') as HTMLElement | null;
+      const btn = (e.target as HTMLElement).closest(
+        '[data-remove]',
+      ) as HTMLElement | null;
       if (btn) {
         removeFile(parseInt(btn.dataset.remove!));
       }
@@ -299,8 +336,11 @@ import Admin from '../../../layouts/Admin.astro';
       if (files.length === 0) return;
       uploadBtn.disabled = true;
 
-      const tags = (document.getElementById('shared-tags') as HTMLInputElement).value;
-      const description = (document.getElementById('shared-description') as HTMLTextAreaElement).value;
+      const tags = (document.getElementById('shared-tags') as HTMLInputElement)
+        .value;
+      const description = (
+        document.getElementById('shared-description') as HTMLTextAreaElement
+      ).value;
 
       let succeeded = 0;
       let failed = 0;
@@ -309,7 +349,8 @@ import Admin from '../../../layouts/Admin.astro';
         const statusSpan = document.getElementById(`status-${i}`);
         if (statusSpan) {
           statusSpan.textContent = 'Uploading...';
-          statusSpan.className = 'file-item__status file-item__status--uploading';
+          statusSpan.className =
+            'file-item__status file-item__status--uploading';
         }
 
         const formData = new FormData();
@@ -327,14 +368,18 @@ import Admin from '../../../layouts/Admin.astro';
             succeeded++;
             if (statusSpan) {
               statusSpan.textContent = 'Done';
-              statusSpan.className = 'file-item__status file-item__status--done';
+              statusSpan.className =
+                'file-item__status file-item__status--done';
             }
           } else {
             failed++;
-            const err = await res.json().catch(() => ({ detail: 'Upload failed' }));
+            const err = await res
+              .json()
+              .catch(() => ({ detail: 'Upload failed' }));
             if (statusSpan) {
               statusSpan.textContent = err.detail || 'Error';
-              statusSpan.className = 'file-item__status file-item__status--error';
+              statusSpan.className =
+                'file-item__status file-item__status--error';
             }
           }
         } catch {
@@ -355,8 +400,11 @@ import Admin from '../../../layouts/Admin.astro';
           files = [];
           renderFileList();
           statusEl.style.display = 'none';
-          (document.getElementById('shared-tags') as HTMLInputElement).value = '';
-          (document.getElementById('shared-description') as HTMLTextAreaElement).value = '';
+          (document.getElementById('shared-tags') as HTMLInputElement).value =
+            '';
+          (
+            document.getElementById('shared-description') as HTMLTextAreaElement
+          ).value = '';
         }, 2000);
       }
     });

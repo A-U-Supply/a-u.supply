@@ -29,7 +29,9 @@
   lg:  1440px
 */
 
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -279,6 +281,10 @@ img {
 }
 
 @keyframes dots {
-  0% { width: 0; }
-  100% { width: 1.2em; }
+  0% {
+    width: 0;
+  }
+  100% {
+    width: 1.2em;
+  }
 }

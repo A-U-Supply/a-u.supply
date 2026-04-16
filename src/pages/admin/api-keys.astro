@@ -10,8 +10,18 @@ import Admin from '../../layouts/Admin.astro';
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Label</label>
-        <input type="text" id="key-label" placeholder="e.g. Slack Bot, CI Pipeline" required />
-        <div id="key-label-error" class="login-error" style="display:none; text-align:left;"></div>
+        <input
+          type="text"
+          id="key-label"
+          placeholder="e.g. Slack Bot, CI Pipeline"
+          required
+        />
+        <div
+          id="key-label-error"
+          class="login-error"
+          style="display:none; text-align:left;"
+        >
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">Scope</label>
@@ -26,14 +36,21 @@ import Admin from '../../layouts/Admin.astro';
   </div>
 
   <div id="new-key-display" class="new-key-display" style="display:none;">
-    <p class="new-key-warning">Copy this key now. It will not be shown again.</p>
+    <p class="new-key-warning">
+      Copy this key now. It will not be shown again.
+    </p>
     <div class="new-key-value">
       <code id="new-key-value"></code>
       <button class="action-btn" id="copy-key-btn">Copy</button>
     </div>
   </div>
 
-  <div id="loading" style="color: var(--color-muted); margin-top: var(--space-md);"><span class="loading-dots">Loading</span></div>
+  <div
+    id="loading"
+    style="color: var(--color-muted); margin-top: var(--space-md);"
+  >
+    <span class="loading-dots">Loading</span>
+  </div>
   <div id="error" class="login-error" style="display:none;"></div>
   <div id="empty" class="empty-state" style="display:none;">
     <div class="empty-state__icon">&#128273;</div>
@@ -60,7 +77,11 @@ import Admin from '../../layouts/Admin.astro';
   <div class="dialog-overlay" id="revoke-dialog" style="display:none;">
     <div class="dialog">
       <p>Revoke API key <strong id="revoke-label"></strong>?</p>
-      <p style="color: var(--color-muted); font-size: var(--text-sm); margin-top: var(--space-xs);">Any integrations using this key will stop working.</p>
+      <p
+        style="color: var(--color-muted); font-size: var(--text-sm); margin-top: var(--space-xs);"
+      >
+        Any integrations using this key will stop working.
+      </p>
       <div class="dialog-actions">
         <button class="btn-cancel" id="revoke-cancel">Cancel</button>
         <button class="btn-danger" id="revoke-confirm">Revoke</button>
@@ -113,10 +134,14 @@ import Admin from '../../layouts/Admin.astro';
     user-select: all;
   }
 
-  .table-wrap { margin-top: var(--space-md); }
+  .table-wrap {
+    margin-top: var(--space-md);
+  }
 
   @media (max-width: 640px) {
-    .form-row { flex-direction: column; }
+    .form-row {
+      flex-direction: column;
+    }
     .release-table th:nth-child(4),
     .release-table td:nth-child(4),
     .release-table th:nth-child(5),
@@ -138,7 +163,9 @@ import Admin from '../../layouts/Admin.astro';
     const errorEl = document.getElementById('error')!;
     const emptyEl = document.getElementById('empty')!;
     const tableWrap = document.getElementById('table-wrap')!;
-    const generateBtn = document.getElementById('generate-btn') as HTMLButtonElement;
+    const generateBtn = document.getElementById(
+      'generate-btn',
+    ) as HTMLButtonElement;
     const newKeyDisplay = document.getElementById('new-key-display')!;
     const newKeyValue = document.getElementById('new-key-value')!;
 
@@ -165,11 +192,21 @@ import Admin from '../../layouts/Admin.astro';
         emptyEl.style.display = 'none';
         tableWrap.style.display = 'block';
 
-        tbody.innerHTML = keys.map((k: any) => {
-          const badgeClass = k.scope === 'admin' ? 'badge--admin' : k.scope === 'write' ? 'badge--write' : 'badge--read';
-          const created = k.created_at ? new Date(k.created_at).toLocaleDateString() : '--';
-          const lastUsed = k.last_used_at ? new Date(k.last_used_at).toLocaleDateString() : 'Never';
-          return `<tr>
+        tbody.innerHTML = keys
+          .map((k: any) => {
+            const badgeClass =
+              k.scope === 'admin'
+                ? 'badge--admin'
+                : k.scope === 'write'
+                  ? 'badge--write'
+                  : 'badge--read';
+            const created = k.created_at
+              ? new Date(k.created_at).toLocaleDateString()
+              : '--';
+            const lastUsed = k.last_used_at
+              ? new Date(k.last_used_at).toLocaleDateString()
+              : 'Never';
+            return `<tr>
             <td style="font-weight:bold;">${k.label || '--'}</td>
             <td style="font-family: var(--font-mono); color: var(--color-muted);">${k.key_prefix || '--'}...</td>
             <td><span class="badge ${badgeClass}">${k.scope || '--'}</span></td>
@@ -179,7 +216,8 @@ import Admin from '../../layouts/Admin.astro';
               <button class="action-btn action-btn--danger" data-revoke="${k.id}" data-label="${k.label || k.key_prefix || 'this key'}">Revoke</button>
             </td>
           </tr>`;
-        }).join('');
+          })
+          .join('');
       } catch (err: any) {
         loadingEl.style.display = 'none';
         errorEl.textContent = err.message;
@@ -189,8 +227,11 @@ import Admin from '../../layouts/Admin.astro';
 
     // Generate key
     generateBtn.addEventListener('click', async () => {
-      const label = (document.getElementById('key-label') as HTMLInputElement).value.trim();
-      const scope = (document.getElementById('key-scope') as HTMLSelectElement).value;
+      const label = (
+        document.getElementById('key-label') as HTMLInputElement
+      ).value.trim();
+      const scope = (document.getElementById('key-scope') as HTMLSelectElement)
+        .value;
 
       const labelError = document.getElementById('key-label-error')!;
       labelError.style.display = 'none';
@@ -212,7 +253,9 @@ import Admin from '../../layouts/Admin.astro';
           body: JSON.stringify({ label, scope }),
         });
         if (!res.ok) {
-          const err = await res.json().catch(() => ({ detail: 'Failed to generate key' }));
+          const err = await res
+            .json()
+            .catch(() => ({ detail: 'Failed to generate key' }));
           (window as any).toast.error(err.detail || 'Failed to generate key');
           return;
         }
@@ -223,10 +266,13 @@ import Admin from '../../layouts/Admin.astro';
         // Clear form + inline error
         labelError.style.display = 'none';
         (document.getElementById('key-label') as HTMLInputElement).value = '';
-        (document.getElementById('key-scope') as HTMLSelectElement).value = 'read';
+        (document.getElementById('key-scope') as HTMLSelectElement).value =
+          'read';
 
         loadKeys();
-      } catch { (window as any).toast.error('Network error'); }
+      } catch {
+        (window as any).toast.error('Network error');
+      }
 
       generateBtn.disabled = false;
       generateBtn.textContent = 'Generate Key';
@@ -238,28 +284,35 @@ import Admin from '../../layouts/Admin.astro';
     });
 
     // Copy key
-    document.getElementById('copy-key-btn')?.addEventListener('click', async () => {
-      const key = newKeyValue.textContent || '';
-      try {
-        await navigator.clipboard.writeText(key);
-        const btn = document.getElementById('copy-key-btn')!;
-        btn.textContent = 'Copied!';
-        setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
-      } catch {
-        // Fallback
-        const range = document.createRange();
-        range.selectNodeContents(newKeyValue);
-        window.getSelection()?.removeAllRanges();
-        window.getSelection()?.addRange(range);
-      }
-    });
+    document
+      .getElementById('copy-key-btn')
+      ?.addEventListener('click', async () => {
+        const key = newKeyValue.textContent || '';
+        try {
+          await navigator.clipboard.writeText(key);
+          const btn = document.getElementById('copy-key-btn')!;
+          btn.textContent = 'Copied!';
+          setTimeout(() => {
+            btn.textContent = 'Copy';
+          }, 2000);
+        } catch {
+          // Fallback
+          const range = document.createRange();
+          range.selectNodeContents(newKeyValue);
+          window.getSelection()?.removeAllRanges();
+          window.getSelection()?.addRange(range);
+        }
+      });
 
     // Revoke delegation
     tbody.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement).closest('[data-revoke]') as HTMLElement | null;
+      const btn = (e.target as HTMLElement).closest(
+        '[data-revoke]',
+      ) as HTMLElement | null;
       if (btn) {
         revokeTarget = btn.dataset.revoke!;
-        document.getElementById('revoke-label')!.textContent = btn.dataset.label || 'this key';
+        document.getElementById('revoke-label')!.textContent =
+          btn.dataset.label || 'this key';
         document.getElementById('revoke-dialog')!.style.display = 'flex';
       }
     });
@@ -269,30 +322,38 @@ import Admin from '../../layouts/Admin.astro';
       revokeTarget = null;
     });
 
-    document.getElementById('revoke-confirm')?.addEventListener('click', async () => {
-      if (!revokeTarget) return;
-      const btn = document.getElementById('revoke-confirm') as HTMLButtonElement;
-      btn.disabled = true;
-      btn.textContent = 'Revoking...';
+    document
+      .getElementById('revoke-confirm')
+      ?.addEventListener('click', async () => {
+        if (!revokeTarget) return;
+        const btn = document.getElementById(
+          'revoke-confirm',
+        ) as HTMLButtonElement;
+        btn.disabled = true;
+        btn.textContent = 'Revoking...';
 
-      try {
-        const res = await fetch(`/api/keys/${revokeTarget}`, {
-          method: 'DELETE',
-          credentials: 'include',
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ detail: 'Revoke failed' }));
-          (window as any).toast.error(err.detail || 'Revoke failed');
-        } else {
-          await loadKeys();
+        try {
+          const res = await fetch(`/api/keys/${revokeTarget}`, {
+            method: 'DELETE',
+            credentials: 'include',
+          });
+          if (!res.ok) {
+            const err = await res
+              .json()
+              .catch(() => ({ detail: 'Revoke failed' }));
+            (window as any).toast.error(err.detail || 'Revoke failed');
+          } else {
+            await loadKeys();
+          }
+        } catch {
+          (window as any).toast.error('Network error');
         }
-      } catch { (window as any).toast.error('Network error'); }
 
-      document.getElementById('revoke-dialog')!.style.display = 'none';
-      btn.disabled = false;
-      btn.textContent = 'Revoke';
-      revokeTarget = null;
-    });
+        document.getElementById('revoke-dialog')!.style.display = 'none';
+        btn.disabled = false;
+        btn.textContent = 'Revoke';
+        revokeTarget = null;
+      });
 
     loadKeys();
   });
