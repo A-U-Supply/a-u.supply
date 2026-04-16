@@ -413,6 +413,39 @@ import Admin from '../../layouts/Admin.astro';
       return payload;
     }
 
+    // Build params from the app manifest: start with every param's default
+    // (so required-with-default params like processing_mode / model are
+    // covered), then force processing_mode to "recipe" if the app offers it
+    // (otherwise an app like rottengenizdat that defaults to "single_pass"
+    // would silently ignore the recipe choice), and finally overlay the user's
+    // recipe pick. Params with unmet depends_on are skipped server-side by
+    // _validate_job_input, so extra defaults are harmless.
+    function buildJobParams(
+      manifest: any,
+      userRecipe: string,
+      randomRecipe: boolean,
+    ): Record<string, any> {
+      const out: Record<string, any> = {};
+      const specs = manifest?.params || {};
+      for (const [name, spec] of Object.entries(specs) as [string, any][]) {
+        if (spec && typeof spec === 'object' && 'default' in spec) {
+          out[name] = spec.default;
+        }
+      }
+      const pm = specs.processing_mode;
+      if (pm && Array.isArray(pm.options) && pm.options.includes('recipe')) {
+        out.processing_mode = 'recipe';
+      }
+      if (randomRecipe) {
+        // Server picks per-job; drop any default recipe value so the audit
+        // trail reflects what actually ran.
+        delete out.recipe;
+      } else if (userRecipe) {
+        out.recipe = userRecipe;
+      }
+      return out;
+    }
+
     submitBtn.addEventListener('click', async () => {
       const app = selectedApp();
       if (!app) return;
@@ -420,10 +453,11 @@ import Admin from '../../layouts/Admin.astro';
       if (!Number.isFinite(count) || count < 1 || count > 100) return;
 
       const randomRecipe = randomRecipeCb.checked;
-      const params: Record<string, any> = {};
-      if (!randomRecipe && recipeSelect.value) {
-        params.recipe = recipeSelect.value;
-      }
+      const params = buildJobParams(
+        app.manifest,
+        recipeSelect.value,
+        randomRecipe,
+      );
 
       statusEl.textContent = `Offering ${count} jobs…`;
       statusEl.className = 'hec-status';
