@@ -78,6 +78,12 @@ import Admin from '../../../layouts/Admin.astro';
       <div id="inputs-list" class="inputs-grid"></div>
     </div>
 
+    <!-- Output items (for inputs) -->
+    <div class="outputs-section" id="outputs-section" style="display:none;">
+      <h2>Outputs</h2>
+      <div id="outputs-list" class="inputs-grid"></div>
+    </div>
+
     <!-- Extraction status -->
     <div class="extraction-section">
       <h2>Extraction Status</h2>
@@ -384,6 +390,19 @@ import Admin from '../../../layouts/Admin.astro';
       return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     }
 
+    function renderRelatedCard(r: any): string {
+      const thumbUrl = r.media_type === 'image' ? `/api/media/${r.id}/thumbnail` : null;
+      return `
+      <div class="input-card">
+        ${thumbUrl ? `<a href="/admin/search/detail?id=${r.id}"><img class="input-thumb" src="${thumbUrl}" alt="${r.filename}"></a>` : ''}
+        <div class="input-info">
+          <a href="/admin/search/detail?id=${r.id}" style="color: var(--color-accent); font-weight: bold;">${r.filename}</a>
+          <span style="color: var(--color-muted); font-size: 0.65rem;">${r.media_type || ''}</span>
+          ${r.slack_link ? `<a href="${r.slack_link}" target="_blank" style="color: var(--color-muted); font-size: 0.65rem;">Slack</a>` : ''}
+        </div>
+      </div>`;
+    }
+
     async function renderDetail() {
       const item = currentItem;
       document.getElementById('detail-title')!.textContent = item.filename || 'Untitled';
@@ -491,40 +510,25 @@ import Admin from '../../../layouts/Admin.astro';
         `}).join('');
       }
 
-      // Input items for outputs
-      if (item.output_index) {
-        const jobSource = sources.find((s: any) => s.source_type === 'job_output');
-        let inputIds: string[] = [];
-        if (jobSource?.source_metadata) {
-          try { inputIds = JSON.parse(jobSource.source_metadata)?.input_item_ids || []; } catch {}
+      // Related items (inputs/outputs) via job linkage
+      try {
+        const relResp = await fetch(`/api/media/${mediaId}/related`, { credentials: 'include' });
+        if (relResp.ok) {
+          const related = await relResp.json();
+          if (related.inputs?.length > 0) {
+            const inputsSection = document.getElementById('inputs-section')!;
+            const inputsList = document.getElementById('inputs-list')!;
+            inputsSection.style.display = '';
+            inputsList.innerHTML = related.inputs.map((inp: any) => renderRelatedCard(inp)).join('');
+          }
+          if (related.outputs?.length > 0) {
+            const outputsSection = document.getElementById('outputs-section')!;
+            const outputsList = document.getElementById('outputs-list')!;
+            outputsSection.style.display = '';
+            outputsList.innerHTML = related.outputs.map((out: any) => renderRelatedCard(out)).join('');
+          }
         }
-        if (inputIds.length > 0) {
-          const inputsSection = document.getElementById('inputs-section')!;
-          const inputsList = document.getElementById('inputs-list')!;
-          inputsSection.style.display = '';
-          // Fetch each input item
-          const inputItems = await Promise.all(inputIds.map(async (id: string) => {
-            try {
-              const resp = await fetch(`/api/media/${id}`, { credentials: 'include' });
-              if (resp.ok) return await resp.json();
-            } catch {}
-            return null;
-          }));
-          inputsList.innerHTML = inputItems.filter(Boolean).map((inp: any) => {
-            const thumbUrl = inp.media_type === 'image' ? `/api/media/${inp.id}/thumbnail` : null;
-            const slackLink = inp.sources?.find((s: any) => s.slack_link)?.slack_link;
-            return `
-            <div class="input-card">
-              ${thumbUrl ? `<a href="/admin/search/detail?id=${inp.id}"><img class="input-thumb" src="${thumbUrl}" alt="${inp.filename}"></a>` : ''}
-              <div class="input-info">
-                <a href="/admin/search/detail?id=${inp.id}" style="color: var(--color-accent); font-weight: bold;">${inp.filename}</a>
-                <span style="color: var(--color-muted); font-size: 0.65rem;">${inp.media_type || ''}</span>
-                ${slackLink ? `<a href="${slackLink}" target="_blank" style="color: var(--color-muted); font-size: 0.65rem;">Slack</a>` : ''}
-              </div>
-            </div>`;
-          }).join('');
-        }
-      }
+      } catch {}
 
       // Extraction failures
       const extractionEl = document.getElementById('extraction-status')!;

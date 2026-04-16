@@ -20,6 +20,8 @@ from auth import get_db, require_scope
 from models import (
     ApiKey,
     ExtractionFailure,
+    Job,
+    JobOutput,
     MediaItem,
     MediaSource,
     MediaTag,
@@ -926,6 +928,72 @@ def get_media(
     """
     item = _get_media_item_or_404(db, media_id)
     return _media_item_response(item)
+
+
+@router.get("/media/{media_id}/related", tags=["Media Items"], summary="Get related inputs/outputs")
+def get_related(
+    media_id: str,
+    _auth=Depends(require_scope("read")),
+    db: Session = Depends(get_db),
+):
+    """Return items related to this media item via job processing.
+
+    For outputs: returns the input items that were used to create it.
+    For inputs: returns any output items that were produced from it.
+
+    **Scope required:** `read`
+    """
+    import json as _json
+
+    item = _get_media_item_or_404(db, media_id)
+    inputs: list[dict] = []
+    outputs: list[dict] = []
+
+    # If this is an output: find its inputs via JobOutput → Job → input_items
+    job_output = db.query(JobOutput).filter(
+        JobOutput.media_item_id == media_id
+    ).first()
+    if job_output:
+        job = db.query(Job).filter(Job.id == job_output.job_id).first()
+        if job:
+            input_ids = _json.loads(job.input_items)
+            for inp in db.query(MediaItem).filter(MediaItem.id.in_(input_ids)).all():
+                inputs.append(_related_item(db, inp))
+
+    # If this is an input: find outputs from jobs that used it
+    # Search all jobs whose input_items JSON contains this media_id
+    jobs = db.query(Job).filter(
+        Job.input_items.contains(media_id),
+        Job.status == "completed",
+    ).all()
+    for job in jobs:
+        input_ids = _json.loads(job.input_items)
+        if media_id not in input_ids:
+            continue
+        for jo in job.outputs:
+            if jo.media_item_id and jo.indexed:
+                out_item = db.query(MediaItem).filter(MediaItem.id == jo.media_item_id).first()
+                if out_item:
+                    outputs.append(_related_item(db, out_item))
+
+    return {"inputs": inputs, "outputs": outputs}
+
+
+def _related_item(db: Session, item: MediaItem) -> dict:
+    """Build a compact response for a related item."""
+    slack_link = None
+    for s in item.sources:
+        link = _slack_message_link(s.source_channel, s.slack_message_ts)
+        if link:
+            slack_link = link
+            break
+    return {
+        "id": item.id,
+        "filename": item.filename,
+        "media_type": item.media_type,
+        "output_index": item.output_index,
+        "slack_link": slack_link,
+    }
 
 
 @router.get("/media/{media_id}/file", tags=["Media Items"], summary="Download media file")
