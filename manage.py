@@ -292,6 +292,116 @@ def check_meta():
     db.close()
 
 
+def log(msg):
+    print(msg, flush=True)
+
+
+def backfill_transcripts():
+    """Find audio/video items missing transcripts and run whisper on them."""
+    import os
+    import tempfile
+    from models import MediaItem, MediaAudioMeta, MediaVideoMeta
+    from extraction import (
+        transcribe_audio, _extract_audio_track, _has_audio_stream,
+        _upsert_meta, SEARCH_MEDIA_DIR,
+    )
+
+    db = SessionLocal()
+
+    # Audio items missing transcripts
+    audio_missing = (
+        db.query(MediaItem)
+        .outerjoin(MediaAudioMeta)
+        .filter(
+            MediaItem.media_type == "audio",
+            (MediaAudioMeta.transcript.is_(None)) | (MediaAudioMeta.media_item_id.is_(None)),
+        )
+        .all()
+    )
+
+    # Video items missing transcripts
+    video_missing = (
+        db.query(MediaItem)
+        .outerjoin(MediaVideoMeta)
+        .filter(
+            MediaItem.media_type == "video",
+            (MediaVideoMeta.audio_transcript.is_(None)) | (MediaVideoMeta.media_item_id.is_(None)),
+        )
+        .all()
+    )
+
+    total = len(audio_missing) + len(video_missing)
+    log(f"Found {len(audio_missing)} audio + {len(video_missing)} video items missing transcripts ({total} total)")
+
+    if total == 0:
+        log("Nothing to do!")
+        db.close()
+        return
+
+    done = 0
+    skipped = 0
+    errors = 0
+    for i, item in enumerate(audio_missing + video_missing):
+        full_path = os.path.join(SEARCH_MEDIA_DIR, item.file_path)
+        if not os.path.exists(full_path):
+            log(f"  SKIP {item.id} — file not found: {full_path}")
+            skipped += 1
+            continue
+
+        log(f"  [{i + 1}/{total}] {item.media_type}: {item.filename}")
+
+        try:
+            if item.media_type == "audio":
+                result = transcribe_audio(full_path)
+                if result:
+                    _upsert_meta(db, MediaAudioMeta, item.id, {
+                        "transcript": result["transcript"],
+                        "transcript_confidence": result["confidence"],
+                    })
+                    log(f"    OK ({len(result['transcript'])} chars, confidence={result['confidence']})")
+                    done += 1
+                else:
+                    log(f"    No speech detected")
+                    skipped += 1
+
+            elif item.media_type == "video":
+                if not _has_audio_stream(full_path):
+                    log(f"    No audio stream, skipping")
+                    skipped += 1
+                    continue
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                    tmp_path = tmp.name
+                try:
+                    if not _extract_audio_track(full_path, tmp_path):
+                        log(f"    Failed to extract audio track")
+                        errors += 1
+                        continue
+                    result = transcribe_audio(tmp_path)
+                    if result:
+                        _upsert_meta(db, MediaVideoMeta, item.id, {
+                            "audio_transcript": result["transcript"],
+                            "transcript_confidence": result["confidence"],
+                        })
+                        log(f"    OK ({len(result['transcript'])} chars, confidence={result['confidence']})")
+                        done += 1
+                    else:
+                        log(f"    No speech detected")
+                        skipped += 1
+                finally:
+                    if os.path.exists(tmp_path):
+                        os.unlink(tmp_path)
+
+        except Exception as exc:
+            log(f"    ERROR: {exc}")
+            errors += 1
+
+    log(f"Done! Transcribed: {done}, Skipped: {skipped}, Errors: {errors}")
+    db.close()
+
+    log("Re-indexing all items to populate has_transcript filter...")
+    reindex_search()
+
+
 def list_users():
     db = SessionLocal()
     users = db.query(User).all()
@@ -360,6 +470,9 @@ if __name__ == "__main__":
         from slack_scraper import backfill_message_text
         result = backfill_message_text()
         print(f"Updated: {result['updated']}, Errors: {result['errors']}")
+
+    elif cmd == "backfill-transcripts":
+        backfill_transcripts()
 
     else:
         print(f"Unknown command: {cmd}")

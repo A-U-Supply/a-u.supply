@@ -64,6 +64,7 @@ FILTERABLE_ATTRIBUTES = [
     "job_app",
     "job_recipe",
     "job_model",
+    "has_transcript",
 ]
 
 SORTABLE_ATTRIBUTES = [
@@ -386,6 +387,7 @@ def _build_document(db: Session, media_item: MediaItem) -> dict:
         doc["channels"] = meta.channels
         doc["bit_depth"] = meta.bit_depth
         doc["transcript"] = meta.transcript
+        doc["has_transcript"] = bool(meta.transcript)
         if meta.acoustic_tags:
             try:
                 doc["acoustic_tags"] = json.loads(meta.acoustic_tags)
@@ -399,6 +401,7 @@ def _build_document(db: Session, media_item: MediaItem) -> dict:
         doc["height"] = meta.height
         doc["fps"] = meta.fps
         doc["audio_transcript"] = meta.audio_transcript
+        doc["has_transcript"] = bool(meta.audio_transcript)
 
     return doc
 

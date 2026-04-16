@@ -126,6 +126,7 @@ Bots are Docker images that process media. They live in **their own repos** — 
 
 - **Auto-deploy**: Merge to master → GitHub Actions → Dokku → live at a-u.supply
 - **Run commands on server**: `ssh dokku enter au-supply web <command>`
+- **Dokku CLI pitfall**: Dokku's argument parser mangles quotes and special characters. Never pass inline Python or multiline strings through `ssh dokku run`. Use `manage.py` commands or the API instead.
 - **Data persists** across deploys (DB + media in mounted volumes)
 - **SSL**: Auto-managed via Let's Encrypt
 
