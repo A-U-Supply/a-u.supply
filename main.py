@@ -57,6 +57,12 @@ if "batch_id" not in _job_cols:
         _conn.execute(_sa_text("ALTER TABLE jobs ADD COLUMN batch_id TEXT"))
         _conn.execute(_sa_text("CREATE INDEX IF NOT EXISTS ix_jobs_batch_id ON jobs(batch_id)"))
 
+# Migrate existing DB: add category column to releases if missing
+_release_cols = [c["name"] for c in _sa_inspect(engine).get_columns("releases")]
+if "category" not in _release_cols:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE releases ADD COLUMN category TEXT"))
+
 
 # ---------------------------------------------------------------------------
 # Background auto-sync scheduler
