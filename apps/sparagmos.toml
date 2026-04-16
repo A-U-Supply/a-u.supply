@@ -11,7 +11,7 @@ output_flag = "--output /work/output/output.png"
 pass_through = ["HF_TOKEN"]
 
 [output]
-index = "sparagmos-outputs"
+index = "outputs"
 
 [input]
 min_items = 2
