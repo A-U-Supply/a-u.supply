@@ -49,14 +49,49 @@ import Admin from '../../../layouts/Admin.astro';
     <div id="shuffle-section" class="shuffle-section" style="display:none;">
       <div class="shuffle-header">
         <h3>Shuffle Inputs</h3>
-        <div class="shuffle-controls">
-          <label class="shuffle-filter"
-            ><input type="checkbox" id="shuffle-exclude-app" /> Exclude processed</label
-          >
-          <label class="shuffle-filter"
-            ><input type="checkbox" id="shuffle-exclude-recipe" /> Exclude this recipe</label
-          >
-          <button class="action-btn" id="shuffle-btn">Shuffle</button>
+        <button class="action-btn" id="shuffle-btn">Shuffle</button>
+      </div>
+      <div class="shuffle-filters" id="shuffle-filters">
+        <div class="sf-row">
+          <div class="sf-field">
+            <label>Search</label>
+            <input type="text" id="sf-query" placeholder="Text search..." />
+          </div>
+          <div class="sf-field">
+            <label>Channel</label>
+            <select id="sf-channel"><option value="">All</option></select>
+          </div>
+          <div class="sf-field">
+            <label>Tags</label>
+            <input type="text" id="sf-tags" placeholder="tag1, tag2" />
+          </div>
+          <div class="sf-field">
+            <label>Index</label>
+            <select id="sf-output-index">
+              <option value="__inputs__">Inputs</option>
+              <option value="outputs">Outputs</option>
+            </select>
+          </div>
+        </div>
+        <div class="sf-row">
+          <div class="sf-field">
+            <label>Min Reactions</label>
+            <input type="number" id="sf-reactions-min" min="0" value="0" />
+          </div>
+          <div class="sf-field">
+            <label>Min Tags</label>
+            <input type="number" id="sf-tags-min" min="0" value="0" />
+          </div>
+          <div class="sf-field sf-checks">
+            <label class="shuffle-filter"
+              ><input type="checkbox" id="shuffle-exclude-app" /> Exclude processed
+              by app</label
+            >
+            <label class="shuffle-filter"
+              ><input type="checkbox" id="shuffle-exclude-recipe" /> Exclude this
+              recipe</label
+            >
+          </div>
         </div>
       </div>
       <div class="shuffle-status" id="shuffle-status"></div>
@@ -402,11 +437,46 @@ import Admin from '../../../layouts/Admin.astro';
     text-transform: uppercase;
     letter-spacing: 0.03em;
   }
-  .shuffle-controls {
+  .shuffle-filters {
+    margin-bottom: var(--space-sm);
+  }
+  .sf-row {
     display: flex;
-    align-items: center;
     gap: var(--space-sm);
     flex-wrap: wrap;
+    margin-bottom: var(--space-xs);
+  }
+  .sf-field {
+    flex: 1;
+    min-width: 120px;
+  }
+  .sf-field label {
+    display: block;
+    font-size: 0.65rem;
+    font-family: var(--font-mono);
+    color: var(--color-muted);
+    margin-bottom: 2px;
+    text-transform: uppercase;
+  }
+  .sf-field input,
+  .sf-field select {
+    width: 100%;
+    padding: 3px 6px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    color: var(--color-text);
+    box-sizing: border-box;
+  }
+  .sf-checks {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+  }
+  .sf-checks label {
+    text-transform: none;
   }
   .shuffle-filter {
     font-size: 0.7rem;
@@ -623,6 +693,49 @@ import Admin from '../../../layouts/Admin.astro';
       });
     }
 
+    function getShuffleFilters(): any {
+      const query = (
+        document.getElementById('sf-query') as HTMLInputElement
+      ).value.trim();
+      const channel = (
+        document.getElementById('sf-channel') as HTMLSelectElement
+      ).value;
+      const tagsStr = (
+        document.getElementById('sf-tags') as HTMLInputElement
+      ).value.trim();
+      const outputIndex = (
+        document.getElementById('sf-output-index') as HTMLSelectElement
+      ).value;
+      const reactionsMin =
+        parseInt(
+          (document.getElementById('sf-reactions-min') as HTMLInputElement)
+            .value,
+        ) || 0;
+      const tagsMin =
+        parseInt(
+          (document.getElementById('sf-tags-min') as HTMLInputElement).value,
+        ) || 0;
+
+      const body: any = {
+        query,
+        media_types: shuffleMediaTypes,
+        sort: 'random',
+        page: 1,
+        per_page: 100,
+        filters: {},
+      };
+      if (channel) body.filters.source_channels = [channel];
+      if (tagsStr)
+        body.filters.tags = tagsStr
+          .split(',')
+          .map((t: string) => t.trim())
+          .filter(Boolean);
+      body.filters.output_index = outputIndex;
+      if (reactionsMin > 0) body.filters.reaction_count = { min: reactionsMin };
+      if (tagsMin > 0) body.filters.tag_count = { min: tagsMin };
+      return body;
+    }
+
     async function doShuffle() {
       const locked = shuffleItems.filter((i) => i.locked);
       const need = shuffleCount - locked.length;
@@ -633,54 +746,76 @@ import Admin from '../../../layouts/Admin.astro';
         return;
       }
 
+      const lockedIds = new Set(locked.map((i) => i.id));
+
+      // Build exclude set from processed jobs if checkboxes are checked
+      const excludeProcessedIds = new Set<string>();
       const excludeApp = (
         document.getElementById('shuffle-exclude-app') as HTMLInputElement
       ).checked;
       const excludeRecipe = (
         document.getElementById('shuffle-exclude-recipe') as HTMLInputElement
       ).checked;
-
-      const params = new URLSearchParams({
-        count: String(need),
-        media_types: shuffleMediaTypes.join(','),
-      });
-
-      // Exclude locked item IDs
-      const lockedIds = locked.map((i) => i.id);
-      if (lockedIds.length > 0) {
-        params.set('exclude_ids', lockedIds.join(','));
-      }
       if (excludeApp && shuffleAppName) {
-        params.set('exclude_app', shuffleAppName);
+        try {
+          const eparams = new URLSearchParams({
+            count: '1',
+            media_types: shuffleMediaTypes.join(','),
+            exclude_app: shuffleAppName,
+          });
+          if (excludeRecipe && shuffleRecipeValue)
+            eparams.set('exclude_recipe', shuffleRecipeValue);
+          eparams.set('return_excluded', 'true');
+          const eres = await fetch(`/api/media/random?${eparams}`, {
+            credentials: 'include',
+          });
+          if (eres.ok) {
+            const edata = await eres.json();
+            for (const id of edata.excluded_ids || [])
+              excludeProcessedIds.add(id);
+          }
+        } catch {}
       }
-      if (excludeRecipe && excludeApp && shuffleRecipeValue) {
-        params.set('exclude_recipe', shuffleRecipeValue);
-      }
+
+      // Use search API with filters for the actual random selection
+      const searchBody = getShuffleFilters();
+      // Request extra so we can filter out locked/excluded IDs client-side
+      searchBody.per_page = Math.min(
+        need + lockedIds.size + excludeProcessedIds.size + 20,
+        100,
+      );
 
       try {
-        const res = await fetch(`/api/media/random?${params}`, {
+        const res = await fetch('/api/search', {
+          method: 'POST',
           credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(searchBody),
         });
         if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          (window as any).toast.error(
-            err.detail || `Shuffle failed (HTTP ${res.status})`,
-          );
+          (window as any).toast.error(`Shuffle failed (HTTP ${res.status})`);
           return;
         }
         const data = await res.json();
+        const results = data.results || data.hits || [];
+
+        // Filter out locked and excluded items, pick the number we need
+        const candidates = results.filter(
+          (r: any) => !lockedIds.has(r.id) && !excludeProcessedIds.has(r.id),
+        );
+        const picked = candidates.slice(0, need);
 
         const statusEl = document.getElementById('shuffle-status')!;
-        if (data.items.length < need) {
-          statusEl.textContent = `Only ${data.items.length + locked.length} of ${shuffleCount} available. Pool: ${data.total_available} items.`;
+        const total = data.total || results.length;
+        if (picked.length < need) {
+          statusEl.textContent = `Only ${picked.length + locked.length} of ${shuffleCount} matched filters. Pool: ${total} items.`;
           statusEl.className = 'shuffle-status shuffle-warn';
         } else {
-          statusEl.textContent = `${shuffleCount} items selected. Pool: ${data.total_available} available.`;
+          statusEl.textContent = `${shuffleCount} items selected. Pool: ${total} matching.`;
           statusEl.className = 'shuffle-status';
         }
 
-        // Merge locked items with new random items
-        const newItems = data.items.map((item: any) => ({
+        const newItems = picked.map((item: any) => ({
           id: item.id,
           filename: item.filename,
           media_type: item.media_type,
@@ -695,6 +830,24 @@ import Admin from '../../../layouts/Admin.astro';
       }
     }
 
+    async function loadShuffleFacets() {
+      try {
+        const res = await fetch('/api/search/facets', {
+          credentials: 'include',
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const channelSelect = document.getElementById(
+          'sf-channel',
+        ) as HTMLSelectElement;
+        channelSelect.innerHTML =
+          '<option value="">All</option>' +
+          (data.channels || [])
+            .map((ch: string) => `<option value="${ch}">${ch}</option>`)
+            .join('');
+      } catch {}
+    }
+
     function showShuffleSection(
       count: number,
       mediaTypes: string[],
@@ -707,6 +860,7 @@ import Admin from '../../../layouts/Admin.astro';
       shuffleRecipeValue = recipe;
 
       const section = document.getElementById('shuffle-section')!;
+      if (section.style.display === 'none') loadShuffleFacets();
       section.style.display = '';
 
       const statusEl = document.getElementById('shuffle-status')!;
