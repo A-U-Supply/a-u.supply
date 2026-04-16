@@ -75,7 +75,8 @@ import Admin from '../../../layouts/Admin.astro';
         <div class="filter-group">
           <label class="filter-label">Index</label>
           <select id="filter-output-index">
-            <option value="">Inputs</option>
+            <option value="__inputs__">Inputs</option>
+            <option value="outputs">Outputs</option>
           </select>
         </div>
 
@@ -1014,9 +1015,7 @@ import Admin from '../../../layouts/Admin.astro';
       };
       if (filters.channels.length) body.filters.source_channels = filters.channels;
       if (filters.poster) body.filters.poster = filters.poster;
-      if (filters.outputIndex !== "__all__") {
-        body.filters.output_index = filters.outputIndex || "__inputs__";
-      }
+      body.filters.output_index = filters.outputIndex;
       if (filters.colorGroups.length) {
         body.filters.color_group = filters.colorGroups;
       }
@@ -1036,6 +1035,7 @@ import Admin from '../../../layouts/Admin.astro';
       if (filters.dateTo) stateParams.set('to', filters.dateTo);
       if (filters.reactionsMin > 0) stateParams.set('rxn', String(filters.reactionsMin));
       if (filters.tagsMin > 0) stateParams.set('mintags', String(filters.tagsMin));
+      if (filters.outputIndex && filters.outputIndex !== '__inputs__') stateParams.set('output_index', filters.outputIndex);
       if (filters.sortBy !== 'newest') stateParams.set('sort', filters.sortBy);
       if (filters.types.length < 3 && filters.types.length > 0) stateParams.set('types', filters.types.join(','));
       if (currentPage > 1) stateParams.set('page', String(currentPage));
@@ -1305,9 +1305,8 @@ import Admin from '../../../layouts/Admin.astro';
         posterSelect.innerHTML = '<option value="">All</option>' +
           (data.uploaders || []).map((u: string) => `<option value="${u}">${u}</option>`).join('');
         const outputIndexSelect = document.getElementById('filter-output-index') as HTMLSelectElement;
-        outputIndexSelect.innerHTML = '<option value="">Inputs</option>' +
-          '<option value="__all__">All</option>' +
-          (data.output_indexes || []).map((idx: string) => `<option value="${idx}">${idx}</option>`).join('');
+        outputIndexSelect.innerHTML = '<option value="__inputs__">Inputs</option>' +
+          '<option value="outputs">Outputs</option>';
         // Restore from URL after dropdowns are populated
         const p = new URLSearchParams(window.location.search);
         if (p.get('poster')) posterSelect.value = p.get('poster')!;
