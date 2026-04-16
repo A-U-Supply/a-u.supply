@@ -346,6 +346,7 @@ class Job(Base):
     retry_count = Column(Integer, nullable=False, default=0)
     max_retries = Column(Integer, nullable=False, default=3)
     log_tail = Column(String, nullable=True)  # Last N lines of container stdout/stderr
+    batch_id = Column(String, nullable=True, index=True)
 
     app = relationship("AppDefinition")
     creator = relationship("User")

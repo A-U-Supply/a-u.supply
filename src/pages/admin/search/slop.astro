@@ -8,6 +8,15 @@ import Admin from '../../../layouts/Admin.astro';
     <div class="slop-summary" id="slop-summary"></div>
   </div>
 
+  <div id="slop-batch-banner" class="slop-batch-banner" style="display:none;">
+    <span>Filtered to batch <code id="slop-batch-id"></code></span>
+    <a
+      class="action-btn"
+      href="/admin/search/slop"
+      style="text-decoration:none;">Clear filter</a
+    >
+  </div>
+
   <div class="slop-controls">
     <select id="filter-type">
       <option value="">All Types</option>
@@ -108,6 +117,24 @@ import Admin from '../../../layouts/Admin.astro';
     gap: var(--space-sm);
     margin-top: var(--space-sm);
     flex-wrap: wrap;
+  }
+  .slop-batch-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    margin-top: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--color-text);
+    background: rgba(255, 255, 255, 0.02);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+  .slop-batch-banner code {
+    font-family: var(--font-mono);
+    padding: 1px 6px;
+    background: rgba(255, 255, 255, 0.05);
   }
   .slop-bulk-actions {
     display: flex;
@@ -233,6 +260,15 @@ import Admin from '../../../layouts/Admin.astro';
     let pendingIndexIds: string[] = [];
     let pendingIndexJobId: string | null = null;
 
+    const slopUrlParams = new URLSearchParams(window.location.search);
+    const slopBatchId = slopUrlParams.get('batch_id');
+    if (slopBatchId) {
+      const banner = document.getElementById('slop-batch-banner')!;
+      const idEl = document.getElementById('slop-batch-id')!;
+      idEl.textContent = slopBatchId.slice(0, 8);
+      banner.style.display = '';
+    }
+
     function formatSize(bytes: number): string {
       if (bytes < 1024) return bytes + ' B';
       if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -270,6 +306,7 @@ import Admin from '../../../layouts/Admin.astro';
       const params = new URLSearchParams();
       if (mediaType) params.set('media_type', mediaType);
       if (appName) params.set('app_name', appName);
+      if (slopBatchId) params.set('batch_id', slopBatchId);
 
       const res = await fetch(`/api/jobs/outputs/unindexed?${params}`, {
         credentials: 'include',
