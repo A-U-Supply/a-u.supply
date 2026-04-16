@@ -1,5 +1,7 @@
 # Media Search Engine — Architecture & Design
 
+> **Note:** This is the original design document written before implementation. Some details may differ from the final implementation. See CLAUDE.md for current architecture. The code is the source of truth.
+
 ## Overview
 
 A media search engine for A-U.Supply that indexes images, audio, and video collected by bots (Slack scrapers, yt-dlp) and uploaded by members. Supports rich metadata, automatic feature extraction, content-based search, and a manual tagging workflow.

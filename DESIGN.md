@@ -1,5 +1,7 @@
 # A-U.SUPPLY — Release Catalog System
 
+> **Note:** This is the original design document written before implementation. Some details (URL routing, rendering strategy) differ from the final implementation. See CLAUDE.md for current architecture. The code is the source of truth.
+
 ## Design Document
 
 ```
