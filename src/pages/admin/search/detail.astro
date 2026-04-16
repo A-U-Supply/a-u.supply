@@ -72,6 +72,12 @@ import Admin from '../../../layouts/Admin.astro';
       <div id="sources-list"></div>
     </div>
 
+    <!-- Input items (for outputs) -->
+    <div class="inputs-section" id="inputs-section" style="display:none;">
+      <h2>Inputs</h2>
+      <div id="inputs-list" class="inputs-grid"></div>
+    </div>
+
     <!-- Extraction status -->
     <div class="extraction-section">
       <h2>Extraction Status</h2>
@@ -244,6 +250,33 @@ import Admin from '../../../layouts/Admin.astro';
   }
   .tag-suggestion:hover { background: #f0f0f0; }
 
+  .inputs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: var(--space-sm);
+  }
+  .input-card {
+    border: 1px solid var(--color-border);
+    padding: var(--space-xs);
+    font-size: var(--text-sm);
+  }
+  .input-thumb {
+    width: 100%;
+    max-height: 150px;
+    object-fit: contain;
+    display: block;
+    margin-bottom: var(--space-xs);
+  }
+  .input-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .input-info a {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .source-card {
     border: 1px solid var(--color-border);
     padding: var(--space-sm);
@@ -440,16 +473,57 @@ import Admin from '../../../layouts/Admin.astro';
       if (sources.length === 0) {
         sourcesEl.innerHTML = '<p style="color: var(--color-muted); font-size: var(--text-sm);">No source information.</p>';
       } else {
-        sourcesEl.innerHTML = sources.map((s: any) => `
+        sourcesEl.innerHTML = sources.map((s: any) => {
+          const sourceLabel = {slack_file: 'Slack File', slack_link: 'Slack Link', upload: 'Upload', job_output: 'Job Output'}[s.source_type] || s.source_type || 'Unknown';
+          let meta: any = null;
+          try { meta = s.source_metadata ? JSON.parse(s.source_metadata) : null; } catch {}
+          return `
           <div class="source-card">
-            <div class="source-card__field"><span class="source-card__label">Source:</span> ${{slack_file: 'Slack File', slack_link: 'Slack Link', upload: 'Upload'}[s.source_type] || s.source_type || 'Unknown'}</div>
+            <div class="source-card__field"><span class="source-card__label">Source:</span> ${sourceLabel}</div>
             ${s.source_channel ? `<div class="source-card__field"><span class="source-card__label">Channel:</span> ${s.source_channel}</div>` : ''}
+            ${s.slack_link ? `<div class="source-card__field"><span class="source-card__label">Slack:</span> <a href="${s.slack_link}" target="_blank" style="color: var(--color-accent);">Open in Slack</a></div>` : ''}
             ${s.slack_message_text ? `<div class="source-card__field"><span class="source-card__label">Message:</span> ${s.slack_message_text}</div>` : ''}
             ${s.source_url ? `<div class="source-card__field"><span class="source-card__label">URL:</span> <a href="${s.source_url}" target="_blank" style="color: var(--color-accent);">${s.source_url}</a></div>` : ''}
             ${s.reaction_count ? `<div class="source-card__field"><span class="source-card__label">Reactions:</span> ${s.reaction_count}</div>` : ''}
+            ${meta?.job_id ? `<div class="source-card__field"><span class="source-card__label">Job:</span> <a href="/admin/jobs/detail?id=${meta.job_id}" style="color: var(--color-accent);">${meta.app_name}${meta.recipe ? ' / ' + meta.recipe : ''}</a></div>` : ''}
             <div class="source-card__field"><span class="source-card__label">Added:</span> ${s.created_at ? new Date(s.created_at).toLocaleString() : '--'}</div>
           </div>
-        `).join('');
+        `}).join('');
+      }
+
+      // Input items for outputs
+      if (item.output_index) {
+        const jobSource = sources.find((s: any) => s.source_type === 'job_output');
+        let inputIds: string[] = [];
+        if (jobSource?.source_metadata) {
+          try { inputIds = JSON.parse(jobSource.source_metadata)?.input_item_ids || []; } catch {}
+        }
+        if (inputIds.length > 0) {
+          const inputsSection = document.getElementById('inputs-section')!;
+          const inputsList = document.getElementById('inputs-list')!;
+          inputsSection.style.display = '';
+          // Fetch each input item
+          const inputItems = await Promise.all(inputIds.map(async (id: string) => {
+            try {
+              const resp = await fetch(`/api/media/${id}`, { credentials: 'include' });
+              if (resp.ok) return await resp.json();
+            } catch {}
+            return null;
+          }));
+          inputsList.innerHTML = inputItems.filter(Boolean).map((inp: any) => {
+            const thumbUrl = inp.media_type === 'image' ? `/api/media/${inp.id}/thumbnail` : null;
+            const slackLink = inp.sources?.find((s: any) => s.slack_link)?.slack_link;
+            return `
+            <div class="input-card">
+              ${thumbUrl ? `<a href="/admin/search/detail?id=${inp.id}"><img class="input-thumb" src="${thumbUrl}" alt="${inp.filename}"></a>` : ''}
+              <div class="input-info">
+                <a href="/admin/search/detail?id=${inp.id}" style="color: var(--color-accent); font-weight: bold;">${inp.filename}</a>
+                <span style="color: var(--color-muted); font-size: 0.65rem;">${inp.media_type || ''}</span>
+                ${slackLink ? `<a href="${slackLink}" target="_blank" style="color: var(--color-muted); font-size: 0.65rem;">Slack</a>` : ''}
+              </div>
+            </div>`;
+          }).join('');
+        }
       }
 
       // Extraction failures
