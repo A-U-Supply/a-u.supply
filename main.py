@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import hmac
+import html
 import logging
 import os
 import subprocess
@@ -10,7 +11,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from slowapi import Limiter
@@ -389,6 +390,7 @@ IS_PRODUCTION = os.environ.get("PRODUCTION", "").lower() in ("1", "true", "yes")
 
 LEGACY_DIR = Path(os.environ.get("LEGACY_SITE_DIR", "/srv/legacy-site"))
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
+DIST_DIR = Path("dist")
 
 
 @app.middleware("http")
@@ -674,11 +676,76 @@ async def webhook_deploy(request: Request):
     return {"ok": True, "action": "webhook received (no DEPLOY_SCRIPT configured)"}
 
 
+# --- OG tags for media detail pages ---
+# Slack/Twitter/iMessage unfurlers don't run JS, so we inject OG meta
+# tags into the static HTML at request time based on the ?id= parameter.
+
+SITE_URL = "https://a-u.supply"
+
+
+@app.get("/admin/search/detail", include_in_schema=False)
+def media_detail_with_og(request: Request, id: str | None = None):
+    """Serve the detail page with OG tags injected for link unfurling."""
+    index = DIST_DIR / "admin" / "search" / "detail" / "index.html"
+    if not index.is_file():
+        raise HTTPException(status_code=404, detail="Page not found")
+
+    raw_html = index.read_text()
+
+    if not id:
+        return HTMLResponse(raw_html)
+
+    from models import MediaItem
+    from sqlalchemy.orm import joinedload
+
+    db = next(get_db())
+    try:
+        item = (
+            db.query(MediaItem)
+            .options(joinedload(MediaItem.image_meta), joinedload(MediaItem.video_meta))
+            .filter(MediaItem.id == id)
+            .first()
+        )
+    finally:
+        db.close()
+
+    if not item:
+        return HTMLResponse(raw_html)
+
+    # Build OG tags
+    title = html.escape(item.filename or "Media")
+    desc = html.escape(item.description or f"{(item.media_type or 'file').capitalize()} — A-U.SUPPLY")
+    page_url = f"{SITE_URL}/admin/search/detail?id={id}"
+    image_url = f"{SITE_URL}/api/media/{id}/og-thumb"
+
+    og_tags = [
+        f'<meta property="og:title" content="{title}" />',
+        f'<meta property="og:description" content="{desc}" />',
+        f'<meta property="og:image" content="{image_url}" />',
+        f'<meta property="og:url" content="{page_url}" />',
+        f'<meta property="og:type" content="website" />',
+        '<meta name="twitter:card" content="summary_large_image" />',
+    ]
+
+    # Add dimensions if available
+    width, height = None, None
+    if item.image_meta:
+        width, height = item.image_meta.width, item.image_meta.height
+    elif item.video_meta:
+        width, height = item.video_meta.width, item.video_meta.height
+    if width and height:
+        og_tags.append(f'<meta property="og:image:width" content="{width}" />')
+        og_tags.append(f'<meta property="og:image:height" content="{height}" />')
+
+    og_block = "\n  ".join(og_tags)
+    injected_html = raw_html.replace("</head>", f"  {og_block}\n</head>", 1)
+
+    return HTMLResponse(injected_html)
+
+
 # --- Static files ---
 # Serve Astro build output as middleware rather than a mount, so it
 # doesn't swallow routes like /catalog that are handled by FastAPI.
-
-DIST_DIR = Path("dist")
 
 
 @app.middleware("http")

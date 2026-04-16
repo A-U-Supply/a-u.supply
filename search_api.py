@@ -559,6 +559,47 @@ def list_tags(
 
 
 # ---------------------------------------------------------------------------
+# Public OG image route (no auth — used by Slack/Twitter/iMessage unfurlers)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/media/{media_id}/og-thumb",
+    tags=["Media Items"],
+    summary="Public thumbnail for Open Graph unfurling",
+    include_in_schema=False,
+)
+def get_media_og_thumb(media_id: str, db: Session = Depends(get_db)):
+    """Serve a thumbnail without auth so link-unfurling bots can fetch og:image."""
+    item = db.query(MediaItem).filter(MediaItem.id == media_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    media_dir = _get_search_media_dir()
+
+    # Video thumbnail
+    if item.media_type == "video" and item.video_meta and item.video_meta.thumbnail_path:
+        thumb_path = media_dir / item.video_meta.thumbnail_path
+        if thumb_path.exists():
+            return FileResponse(thumb_path, media_type="image/webp")
+
+    # Image thumbnail (_thumb.webp)
+    if item.file_path:
+        original = media_dir / item.file_path
+        thumb = original.with_name(original.stem + "_thumb.webp")
+        if thumb.exists():
+            return FileResponse(thumb, media_type="image/webp")
+
+    # Fallback: serve original for images
+    if item.media_type == "image" and item.file_path:
+        file_path = media_dir / item.file_path
+        if file_path.exists():
+            return FileResponse(file_path, media_type=item.mime_type or "application/octet-stream")
+
+    raise HTTPException(status_code=404, detail="Thumbnail not found")
+
+
+# ---------------------------------------------------------------------------
 # Media static routes (must be defined before /media/{media_id} to avoid capture)
 # ---------------------------------------------------------------------------
 
