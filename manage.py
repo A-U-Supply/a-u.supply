@@ -7,13 +7,14 @@ Usage (from host):
     ssh dokku run au-supply .venv/bin/python manage.py revoke-apikey <key-prefix>
     ssh dokku run au-supply .venv/bin/python manage.py migrate-index <old-index> <new-index>
     ssh dokku run au-supply .venv/bin/python manage.py seed-slack-mapping [--dry-run]
+    ssh dokku run au-supply .venv/bin/python manage.py add-slack-mapping <slack-user-id> <user-email>
     ssh dokku run au-supply .venv/bin/python manage.py backfill-slack-uploader-id [--dry-run]
 """
 
 import sys
 
 from auth import hash_password
-from models import SessionLocal, User
+from models import SessionLocal, SlackUserMapping, User
 
 
 def create_user(email: str, password: str, name: str, role: str = "member"):
@@ -48,6 +49,37 @@ def set_role(email: str, role: str):
     user.role = role
     db.commit()
     print(f"{user.name} ({user.email}) is now {user.role}")
+    db.close()
+
+
+def add_slack_mapping(slack_user_id: str, user_email: str):
+    if not slack_user_id or not slack_user_id.startswith("U"):
+        print(f"ERROR: slack_user_id {slack_user_id!r} should look like 'U...'")
+        sys.exit(1)
+    db = SessionLocal()
+    user = db.query(User).filter(User.email == user_email).first()
+    if not user:
+        print(f"ERROR: no User with email {user_email}")
+        db.close()
+        sys.exit(1)
+    existing = (
+        db.query(SlackUserMapping)
+        .filter(SlackUserMapping.slack_user_id == slack_user_id)
+        .first()
+    )
+    if existing:
+        if existing.user_id == user.id:
+            print(f"No change: {slack_user_id} -> user {user.id} ({user.name})")
+        else:
+            prev = existing.user_id
+            existing.user_id = user.id
+            existing.email = user_email
+            db.commit()
+            print(f"Updated: {slack_user_id} user {prev} -> {user.id} ({user.name})")
+    else:
+        db.add(SlackUserMapping(slack_user_id=slack_user_id, user_id=user.id, email=user_email))
+        db.commit()
+        print(f"Added: {slack_user_id} -> user {user.id} ({user.name})")
     db.close()
 
 
@@ -538,6 +570,12 @@ if __name__ == "__main__":
         from slack_scraper import backfill_posters
         result = backfill_posters()
         print(f"Updated: {result['updated']}, Errors: {result['errors']}")
+
+    elif cmd == "add-slack-mapping":
+        if len(sys.argv) < 4:
+            print("Usage: manage.py add-slack-mapping <slack-user-id> <user-email>")
+            sys.exit(1)
+        add_slack_mapping(sys.argv[2], sys.argv[3])
 
     elif cmd == "seed-slack-mapping":
         from slack_scraper import seed_slack_user_mapping
