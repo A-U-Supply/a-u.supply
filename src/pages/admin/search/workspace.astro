@@ -12,7 +12,8 @@ import Admin from '../../../layouts/Admin.astro';
 
   <div id="empty" class="empty-state" style="display:none;">
     <div class="empty-state__icon">&#128451;</div>
-    Workspace is empty. Go to <a href="/admin/search">Search</a> and add items using the batch bar.
+    Workspace is empty. Go to <a href="/admin/search">Search</a> and add items using
+    the batch bar.
   </div>
 
   <div id="workspace-items" class="workspace-grid" style="display:none;"></div>
@@ -28,7 +29,9 @@ import Admin from '../../../layouts/Admin.astro';
     <select id="app-select">
       <option value="">Select an app...</option>
     </select>
-    <button class="action-btn" id="configure-btn" disabled>Configure & Run</button>
+    <button class="action-btn" id="configure-btn" disabled
+      >Configure & Run</button
+    >
   </div>
 
   <!-- Inline app config section -->
@@ -43,6 +46,22 @@ import Admin from '../../../layouts/Admin.astro';
       <div id="config-app-detail" class="config-detail"></div>
     </details>
     <div id="config-params"></div>
+    <div id="shuffle-section" class="shuffle-section" style="display:none;">
+      <div class="shuffle-header">
+        <h3>Shuffle Inputs</h3>
+        <div class="shuffle-controls">
+          <label class="shuffle-filter"
+            ><input type="checkbox" id="shuffle-exclude-app" /> Exclude processed</label
+          >
+          <label class="shuffle-filter"
+            ><input type="checkbox" id="shuffle-exclude-recipe" /> Exclude this recipe</label
+          >
+          <button class="action-btn" id="shuffle-btn">Shuffle</button>
+        </div>
+      </div>
+      <div class="shuffle-status" id="shuffle-status"></div>
+      <div class="shuffle-grid" id="shuffle-grid"></div>
+    </div>
     <div class="config-actions">
       <button class="action-btn" id="config-submit">Submit Job</button>
     </div>
@@ -66,7 +85,9 @@ import Admin from '../../../layouts/Admin.astro';
     overflow: hidden;
     min-width: 0;
   }
-  .workspace-grid .ws-item:hover { border-color: var(--color-text); }
+  .workspace-grid .ws-item:hover {
+    border-color: var(--color-text);
+  }
   .workspace-grid .ws-thumb {
     width: 100%;
     aspect-ratio: 1;
@@ -88,27 +109,29 @@ import Admin from '../../../layouts/Admin.astro';
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0,0,0,0.35);
+    background: rgba(0, 0, 0, 0.35);
     opacity: 0;
     transition: opacity 0.15s;
     cursor: pointer;
     border: none;
     padding: 0;
   }
-  .workspace-grid .ws-thumb:hover .ws-play { opacity: 1; }
+  .workspace-grid .ws-thumb:hover .ws-play {
+    opacity: 1;
+  }
   .workspace-grid .ws-play svg {
     width: 32px;
     height: 32px;
     fill: #fff;
-    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
   }
   .workspace-grid .ws-add {
     position: absolute;
     bottom: 4px;
     right: 4px;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0, 0, 0, 0.6);
     color: #fff;
-    border: 1px solid rgba(255,255,255,0.3);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     font-family: var(--font-mono);
     font-size: 0.85rem;
     font-weight: bold;
@@ -123,14 +146,19 @@ import Admin from '../../../layouts/Admin.astro';
     padding: 0;
     z-index: 1;
   }
-  .workspace-grid .ws-thumb:hover .ws-add { opacity: 1; }
-  .workspace-grid .ws-add:hover { background: rgba(184,134,11,0.8); border-color: #b8860b; }
+  .workspace-grid .ws-thumb:hover .ws-add {
+    opacity: 1;
+  }
+  .workspace-grid .ws-add:hover {
+    background: rgba(184, 134, 11, 0.8);
+    border-color: #b8860b;
+  }
   .workspace-grid .ws-duration {
     position: absolute;
     bottom: 3px;
     right: 4px;
     font-size: 0.6rem;
-    background: rgba(0,0,0,0.7);
+    background: rgba(0, 0, 0, 0.7);
     color: #fff;
     padding: 1px 4px;
     font-family: var(--font-mono);
@@ -140,7 +168,7 @@ import Admin from '../../../layouts/Admin.astro';
     top: 3px;
     left: 4px;
     font-size: 0.55rem;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0, 0, 0, 0.6);
     color: #fff;
     padding: 1px 4px;
     text-transform: uppercase;
@@ -161,7 +189,7 @@ import Admin from '../../../layouts/Admin.astro';
     position: absolute;
     top: 2px;
     right: 4px;
-    background: rgba(0,0,0,0.5);
+    background: rgba(0, 0, 0, 0.5);
     border: none;
     color: #fff;
     cursor: pointer;
@@ -172,8 +200,12 @@ import Admin from '../../../layouts/Admin.astro';
     opacity: 0;
     transition: opacity 0.15s;
   }
-  .workspace-grid .ws-item:hover .ws-remove { opacity: 1; }
-  .workspace-grid .ws-remove:hover { background: rgba(0,0,0,0.8); }
+  .workspace-grid .ws-item:hover .ws-remove {
+    opacity: 1;
+  }
+  .workspace-grid .ws-remove:hover {
+    background: rgba(0, 0, 0, 0.8);
+  }
 
   /* Config section (inline, dynamically rendered content) */
   .config-section {
@@ -226,7 +258,7 @@ import Admin from '../../../layouts/Admin.astro';
     padding: var(--space-md) 0;
     border-bottom: 1px solid var(--color-border);
   }
-  .config-field[style*="display: none"] + .config-field {
+  .config-field[style*='display: none'] + .config-field {
     border-top: none;
   }
   .config-field label {
@@ -283,12 +315,21 @@ import Admin from '../../../layouts/Admin.astro';
     padding: 4px 8px;
     font-family: var(--font-mono);
   }
-  .input-count-ok { color: #6a9955; }
-  .input-count-fill { color: #dcdcaa; }
-  .input-count-over { color: #f44747; font-weight: bold; }
+  .input-count-ok {
+    color: #6a9955;
+  }
+  .input-count-fill {
+    color: #dcdcaa;
+  }
+  .input-count-over {
+    color: #f44747;
+    font-weight: bold;
+  }
 
   /* Multi-select chain picker */
-  .multi-select-wrap { margin-top: 4px; }
+  .multi-select-wrap {
+    margin-top: 4px;
+  }
   .ms-picker {
     display: flex;
     gap: var(--space-xs);
@@ -325,7 +366,9 @@ import Admin from '../../../layouts/Admin.astro';
     color: var(--color-muted);
     min-width: 1.5em;
   }
-  .ms-label { flex: 1; }
+  .ms-label {
+    flex: 1;
+  }
   .ms-remove {
     background: none;
     border: none;
@@ -334,7 +377,151 @@ import Admin from '../../../layouts/Admin.astro';
     font-size: 1rem;
     padding: 0 4px;
   }
-  .ms-remove:hover { color: #f44747; }
+  .ms-remove:hover {
+    color: #f44747;
+  }
+
+  /* Shuffle section */
+  .shuffle-section {
+    margin-top: var(--space-md);
+    border-top: 1px solid var(--color-border);
+    padding-top: var(--space-md);
+  }
+  .shuffle-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-sm);
+  }
+  .shuffle-header h3 {
+    margin: 0;
+    font-size: 0.9rem;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .shuffle-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+  }
+  .shuffle-filter {
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    color: var(--color-muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+  }
+  .shuffle-filter input[type='checkbox'] {
+    width: auto;
+    margin: 0;
+  }
+  .shuffle-status {
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--color-muted);
+    margin-bottom: var(--space-sm);
+  }
+  .shuffle-status.shuffle-warn {
+    color: #dcdcaa;
+  }
+  .shuffle-status.shuffle-err {
+    color: #f44747;
+  }
+  .shuffle-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--space-sm);
+  }
+  .shuffle-grid .ws-item {
+    border: 1px solid var(--color-border);
+    font-size: var(--text-sm);
+    font-family: var(--font-mono);
+    position: relative;
+    transition: border-color 0.15s;
+    overflow: hidden;
+    min-width: 0;
+  }
+  .shuffle-grid .ws-item:hover {
+    border-color: var(--color-text);
+  }
+  .shuffle-grid .ws-thumb {
+    width: 100%;
+    aspect-ratio: 1;
+    background: #111;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .shuffle-grid .ws-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .shuffle-grid .ws-type-badge {
+    position: absolute;
+    top: 3px;
+    right: 4px;
+    font-size: 0.55rem;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    padding: 1px 4px;
+    text-transform: uppercase;
+    font-family: var(--font-mono);
+  }
+  .shuffle-grid .ws-info {
+    padding: 4px 6px;
+    border-top: 1px solid var(--color-border);
+    min-width: 0;
+  }
+  .shuffle-grid .ws-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.65rem;
+  }
+  .shuffle-grid .ws-duration {
+    position: absolute;
+    bottom: 3px;
+    right: 4px;
+    font-size: 0.6rem;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    padding: 1px 4px;
+    font-family: var(--font-mono);
+  }
+  .shuffle-lock {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    background: rgba(0, 0, 0, 0.5);
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.7rem;
+    padding: 2px 4px;
+    z-index: 2;
+    opacity: 0.5;
+    transition: opacity 0.15s;
+    font-family: var(--font-mono);
+  }
+  .shuffle-grid .ws-item:hover .shuffle-lock {
+    opacity: 0.8;
+  }
+  .shuffle-grid .ws-item.locked .shuffle-lock {
+    opacity: 1;
+    color: #dcdcaa;
+  }
+  .shuffle-grid .ws-item.locked {
+    border-left: 3px solid var(--color-text);
+  }
 </style>
 
 <style>
@@ -374,19 +561,198 @@ import Admin from '../../../layouts/Admin.astro';
     const pageSize = 48;
     let totalItems = 0;
 
+    // Shuffle state
+    let shuffleItems: Array<{
+      id: string;
+      filename: string;
+      media_type: string;
+      locked: boolean;
+      duration_seconds?: number;
+    }> = [];
+    let shuffleActive = false;
+    let shuffleCount = 0;
+    let shuffleMediaTypes: string[] = [];
+    let shuffleAppName = '';
+    let shuffleRecipeValue = '';
+
+    function fmtDur(s: number) {
+      const m = Math.floor(s / 60);
+      const sec = Math.floor(s % 60);
+      return `${m}:${sec.toString().padStart(2, '0')}`;
+    }
+
+    function renderShuffleGrid() {
+      const grid = document.getElementById('shuffle-grid')!;
+      if (shuffleItems.length === 0) {
+        grid.innerHTML = '';
+        return;
+      }
+      grid.innerHTML = shuffleItems
+        .map((item, i) => {
+          const hasThumb =
+            item.media_type === 'image' || item.media_type === 'video';
+          const thumb = hasThumb
+            ? `<img src="/api/media/${item.id}/thumbnail" alt="" loading="lazy" />`
+            : `<img src="/assets/default-cover.jpg" alt="${item.media_type}" loading="lazy" style="image-rendering: pixelated;" />`;
+          const dur = item.duration_seconds
+            ? `<span class="ws-duration">${fmtDur(item.duration_seconds)}</span>`
+            : '';
+          const lockIcon = item.locked ? '&#128274;' : '&#128275;';
+          return `<div class="ws-item ${item.locked ? 'locked' : ''}" data-shuffle-idx="${i}">
+          <button class="shuffle-lock" data-idx="${i}" title="${item.locked ? 'Unlock' : 'Lock'}">${lockIcon}</button>
+          <div class="ws-thumb">
+            <span class="ws-type-badge">${item.media_type}</span>
+            ${thumb}
+            ${dur}
+          </div>
+          <div class="ws-info">
+            <div class="ws-name" title="${item.filename}">${item.filename}</div>
+          </div>
+        </div>`;
+        })
+        .join('');
+
+      // Wire lock toggles
+      grid.querySelectorAll('.shuffle-lock').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const idx = parseInt((btn as HTMLElement).dataset.idx!);
+          shuffleItems[idx].locked = !shuffleItems[idx].locked;
+          renderShuffleGrid();
+        });
+      });
+    }
+
+    async function doShuffle() {
+      const locked = shuffleItems.filter((i) => i.locked);
+      const need = shuffleCount - locked.length;
+      if (need <= 0) {
+        (window as any).toast.error(
+          'All items are locked. Unlock some to shuffle.',
+        );
+        return;
+      }
+
+      const excludeApp = (
+        document.getElementById('shuffle-exclude-app') as HTMLInputElement
+      ).checked;
+      const excludeRecipe = (
+        document.getElementById('shuffle-exclude-recipe') as HTMLInputElement
+      ).checked;
+
+      const params = new URLSearchParams({
+        count: String(need),
+        media_types: shuffleMediaTypes.join(','),
+      });
+
+      // Exclude locked item IDs
+      const lockedIds = locked.map((i) => i.id);
+      if (lockedIds.length > 0) {
+        params.set('exclude_ids', lockedIds.join(','));
+      }
+      if (excludeApp && shuffleAppName) {
+        params.set('exclude_app', shuffleAppName);
+      }
+      if (excludeRecipe && excludeApp && shuffleRecipeValue) {
+        params.set('exclude_recipe', shuffleRecipeValue);
+      }
+
+      try {
+        const res = await fetch(`/api/media/random?${params}`, {
+          credentials: 'include',
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          (window as any).toast.error(
+            err.detail || `Shuffle failed (HTTP ${res.status})`,
+          );
+          return;
+        }
+        const data = await res.json();
+
+        const statusEl = document.getElementById('shuffle-status')!;
+        if (data.items.length < need) {
+          statusEl.textContent = `Only ${data.items.length + locked.length} of ${shuffleCount} available. Pool: ${data.total_available} items.`;
+          statusEl.className = 'shuffle-status shuffle-warn';
+        } else {
+          statusEl.textContent = `${shuffleCount} items selected. Pool: ${data.total_available} available.`;
+          statusEl.className = 'shuffle-status';
+        }
+
+        // Merge locked items with new random items
+        const newItems = data.items.map((item: any) => ({
+          id: item.id,
+          filename: item.filename,
+          media_type: item.media_type,
+          duration_seconds: item.duration_seconds,
+          locked: false,
+        }));
+        shuffleItems = [...locked, ...newItems];
+        shuffleActive = true;
+        renderShuffleGrid();
+      } catch (e) {
+        (window as any).toast.error('Shuffle failed: ' + (e as Error).message);
+      }
+    }
+
+    function showShuffleSection(
+      count: number,
+      mediaTypes: string[],
+      appName: string,
+      recipe: string,
+    ) {
+      shuffleCount = count;
+      shuffleMediaTypes = mediaTypes;
+      shuffleAppName = appName;
+      shuffleRecipeValue = recipe;
+
+      const section = document.getElementById('shuffle-section')!;
+      section.style.display = '';
+
+      const statusEl = document.getElementById('shuffle-status')!;
+      statusEl.textContent = `Needs ${count} ${mediaTypes.join('/')} item(s). Click Shuffle to draw random inputs.`;
+      statusEl.className = 'shuffle-status';
+
+      // Keep any existing locked items that still match, clear the rest
+      shuffleItems = shuffleItems.filter((i) => i.locked);
+      renderShuffleGrid();
+    }
+
+    function hideShuffleSection() {
+      const section = document.getElementById('shuffle-section')!;
+      section.style.display = 'none';
+      shuffleItems = [];
+      shuffleActive = false;
+      document.getElementById('shuffle-grid')!.innerHTML = '';
+      document.getElementById('shuffle-status')!.textContent = '';
+    }
+
+    // Wire shuffle button
+    document
+      .getElementById('shuffle-btn')
+      ?.addEventListener('click', doShuffle);
+
     if (!wsId) {
       emptyEl.style.display = '';
       return;
     }
 
     async function loadItems() {
-      const res = await fetch(`/api/workspaces/${wsId}/items?page=${currentPage}&per_page=${pageSize}`, { credentials: 'include' });
-      if (!res.ok) { emptyEl.style.display = ''; return; }
+      const res = await fetch(
+        `/api/workspaces/${wsId}/items?page=${currentPage}&per_page=${pageSize}`,
+        { credentials: 'include' },
+      );
+      if (!res.ok) {
+        emptyEl.style.display = '';
+        return;
+      }
       const data = await res.json();
       totalItems = data.total;
 
       // Update title
-      const wsRes = await fetch(`/api/workspaces/${wsId}`, { credentials: 'include' });
+      const wsRes = await fetch(`/api/workspaces/${wsId}`, {
+        credentials: 'include',
+      });
       if (wsRes.ok) {
         const ws = await wsRes.json();
         titleEl.textContent = `${ws.name} (${totalItems})`;
@@ -395,12 +761,12 @@ import Admin from '../../../layouts/Admin.astro';
       if (totalItems === 0) {
         emptyEl.style.display = '';
         gridEl.style.display = 'none';
-        processBar.style.display = 'none';
-        return;
+      } else {
+        emptyEl.style.display = 'none';
+        gridEl.style.display = 'grid';
       }
 
-      emptyEl.style.display = 'none';
-      gridEl.style.display = 'grid';
+      // Always show process bar — shuffle works even with empty workspace
       processBar.style.display = 'flex';
 
       const playSvg = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
@@ -411,19 +777,22 @@ import Admin from '../../../layouts/Admin.astro';
         return `${m}:${sec.toString().padStart(2, '0')}`;
       }
 
-      gridEl.innerHTML = data.items.map((item: any) => {
-        const hasThumb = item.media_type === 'image' || item.media_type === 'video';
-        const thumb = hasThumb
-          ? `<img src="/api/media/${item.media_item_id}/thumbnail" alt="" loading="lazy" />`
-          : `<img src="/assets/default-cover.jpg" alt="${item.media_type}" loading="lazy" style="image-rendering: pixelated;" />`;
-        const canPlay = item.media_type === 'audio' || item.media_type === 'video';
-        const playBtn = canPlay
-          ? `<button class="ws-play" data-play-id="${item.media_item_id}" data-play-type="${item.media_type}" title="Play">${playSvg}</button><button class="ws-add" data-play-id="${item.media_item_id}" data-play-type="${item.media_type}" title="Add to queue">+</button>`
-          : '';
-        const dur = item.duration_seconds
-          ? `<span class="ws-duration">${fmtDur(item.duration_seconds)}</span>`
-          : '';
-        return `<div class="ws-item">
+      gridEl.innerHTML = data.items
+        .map((item: any) => {
+          const hasThumb =
+            item.media_type === 'image' || item.media_type === 'video';
+          const thumb = hasThumb
+            ? `<img src="/api/media/${item.media_item_id}/thumbnail" alt="" loading="lazy" />`
+            : `<img src="/assets/default-cover.jpg" alt="${item.media_type}" loading="lazy" style="image-rendering: pixelated;" />`;
+          const canPlay =
+            item.media_type === 'audio' || item.media_type === 'video';
+          const playBtn = canPlay
+            ? `<button class="ws-play" data-play-id="${item.media_item_id}" data-play-type="${item.media_type}" title="Play">${playSvg}</button><button class="ws-add" data-play-id="${item.media_item_id}" data-play-type="${item.media_type}" title="Add to queue">+</button>`
+            : '';
+          const dur = item.duration_seconds
+            ? `<span class="ws-duration">${fmtDur(item.duration_seconds)}</span>`
+            : '';
+          return `<div class="ws-item">
           <button class="ws-remove" data-id="${item.media_item_id}" title="Remove">&times;</button>
           <div class="ws-thumb">
             <span class="ws-type-badge">${item.media_type}</span>
@@ -435,72 +804,88 @@ import Admin from '../../../layouts/Admin.astro';
             <div class="ws-name" title="${item.filename}">${item.filename}</div>
           </div>
         </div>`;
-      }).join('');
+        })
+        .join('');
 
       // Remove buttons
-      gridEl.querySelectorAll('.ws-remove').forEach(btn => {
+      gridEl.querySelectorAll('.ws-remove').forEach((btn) => {
         btn.addEventListener('click', async (e) => {
           e.stopPropagation();
           const id = (btn as HTMLElement).dataset.id;
-          await fetch(`/api/workspaces/${wsId}/items`, { method: 'DELETE', credentials: 'include',
+          await fetch(`/api/workspaces/${wsId}/items`, {
+            method: 'DELETE',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ media_item_ids: [id] }) });
+            body: JSON.stringify({ media_item_ids: [id] }),
+          });
           loadItems();
         });
       });
 
       // Play buttons — dispatch to the persistent player
-      gridEl.querySelectorAll('.ws-play').forEach(btn => {
+      gridEl.querySelectorAll('.ws-play').forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           const el = btn as HTMLElement;
           const mediaId = el.dataset.playId!;
           const item = data.items.find((i: any) => i.media_item_id === mediaId);
           if (!item) return;
-          document.dispatchEvent(new CustomEvent('player:queue', {
-            detail: {
-              tracks: [{
-                track_id: mediaId,
-                title: item.filename,
-                release_title: '',
-                release_code: '',
-                media_type: item.media_type,
-                stream_url: `/api/media/${mediaId}/file`,
-                cover_url: (item.media_type === 'image' || item.media_type === 'video')
-                  ? `/api/media/${mediaId}/thumbnail` : '/assets/default-cover.jpg',
-                duration: item.duration_seconds || 0,
-                entity_name: '',
-              }],
-              startIndex: 0,
-            },
-          }));
+          document.dispatchEvent(
+            new CustomEvent('player:queue', {
+              detail: {
+                tracks: [
+                  {
+                    track_id: mediaId,
+                    title: item.filename,
+                    release_title: '',
+                    release_code: '',
+                    media_type: item.media_type,
+                    stream_url: `/api/media/${mediaId}/file`,
+                    cover_url:
+                      item.media_type === 'image' || item.media_type === 'video'
+                        ? `/api/media/${mediaId}/thumbnail`
+                        : '/assets/default-cover.jpg',
+                    duration: item.duration_seconds || 0,
+                    entity_name: '',
+                  },
+                ],
+                startIndex: 0,
+              },
+            }),
+          );
         });
       });
 
       // Add to queue buttons
-      gridEl.querySelectorAll('.ws-add').forEach(btn => {
+      gridEl.querySelectorAll('.ws-add').forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           const el = btn as HTMLElement;
           const mediaId = el.dataset.playId!;
           const item = data.items.find((i: any) => i.media_item_id === mediaId);
           if (!item) return;
-          document.dispatchEvent(new CustomEvent('player:add', {
-            detail: {
-              tracks: [{
-                track_id: mediaId,
-                title: item.filename,
-                release_title: '',
-                release_code: '',
-                media_type: item.media_type,
-                stream_url: `/api/media/${mediaId}/file`,
-                cover_url: (item.media_type === 'image' || item.media_type === 'video')
-                  ? `/api/media/${mediaId}/thumbnail` : '/assets/default-cover.jpg',
-                duration: item.duration_seconds || 0,
-                entity_name: '',
-              }],
-            },
-          }));
+          document.dispatchEvent(
+            new CustomEvent('player:add', {
+              detail: {
+                tracks: [
+                  {
+                    track_id: mediaId,
+                    title: item.filename,
+                    release_title: '',
+                    release_code: '',
+                    media_type: item.media_type,
+                    stream_url: `/api/media/${mediaId}/file`,
+                    cover_url:
+                      item.media_type === 'image' || item.media_type === 'video'
+                        ? `/api/media/${mediaId}/thumbnail`
+                        : '/assets/default-cover.jpg',
+                    duration: item.duration_seconds || 0,
+                    entity_name: '',
+                  },
+                ],
+              },
+            }),
+          );
         });
       });
 
@@ -511,32 +896,53 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     document.getElementById('prev-page')?.addEventListener('click', () => {
-      if (currentPage > 1) { currentPage--; loadItems(); }
+      if (currentPage > 1) {
+        currentPage--;
+        loadItems();
+      }
     });
     document.getElementById('next-page')?.addEventListener('click', () => {
-      if (currentPage * pageSize < totalItems) { currentPage++; loadItems(); }
+      if (currentPage * pageSize < totalItems) {
+        currentPage++;
+        loadItems();
+      }
     });
 
     // Clear workspace
-    document.getElementById('clear-workspace-btn')?.addEventListener('click', async () => {
-      if (!await (window as any).confirmDialog('Remove all items from workspace?', 'Clear All')) return;
-      await fetch(`/api/workspaces/${wsId}`, { method: 'DELETE', credentials: 'include' });
-      localStorage.removeItem('active_workspace_id');
-      emptyEl.style.display = '';
-      gridEl.style.display = 'none';
-      processBar.style.display = 'none';
-    });
+    document
+      .getElementById('clear-workspace-btn')
+      ?.addEventListener('click', async () => {
+        if (
+          !(await (window as any).confirmDialog(
+            'Remove all items from workspace?',
+            'Clear All',
+          ))
+        )
+          return;
+        await fetch(`/api/workspaces/${wsId}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
+        localStorage.removeItem('active_workspace_id');
+        emptyEl.style.display = '';
+        gridEl.style.display = 'none';
+        processBar.style.display = 'none';
+      });
 
     // Load apps
-    const appSelect = document.getElementById('app-select') as HTMLSelectElement;
-    const configureBtn = document.getElementById('configure-btn') as HTMLButtonElement;
+    const appSelect = document.getElementById(
+      'app-select',
+    ) as HTMLSelectElement;
+    const configureBtn = document.getElementById(
+      'configure-btn',
+    ) as HTMLButtonElement;
     let apps: any[] = [];
 
     try {
       const res = await fetch('/api/apps', { credentials: 'include' });
       if (res.ok) {
         apps = await res.json();
-        apps.forEach(app => {
+        apps.forEach((app) => {
           const opt = document.createElement('option');
           opt.value = app.name;
           opt.textContent = app.display_name;
@@ -551,11 +957,13 @@ import Admin from '../../../layouts/Admin.astro';
 
     // Configure & Run
     configureBtn.addEventListener('click', () => {
-      const app = apps.find(a => a.name === appSelect.value);
+      const app = apps.find((a) => a.name === appSelect.value);
       if (!app) return;
 
-      document.getElementById('config-app-name')!.textContent = app.display_name;
-      document.getElementById('config-app-desc')!.textContent = app.description || '';
+      document.getElementById('config-app-name')!.textContent =
+        app.display_name;
+      document.getElementById('config-app-desc')!.textContent =
+        app.description || '';
 
       const detailEl = document.getElementById('config-app-detail')!;
       const detailWrap = document.getElementById('config-app-detail-wrap')!;
@@ -576,7 +984,9 @@ import Admin from '../../../layouts/Admin.astro';
       const isParamActive = (spec: any): boolean => {
         const dep = spec.depends_on;
         if (!dep) return true;
-        const depEl = paramsContainer.querySelector(`[name="${dep.param}"]`) as HTMLInputElement | HTMLSelectElement;
+        const depEl = paramsContainer.querySelector(`[name="${dep.param}"]`) as
+          | HTMLInputElement
+          | HTMLSelectElement;
         if (!depEl) return true;
         const depVal = depEl.value;
         if (dep.values) return dep.values.includes(depVal);
@@ -585,8 +995,13 @@ import Admin from '../../../layouts/Admin.astro';
 
       // Update visibility of all param fields based on depends_on
       const updateVisibility = () => {
-        for (const [name, spec] of Object.entries(paramSpecs) as [string, any][]) {
-          const field = paramsContainer.querySelector(`[data-param-field="${name}"]`) as HTMLElement;
+        for (const [name, spec] of Object.entries(paramSpecs) as [
+          string,
+          any,
+        ][]) {
+          const field = paramsContainer.querySelector(
+            `[data-param-field="${name}"]`,
+          ) as HTMLElement;
           if (!field) continue;
           field.style.display = isParamActive(spec) ? '' : 'none';
         }
@@ -594,9 +1009,13 @@ import Admin from '../../../layouts/Admin.astro';
 
       // Helper: look up input_count for a selected option across all option_groups
       const getInputCount = (spec: any, value: string): number | null => {
-        for (const g of (spec.option_groups || [])) {
+        for (const g of spec.option_groups || []) {
           for (const o of g.options) {
-            if (typeof o === 'object' && o.value === value && o.input_count != null) {
+            if (
+              typeof o === 'object' &&
+              o.value === value &&
+              o.input_count != null
+            ) {
               return o.input_count;
             }
           }
@@ -604,7 +1023,10 @@ import Admin from '../../../layouts/Admin.astro';
         return null;
       };
 
-      for (const [name, spec] of Object.entries(paramSpecs) as [string, any][]) {
+      for (const [name, spec] of Object.entries(paramSpecs) as [
+        string,
+        any,
+      ][]) {
         const field = document.createElement('div');
         field.className = 'config-field';
         field.setAttribute('data-param-field', name);
@@ -614,19 +1036,26 @@ import Admin from '../../../layouts/Admin.astro';
           // Multi-select: dropdown picker + ordered list of selections
           let groupedOpts = '';
           if (spec.option_groups) {
-            groupedOpts = spec.option_groups.map((g: any) => {
-              const opts = g.options.map((o: any) => {
-                const val = typeof o === 'string' ? o : o.value;
-                const label = typeof o === 'string' ? o : o.label;
-                const ic = typeof o === 'object' && o.input_count ? ` (${o.input_count} img)` : '';
-                return `<option value="${val}">${label}${ic}</option>`;
-              }).join('');
-              return `<optgroup label="${g.label}">${opts}</optgroup>`;
-            }).join('');
+            groupedOpts = spec.option_groups
+              .map((g: any) => {
+                const opts = g.options
+                  .map((o: any) => {
+                    const val = typeof o === 'string' ? o : o.value;
+                    const label = typeof o === 'string' ? o : o.label;
+                    const ic =
+                      typeof o === 'object' && o.input_count
+                        ? ` (${o.input_count} img)`
+                        : '';
+                    return `<option value="${val}">${label}${ic}</option>`;
+                  })
+                  .join('');
+                return `<optgroup label="${g.label}">${opts}</optgroup>`;
+              })
+              .join('');
           } else {
-            groupedOpts = (spec.options || []).map((o: string) =>
-              `<option value="${o}">${o}</option>`
-            ).join('');
+            groupedOpts = (spec.options || [])
+              .map((o: string) => `<option value="${o}">${o}</option>`)
+              .join('');
           }
           inputHtml = `
             <div class="multi-select-wrap" data-ms-name="${name}">
@@ -639,19 +1068,26 @@ import Admin from '../../../layouts/Admin.astro';
             </div>`;
         } else if (spec.type === 'select') {
           if (spec.option_groups) {
-            const groups = spec.option_groups.map((g: any) => {
-              const opts = g.options.map((o: any) => {
-                const val = typeof o === 'string' ? o : o.value;
-                const label = typeof o === 'string' ? o : o.label;
-                return `<option value="${val}" ${val === spec.default ? 'selected' : ''}>${label}</option>`;
-              }).join('');
-              return `<optgroup label="${g.label}">${opts}</optgroup>`;
-            }).join('');
+            const groups = spec.option_groups
+              .map((g: any) => {
+                const opts = g.options
+                  .map((o: any) => {
+                    const val = typeof o === 'string' ? o : o.value;
+                    const label = typeof o === 'string' ? o : o.label;
+                    return `<option value="${val}" ${val === spec.default ? 'selected' : ''}>${label}</option>`;
+                  })
+                  .join('');
+                return `<optgroup label="${g.label}">${opts}</optgroup>`;
+              })
+              .join('');
             inputHtml = `<select name="${name}">${groups}</select>`;
           } else {
-            const options = (spec.options || []).map((o: string) =>
-              `<option value="${o}" ${o === spec.default ? 'selected' : ''}>${o}</option>`
-            ).join('');
+            const options = (spec.options || [])
+              .map(
+                (o: string) =>
+                  `<option value="${o}" ${o === spec.default ? 'selected' : ''}>${o}</option>`,
+              )
+              .join('');
             inputHtml = `<select name="${name}">${options}</select>`;
           }
         } else if (spec.type === 'bool') {
@@ -677,34 +1113,66 @@ import Admin from '../../../layouts/Admin.astro';
 
         // Wire up multi_select add/remove behavior
         if (spec.type === 'multi_select') {
-          const wrap = field.querySelector(`.multi-select-wrap[data-ms-name="${name}"]`)!;
-          const dropdown = wrap.querySelector('.ms-dropdown') as HTMLSelectElement;
+          const wrap = field.querySelector(
+            `.multi-select-wrap[data-ms-name="${name}"]`,
+          )!;
+          const dropdown = wrap.querySelector(
+            '.ms-dropdown',
+          ) as HTMLSelectElement;
           const addBtn = wrap.querySelector('.ms-add-btn')!;
           const list = wrap.querySelector('.ms-list')!;
-          const hiddenInput = wrap.querySelector(`input[name="${name}"]`) as HTMLInputElement;
+          const hiddenInput = wrap.querySelector(
+            `input[name="${name}"]`,
+          ) as HTMLInputElement;
           let selected: string[] = [];
 
           const syncHidden = () => {
             hiddenInput.value = JSON.stringify(selected);
             hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+            // Update shuffle section for multi_select chains
+            const inputSpec = manifest.input || {};
+            if (inputSpec.allow_random_fill && selected.length > 0) {
+              let maxCount = 0;
+              for (const val of selected) {
+                const ic = getInputCount(spec, val);
+                if (ic !== null && ic > maxCount) maxCount = ic;
+              }
+              if (maxCount > 0) {
+                const mediaTypes = inputSpec.media_types || [];
+                showShuffleSection(
+                  maxCount,
+                  mediaTypes,
+                  app.name,
+                  selected.join(','),
+                );
+              }
+            } else if (selected.length === 0) {
+              hideShuffleSection();
+            }
           };
 
           const renderList = () => {
-            list.innerHTML = selected.map((val, i) => {
-              // Find label for this value
-              let label = val;
-              for (const g of (spec.option_groups || [])) {
-                for (const o of g.options) {
-                  if (typeof o === 'object' && o.value === val) { label = o.label || val; break; }
+            list.innerHTML = selected
+              .map((val, i) => {
+                // Find label for this value
+                let label = val;
+                for (const g of spec.option_groups || []) {
+                  for (const o of g.options) {
+                    if (typeof o === 'object' && o.value === val) {
+                      label = o.label || val;
+                      break;
+                    }
+                  }
                 }
-              }
-              return `<li data-idx="${i}">
+                return `<li data-idx="${i}">
                 <span class="ms-num">${i + 1}.</span>
                 <span class="ms-label">${label}</span>
                 <button type="button" class="ms-remove" data-idx="${i}" title="Remove">&times;</button>
               </li>`;
-            }).join('');
-            list.querySelectorAll('.ms-remove').forEach(btn => {
+              })
+              .join('');
+            list.querySelectorAll('.ms-remove').forEach((btn) => {
               btn.addEventListener('click', () => {
                 const idx = parseInt((btn as HTMLElement).dataset.idx!);
                 selected.splice(idx, 1);
@@ -726,8 +1194,12 @@ import Admin from '../../../layouts/Admin.astro';
         // For grouped selects with option descriptions and input_count, show both
         if (spec.type === 'select' && spec.option_groups) {
           const selectEl = field.querySelector('select')!;
-          const descEl = field.querySelector(`.config-option-desc[data-option-desc="${name}"]`) as HTMLElement;
-          const countEl = field.querySelector(`.config-input-count[data-input-count="${name}"]`) as HTMLElement;
+          const descEl = field.querySelector(
+            `.config-option-desc[data-option-desc="${name}"]`,
+          ) as HTMLElement;
+          const countEl = field.querySelector(
+            `.config-input-count[data-input-count="${name}"]`,
+          ) as HTMLElement;
           const updateOptionDesc = () => {
             const val = (selectEl as HTMLSelectElement).value;
             let desc = '';
@@ -763,8 +1235,16 @@ import Admin from '../../../layouts/Admin.astro';
                 countEl.className = 'config-input-count input-count-over';
               }
               countEl.style.display = 'block';
+
+              // Show shuffle section if app allows random fill
+              const inputSpec = manifest.input || {};
+              if (inputSpec.allow_random_fill) {
+                const mediaTypes = inputSpec.media_types || [];
+                showShuffleSection(inputCount, mediaTypes, app.name, val);
+              }
             } else {
               countEl.style.display = 'none';
+              hideShuffleSection();
             }
           };
           selectEl.addEventListener('change', updateOptionDesc);
@@ -773,161 +1253,235 @@ import Admin from '../../../layouts/Admin.astro';
       }
 
       // Wire up depends_on visibility: any select/input change re-evaluates visibility
-      paramsContainer.querySelectorAll('input, select').forEach(el => {
+      paramsContainer.querySelectorAll('input, select').forEach((el) => {
         el.addEventListener('change', updateVisibility);
         el.addEventListener('input', () => {
           const name = (el as HTMLInputElement).name;
-          const errDiv = paramsContainer.querySelector(`.param-error[data-param="${name}"]`) as HTMLElement;
+          const errDiv = paramsContainer.querySelector(
+            `.param-error[data-param="${name}"]`,
+          ) as HTMLElement;
           if (errDiv) errDiv.style.display = 'none';
         });
       });
       updateVisibility();
 
+      // Reset shuffle when opening config for a new/different app
+      hideShuffleSection();
+
+      // If app has allow_random_fill but no per-recipe input_count, show shuffle with min_items
+      const inputSpec = manifest.input || {};
+      if (inputSpec.allow_random_fill) {
+        const hasPerRecipeCount = Object.values(paramSpecs).some((s: any) =>
+          (s.option_groups || []).some((g: any) =>
+            g.options.some(
+              (o: any) => typeof o === 'object' && o.input_count != null,
+            ),
+          ),
+        );
+        if (!hasPerRecipeCount && inputSpec.min_items) {
+          showShuffleSection(
+            inputSpec.min_items,
+            inputSpec.media_types || [],
+            app.name,
+            '',
+          );
+        }
+      }
+
       document.getElementById('config-section')!.style.display = '';
-      document.getElementById('config-section')!.scrollIntoView({ behavior: 'smooth' });
+      document
+        .getElementById('config-section')!
+        .scrollIntoView({ behavior: 'smooth' });
     });
 
     document.getElementById('config-cancel')?.addEventListener('click', () => {
       document.getElementById('config-section')!.style.display = 'none';
+      hideShuffleSection();
     });
 
-    document.getElementById('config-submit')?.addEventListener('click', async () => {
-      const app = apps.find(a => a.name === appSelect.value);
-      if (!app) return;
+    document
+      .getElementById('config-submit')
+      ?.addEventListener('click', async () => {
+        const app = apps.find((a) => a.name === appSelect.value);
+        if (!app) return;
 
-      // Collect params from form
-      const paramsContainer = document.getElementById('config-params')!;
-      const jobParams: Record<string, any> = {};
-      const manifest = app.manifest;
+        // Collect params from form
+        const paramsContainer = document.getElementById('config-params')!;
+        const jobParams: Record<string, any> = {};
+        const manifest = app.manifest;
 
-      // Clear previous inline errors
-      paramsContainer.querySelectorAll('.param-error').forEach(el => {
-        (el as HTMLElement).style.display = 'none';
-      });
+        // Clear previous inline errors
+        paramsContainer.querySelectorAll('.param-error').forEach((el) => {
+          (el as HTMLElement).style.display = 'none';
+        });
 
-      // Check if a param's depends_on is met (mirrors the visibility logic)
-      const isActive = (spec: any): boolean => {
-        const dep = spec.depends_on;
-        if (!dep) return true;
-        const depEl = paramsContainer.querySelector(`[name="${dep.param}"]`) as HTMLInputElement | HTMLSelectElement;
-        if (!depEl) return true;
-        const depVal = depEl.value;
-        if (dep.values) return dep.values.includes(depVal);
-        return depVal === dep.value;
-      };
+        // Check if a param's depends_on is met (mirrors the visibility logic)
+        const isActive = (spec: any): boolean => {
+          const dep = spec.depends_on;
+          if (!dep) return true;
+          const depEl = paramsContainer.querySelector(
+            `[name="${dep.param}"]`,
+          ) as HTMLInputElement | HTMLSelectElement;
+          if (!depEl) return true;
+          const depVal = depEl.value;
+          if (dep.values) return dep.values.includes(depVal);
+          return depVal === dep.value;
+        };
 
-      let hasFieldError = false;
-      let needsRandomFill = false;
-      for (const [name, spec] of Object.entries(manifest.params || {}) as [string, any][]) {
-        // Skip inactive (hidden) params
-        if (!isActive(spec)) continue;
+        let hasFieldError = false;
+        let needsRandomFill = false;
+        for (const [name, spec] of Object.entries(manifest.params || {}) as [
+          string,
+          any,
+        ][]) {
+          // Skip inactive (hidden) params
+          if (!isActive(spec)) continue;
 
-        const el = paramsContainer.querySelector(`[name="${name}"]`) as HTMLInputElement | HTMLSelectElement;
-        if (!el) continue;
-        if (spec.type === 'bool') {
-          jobParams[name] = (el as HTMLInputElement).checked;
-        } else if (spec.type === 'float') {
-          jobParams[name] = parseFloat(el.value);
-        } else if (spec.type === 'int') {
-          if (el.value.trim() === '') {
-            // Optional int with no value — omit from params
-            continue;
-          }
-          jobParams[name] = parseInt(el.value);
-        } else if (spec.type === 'multi_select') {
-          try { jobParams[name] = JSON.parse(el.value); } catch { jobParams[name] = []; }
-        } else {
-          jobParams[name] = el.value;
-        }
-
-        // Validate required params
-        if (spec.required && spec.type !== 'bool') {
-          if (spec.type === 'multi_select') {
-            const arr = jobParams[name];
-            const minSel = spec.min_selections || 2;
-            if (!Array.isArray(arr) || arr.length < minSel) {
-              const errDiv = paramsContainer.querySelector(`.param-error[data-param="${name}"]`) as HTMLElement;
-              if (errDiv) {
-                errDiv.textContent = `${spec.label || name} requires at least ${minSel} selections`;
-                errDiv.style.display = 'block';
-              }
-              hasFieldError = true;
+          const el = paramsContainer.querySelector(`[name="${name}"]`) as
+            | HTMLInputElement
+            | HTMLSelectElement;
+          if (!el) continue;
+          if (spec.type === 'bool') {
+            jobParams[name] = (el as HTMLInputElement).checked;
+          } else if (spec.type === 'float') {
+            jobParams[name] = parseFloat(el.value);
+          } else if (spec.type === 'int') {
+            if (el.value.trim() === '') {
+              // Optional int with no value — omit from params
+              continue;
+            }
+            jobParams[name] = parseInt(el.value);
+          } else if (spec.type === 'multi_select') {
+            try {
+              jobParams[name] = JSON.parse(el.value);
+            } catch {
+              jobParams[name] = [];
             }
           } else {
-            const val = String(el.value).trim();
-            if (!val) {
-              const errDiv = paramsContainer.querySelector(`.param-error[data-param="${name}"]`) as HTMLElement;
-              if (errDiv) {
-                errDiv.textContent = `${spec.label || name} is required`;
-                errDiv.style.display = 'block';
+            jobParams[name] = el.value;
+          }
+
+          // Validate required params
+          if (spec.required && spec.type !== 'bool') {
+            if (spec.type === 'multi_select') {
+              const arr = jobParams[name];
+              const minSel = spec.min_selections || 2;
+              if (!Array.isArray(arr) || arr.length < minSel) {
+                const errDiv = paramsContainer.querySelector(
+                  `.param-error[data-param="${name}"]`,
+                ) as HTMLElement;
+                if (errDiv) {
+                  errDiv.textContent = `${spec.label || name} requires at least ${minSel} selections`;
+                  errDiv.style.display = 'block';
+                }
+                hasFieldError = true;
               }
-              hasFieldError = true;
+            } else {
+              const val = String(el.value).trim();
+              if (!val) {
+                const errDiv = paramsContainer.querySelector(
+                  `.param-error[data-param="${name}"]`,
+                ) as HTMLElement;
+                if (errDiv) {
+                  errDiv.textContent = `${spec.label || name} is required`;
+                  errDiv.style.display = 'block';
+                }
+                hasFieldError = true;
+              }
             }
           }
-        }
 
-        // Check per-recipe input_count validation
-        if (spec.type === 'select' && spec.option_groups) {
-          const selectedVal = el.value;
-          for (const g of spec.option_groups) {
-            for (const o of g.options) {
-              if (typeof o === 'object' && o.value === selectedVal && o.input_count != null) {
-                const required = o.input_count as number;
-                if (totalItems > required) {
-                  const errDiv = paramsContainer.querySelector(`.param-error[data-param="${name}"]`) as HTMLElement;
-                  if (errDiv) {
-                    errDiv.textContent = `This recipe requires ${required} images but you have ${totalItems}. Remove ${totalItems - required} item(s).`;
-                    errDiv.style.display = 'block';
+          // Check per-recipe input_count validation (skip when shuffle is active — it already has the right count)
+          if (!shuffleActive && spec.type === 'select' && spec.option_groups) {
+            const selectedVal = el.value;
+            for (const g of spec.option_groups) {
+              for (const o of g.options) {
+                if (
+                  typeof o === 'object' &&
+                  o.value === selectedVal &&
+                  o.input_count != null
+                ) {
+                  const required = o.input_count as number;
+                  if (totalItems > required) {
+                    const errDiv = paramsContainer.querySelector(
+                      `.param-error[data-param="${name}"]`,
+                    ) as HTMLElement;
+                    if (errDiv) {
+                      errDiv.textContent = `This recipe requires ${required} images but you have ${totalItems}. Remove ${totalItems - required} item(s).`;
+                      errDiv.style.display = 'block';
+                    }
+                    hasFieldError = true;
+                  } else if (totalItems < required) {
+                    needsRandomFill = true;
                   }
-                  hasFieldError = true;
-                } else if (totalItems < required) {
-                  needsRandomFill = true;
                 }
               }
             }
           }
         }
-      }
 
-      if (hasFieldError) return;
+        if (hasFieldError) return;
 
-      // Get all workspace item IDs
-      const allRes = await fetch(`/api/workspaces/${wsId}/items?page=1&per_page=200`, { credentials: 'include' });
-      const allData = await allRes.json();
-      const mediaIds = allData.items.map((i: any) => i.media_item_id);
-
-      try {
-        const res = await fetch('/api/jobs', { method: 'POST', credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            app_name: app.name,
-            media_item_ids: mediaIds,
-            params: jobParams,
-            random_fill: needsRandomFill,
-          }) });
-
-        if (res.ok) {
-          const job = await res.json();
-          document.getElementById('config-section')!.style.display = 'none';
-          window.location.href = `/admin/jobs?highlight=${job.id}`;
+        // Get input item IDs — from shuffle if active, otherwise from workspace
+        let mediaIds: string[];
+        let useRandomFill = needsRandomFill;
+        if (shuffleActive && shuffleItems.length > 0) {
+          mediaIds = shuffleItems.map((i) => i.id);
+          useRandomFill = false; // items are already fully specified
         } else {
-          try {
-            const err = await res.json();
-            const detail = err.detail;
-            if (detail?.errors && Array.isArray(detail.errors)) {
-              const msgs = detail.errors.map((e: any) => e.message || `${e.field}: unknown error`);
-              (window as any).toast.error(msgs.join(' | '), 10000);
-            } else if (typeof detail === 'string') {
-              (window as any).toast.error(detail);
-            } else {
-              (window as any).toast.error(detail?.detail || 'Job submission failed');
-            }
-          } catch {
-            (window as any).toast.error(`Job submission failed (HTTP ${res.status})`);
-          }
+          const allRes = await fetch(
+            `/api/workspaces/${wsId}/items?page=1&per_page=200`,
+            { credentials: 'include' },
+          );
+          const allData = await allRes.json();
+          mediaIds = allData.items.map((i: any) => i.media_item_id);
         }
-      } catch (e) { (window as any).toast.error('Failed to create job: ' + (e as Error).message); }
-    });
+
+        try {
+          const res = await fetch('/api/jobs', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              app_name: app.name,
+              media_item_ids: mediaIds,
+              params: jobParams,
+              random_fill: useRandomFill,
+            }),
+          });
+
+          if (res.ok) {
+            const job = await res.json();
+            document.getElementById('config-section')!.style.display = 'none';
+            window.location.href = `/admin/jobs?highlight=${job.id}`;
+          } else {
+            try {
+              const err = await res.json();
+              const detail = err.detail;
+              if (detail?.errors && Array.isArray(detail.errors)) {
+                const msgs = detail.errors.map(
+                  (e: any) => e.message || `${e.field}: unknown error`,
+                );
+                (window as any).toast.error(msgs.join(' | '), 10000);
+              } else if (typeof detail === 'string') {
+                (window as any).toast.error(detail);
+              } else {
+                (window as any).toast.error(
+                  detail?.detail || 'Job submission failed',
+                );
+              }
+            } catch {
+              (window as any).toast.error(
+                `Job submission failed (HTTP ${res.status})`,
+              );
+            }
+          }
+        } catch (e) {
+          (window as any).toast.error(
+            'Failed to create job: ' + (e as Error).message,
+          );
+        }
+      });
 
     loadItems();
   });

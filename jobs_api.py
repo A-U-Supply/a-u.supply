@@ -25,7 +25,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session, joinedload
 
 from auth import get_db, require_scope
@@ -81,12 +81,20 @@ def _get_required_input_count(manifest: dict, params: dict) -> int | None:
             continue
         # Check flat options
         for opt in spec.get("options", []):
-            if isinstance(opt, dict) and opt.get("value") == value and "input_count" in opt:
+            if (
+                isinstance(opt, dict)
+                and opt.get("value") == value
+                and "input_count" in opt
+            ):
                 return opt["input_count"]
         # Check option_groups
         for group in spec.get("option_groups", []):
             for opt in group.get("options", []):
-                if isinstance(opt, dict) and opt.get("value") == value and "input_count" in opt:
+                if (
+                    isinstance(opt, dict)
+                    and opt.get("value") == value
+                    and "input_count" in opt
+                ):
                     return opt["input_count"]
     return None
 
@@ -108,25 +116,31 @@ def _validate_job_input(
     if allowed_types:
         for item in media_items:
             if item.media_type not in allowed_types:
-                errors.append({
-                    "field": "input_items",
-                    "message": f"Item '{item.filename}' is {item.media_type}, "
-                               f"but this app only accepts: {', '.join(allowed_types)}",
-                })
+                errors.append(
+                    {
+                        "field": "input_items",
+                        "message": f"Item '{item.filename}' is {item.media_type}, "
+                        f"but this app only accepts: {', '.join(allowed_types)}",
+                    }
+                )
 
     # Validate count
     min_items = input_spec.get("min_items", 1)
     max_items = input_spec.get("max_items")
     if len(media_items) < min_items:
-        errors.append({
-            "field": "input_items",
-            "message": f"At least {min_items} item(s) required, got {len(media_items)}",
-        })
+        errors.append(
+            {
+                "field": "input_items",
+                "message": f"At least {min_items} item(s) required, got {len(media_items)}",
+            }
+        )
     if max_items and len(media_items) > max_items:
-        errors.append({
-            "field": "input_items",
-            "message": f"At most {max_items} item(s) allowed, got {len(media_items)}",
-        })
+        errors.append(
+            {
+                "field": "input_items",
+                "message": f"At most {max_items} item(s) allowed, got {len(media_items)}",
+            }
+        )
 
     # Validate params
     param_specs = manifest.get("params", {})
@@ -137,17 +151,21 @@ def _validate_job_input(
         depends_on = spec.get("depends_on")
         if depends_on:
             dep_param = depends_on.get("param")
-            dep_values = depends_on.get("values", [depends_on["value"]] if "value" in depends_on else [])
+            dep_values = depends_on.get(
+                "values", [depends_on["value"]] if "value" in depends_on else []
+            )
             if params.get(dep_param) not in dep_values:
                 continue
 
         required = spec.get("required", False)
         if value is None:
             if required:
-                errors.append({
-                    "field": f"params.{param_name}",
-                    "message": f"Required parameter '{param_name}' is missing",
-                })
+                errors.append(
+                    {
+                        "field": f"params.{param_name}",
+                        "message": f"Required parameter '{param_name}' is missing",
+                    }
+                )
             continue
 
         param_type = spec.get("type", "string")
@@ -159,10 +177,12 @@ def _validate_job_input(
                     for opt in group.get("options", []):
                         options.append(opt["value"] if isinstance(opt, dict) else opt)
             if options and value not in options:
-                errors.append({
-                    "field": f"params.{param_name}",
-                    "message": f"Must be one of: {', '.join(str(o) for o in options)}",
-                })
+                errors.append(
+                    {
+                        "field": f"params.{param_name}",
+                        "message": f"Must be one of: {', '.join(str(o) for o in options)}",
+                    }
+                )
 
         elif param_type == "multi_select":
             options = spec.get("options", [])
@@ -171,52 +191,68 @@ def _validate_job_input(
                     for opt in group.get("options", []):
                         options.append(opt["value"] if isinstance(opt, dict) else opt)
             if not isinstance(value, list):
-                errors.append({
-                    "field": f"params.{param_name}",
-                    "message": "Must be a list",
-                })
+                errors.append(
+                    {
+                        "field": f"params.{param_name}",
+                        "message": "Must be a list",
+                    }
+                )
             elif options:
                 invalid = [v for v in value if v not in options]
                 if invalid:
-                    errors.append({
-                        "field": f"params.{param_name}",
-                        "message": f"Invalid options: {', '.join(str(v) for v in invalid)}",
-                    })
-            min_sel = spec.get("min_selections", 2 if param_type == "multi_select" else None)
+                    errors.append(
+                        {
+                            "field": f"params.{param_name}",
+                            "message": f"Invalid options: {', '.join(str(v) for v in invalid)}",
+                        }
+                    )
+            min_sel = spec.get(
+                "min_selections", 2 if param_type == "multi_select" else None
+            )
             if min_sel and isinstance(value, list) and len(value) < min_sel:
-                errors.append({
-                    "field": f"params.{param_name}",
-                    "message": f"At least {min_sel} selection(s) required",
-                })
+                errors.append(
+                    {
+                        "field": f"params.{param_name}",
+                        "message": f"At least {min_sel} selection(s) required",
+                    }
+                )
 
         elif param_type in ("float", "int"):
             try:
                 num = float(value) if param_type == "float" else int(value)
             except (ValueError, TypeError):
-                errors.append({
-                    "field": f"params.{param_name}",
-                    "message": f"Must be a valid {param_type}",
-                })
+                errors.append(
+                    {
+                        "field": f"params.{param_name}",
+                        "message": f"Must be a valid {param_type}",
+                    }
+                )
                 continue
             min_val = spec.get("min")
             max_val = spec.get("max")
             if min_val is not None and num < min_val:
-                errors.append({
-                    "field": f"params.{param_name}",
-                    "message": f"Must be at least {min_val}",
-                })
+                errors.append(
+                    {
+                        "field": f"params.{param_name}",
+                        "message": f"Must be at least {min_val}",
+                    }
+                )
             if max_val is not None and num > max_val:
-                errors.append({
-                    "field": f"params.{param_name}",
-                    "message": f"Must be at most {max_val}",
-                })
+                errors.append(
+                    {
+                        "field": f"params.{param_name}",
+                        "message": f"Must be at most {max_val}",
+                    }
+                )
 
         elif param_type == "bool":
             if not isinstance(value, bool):
-                errors.append({
-                    "field": f"params.{param_name}",
-                    "message": "Must be true or false",
-                })
+                errors.append(
+                    {
+                        "field": f"params.{param_name}",
+                        "message": "Must be true or false",
+                    }
+                )
 
     return errors
 
@@ -228,6 +264,7 @@ def _validate_job_input(
 
 class WorkspaceCreate(BaseModel):
     """Create a new workspace for collecting media items."""
+
     name: str = Field(..., description="Display name for the workspace.")
 
 
@@ -241,12 +278,16 @@ class WorkspaceResponse(BaseModel):
 
 class WorkspaceItemsAdd(BaseModel):
     """Add media items to a workspace by ID."""
+
     media_item_ids: list[str] = Field(..., description="List of media item IDs to add.")
 
 
 class WorkspaceItemsRemove(BaseModel):
     """Remove media items from a workspace by ID."""
-    media_item_ids: list[str] = Field(..., description="List of media item IDs to remove.")
+
+    media_item_ids: list[str] = Field(
+        ..., description="List of media item IDs to remove."
+    )
 
 
 class AppResponse(BaseModel):
@@ -351,6 +392,7 @@ class AppRegister(BaseModel):
         docker run --rm -v ./test-input:/work/input -v ./test-output:/work/output your-image:latest
 
     """
+
     manifest_toml: str = Field(
         ...,
         description="The full app manifest in TOML format. See the docstring above for the schema.",
@@ -368,11 +410,22 @@ class JobCreate(BaseModel):
     ``min_items``, set ``random_fill=true`` and the system will randomly
     select additional items of the correct media type from the search engine.
     """
+
     app_name: str = Field(..., description="Name of the registered app to run.")
-    media_item_ids: list[str] = Field(..., description="List of media item IDs to process.")
-    params: dict = Field(default_factory=dict, description="App-specific parameters. Validated against the app manifest.")
-    random_fill: bool = Field(False, description="If true, auto-fill remaining input slots with random media of the correct type.")
-    priority: int = Field(100, description="Job priority. Lower numbers run first. Default is 100.")
+    media_item_ids: list[str] = Field(
+        ..., description="List of media item IDs to process."
+    )
+    params: dict = Field(
+        default_factory=dict,
+        description="App-specific parameters. Validated against the app manifest.",
+    )
+    random_fill: bool = Field(
+        False,
+        description="If true, auto-fill remaining input slots with random media of the correct type.",
+    )
+    priority: int = Field(
+        100, description="Job priority. Lower numbers run first. Default is 100."
+    )
 
 
 class JobResponse(BaseModel):
@@ -402,13 +455,18 @@ class JobOutputResponse(BaseModel):
 
 class ValidationErrorResponse(BaseModel):
     detail: str = "Validation failed"
-    errors: list[dict] = Field(..., description="List of ``{field, message}`` error objects.")
+    errors: list[dict] = Field(
+        ..., description="List of ``{field, message}`` error objects."
+    )
 
 
 class ValidateRequest(BaseModel):
     """Validate input items and params against an app manifest without creating a job."""
+
     media_item_ids: list[str] = Field(..., description="Media item IDs to validate.")
-    params: dict = Field(default_factory=dict, description="App-specific parameters to validate.")
+    params: dict = Field(
+        default_factory=dict, description="App-specific parameters to validate."
+    )
 
 
 class IndexMetadata(BaseModel):
@@ -426,9 +484,19 @@ class IndexMetadata(BaseModel):
     ``model:<name>`` (if applicable), and ``index:<name>`` (if output_index is set).
     User-supplied tags are added alongside auto-generated ones.
     """
-    description: str | None = Field(None, description="Free-text description. If omitted, an auto-generated summary is used.")
-    tags: list[str] = Field(default_factory=list, description="Additional tags to apply alongside auto-generated tags.")
-    output_index: str | None = Field(None, description="Override the output index from the app manifest's ``[output].index``.")
+
+    description: str | None = Field(
+        None,
+        description="Free-text description. If omitted, an auto-generated summary is used.",
+    )
+    tags: list[str] = Field(
+        default_factory=list,
+        description="Additional tags to apply alongside auto-generated tags.",
+    )
+    output_index: str | None = Field(
+        None,
+        description="Override the output index from the app manifest's ``[output].index``.",
+    )
 
 
 class BulkIndexRequest(BaseModel):
@@ -437,10 +505,17 @@ class BulkIndexRequest(BaseModel):
     All metadata fields are applied uniformly to every output in the batch.
     See ``IndexMetadata`` for field descriptions.
     """
+
     output_ids: list[str] = Field(..., description="List of output IDs to index.")
-    description: str | None = Field(None, description="Free-text description for all outputs.")
-    tags: list[str] = Field(default_factory=list, description="Additional tags for all outputs.")
-    output_index: str | None = Field(None, description="Override output index for all outputs.")
+    description: str | None = Field(
+        None, description="Free-text description for all outputs."
+    )
+    tags: list[str] = Field(
+        default_factory=list, description="Additional tags for all outputs."
+    )
+    output_index: str | None = Field(
+        None, description="Override output index for all outputs."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -465,8 +540,11 @@ def create_workspace(
     db.commit()
     db.refresh(ws)
     return WorkspaceResponse(
-        id=ws.id, name=ws.name, item_count=0,
-        created_at=ws.created_at.isoformat(), updated_at=ws.updated_at.isoformat(),
+        id=ws.id,
+        name=ws.name,
+        item_count=0,
+        created_at=ws.created_at.isoformat(),
+        updated_at=ws.updated_at.isoformat(),
     )
 
 
@@ -487,14 +565,19 @@ def list_workspaces(
     )
     return [
         WorkspaceResponse(
-            id=ws.id, name=ws.name, item_count=count,
-            created_at=ws.created_at.isoformat(), updated_at=ws.updated_at.isoformat(),
+            id=ws.id,
+            name=ws.name,
+            item_count=count,
+            created_at=ws.created_at.isoformat(),
+            updated_at=ws.updated_at.isoformat(),
         )
         for ws, count in rows
     ]
 
 
-@router.get("/workspaces/{workspace_id}", tags=["Workspaces"], summary="Get workspace details")
+@router.get(
+    "/workspaces/{workspace_id}", tags=["Workspaces"], summary="Get workspace details"
+)
 def get_workspace(
     workspace_id: str,
     auth: tuple[User, str] = Depends(require_scope("write")),
@@ -502,17 +585,30 @@ def get_workspace(
 ):
     user = auth[0]
     """Get a workspace with its item count."""
-    ws = db.query(Workspace).filter(Workspace.id == workspace_id, Workspace.created_by == user.id).first()
+    ws = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id, Workspace.created_by == user.id)
+        .first()
+    )
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
-    count = db.query(func.count(WorkspaceItem.id)).filter(WorkspaceItem.workspace_id == ws.id).scalar()
+    count = (
+        db.query(func.count(WorkspaceItem.id))
+        .filter(WorkspaceItem.workspace_id == ws.id)
+        .scalar()
+    )
     return WorkspaceResponse(
-        id=ws.id, name=ws.name, item_count=count,
-        created_at=ws.created_at.isoformat(), updated_at=ws.updated_at.isoformat(),
+        id=ws.id,
+        name=ws.name,
+        item_count=count,
+        created_at=ws.created_at.isoformat(),
+        updated_at=ws.updated_at.isoformat(),
     )
 
 
-@router.put("/workspaces/{workspace_id}", tags=["Workspaces"], summary="Rename workspace")
+@router.put(
+    "/workspaces/{workspace_id}", tags=["Workspaces"], summary="Rename workspace"
+)
 def rename_workspace(
     workspace_id: str,
     body: WorkspaceCreate,
@@ -521,7 +617,11 @@ def rename_workspace(
 ):
     user = auth[0]
     """Rename an existing workspace."""
-    ws = db.query(Workspace).filter(Workspace.id == workspace_id, Workspace.created_by == user.id).first()
+    ws = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id, Workspace.created_by == user.id)
+        .first()
+    )
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
     ws.name = body.name
@@ -529,7 +629,9 @@ def rename_workspace(
     return {"ok": True}
 
 
-@router.delete("/workspaces/{workspace_id}", tags=["Workspaces"], summary="Delete workspace")
+@router.delete(
+    "/workspaces/{workspace_id}", tags=["Workspaces"], summary="Delete workspace"
+)
 def delete_workspace(
     workspace_id: str,
     auth: tuple[User, str] = Depends(require_scope("write")),
@@ -540,7 +642,11 @@ def delete_workspace(
 
     This does not delete the media items themselves — just removes them from the workspace.
     """
-    ws = db.query(Workspace).filter(Workspace.id == workspace_id, Workspace.created_by == user.id).first()
+    ws = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id, Workspace.created_by == user.id)
+        .first()
+    )
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
     db.delete(ws)
@@ -548,7 +654,11 @@ def delete_workspace(
     return {"ok": True}
 
 
-@router.post("/workspaces/{workspace_id}/items", tags=["Workspaces"], summary="Add items to workspace")
+@router.post(
+    "/workspaces/{workspace_id}/items",
+    tags=["Workspaces"],
+    summary="Add items to workspace",
+)
 def add_workspace_items(
     workspace_id: str,
     body: WorkspaceItemsAdd,
@@ -557,14 +667,21 @@ def add_workspace_items(
 ):
     user = auth[0]
     """Add media items to a workspace. Duplicates are silently ignored."""
-    ws = db.query(Workspace).filter(Workspace.id == workspace_id, Workspace.created_by == user.id).first()
+    ws = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id, Workspace.created_by == user.id)
+        .first()
+    )
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
     existing = set(
-        row[0] for row in
-        db.query(WorkspaceItem.media_item_id)
-        .filter(WorkspaceItem.workspace_id == ws.id, WorkspaceItem.media_item_id.in_(body.media_item_ids))
+        row[0]
+        for row in db.query(WorkspaceItem.media_item_id)
+        .filter(
+            WorkspaceItem.workspace_id == ws.id,
+            WorkspaceItem.media_item_id.in_(body.media_item_ids),
+        )
         .all()
     )
 
@@ -575,10 +692,18 @@ def add_workspace_items(
             added += 1
 
     db.commit()
-    return {"ok": True, "added": added, "already_present": len(body.media_item_ids) - added}
+    return {
+        "ok": True,
+        "added": added,
+        "already_present": len(body.media_item_ids) - added,
+    }
 
 
-@router.delete("/workspaces/{workspace_id}/items", tags=["Workspaces"], summary="Remove items from workspace")
+@router.delete(
+    "/workspaces/{workspace_id}/items",
+    tags=["Workspaces"],
+    summary="Remove items from workspace",
+)
 def remove_workspace_items(
     workspace_id: str,
     body: WorkspaceItemsRemove,
@@ -587,20 +712,31 @@ def remove_workspace_items(
 ):
     user = auth[0]
     """Remove specific media items from a workspace."""
-    ws = db.query(Workspace).filter(Workspace.id == workspace_id, Workspace.created_by == user.id).first()
+    ws = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id, Workspace.created_by == user.id)
+        .first()
+    )
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
     deleted = (
         db.query(WorkspaceItem)
-        .filter(WorkspaceItem.workspace_id == ws.id, WorkspaceItem.media_item_id.in_(body.media_item_ids))
+        .filter(
+            WorkspaceItem.workspace_id == ws.id,
+            WorkspaceItem.media_item_id.in_(body.media_item_ids),
+        )
         .delete(synchronize_session=False)
     )
     db.commit()
     return {"ok": True, "removed": deleted}
 
 
-@router.get("/workspaces/{workspace_id}/items", tags=["Workspaces"], summary="List workspace items")
+@router.get(
+    "/workspaces/{workspace_id}/items",
+    tags=["Workspaces"],
+    summary="List workspace items",
+)
 def list_workspace_items(
     workspace_id: str,
     page: int = Query(1, ge=1, description="Page number."),
@@ -610,11 +746,19 @@ def list_workspace_items(
 ):
     user = auth[0]
     """List media items in a workspace with basic metadata, paginated."""
-    ws = db.query(Workspace).filter(Workspace.id == workspace_id, Workspace.created_by == user.id).first()
+    ws = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id, Workspace.created_by == user.id)
+        .first()
+    )
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
-    total = db.query(func.count(WorkspaceItem.id)).filter(WorkspaceItem.workspace_id == ws.id).scalar()
+    total = (
+        db.query(func.count(WorkspaceItem.id))
+        .filter(WorkspaceItem.workspace_id == ws.id)
+        .scalar()
+    )
     rows = (
         db.query(WorkspaceItem)
         .options(
@@ -667,11 +811,20 @@ def list_apps(
     Each app defines what media types it accepts, what parameters it takes,
     and how to run it. Use the manifest to build a parameter form in the UI.
     """
-    apps = db.query(AppDefinition).filter(AppDefinition.enabled == True).order_by(AppDefinition.display_name).all()
+    apps = (
+        db.query(AppDefinition)
+        .filter(AppDefinition.enabled == True)
+        .order_by(AppDefinition.display_name)
+        .all()
+    )
     return [
         AppResponse(
-            name=a.name, display_name=a.display_name, description=a.description,
-            image=a.image, enabled=a.enabled, manifest=_parse_manifest(a.manifest),
+            name=a.name,
+            display_name=a.display_name,
+            description=a.description,
+            image=a.image,
+            enabled=a.enabled,
+            manifest=_parse_manifest(a.manifest),
             created_at=a.created_at.isoformat(),
         )
         for a in apps
@@ -690,8 +843,12 @@ def get_app(
     if not app:
         raise HTTPException(status_code=404, detail="App not found")
     return AppResponse(
-        name=app.name, display_name=app.display_name, description=app.description,
-        image=app.image, enabled=app.enabled, manifest=_parse_manifest(app.manifest),
+        name=app.name,
+        display_name=app.display_name,
+        description=app.description,
+        image=app.image,
+        enabled=app.enabled,
+        manifest=_parse_manifest(app.manifest),
         created_at=app.created_at.isoformat(),
     )
 
@@ -758,7 +915,9 @@ def register_app(
     required = ["name", "display_name", "image"]
     for field in required:
         if field not in manifest:
-            raise HTTPException(status_code=422, detail=f"Manifest missing required field: {field}")
+            raise HTTPException(
+                status_code=422, detail=f"Manifest missing required field: {field}"
+            )
 
     name = manifest["name"]
     if db.query(AppDefinition).filter(AppDefinition.name == name).first():
@@ -775,8 +934,12 @@ def register_app(
     db.commit()
     db.refresh(app)
     return AppResponse(
-        name=app.name, display_name=app.display_name, description=app.description,
-        image=app.image, enabled=app.enabled, manifest=manifest,
+        name=app.name,
+        display_name=app.display_name,
+        description=app.description,
+        image=app.image,
+        enabled=app.enabled,
+        manifest=manifest,
         created_at=app.created_at.isoformat(),
     )
 
@@ -826,8 +989,12 @@ def delete_app(
     return {"ok": True}
 
 
-@router.post("/apps/{name}/validate", tags=["Apps"], summary="Validate inputs against app manifest",
-             responses={422: {"model": ValidationErrorResponse}})
+@router.post(
+    "/apps/{name}/validate",
+    tags=["Apps"],
+    summary="Validate inputs against app manifest",
+    responses={422: {"model": ValidationErrorResponse}},
+)
 def validate_app_input(
     name: str,
     body: ValidateRequest,
@@ -847,13 +1014,107 @@ def validate_app_input(
     if len(items) != len(body.media_item_ids):
         found_ids = {i.id for i in items}
         missing = [mid for mid in body.media_item_ids if mid not in found_ids]
-        raise HTTPException(status_code=422, detail=f"Media items not found: {', '.join(missing)}")
+        raise HTTPException(
+            status_code=422, detail=f"Media items not found: {', '.join(missing)}"
+        )
 
     errors = _validate_job_input(manifest, items, body.params)
     if errors:
-        raise HTTPException(status_code=422, detail={"detail": "Validation failed", "errors": errors})
+        raise HTTPException(
+            status_code=422, detail={"detail": "Validation failed", "errors": errors}
+        )
 
     return {"ok": True, "item_count": len(items)}
+
+
+# ---------------------------------------------------------------------------
+# Random media endpoint
+# ---------------------------------------------------------------------------
+
+
+@router.get("/media/random", tags=["Media"], summary="Get random media items")
+def get_random_media(
+    count: int = Query(..., ge=1, le=50, description="Number of items to return"),
+    media_types: str = Query(
+        ..., description="Comma-separated media types, e.g. 'audio,video'"
+    ),
+    exclude_ids: str = Query(
+        "", description="Comma-separated media item IDs to exclude (e.g. locked items)"
+    ),
+    exclude_app: str = Query("", description="Exclude items already used by this app"),
+    exclude_recipe: str = Query(
+        "",
+        description="Exclude items used by this app+recipe combo (requires exclude_app)",
+    ),
+    auth: tuple[User, str] = Depends(require_scope("read")),
+    db: Session = Depends(get_db),
+):
+    """Return random media items matching the given type filters.
+
+    Supports excluding items that have already been processed by a specific
+    app or app+recipe combination, by inspecting the JSON ``input_items``
+    column of past jobs via SQLite's ``json_each()``.
+    """
+    types_list = [t.strip() for t in media_types.split(",") if t.strip()]
+    if not types_list:
+        raise HTTPException(status_code=422, detail="media_types is required")
+
+    exclude_id_set: set[str] = set()
+    if exclude_ids:
+        exclude_id_set = {eid.strip() for eid in exclude_ids.split(",") if eid.strip()}
+
+    # Exclude items already used by a specific app (and optionally recipe)
+    if exclude_app:
+        recipe_clause = ""
+        params = {"app_name": exclude_app}
+        if exclude_recipe:
+            recipe_clause = "AND json_extract(j.params, '$.recipe') = :recipe"
+            params["recipe"] = exclude_recipe
+        rows = db.execute(
+            text(f"""
+                SELECT DISTINCT je.value
+                FROM jobs j, json_each(j.input_items) je
+                WHERE j.app_name = :app_name
+                AND j.status IN ('completed', 'running', 'pending')
+                {recipe_clause}
+            """),
+            params,
+        ).fetchall()
+        exclude_id_set |= {row[0] for row in rows}
+
+    q = db.query(MediaItem).filter(MediaItem.media_type.in_(types_list))
+    if exclude_id_set:
+        q = q.filter(MediaItem.id.notin_(exclude_id_set))
+
+    total_available = q.count()
+    items = (
+        q.options(
+            joinedload(MediaItem.audio_meta),
+            joinedload(MediaItem.video_meta),
+        )
+        .order_by(func.random())
+        .limit(count)
+        .all()
+    )
+
+    result_items = []
+    for item in items:
+        dur = None
+        if item.media_type == "audio" and item.audio_meta:
+            dur = item.audio_meta.duration_seconds
+        elif item.media_type == "video" and item.video_meta:
+            dur = item.video_meta.duration_seconds
+        entry: dict = {
+            "id": item.id,
+            "filename": item.filename,
+            "media_type": item.media_type,
+            "file_size_bytes": item.file_size_bytes,
+        }
+        if dur is not None:
+            entry["duration_seconds"] = dur
+        result_items.append(entry)
+
+    return {"items": result_items, "total_available": total_available}
 
 
 # ---------------------------------------------------------------------------
@@ -861,8 +1122,12 @@ def validate_app_input(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/jobs", tags=["Jobs"], summary="Submit a job",
-             responses={422: {"model": ValidationErrorResponse}})
+@router.post(
+    "/jobs",
+    tags=["Jobs"],
+    summary="Submit a job",
+    responses={422: {"model": ValidationErrorResponse}},
+)
 def create_job(
     body: JobCreate,
     auth: tuple[User, str] = Depends(require_scope("write")),
@@ -878,9 +1143,15 @@ def create_job(
     the system fills remaining slots with random media items of the correct
     type from the search engine. The response shows which items were added.
     """
-    app = db.query(AppDefinition).filter(AppDefinition.name == body.app_name, AppDefinition.enabled == True).first()
+    app = (
+        db.query(AppDefinition)
+        .filter(AppDefinition.name == body.app_name, AppDefinition.enabled == True)
+        .first()
+    )
     if not app:
-        raise HTTPException(status_code=404, detail=f"App '{body.app_name}' not found or disabled")
+        raise HTTPException(
+            status_code=404, detail=f"App '{body.app_name}' not found or disabled"
+        )
 
     manifest = _parse_manifest(app.manifest)
     input_spec = manifest.get("input", {})
@@ -890,7 +1161,9 @@ def create_job(
     if len(items) != len(body.media_item_ids):
         found_ids = {i.id for i in items}
         missing = [mid for mid in body.media_item_ids if mid not in found_ids]
-        raise HTTPException(status_code=422, detail=f"Media items not found: {', '.join(missing)}")
+        raise HTTPException(
+            status_code=422, detail=f"Media items not found: {', '.join(missing)}"
+        )
 
     # Determine required input count: per-recipe input_count overrides global min/max
     required_count = _get_required_input_count(manifest, body.params)
@@ -899,14 +1172,21 @@ def create_job(
     # Random fill if requested and allowed
     filled_ids = []
     fill_target = required_count or min_items
-    if body.random_fill and input_spec.get("allow_random_fill") and len(items) < fill_target:
+    if (
+        body.random_fill
+        and input_spec.get("allow_random_fill")
+        and len(items) < fill_target
+    ):
         allowed_types = input_spec.get("media_types", [])
         need = fill_target - len(items)
         existing_ids = {i.id for i in items}
 
         candidates = (
             db.query(MediaItem)
-            .filter(MediaItem.media_type.in_(allowed_types), MediaItem.id.notin_(existing_ids))
+            .filter(
+                MediaItem.media_type.in_(allowed_types),
+                MediaItem.id.notin_(existing_ids),
+            )
             .all()
         )
         if len(candidates) < need:
@@ -925,10 +1205,12 @@ def create_job(
                 status_code=422,
                 detail={
                     "detail": "Validation failed",
-                    "errors": [{
-                        "field": "input_items",
-                        "message": f"This recipe requires exactly {required_count} image(s), but {len(items)} selected. Remove {len(items) - required_count} item(s).",
-                    }],
+                    "errors": [
+                        {
+                            "field": "input_items",
+                            "message": f"This recipe requires exactly {required_count} image(s), but {len(items)} selected. Remove {len(items) - required_count} item(s).",
+                        }
+                    ],
                 },
             )
         if len(items) < required_count:
@@ -936,17 +1218,21 @@ def create_job(
                 status_code=422,
                 detail={
                     "detail": "Validation failed",
-                    "errors": [{
-                        "field": "input_items",
-                        "message": f"This recipe requires {required_count} image(s), but only {len(items)} available (including random fill).",
-                    }],
+                    "errors": [
+                        {
+                            "field": "input_items",
+                            "message": f"This recipe requires {required_count} image(s), but only {len(items)} available (including random fill).",
+                        }
+                    ],
                 },
             )
 
     # Validate
     errors = _validate_job_input(manifest, items, body.params)
     if errors:
-        raise HTTPException(status_code=422, detail={"detail": "Validation failed", "errors": errors})
+        raise HTTPException(
+            status_code=422, detail={"detail": "Validation failed", "errors": errors}
+        )
 
     all_item_ids = [i.id for i in items]
 
@@ -977,7 +1263,10 @@ def create_job(
 
 @router.get("/jobs", tags=["Jobs"], summary="List jobs")
 def list_jobs(
-    status: Optional[str] = Query(None, description="Filter by status: pending, running, completed, failed, cancelled."),
+    status: Optional[str] = Query(
+        None,
+        description="Filter by status: pending, running, completed, failed, cancelled.",
+    ),
     app_name: Optional[str] = Query(None, description="Filter by app name."),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
@@ -993,18 +1282,29 @@ def list_jobs(
         q = q.filter(Job.app_name == app_name)
 
     total = q.count()
-    jobs = q.order_by(Job.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
+    jobs = (
+        q.order_by(Job.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
 
     return {
         "jobs": [
             JobResponse(
-                id=j.id, app_name=j.app_name, status=j.status,
-                params=json.loads(j.params), input_item_count=len(json.loads(j.input_items)),
-                priority=j.priority, created_at=j.created_at.isoformat(),
+                id=j.id,
+                app_name=j.app_name,
+                status=j.status,
+                params=json.loads(j.params),
+                input_item_count=len(json.loads(j.input_items)),
+                priority=j.priority,
+                created_at=j.created_at.isoformat(),
                 started_at=j.started_at.isoformat() if j.started_at else None,
                 completed_at=j.completed_at.isoformat() if j.completed_at else None,
-                error_message=j.error_message, retry_count=j.retry_count,
-                log_tail=j.log_tail, output_count=len(j.outputs),
+                error_message=j.error_message,
+                retry_count=j.retry_count,
+                log_tail=j.log_tail,
+                output_count=len(j.outputs),
             )
             for j in jobs
         ],
@@ -1022,7 +1322,9 @@ def get_job(
 ):
     user = auth[0]
     """Get full details for a job including status, params, log output, and output files."""
-    job = db.query(Job).options(joinedload(Job.outputs)).filter(Job.id == job_id).first()
+    job = (
+        db.query(Job).options(joinedload(Job.outputs)).filter(Job.id == job_id).first()
+    )
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -1032,27 +1334,43 @@ def get_job(
     output_config = manifest.get("output", {})
 
     input_ids = json.loads(job.input_items)
-    input_filenames = [
-        r[0] for r in db.query(MediaItem.filename).filter(MediaItem.id.in_(input_ids)).all()
-    ] if input_ids else []
+    input_filenames = (
+        [
+            r[0]
+            for r in db.query(MediaItem.filename)
+            .filter(MediaItem.id.in_(input_ids))
+            .all()
+        ]
+        if input_ids
+        else []
+    )
 
     return {
         "job": JobResponse(
-            id=job.id, app_name=job.app_name, status=job.status,
-            params=json.loads(job.params), input_item_count=len(json.loads(job.input_items)),
-            priority=job.priority, created_at=job.created_at.isoformat(),
+            id=job.id,
+            app_name=job.app_name,
+            status=job.status,
+            params=json.loads(job.params),
+            input_item_count=len(json.loads(job.input_items)),
+            priority=job.priority,
+            created_at=job.created_at.isoformat(),
             started_at=job.started_at.isoformat() if job.started_at else None,
             completed_at=job.completed_at.isoformat() if job.completed_at else None,
-            error_message=job.error_message, retry_count=job.retry_count,
-            log_tail=job.log_tail, output_count=len(job.outputs),
+            error_message=job.error_message,
+            retry_count=job.retry_count,
+            log_tail=job.log_tail,
+            output_count=len(job.outputs),
         ),
         "input_items": json.loads(job.input_items),
         "input_filenames": input_filenames,
         "manifest_output": output_config,
         "outputs": [
             JobOutputResponse(
-                id=o.id, filename=o.filename, media_type=o.media_type,
-                file_size_bytes=o.file_size_bytes, indexed=o.indexed,
+                id=o.id,
+                filename=o.filename,
+                media_type=o.media_type,
+                file_size_bytes=o.file_size_bytes,
+                indexed=o.indexed,
                 media_item_id=o.media_item_id,
             )
             for o in job.outputs
@@ -1098,9 +1416,14 @@ def retry_job(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     if job.status != "failed":
-        raise HTTPException(status_code=400, detail=f"Can only retry failed jobs, this one is {job.status}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Can only retry failed jobs, this one is {job.status}",
+        )
     if job.retry_count >= job.max_retries:
-        raise HTTPException(status_code=400, detail=f"Max retries ({job.max_retries}) reached")
+        raise HTTPException(
+            status_code=400, detail=f"Max retries ({job.max_retries}) reached"
+        )
     job.status = "pending"
     job.error_message = None
     job.log_tail = None
@@ -1122,12 +1445,15 @@ def delete_job(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     if job.status == "running":
-        raise HTTPException(status_code=400, detail="Cannot delete a running job — cancel it first")
+        raise HTTPException(
+            status_code=400, detail="Cannot delete a running job — cancel it first"
+        )
 
     # Delete output files from disk
     job_dir = JOB_DATA_DIR / job.id
     if job_dir.is_dir():
         import shutil
+
         shutil.rmtree(job_dir, ignore_errors=True)
 
     db.delete(job)
@@ -1152,18 +1478,30 @@ def list_job_outputs(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    outputs = db.query(JobOutput).filter(JobOutput.job_id == job_id).order_by(JobOutput.filename).all()
+    outputs = (
+        db.query(JobOutput)
+        .filter(JobOutput.job_id == job_id)
+        .order_by(JobOutput.filename)
+        .all()
+    )
     return [
         JobOutputResponse(
-            id=o.id, filename=o.filename, media_type=o.media_type,
-            file_size_bytes=o.file_size_bytes, indexed=o.indexed,
+            id=o.id,
+            filename=o.filename,
+            media_type=o.media_type,
+            file_size_bytes=o.file_size_bytes,
+            indexed=o.indexed,
             media_item_id=o.media_item_id,
         )
         for o in outputs
     ]
 
 
-@router.get("/jobs/{job_id}/outputs/{output_id}/download", tags=["Job Outputs"], summary="Download an output file")
+@router.get(
+    "/jobs/{job_id}/outputs/{output_id}/download",
+    tags=["Job Outputs"],
+    summary="Download an output file",
+)
 def download_output(
     job_id: str,
     output_id: str,
@@ -1174,7 +1512,11 @@ def download_output(
     """Download a single output file from a completed job."""
     from fastapi.responses import FileResponse
 
-    output = db.query(JobOutput).filter(JobOutput.id == output_id, JobOutput.job_id == job_id).first()
+    output = (
+        db.query(JobOutput)
+        .filter(JobOutput.id == output_id, JobOutput.job_id == job_id)
+        .first()
+    )
     if not output:
         raise HTTPException(status_code=404, detail="Output not found")
 
@@ -1185,8 +1527,13 @@ def download_output(
     return FileResponse(file_path, filename=output.filename)
 
 
-def _do_index_output(output_id: str, job_id: str, user, db: Session,
-                     metadata: IndexMetadata | None = None) -> dict:
+def _do_index_output(
+    output_id: str,
+    job_id: str,
+    user,
+    db: Session,
+    metadata: IndexMetadata | None = None,
+) -> dict:
     """Internal: index a single job output into the search engine.
 
     Copies the file to the search media directory, creates a ``MediaItem``
@@ -1199,12 +1546,21 @@ def _do_index_output(output_id: str, job_id: str, user, db: Session,
     Indexed fields in Meilisearch: ``output_index``, ``job_app``, ``job_recipe``,
     ``job_model``, ``job_runtime_seconds``, ``job_input_count`` — all filterable.
     """
-    output = db.query(JobOutput).filter(JobOutput.id == output_id, JobOutput.job_id == job_id).first()
+    output = (
+        db.query(JobOutput)
+        .filter(JobOutput.id == output_id, JobOutput.job_id == job_id)
+        .first()
+    )
     if not output:
         raise HTTPException(status_code=404, detail="Output not found")
     if output.indexed:
         # If the linked media item was deleted, allow re-indexing
-        if output.media_item_id and not db.query(MediaItem).filter(MediaItem.id == output.media_item_id).first():
+        if (
+            output.media_item_id
+            and not db.query(MediaItem)
+            .filter(MediaItem.id == output.media_item_id)
+            .first()
+        ):
             output.indexed = False
             output.media_item_id = None
             db.flush()
@@ -1228,8 +1584,11 @@ def _do_index_output(output_id: str, job_id: str, user, db: Session,
     output_config = manifest.get("output", {})
 
     # Resolve output_index: user override > manifest default
-    resolved_index = (metadata.output_index if metadata and metadata.output_index
-                      else output_config.get("index"))
+    resolved_index = (
+        metadata.output_index
+        if metadata and metadata.output_index
+        else output_config.get("index")
+    )
 
     search_media_dir = Path(os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data"))
     media_type = output.media_type or _infer_media_type(output.filename)
@@ -1257,9 +1616,16 @@ def _do_index_output(output_id: str, job_id: str, user, db: Session,
     # Build enriched source_metadata
     params = json.loads(job.params)
     input_ids = json.loads(job.input_items)
-    input_filenames = [
-        r[0] for r in db.query(MediaItem.filename).filter(MediaItem.id.in_(input_ids)).all()
-    ] if input_ids else []
+    input_filenames = (
+        [
+            r[0]
+            for r in db.query(MediaItem.filename)
+            .filter(MediaItem.id.in_(input_ids))
+            .all()
+        ]
+        if input_ids
+        else []
+    )
 
     runtime_seconds = None
     if job.started_at and job.completed_at:
@@ -1292,10 +1658,12 @@ def _do_index_output(output_id: str, job_id: str, user, db: Session,
         parts.append(f"{runtime_seconds}s")
     auto_description = " / ".join(parts)
 
-    description = (metadata.description if metadata and metadata.description
-                   else auto_description)
+    description = (
+        metadata.description if metadata and metadata.description else auto_description
+    )
 
     import mimetypes as mt
+
     mime, _ = mt.guess_type(output.filename)
 
     media_item = MediaItem(
@@ -1340,6 +1708,7 @@ def _do_index_output(output_id: str, job_id: str, user, db: Session,
 
     try:
         from extraction import run_extraction_async
+
         run_extraction_async(media_item.id, str(dest_path), media_type, db)
     except Exception:
         logger.exception("Extraction failed for indexed output %s", output.id)
@@ -1347,8 +1716,11 @@ def _do_index_output(output_id: str, job_id: str, user, db: Session,
     return {"ok": True, "media_item_id": media_item.id}
 
 
-@router.post("/jobs/{job_id}/outputs/{output_id}/index", tags=["Job Outputs"],
-             summary="Index an output into the search engine")
+@router.post(
+    "/jobs/{job_id}/outputs/{output_id}/index",
+    tags=["Job Outputs"],
+    summary="Index an output into the search engine",
+)
 def index_output(
     output_id: str,
     job_id: str,
@@ -1375,7 +1747,9 @@ def index_output(
     return _do_index_output(output_id, job_id, auth[0], db, body)
 
 
-@router.post("/jobs/{job_id}/outputs/index", tags=["Job Outputs"], summary="Bulk index outputs")
+@router.post(
+    "/jobs/{job_id}/outputs/index", tags=["Job Outputs"], summary="Bulk index outputs"
+)
 def bulk_index_outputs(
     job_id: str,
     body: BulkIndexRequest,
@@ -1404,7 +1778,9 @@ def bulk_index_outputs(
     return {"results": results}
 
 
-@router.delete("/jobs/{job_id}/outputs", tags=["Job Outputs"], summary="Discard all outputs")
+@router.delete(
+    "/jobs/{job_id}/outputs", tags=["Job Outputs"], summary="Discard all outputs"
+)
 def discard_outputs(
     job_id: str,
     auth: tuple[User, str] = Depends(require_scope("write")),
@@ -1423,8 +1799,11 @@ def discard_outputs(
     output_dir = JOB_DATA_DIR / job_id / "output"
     if output_dir.is_dir():
         import shutil
+
         shutil.rmtree(output_dir, ignore_errors=True)
 
-    db.query(JobOutput).filter(JobOutput.job_id == job_id).delete(synchronize_session=False)
+    db.query(JobOutput).filter(JobOutput.job_id == job_id).delete(
+        synchronize_session=False
+    )
     db.commit()
     return {"ok": True}
