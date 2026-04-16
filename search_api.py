@@ -274,7 +274,9 @@ def _build_meili_filter(filters: SearchFilters | None) -> str | None:
         if filters.tag_count.get("max") is not None:
             parts.append(f"tag_count <= {filters.tag_count['max']}")
 
-    if filters.output_index:
+    if filters.output_index == "__inputs__":
+        parts.append("output_index IS NULL")
+    elif filters.output_index:
         parts.append(f'output_index = "{_escape_filter_value(filters.output_index)}"')
 
     return " AND ".join(parts) if parts else None

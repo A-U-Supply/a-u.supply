@@ -75,7 +75,7 @@ import Admin from '../../../layouts/Admin.astro';
         <div class="filter-group">
           <label class="filter-label">Index</label>
           <select id="filter-output-index">
-            <option value="">All</option>
+            <option value="">Inputs</option>
           </select>
         </div>
 
@@ -1014,7 +1014,9 @@ import Admin from '../../../layouts/Admin.astro';
       };
       if (filters.channels.length) body.filters.source_channels = filters.channels;
       if (filters.poster) body.filters.poster = filters.poster;
-      if (filters.outputIndex) body.filters.output_index = filters.outputIndex;
+      if (filters.outputIndex !== "__all__") {
+        body.filters.output_index = filters.outputIndex || "__inputs__";
+      }
       if (filters.colorGroups.length) {
         body.filters.color_group = filters.colorGroups;
       }
@@ -1303,7 +1305,8 @@ import Admin from '../../../layouts/Admin.astro';
         posterSelect.innerHTML = '<option value="">All</option>' +
           (data.uploaders || []).map((u: string) => `<option value="${u}">${u}</option>`).join('');
         const outputIndexSelect = document.getElementById('filter-output-index') as HTMLSelectElement;
-        outputIndexSelect.innerHTML = '<option value="">All</option>' +
+        outputIndexSelect.innerHTML = '<option value="">Inputs</option>' +
+          '<option value="__all__">All</option>' +
           (data.output_indexes || []).map((idx: string) => `<option value="${idx}">${idx}</option>`).join('');
         // Restore from URL after dropdowns are populated
         const p = new URLSearchParams(window.location.search);
