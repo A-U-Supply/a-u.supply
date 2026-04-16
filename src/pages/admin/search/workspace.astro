@@ -12,8 +12,8 @@ import Admin from '../../../layouts/Admin.astro';
 
   <div id="empty" class="empty-state" style="display:none;">
     <div class="empty-state__icon">&#128451;</div>
-    Workspace is empty. Go to <a href="/admin/search">Search</a> and add items using
-    the batch bar.
+    Workspace is empty. Select an app below to shuffle random inputs, or go to
+    <a href="/admin/search">Search</a> to add items manually.
   </div>
 
   <div id="workspace-items" class="workspace-grid" style="display:none;"></div>
@@ -734,16 +734,24 @@ import Admin from '../../../layouts/Admin.astro';
 
     if (!wsId) {
       emptyEl.style.display = '';
-      return;
+      // Don't return — still need to load apps and show process bar for shuffle
     }
 
     async function loadItems() {
+      if (!wsId) {
+        emptyEl.style.display = '';
+        gridEl.style.display = 'none';
+        processBar.style.display = 'flex';
+        return;
+      }
+
       const res = await fetch(
         `/api/workspaces/${wsId}/items?page=${currentPage}&per_page=${pageSize}`,
         { credentials: 'include' },
       );
       if (!res.ok) {
         emptyEl.style.display = '';
+        processBar.style.display = 'flex';
         return;
       }
       const data = await res.json();
@@ -1428,13 +1436,15 @@ import Admin from '../../../layouts/Admin.astro';
         if (shuffleActive && shuffleItems.length > 0) {
           mediaIds = shuffleItems.map((i) => i.id);
           useRandomFill = false; // items are already fully specified
-        } else {
+        } else if (wsId) {
           const allRes = await fetch(
             `/api/workspaces/${wsId}/items?page=1&per_page=200`,
             { credentials: 'include' },
           );
           const allData = await allRes.json();
           mediaIds = allData.items.map((i: any) => i.media_item_id);
+        } else {
+          mediaIds = [];
         }
 
         try {
