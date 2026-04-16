@@ -515,6 +515,9 @@ def _run_audio_extraction(db, media_item_id: str, file_path: str, MediaAudioMeta
         if transcript_result:
             meta_kwargs["transcript"] = transcript_result["transcript"]
             meta_kwargs["transcript_confidence"] = transcript_result["confidence"]
+        else:
+            meta_kwargs["transcript"] = ""
+            meta_kwargs["transcript_confidence"] = 0.0
     except Exception as exc:
         logger.error("Audio transcription failed for %s: %s", media_item_id, exc)
         _log_failure(db, media_item_id, "whisper", exc)
@@ -560,7 +563,9 @@ def _run_video_extraction(db, media_item_id: str, file_path: str, MediaVideoMeta
 
     # Step 3: Audio transcription from extracted audio track
     if not _has_audio_stream(file_path):
-        logger.info("No audio stream in %s, skipping transcription.", media_item_id)
+        logger.info("No audio stream in %s, marking as no audio.", media_item_id)
+        meta_kwargs["audio_transcript"] = ""
+        meta_kwargs["transcript_confidence"] = 0.0
     else:
         try:
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
@@ -571,8 +576,12 @@ def _run_video_extraction(db, media_item_id: str, file_path: str, MediaVideoMeta
                     if transcript_result:
                         meta_kwargs["audio_transcript"] = transcript_result["transcript"]
                         meta_kwargs["transcript_confidence"] = transcript_result["confidence"]
+                    else:
+                        meta_kwargs["audio_transcript"] = ""
+                        meta_kwargs["transcript_confidence"] = 0.0
                 else:
-                    raise RuntimeError("Failed to extract audio track from video")
+                    meta_kwargs["audio_transcript"] = ""
+                    meta_kwargs["transcript_confidence"] = 0.0
             finally:
                 if os.path.exists(tmp_audio_path):
                     os.unlink(tmp_audio_path)
