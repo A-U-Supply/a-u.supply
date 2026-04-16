@@ -365,9 +365,12 @@ class JobOutput(Base):
     indexed = Column(Boolean, nullable=False, default=False)
     media_item_id = Column(String, ForeignKey("media_items.id"), nullable=True)  # Set when indexed
     created_at = Column(DateTime, nullable=False, default=_utcnow)
+    discarded_at = Column(DateTime, nullable=True, index=True)  # Set when sent to midden; hard-deleted after 24h
+    discarded_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # User who discarded it (excluded from rescue/index)
 
     job = relationship("Job", back_populates="outputs")
     media_item = relationship("MediaItem")
+    discarder = relationship("User", foreign_keys=[discarded_by])
 
 
 class Bookmark(Base):
