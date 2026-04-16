@@ -1046,6 +1046,9 @@ def get_random_media(
         "",
         description="Exclude items used by this app+recipe combo (requires exclude_app)",
     ),
+    return_excluded: bool = Query(
+        False, description="If true, also return the list of excluded IDs"
+    ),
     auth: tuple[User, str] = Depends(require_scope("read")),
     db: Session = Depends(get_db),
 ):
@@ -1114,7 +1117,10 @@ def get_random_media(
             entry["duration_seconds"] = dur
         result_items.append(entry)
 
-    return {"items": result_items, "total_available": total_available}
+    result = {"items": result_items, "total_available": total_available}
+    if return_excluded and exclude_id_set:
+        result["excluded_ids"] = list(exclude_id_set)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -1706,10 +1712,19 @@ def _do_index_output(
     output.media_item_id = media_item.id
     db.commit()
 
+    # Sync to search immediately so the item is visible even if extraction is slow
+    try:
+        from search_client import sync_media_item
+
+        sync_media_item(db, media_item)
+    except Exception:
+        logger.exception("Meilisearch sync failed for indexed output %s", output.id)
+
+    # Run extraction in background (will re-sync with enriched metadata when done)
     try:
         from extraction import run_extraction_async
 
-        run_extraction_async(media_item.id, str(dest_path), media_type, db)
+        run_extraction_async(media_item.id, str(dest_path), media_type)
     except Exception:
         logger.exception("Extraction failed for indexed output %s", output.id)
 
