@@ -133,6 +133,14 @@ import Admin from '../../../layouts/Admin.astro';
     font-family: var(--font-mono);
     font-size: var(--text-sm);
   }
+  .output-preview {
+    width: 100%;
+    max-height: 400px;
+    object-fit: contain;
+    display: block;
+    margin-bottom: var(--space-xs);
+    border-radius: 2px;
+  }
   .output-card .output-name {
     font-weight: bold;
     overflow: hidden;
@@ -377,8 +385,19 @@ import Admin from '../../../layouts/Admin.astro';
         const playAllBtn = document.getElementById('play-all-btn')!;
         playAllBtn.style.display = playable.length > 0 ? '' : 'none';
 
-        listEl.innerHTML = outputs.map((o: any) => `
+        listEl.innerHTML = outputs.map((o: any) => {
+          const dlUrl = `/api/jobs/${jobId}/outputs/${o.id}/download`;
+          let preview = '';
+          if (o.media_type === 'image') {
+            preview = `<a href="${dlUrl}" target="_blank"><img class="output-preview" src="${dlUrl}" alt="${o.filename}"></a>`;
+          } else if (o.media_type === 'video') {
+            preview = `<video class="output-preview" controls src="${dlUrl}"></video>`;
+          } else if (o.media_type === 'audio') {
+            preview = `<audio controls src="${dlUrl}" style="width:100%;margin-top:var(--space-xs);"></audio>`;
+          }
+          return `
           <div class="output-card">
+            ${preview}
             <div class="output-name" title="${o.filename}">${o.filename}</div>
             <div class="output-meta">
               ${o.media_type || 'unknown'} &middot; ${o.file_size_bytes ? formatSize(o.file_size_bytes) : '?'}
@@ -386,11 +405,11 @@ import Admin from '../../../layouts/Admin.astro';
             ${o.indexed ? '<div class="output-indexed">indexed</div>' : ''}
             <div class="output-actions">
               ${isPlayable(o) ? `<button class="action-btn" data-play="${o.id}">Play</button>` : ''}
-              <a href="/api/jobs/${jobId}/outputs/${o.id}/download" class="action-btn" style="text-decoration:none;">Download</a>
+              <a href="${dlUrl}" class="action-btn" style="text-decoration:none;">Download</a>
               ${!o.indexed ? `<button class="action-btn" data-index="${o.id}">Index</button>` : ''}
             </div>
           </div>
-        `).join('');
+        `}).join('');
 
         // Play buttons
         listEl.querySelectorAll('[data-play]').forEach(btn => {
