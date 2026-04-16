@@ -6,6 +6,8 @@ Usage (from host):
     ssh dokku run au-supply .venv/bin/python manage.py make-apikey <email> <label> <scope>
     ssh dokku run au-supply .venv/bin/python manage.py revoke-apikey <key-prefix>
     ssh dokku run au-supply .venv/bin/python manage.py migrate-index <old-index> <new-index>
+    ssh dokku run au-supply .venv/bin/python manage.py seed-slack-mapping [--dry-run]
+    ssh dokku run au-supply .venv/bin/python manage.py backfill-slack-uploader-id [--dry-run]
 """
 
 import sys
@@ -536,6 +538,33 @@ if __name__ == "__main__":
         from slack_scraper import backfill_posters
         result = backfill_posters()
         print(f"Updated: {result['updated']}, Errors: {result['errors']}")
+
+    elif cmd == "seed-slack-mapping":
+        from slack_scraper import seed_slack_user_mapping
+        dry_run = "--dry-run" in sys.argv[2:]
+        result = seed_slack_user_mapping(dry_run=dry_run)
+        print(f"Inserted: {result['inserted']}")
+        print(f"Updated: {result['updated']}")
+        print(f"Skipped (bots/deleted): {result['skipped_bots_or_deleted']}")
+        print(f"Unmatched: {len(result['unmatched'])}")
+        for u in result["unmatched"]:
+            print(f"  - {u.get('slack_user_id')} | {u.get('name', '')} | {u.get('email', '-')} | {u.get('reason')}")
+        if result["dry_run"]:
+            print("(dry-run — nothing written)")
+
+    elif cmd == "backfill-slack-uploader-id":
+        from slack_scraper import backfill_slack_uploader_id
+        dry_run = "--dry-run" in sys.argv[2:]
+        result = backfill_slack_uploader_id(dry_run=dry_run)
+        print(f"Scanned: {result['scanned']}")
+        print(f"Updated: {result['updated']}")
+        print(f"Missing slack_user_id in metadata: {result['missing_slack_user_id_in_metadata']}")
+        if result["unmapped_slack_users"]:
+            print("Unmapped slack users (run seed-slack-mapping + backfill-posters first):")
+            for uid, n in sorted(result["unmapped_slack_users"].items(), key=lambda x: -x[1]):
+                print(f"  {uid}: {n} rows")
+        if result["dry_run"]:
+            print("(dry-run — nothing written)")
 
     elif cmd == "backfill-text":
         from slack_scraper import backfill_message_text
