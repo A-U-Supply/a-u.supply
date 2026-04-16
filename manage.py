@@ -5,6 +5,7 @@ Usage (from host):
     ssh dokku run au-supply .venv/bin/python manage.py list-users
     ssh dokku run au-supply .venv/bin/python manage.py make-apikey <email> <label> <scope>
     ssh dokku run au-supply .venv/bin/python manage.py revoke-apikey <key-prefix>
+    ssh dokku run au-supply .venv/bin/python manage.py migrate-index <old-index> <new-index>
 """
 
 import sys
@@ -473,6 +474,29 @@ if __name__ == "__main__":
 
     elif cmd == "backfill-transcripts":
         backfill_transcripts()
+
+    elif cmd == "migrate-index":
+        if len(sys.argv) < 4:
+            print("Usage: manage.py migrate-index <old-index> <new-index>")
+            sys.exit(1)
+        old_idx, new_idx = sys.argv[2], sys.argv[3]
+        from models import MediaItem, MediaTag
+        db = SessionLocal()
+        items = db.query(MediaItem).filter(MediaItem.output_index == old_idx).all()
+        print(f"Found {len(items)} items with output_index={old_idx}")
+        for item in items:
+            item.output_index = new_idx
+            old_tag = db.query(MediaTag).filter(
+                MediaTag.media_item_id == item.id,
+                MediaTag.tag == f"index:{old_idx}",
+            ).first()
+            if old_tag:
+                old_tag.tag = f"index:{new_idx}"
+            print(f"  {item.id}: {old_idx} -> {new_idx}")
+        db.commit()
+        db.close()
+        print(f"Migrated {len(items)} items. Running reindex...")
+        reindex_search()
 
     else:
         print(f"Unknown command: {cmd}")
