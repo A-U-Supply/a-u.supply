@@ -384,7 +384,7 @@ import Admin from '../../../layouts/Admin.astro';
       return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     }
 
-    function renderDetail() {
+    async function renderDetail() {
       const item = currentItem;
       document.getElementById('detail-title')!.textContent = item.filename || 'Untitled';
       document.getElementById('meta-filename')!.textContent = item.filename || '--';
