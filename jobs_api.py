@@ -1640,6 +1640,7 @@ def _do_index_output(
     source_meta = {
         "job_id": job_id,
         "app_name": job.app_name,
+        "poster": user.name,
         "recipe": params.get("recipe"),
         "model": params.get("model"),
         "processing_mode": params.get("processing_mode"),

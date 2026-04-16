@@ -65,6 +65,7 @@ FILTERABLE_ATTRIBUTES = [
     "job_recipe",
     "job_model",
     "has_transcript",
+    "has_text",
 ]
 
 SORTABLE_ATTRIBUTES = [
@@ -379,6 +380,7 @@ def _build_document(db: Session, media_item: MediaItem) -> dict:
                 doc["dominant_colors"] = []
                 doc["color_names"] = ""
         doc["caption"] = meta.caption
+        doc["has_text"] = bool(meta.caption)
 
     elif media_item.media_type == "audio" and media_item.audio_meta:
         meta = media_item.audio_meta

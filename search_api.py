@@ -54,6 +54,9 @@ class SearchFilters(BaseModel):
     reaction_count: dict | None = Field(None, description="Minimum reaction count: `{\"min\": 3}`.")
     tag_count: dict | None = Field(None, description="Tag count filter: `{\"min\": 1}` and/or `{\"max\": 5}`.")
     output_index: str | None = Field(None, description="Filter by output index/collection name (e.g. `rgz9-outputs`).")
+    has_transcript: bool | None = Field(None, description="Filter audio/video items by whether they have a transcript.")
+    has_text: bool | None = Field(None, description="Filter images by whether they have OCR-extracted text.")
+    job_app: str | None = Field(None, description="Filter outputs by app name (e.g. `rottengenizdat`).")
 
     @field_validator("color_group", mode="before")
     @classmethod
@@ -303,6 +306,15 @@ def _build_meili_filter(filters: SearchFilters | None) -> str | None:
         parts.append("output_index IS NULL")
     elif filters.output_index:
         parts.append(f'output_index = "{_escape_filter_value(filters.output_index)}"')
+
+    if filters.has_transcript is not None:
+        parts.append(f"has_transcript = {str(filters.has_transcript).lower()}")
+
+    if filters.has_text is not None:
+        parts.append(f"has_text = {str(filters.has_text).lower()}")
+
+    if filters.job_app:
+        parts.append(f'job_app = "{_escape_filter_value(filters.job_app)}"')
 
     return " AND ".join(parts) if parts else None
 
@@ -558,9 +570,20 @@ def search_facets(
             pass
     uploaders = list(uploaders_set)
 
+    # Distinct job apps from source_metadata
+    app_names_set = set()
+    for (meta_str,) in sources_with_meta:
+        try:
+            meta = _json.loads(meta_str)
+            if isinstance(meta, dict) and meta.get("app_name"):
+                app_names_set.add(meta["app_name"])
+        except (ValueError, TypeError):
+            pass
+
     return {
         "channels": sorted(channels),
         "uploaders": sorted(uploaders),
+        "job_apps": sorted(app_names_set),
     }
 
 
