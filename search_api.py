@@ -148,6 +148,39 @@ def _get_media_item_or_404(db: Session, media_id: str) -> MediaItem:
     return item
 
 
+_SLACK_CHANNEL_IDS: dict[str, str] = {
+    "image-gen": os.environ.get("SLACK_CHANNEL_IMAGE_GEN", ""),
+    "sample-sale": os.environ.get("SLACK_CHANNEL_SAMPLE_SALE", ""),
+}
+
+
+def _slack_message_link(channel_name: str | None, message_ts: str | None) -> str | None:
+    """Build a Slack deep link from channel name and message timestamp."""
+    if not channel_name or not message_ts:
+        return None
+    channel_id = _SLACK_CHANNEL_IDS.get(channel_name)
+    if not channel_id:
+        return None
+    ts_clean = message_ts.replace(".", "")
+    return f"https://au-supply.slack.com/archives/{channel_id}/p{ts_clean}"
+
+
+def _source_response(s) -> dict:
+    """Build a source dict for API responses."""
+    return {
+        "id": s.id,
+        "source_type": s.source_type,
+        "source_channel": s.source_channel,
+        "slack_message_ts": s.slack_message_ts,
+        "slack_message_text": s.slack_message_text,
+        "slack_link": _slack_message_link(s.source_channel, s.slack_message_ts),
+        "reaction_count": s.reaction_count,
+        "source_url": s.source_url,
+        "source_metadata": s.source_metadata,
+        "created_at": s.created_at.isoformat() if s.created_at else None,
+    }
+
+
 def _media_item_response(item: MediaItem) -> dict:
     """Build a full metadata response dict for a MediaItem."""
     data = {
@@ -162,18 +195,8 @@ def _media_item_response(item: MediaItem) -> dict:
         "created_at": item.created_at.isoformat() if item.created_at else None,
         "updated_at": item.updated_at.isoformat() if item.updated_at else None,
         "tags": [t.tag for t in item.tags],
-        "sources": [
-            {
-                "id": s.id,
-                "source_type": s.source_type,
-                "source_channel": s.source_channel,
-                "slack_message_text": s.slack_message_text,
-                "reaction_count": s.reaction_count,
-                "source_url": s.source_url,
-                "created_at": s.created_at.isoformat() if s.created_at else None,
-            }
-            for s in item.sources
-        ],
+        "output_index": item.output_index,
+        "sources": [_source_response(s) for s in item.sources],
         "image_meta": None,
         "audio_meta": None,
         "video_meta": None,

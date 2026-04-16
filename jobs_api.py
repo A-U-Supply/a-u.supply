@@ -1274,6 +1274,7 @@ def _do_index_output(output_id: str, job_id: str, user, db: Session,
         "input_combination": params.get("input_combination"),
         "runtime_seconds": runtime_seconds,
         "input_count": len(input_ids),
+        "input_item_ids": input_ids,
         "input_filenames": input_filenames,
         "params": params,
     }
