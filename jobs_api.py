@@ -518,6 +518,27 @@ class BulkIndexRequest(BaseModel):
     )
 
 
+class CrossJobBulkIndexRequest(BaseModel):
+    """Bulk index outputs across multiple jobs."""
+
+    output_ids: list[str] = Field(..., description="List of output IDs to index.")
+    description: str | None = Field(
+        None, description="Free-text description for all outputs."
+    )
+    tags: list[str] = Field(
+        default_factory=list, description="Additional tags for all outputs."
+    )
+    output_index: str | None = Field(
+        None, description="Override output index for all outputs."
+    )
+
+
+class CrossJobBulkDiscardRequest(BaseModel):
+    """Bulk discard outputs across multiple jobs."""
+
+    output_ids: list[str] = Field(..., description="List of output IDs to discard.")
+
+
 # ---------------------------------------------------------------------------
 # Workspace endpoints
 # ---------------------------------------------------------------------------
@@ -1320,6 +1341,140 @@ def list_jobs(
     }
 
 
+@router.get(
+    "/jobs/outputs/unindexed",
+    tags=["Slop Bucket"],
+    summary="List all unindexed outputs across jobs",
+)
+def list_unindexed_outputs(
+    media_type: Optional[str] = Query(
+        None, description="Filter by media type: image, audio, video."
+    ),
+    app_name: Optional[str] = Query(None, description="Filter by app name."),
+    auth: tuple[User, str] = Depends(require_scope("write")),
+    db: Session = Depends(get_db),
+):
+    """List all job outputs that have not been indexed into the search engine.
+
+    Returns outputs across all completed jobs, with parent job context for each.
+    Used by the Slop Bucket page to surface outputs that would otherwise be lost.
+    """
+    q = (
+        db.query(JobOutput, Job)
+        .join(Job, JobOutput.job_id == Job.id)
+        .filter(JobOutput.indexed == False)  # noqa: E712
+    )
+    if media_type:
+        q = q.filter(JobOutput.media_type == media_type)
+    if app_name:
+        q = q.filter(Job.app_name == app_name)
+
+    rows = q.order_by(JobOutput.created_at.desc()).all()
+
+    job_ids = set()
+    outputs = []
+    for output, job in rows:
+        job_ids.add(job.id)
+        outputs.append(
+            {
+                "id": output.id,
+                "filename": output.filename,
+                "media_type": output.media_type,
+                "file_size_bytes": output.file_size_bytes,
+                "created_at": output.created_at.isoformat(),
+                "job_id": job.id,
+                "job_app_name": job.app_name,
+                "job_status": job.status,
+                "job_created_at": job.created_at.isoformat(),
+                "job_completed_at": job.completed_at.isoformat()
+                if job.completed_at
+                else None,
+                "job_params": json.loads(job.params),
+            }
+        )
+
+    # Distinct app names for filter dropdown
+    app_names = sorted(
+        {o["job_app_name"] for o in outputs}
+    )
+
+    return {
+        "outputs": outputs,
+        "total": len(outputs),
+        "job_count": len(job_ids),
+        "app_names": app_names,
+    }
+
+
+@router.post(
+    "/jobs/outputs/bulk-index",
+    tags=["Slop Bucket"],
+    summary="Bulk index outputs across jobs",
+)
+def cross_job_bulk_index(
+    body: CrossJobBulkIndexRequest,
+    auth: tuple[User, str] = Depends(require_scope("write")),
+    db: Session = Depends(get_db),
+):
+    """Index multiple outputs from different jobs into the search engine at once.
+
+    Looks up each output's parent job and delegates to the standard indexing
+    logic. All metadata fields are applied uniformly to every output.
+    """
+    user = auth[0]
+    meta = IndexMetadata(
+        description=body.description,
+        tags=body.tags,
+        output_index=body.output_index,
+    )
+    results = []
+    for output_id in body.output_ids:
+        output = db.query(JobOutput).filter(JobOutput.id == output_id).first()
+        if not output:
+            results.append({"output_id": output_id, "error": "Output not found"})
+            continue
+        try:
+            result = _do_index_output(output_id, output.job_id, user, db, meta)
+            results.append({"output_id": output_id, **result})
+        except HTTPException as e:
+            results.append({"output_id": output_id, "error": e.detail})
+    return {"results": results}
+
+
+@router.post(
+    "/jobs/outputs/bulk-discard",
+    tags=["Slop Bucket"],
+    summary="Bulk discard outputs across jobs",
+)
+def cross_job_bulk_discard(
+    body: CrossJobBulkDiscardRequest,
+    auth: tuple[User, str] = Depends(require_scope("write")),
+    db: Session = Depends(get_db),
+):
+    """Delete multiple unindexed outputs from different jobs.
+
+    Removes output files from disk and database records. Outputs that have
+    already been indexed are skipped.
+    """
+    deleted = 0
+    skipped = 0
+    for output_id in body.output_ids:
+        output = db.query(JobOutput).filter(JobOutput.id == output_id).first()
+        if not output:
+            skipped += 1
+            continue
+        if output.indexed:
+            skipped += 1
+            continue
+        file_path = JOB_DATA_DIR / output.job_id / "output" / output.file_path
+        if file_path.is_file():
+            file_path.unlink()
+        db.delete(output)
+        deleted += 1
+    db.commit()
+    return {"ok": True, "deleted": deleted, "skipped": skipped}
+
+
 @router.get("/jobs/{job_id}", tags=["Jobs"], summary="Get job details")
 def get_job(
     job_id: str,
@@ -1821,5 +1976,35 @@ def discard_outputs(
     db.query(JobOutput).filter(JobOutput.job_id == job_id).delete(
         synchronize_session=False
     )
+    db.commit()
+    return {"ok": True}
+
+
+@router.delete(
+    "/jobs/{job_id}/outputs/{output_id}",
+    tags=["Job Outputs"],
+    summary="Discard a single output",
+)
+def discard_single_output(
+    job_id: str,
+    output_id: str,
+    auth: tuple[User, str] = Depends(require_scope("write")),
+    db: Session = Depends(get_db),
+):
+    """Delete a single unindexed output file from disk and database."""
+    output = (
+        db.query(JobOutput)
+        .filter(JobOutput.id == output_id, JobOutput.job_id == job_id)
+        .first()
+    )
+    if not output:
+        raise HTTPException(status_code=404, detail="Output not found")
+    if output.indexed:
+        raise HTTPException(status_code=400, detail="Cannot discard an indexed output")
+
+    file_path = JOB_DATA_DIR / job_id / "output" / output.file_path
+    if file_path.is_file():
+        file_path.unlink()
+    db.delete(output)
     db.commit()
     return {"ok": True}

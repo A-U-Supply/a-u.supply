@@ -8,13 +8,19 @@ import Admin from '../../../layouts/Admin.astro';
     <a href="/admin/catalog/new" class="btn-primary">+ New Release</a>
   </div>
 
-  <div class="status-tabs" id="status-tabs" style="margin-top: var(--space-md);">
+  <div
+    class="status-tabs"
+    id="status-tabs"
+    style="margin-top: var(--space-md);"
+  >
     <button class="tab active" data-status="all">All</button>
     <button class="tab" data-status="draft">Draft</button>
     <button class="tab" data-status="published">Published</button>
   </div>
 
-  <div id="loading" style="color: var(--color-muted);"><span class="loading-dots">Loading releases</span></div>
+  <div id="loading" style="color: var(--color-muted);">
+    <span class="loading-dots">Loading releases</span>
+  </div>
   <div id="error" class="login-error" style="display:none;"></div>
   <div id="empty" class="empty-state" style="display:none;">
     <div class="empty-state__icon">&#9744;</div>
@@ -43,7 +49,11 @@ import Admin from '../../../layouts/Admin.astro';
   <div class="dialog-overlay" id="delete-dialog" style="display:none;">
     <div class="dialog">
       <p>Delete release <strong id="delete-code"></strong>?</p>
-      <p style="color: var(--color-muted); font-size: var(--text-sm); margin-top: var(--space-xs);">This action cannot be undone.</p>
+      <p
+        style="color: var(--color-muted); font-size: var(--text-sm); margin-top: var(--space-xs);"
+      >
+        This action cannot be undone.
+      </p>
       <div class="dialog-actions">
         <button class="btn-cancel" id="delete-cancel">Cancel</button>
         <button class="btn-danger" id="delete-confirm">Delete</button>
@@ -75,10 +85,14 @@ import Admin from '../../../layouts/Admin.astro';
 
     // Tab switching
     document.getElementById('status-tabs')?.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement).closest('.tab') as HTMLButtonElement | null;
+      const btn = (e.target as HTMLElement).closest(
+        '.tab',
+      ) as HTMLButtonElement | null;
       if (!btn) return;
       currentFilter = btn.dataset.status || 'all';
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document
+        .querySelectorAll('.tab')
+        .forEach((t) => t.classList.remove('active'));
       btn.classList.add('active');
       renderTable();
     });
@@ -90,7 +104,9 @@ import Admin from '../../../layouts/Admin.astro';
       errorEl.style.display = 'none';
 
       try {
-        const res = await fetch('/api/releases?status=all', { credentials: 'include' });
+        const res = await fetch('/api/releases?status=all', {
+          credentials: 'include',
+        });
         if (!res.ok) throw new Error('Failed to load releases');
         const data = await res.json();
         allReleases = data.releases || data;
@@ -108,9 +124,10 @@ import Admin from '../../../layouts/Admin.astro';
       const tableWrap = document.getElementById('table-wrap')!;
       const emptyEl = document.getElementById('empty')!;
 
-      const filtered = currentFilter === 'all'
-        ? allReleases
-        : allReleases.filter((r: any) => r.status === currentFilter);
+      const filtered =
+        currentFilter === 'all'
+          ? allReleases
+          : allReleases.filter((r: any) => r.status === currentFilter);
 
       if (filtered.length === 0) {
         tableWrap.style.display = 'none';
@@ -121,17 +138,21 @@ import Admin from '../../../layouts/Admin.astro';
       emptyEl.style.display = 'none';
       tableWrap.style.display = 'block';
 
-      tbody.innerHTML = filtered.map((r: any) => {
-        const entities = (r.entities || []).map((e: any) => e.name).join(', ') || '—';
-        const badgeClass = r.status === 'published' ? 'badge--published' : 'badge--draft';
-        const date = r.release_date || '—';
-        const trackCount = r.track_count ?? r.tracks?.length ?? '—';
-        const createdBy = r.created_by_name || r.created_by || '—';
-        const toggleBtn = r.status === 'published'
-          ? `<button class="action-btn" data-action="unpublish" data-code="${r.product_code}">Unpublish</button>`
-          : `<button class="action-btn action-btn--publish" data-action="publish" data-code="${r.product_code}">Publish</button>`;
+      tbody.innerHTML = filtered
+        .map((r: any) => {
+          const entities =
+            (r.entities || []).map((e: any) => e.name).join(', ') || '—';
+          const badgeClass =
+            r.status === 'published' ? 'badge--published' : 'badge--draft';
+          const date = r.release_date || '—';
+          const trackCount = r.track_count ?? r.tracks?.length ?? '—';
+          const createdBy = r.created_by_name || r.created_by || '—';
+          const toggleBtn =
+            r.status === 'published'
+              ? `<button class="action-btn" data-action="unpublish" data-code="${r.product_code}">Unpublish</button>`
+              : `<button class="action-btn action-btn--publish" data-action="publish" data-code="${r.product_code}">Publish</button>`;
 
-        return `<tr>
+          return `<tr>
           <td style="white-space:nowrap; font-weight:bold;">${r.product_code}</td>
           <td>${r.title || '(untitled)'}</td>
           <td>${entities}</td>
@@ -146,41 +167,51 @@ import Admin from '../../../layouts/Admin.astro';
             <button class="action-btn action-btn--danger" data-action="delete" data-code="${r.product_code}">Delete</button>
           </td>
         </tr>`;
-      }).join('');
+        })
+        .join('');
     }
 
     // Action delegation
-    document.getElementById('release-tbody')?.addEventListener('click', async (e) => {
-      const btn = (e.target as HTMLElement).closest('[data-action]') as HTMLElement | null;
-      if (!btn) return;
+    document
+      .getElementById('release-tbody')
+      ?.addEventListener('click', async (e) => {
+        const btn = (e.target as HTMLElement).closest(
+          '[data-action]',
+        ) as HTMLElement | null;
+        if (!btn) return;
 
-      const action = btn.dataset.action;
-      const code = btn.dataset.code;
-      if (!code) return;
+        const action = btn.dataset.action;
+        const code = btn.dataset.code;
+        if (!code) return;
 
-      if (action === 'publish' || action === 'unpublish') {
-        try {
-          const res = await fetch(`/api/releases/${encodeURIComponent(code)}/${action}`, {
-            method: 'POST',
-            credentials: 'include',
-          });
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({ detail: 'Request failed' }));
-            (window as any).toast.error(err.detail || 'Request failed');
-            return;
+        if (action === 'publish' || action === 'unpublish') {
+          try {
+            const res = await fetch(
+              `/api/releases/${encodeURIComponent(code)}/${action}`,
+              {
+                method: 'POST',
+                credentials: 'include',
+              },
+            );
+            if (!res.ok) {
+              const err = await res
+                .json()
+                .catch(() => ({ detail: 'Request failed' }));
+              (window as any).toast.error(err.detail || 'Request failed');
+              return;
+            }
+            await loadReleases();
+          } catch {
+            (window as any).toast.error('Network error');
           }
-          await loadReleases();
-        } catch {
-          (window as any).toast.error('Network error');
         }
-      }
 
-      if (action === 'delete') {
-        deleteTarget = code;
-        document.getElementById('delete-code')!.textContent = code;
-        document.getElementById('delete-dialog')!.style.display = 'flex';
-      }
-    });
+        if (action === 'delete') {
+          deleteTarget = code;
+          document.getElementById('delete-code')!.textContent = code;
+          document.getElementById('delete-dialog')!.style.display = 'flex';
+        }
+      });
 
     // Delete dialog
     document.getElementById('delete-cancel')?.addEventListener('click', () => {
@@ -188,31 +219,40 @@ import Admin from '../../../layouts/Admin.astro';
       deleteTarget = null;
     });
 
-    document.getElementById('delete-confirm')?.addEventListener('click', async () => {
-      if (!deleteTarget) return;
-      const btn = document.getElementById('delete-confirm') as HTMLButtonElement;
-      btn.disabled = true;
-      btn.textContent = 'Deleting...';
+    document
+      .getElementById('delete-confirm')
+      ?.addEventListener('click', async () => {
+        if (!deleteTarget) return;
+        const btn = document.getElementById(
+          'delete-confirm',
+        ) as HTMLButtonElement;
+        btn.disabled = true;
+        btn.textContent = 'Deleting...';
 
-      try {
-        const res = await fetch(`/api/releases/${encodeURIComponent(deleteTarget)}`, {
-          method: 'DELETE',
-          credentials: 'include',
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ detail: 'Delete failed' }));
-          (window as any).toast.error(err.detail || 'Delete failed');
-        } else {
-          await loadReleases();
+        try {
+          const res = await fetch(
+            `/api/releases/${encodeURIComponent(deleteTarget)}`,
+            {
+              method: 'DELETE',
+              credentials: 'include',
+            },
+          );
+          if (!res.ok) {
+            const err = await res
+              .json()
+              .catch(() => ({ detail: 'Delete failed' }));
+            (window as any).toast.error(err.detail || 'Delete failed');
+          } else {
+            await loadReleases();
+          }
+        } catch {
+          (window as any).toast.error('Network error');
         }
-      } catch {
-        (window as any).toast.error('Network error');
-      }
 
-      document.getElementById('delete-dialog')!.style.display = 'none';
-      btn.disabled = false;
-      btn.textContent = 'Delete';
-      deleteTarget = null;
-    });
+        document.getElementById('delete-dialog')!.style.display = 'none';
+        btn.disabled = false;
+        btn.textContent = 'Delete';
+        deleteTarget = null;
+      });
   });
 </script>

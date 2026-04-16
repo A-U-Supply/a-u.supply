@@ -17,7 +17,9 @@ import Admin from '../../../layouts/Admin.astro';
     </div>
   </div>
 
-  <div id="loading" style="color: var(--color-muted);"><span class="loading-dots">Loading</span></div>
+  <div id="loading" style="color: var(--color-muted);">
+    <span class="loading-dots">Loading</span>
+  </div>
   <div id="empty" class="empty-state" style="display:none;">
     <div class="empty-state__icon">&#9881;</div>
     No jobs found.
@@ -61,7 +63,9 @@ import Admin from '../../../layouts/Admin.astro';
     const tbodyEl = document.getElementById('jobs-tbody')!;
     const paginationEl = document.getElementById('pagination')!;
     const pageInfo = document.getElementById('page-info')!;
-    const filterStatus = document.getElementById('filter-status') as HTMLSelectElement;
+    const filterStatus = document.getElementById(
+      'filter-status',
+    ) as HTMLSelectElement;
 
     let currentPage = 1;
     const pageSize = 50;
@@ -82,18 +86,31 @@ import Admin from '../../../layouts/Admin.astro';
 
     function formatDate(iso: string): string {
       const d = new Date(iso);
-      return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return d.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
     }
 
     async function loadJobs() {
       const status = filterStatus.value;
-      const params = new URLSearchParams({ page: String(currentPage), per_page: String(pageSize) });
+      const params = new URLSearchParams({
+        page: String(currentPage),
+        per_page: String(pageSize),
+      });
       if (status) params.set('status', status);
 
-      const res = await fetch(`/api/jobs?${params}`, { credentials: 'include' });
+      const res = await fetch(`/api/jobs?${params}`, {
+        credentials: 'include',
+      });
       loadingEl.style.display = 'none';
 
-      if (!res.ok) { emptyEl.style.display = ''; return; }
+      if (!res.ok) {
+        emptyEl.style.display = '';
+        return;
+      }
       const data = await res.json();
       totalJobs = data.total;
 
@@ -106,7 +123,9 @@ import Admin from '../../../layouts/Admin.astro';
       emptyEl.style.display = 'none';
       tableEl.style.display = '';
 
-      tbodyEl.innerHTML = data.jobs.map((j: any) => `
+      tbodyEl.innerHTML = data.jobs
+        .map(
+          (j: any) => `
         <tr${j.id === highlightId ? ' style="background: rgba(255,255,255,0.05);"' : ''}>
           <td><span class="status-badge status-${j.status}">${j.status}</span></td>
           <td>${j.app_name}</td>
@@ -116,28 +135,42 @@ import Admin from '../../../layouts/Admin.astro';
           <td>${j.output_count > 0 ? j.output_count + ' files' : '-'}</td>
           <td>
             <a href="/admin/jobs/detail?id=${j.id}" class="action-btn" style="text-decoration:none;">View</a>
-            ${j.status === 'pending' || j.status === 'running'
-              ? `<button class="action-btn" data-cancel="${j.id}">Cancel</button>` : ''}
-            ${j.status === 'failed'
-              ? `<button class="action-btn" data-retry="${j.id}">Retry</button>` : ''}
+            ${
+              j.status === 'pending' || j.status === 'running'
+                ? `<button class="action-btn" data-cancel="${j.id}">Cancel</button>`
+                : ''
+            }
+            ${
+              j.status === 'failed'
+                ? `<button class="action-btn" data-retry="${j.id}">Retry</button>`
+                : ''
+            }
           </td>
         </tr>
-      `).join('');
+      `,
+        )
+        .join('');
 
       // Cancel buttons
-      tbodyEl.querySelectorAll('[data-cancel]').forEach(btn => {
+      tbodyEl.querySelectorAll('[data-cancel]').forEach((btn) => {
         btn.addEventListener('click', async () => {
           const id = (btn as HTMLElement).dataset.cancel;
-          await fetch(`/api/jobs/${id}/cancel`, { method: 'POST', credentials: 'include' });
+          await fetch(`/api/jobs/${id}/cancel`, {
+            method: 'POST',
+            credentials: 'include',
+          });
           loadJobs();
         });
       });
 
       // Retry buttons
-      tbodyEl.querySelectorAll('[data-retry]').forEach(btn => {
+      tbodyEl.querySelectorAll('[data-retry]').forEach((btn) => {
         btn.addEventListener('click', async () => {
           const id = (btn as HTMLElement).dataset.retry;
-          await fetch(`/api/jobs/${id}/retry`, { method: 'POST', credentials: 'include' });
+          await fetch(`/api/jobs/${id}/retry`, {
+            method: 'POST',
+            credentials: 'include',
+          });
           loadJobs();
         });
       });
@@ -148,19 +181,31 @@ import Admin from '../../../layouts/Admin.astro';
       pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
     }
 
-    filterStatus.addEventListener('change', () => { currentPage = 1; loadJobs(); });
+    filterStatus.addEventListener('change', () => {
+      currentPage = 1;
+      loadJobs();
+    });
     document.getElementById('prev-page')?.addEventListener('click', () => {
-      if (currentPage > 1) { currentPage--; loadJobs(); }
+      if (currentPage > 1) {
+        currentPage--;
+        loadJobs();
+      }
     });
     document.getElementById('next-page')?.addEventListener('click', () => {
-      if (currentPage * pageSize < totalJobs) { currentPage++; loadJobs(); }
+      if (currentPage * pageSize < totalJobs) {
+        currentPage++;
+        loadJobs();
+      }
     });
 
     loadJobs();
 
     // Auto-refresh if there are running jobs
     setInterval(() => {
-      if (tbodyEl.querySelector('.status-running') || tbodyEl.querySelector('.status-pending')) {
+      if (
+        tbodyEl.querySelector('.status-running') ||
+        tbodyEl.querySelector('.status-pending')
+      ) {
         loadJobs();
       }
     }, 5000);

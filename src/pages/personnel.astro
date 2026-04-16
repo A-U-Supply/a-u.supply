@@ -3,11 +3,13 @@ import Base from '../layouts/Base.astro';
 import { encrypt } from '../lib/encrypt';
 
 const redactedEntry = JSON.stringify({
-  department: "Philosophy & Signal",
-  name: "MCA",
-  role: "Director — Philosophy, Singer-Songwriter, Guitar",
-  responsibilities: "Provides conceptual framework and original song material. Guitar, vocal, and lyrical contributions enter the production pipeline and are processed through standard channels. Also produces independently (see product catalog: Pathos for Bathos).",
-  quote: "I write songs the normal way. Guitar, words, feelings. Then the others put it through the tubes and it comes out as something I don't recognize but somehow agree with."
+  department: 'Philosophy & Signal',
+  name: 'MCA',
+  role: 'Director — Philosophy, Singer-Songwriter, Guitar',
+  responsibilities:
+    'Provides conceptual framework and original song material. Guitar, vocal, and lyrical contributions enter the production pipeline and are processed through standard channels. Also produces independently (see product catalog: Pathos for Bathos).',
+  quote:
+    "I write songs the normal way. Guitar, words, feelings. Then the others put it through the tubes and it comes out as something I don't recognize but somehow agree with.",
 });
 
 const ciphertext = encrypt(redactedEntry, 'pathos4bathos');
@@ -15,7 +17,9 @@ const ciphertext = encrypt(redactedEntry, 'pathos4bathos');
 
 <Base title="Personnel Directory — A-U.SUPPLY">
   <main class="page-content">
-    <div class="page-doc-header">A-U.SUPPLY — Audio Units Division &nbsp;&nbsp; AU-REF-2026-001</div>
+    <div class="page-doc-header">
+      A-U.SUPPLY — Audio Units Division &nbsp;&nbsp; AU-REF-2026-001
+    </div>
 
     <h2 class="section-title">2. Personnel Directory</h2>
 
@@ -23,24 +27,54 @@ const ciphertext = encrypt(redactedEntry, 'pathos4bathos');
       <div class="dept">Department: Final Assembly</div>
       <div class="name">number 4</div>
       <div class="role">Superintendent — Production &amp; Final Assembly</div>
-      <p class="desc">Oversees all production. Responsible for final assembly of all audio units prior to distribution. All material passes through this station before release. Quality threshold determination is at the sole discretion of the Superintendent.</p>
-      <div class="remarks-block">"The final mix is just the last thing that happened to it. Before that it was something else. Before that, something else. You go back far enough and it's just air."</div>
+      <p class="desc">
+        Oversees all production. Responsible for final assembly of all audio
+        units prior to distribution. All material passes through this station
+        before release. Quality threshold determination is at the sole
+        discretion of the Superintendent.
+      </p>
+      <div class="remarks-block">
+        "The final mix is just the last thing that happened to it. Before that
+        it was something else. Before that, something else. You go back far
+        enough and it's just air."
+      </div>
     </div>
 
     <div class="personnel-block">
       <div class="dept">Department: Automation &amp; Signal Processing</div>
       <div class="name">NoNameSteak</div>
       <div class="role">Automation &amp; Signal Processing Lead</div>
-      <p class="desc">Manages the modular synthesizer array, texture generation equipment, and all AI-assisted production processes. Also responsible for signal derailment — the controlled introduction of deviation into otherwise stable production lines. May also operate under designations "Tube" and/or "Jake Japan." Designation policy: rotating.</p>
-      <div class="remarks-block">"The machines have preferences. I don't override them. Most of what comes out of the rack is unusable — that's correct. You run enough signal through enough tubes and eventually something happens that nobody asked for. That's the product. My job is just to make sure it gets lost at least twice before it reaches number 4."</div>
+      <p class="desc">
+        Manages the modular synthesizer array, texture generation equipment, and
+        all AI-assisted production processes. Also responsible for signal
+        derailment — the controlled introduction of deviation into otherwise
+        stable production lines. May also operate under designations "Tube"
+        and/or "Jake Japan." Designation policy: rotating.
+      </p>
+      <div class="remarks-block">
+        "The machines have preferences. I don't override them. Most of what
+        comes out of the rack is unusable — that's correct. You run enough
+        signal through enough tubes and eventually something happens that nobody
+        asked for. That's the product. My job is just to make sure it gets lost
+        at least twice before it reaches number 4."
+      </div>
     </div>
 
     <div class="personnel-block">
       <div class="dept">Department: Vocal Supply</div>
       <div class="name">Ancients</div>
       <div class="role">Chief Vocal Supply</div>
-      <p class="desc">Primary source of vocal material for all product lines. Recorded output is segmented, cataloged, and routed to assembly as needed. Archive of vocal material is maintained and indexed by the Final Assembly department.</p>
-      <div class="remarks-block">"Every syllable I've ever recorded is in a database somewhere. NoNameSteak has them sorted by vowel shape. number 4 decides which ones ship."</div>
+      <p class="desc">
+        Primary source of vocal material for all product lines. Recorded output
+        is segmented, cataloged, and routed to assembly as needed. Archive of
+        vocal material is maintained and indexed by the Final Assembly
+        department.
+      </p>
+      <div class="remarks-block">
+        "Every syllable I've ever recorded is in a database somewhere.
+        NoNameSteak has them sorted by vowel shape. number 4 decides which ones
+        ship."
+      </div>
     </div>
 
     <div class="personnel-block personnel-block--redacted">
@@ -50,7 +84,10 @@ const ciphertext = encrypt(redactedEntry, 'pathos4bathos');
     </div>
 
     <div class="notice-box">
-      PERSONNEL NOTE: Total headcount is 4 (official). Extended personnel and subcontractor relationships are unconfirmed. Alias rotation is in effect across all departments. Additional designations may be active at any time. See also: Associated Entities.
+      PERSONNEL NOTE: Total headcount is 4 (official). Extended personnel and
+      subcontractor relationships are unconfirmed. Alias rotation is in effect
+      across all departments. Additional designations may be active at any time.
+      See also: Associated Entities.
     </div>
   </main>
 </Base>

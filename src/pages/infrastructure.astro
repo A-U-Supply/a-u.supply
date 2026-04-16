@@ -4,126 +4,253 @@ import Base from '../layouts/Base.astro';
 
 <Base title="Production Infrastructure — A-U.SUPPLY">
   <main class="page-content">
-    <div class="page-doc-header">A-U.SUPPLY — Audio Units Division &nbsp;&nbsp; AU-REF-2026-001</div>
+    <div class="page-doc-header">
+      A-U.SUPPLY — Audio Units Division &nbsp;&nbsp; AU-REF-2026-001
+    </div>
 
     <h2 class="section-title">4. Production Infrastructure</h2>
 
-    <p class="infra-intro">All production lines operate on automated daily cycles. Input materials are sourced from internal channels. Output is routed to distribution or recirculated into the supply chain as feedstock. Throughput is measured in units per cycle. Calibration is ongoing.</p>
+    <p class="infra-intro">
+      All production lines operate on automated daily cycles. Input materials
+      are sourced from internal channels. Output is routed to distribution or
+      recirculated into the supply chain as feedstock. Throughput is measured in
+      units per cycle. Calibration is ongoing.
+    </p>
 
     <h3 class="subsection-title">Production Lines</h3>
 
     <div class="line-item">
       <div class="line-header">
         <span class="line-id">Line 1 — Thermal Sequence Generation</span>
-        <span class="line-specs">Cycle: daily | Throughput: 4 units | Tube gauge: 18</span>
+        <span class="line-specs"
+          >Cycle: daily | Throughput: 4 units | Tube gauge: 18</span
+        >
       </div>
       <div class="line-name">TSG-400 Series</div>
-      <div class="line-desc">Four-channel output per cycle. Each channel is driven through a separate neural tube (ImprovRNN, DrumsRNN, programmatic bass, programmatic chord) before convergence at the output stage. Scale calibration library covers Maqam, Raga, Blues, Gamelan, Klezmer, and Pelog tolerances. Input parameters are derived from current environmental conditions. Units are deposited into the #midieval holding bay.</div>
+      <div class="line-desc">
+        Four-channel output per cycle. Each channel is driven through a separate
+        neural tube (ImprovRNN, DrumsRNN, programmatic bass, programmatic chord)
+        before convergence at the output stage. Scale calibration library covers
+        Maqam, Raga, Blues, Gamelan, Klezmer, and Pelog tolerances. Input
+        parameters are derived from current environmental conditions. Units are
+        deposited into the #midieval holding bay.
+      </div>
     </div>
 
     <div class="line-item">
       <div class="line-header">
         <span class="line-id">Line 2 — Glottal Segmentation</span>
-        <span class="line-specs">Cycle: daily | Throughput: 1 unit | Tube gauge: variable</span>
+        <span class="line-specs"
+          >Cycle: daily | Throughput: 1 unit | Tube gauge: variable</span
+        >
       </div>
       <div class="line-name">GD-7 Syllable Mill</div>
-      <div class="line-desc">Raw vocal material is fed through the segmentation tube where it is broken at syllable boundaries by acoustic pressure analysis. Resulting fragments are stored in indexed bins. Reassembly occurs downstream per batch configuration. Mill is maintained as a standalone module (ref: GD-7 technical manual, rev. 215).</div>
+      <div class="line-desc">
+        Raw vocal material is fed through the segmentation tube where it is
+        broken at syllable boundaries by acoustic pressure analysis. Resulting
+        fragments are stored in indexed bins. Reassembly occurs downstream per
+        batch configuration. Mill is maintained as a standalone module (ref:
+        GD-7 technical manual, rev. 215).
+      </div>
     </div>
 
     <div class="line-item">
       <div class="line-header">
         <span class="line-id">Line 3 — Contour Mapping</span>
-        <span class="line-specs">Cycle: daily | Throughput: 1 unit | Requires Line 1 + Line 2 output</span>
+        <span class="line-specs"
+          >Cycle: daily | Throughput: 1 unit | Requires Line 1 + Line 2 output</span
+        >
       </div>
       <div class="line-name">HYM-N Extension Module</div>
-      <div class="line-desc">Accepts output from Line 1 (thermal sequence) and extends it through a secondary neural tube before mapping it onto vocal fragments from the Line 2 archive. Output contour is determined by melodic pressure gradient. Final assembly is automatic.</div>
+      <div class="line-desc">
+        Accepts output from Line 1 (thermal sequence) and extends it through a
+        secondary neural tube before mapping it onto vocal fragments from the
+        Line 2 archive. Output contour is determined by melodic pressure
+        gradient. Final assembly is automatic.
+      </div>
     </div>
 
     <div class="line-item">
       <div class="line-header">
         <span class="line-id">Line 4 — Prompt Extrusion</span>
-        <span class="line-specs">Cycle: daily | Throughput: 1 unit | Input: 8-source blend</span>
+        <span class="line-specs"
+          >Cycle: daily | Throughput: 1 unit | Input: 8-source blend</span
+        >
       </div>
       <div class="line-name">SPB-8 Surrealist Extruder</div>
-      <div class="line-desc">Eight raw headline streams are blended with an inspiration compound (movements, techniques, historical artist residues) and fed through a large language tube at high temperature. Output is a single extruded prompt, deposited into the #drawma receiving bay. Extrusion temperature is not user-adjustable.</div>
+      <div class="line-desc">
+        Eight raw headline streams are blended with an inspiration compound
+        (movements, techniques, historical artist residues) and fed through a
+        large language tube at high temperature. Output is a single extruded
+        prompt, deposited into the #drawma receiving bay. Extrusion temperature
+        is not user-adjustable.
+      </div>
     </div>
 
     <div class="line-item">
       <div class="line-header">
         <span class="line-id">Line 5 — Intake &amp; Sequencing</span>
-        <span class="line-specs">Cycle: daily | Capacity: ~190 inserts | Rollover threshold: 5,000</span>
+        <span class="line-specs"
+          >Cycle: daily | Capacity: ~190 inserts | Rollover threshold: 5,000</span
+        >
       </div>
       <div class="line-name">MZK Accumulator</div>
-      <div class="line-desc">Incoming material from the #muzzik channel is classified, queued, and inserted into the accumulator at a rate determined by upstream quota constraints. When the accumulator reaches 5,000 units it is sealed and a new accumulator is initialized. Classification is automatic. Rejected material is not returned.</div>
+      <div class="line-desc">
+        Incoming material from the #muzzik channel is classified, queued, and
+        inserted into the accumulator at a rate determined by upstream quota
+        constraints. When the accumulator reaches 5,000 units it is sealed and a
+        new accumulator is initialized. Classification is automatic. Rejected
+        material is not returned.
+      </div>
     </div>
 
     <div class="line-item">
       <div class="line-header">
         <span class="line-id">Line 6 — Title Filtration</span>
-        <span class="line-specs">Cycle: daily | Rejection rate: variable | Output: catalog page</span>
+        <span class="line-specs"
+          >Cycle: daily | Rejection rate: variable | Output: catalog page</span
+        >
       </div>
       <div class="line-name">ST-QA Filtration Stack</div>
-      <div class="line-desc">Raw title material from the #song-titles channel is passed through the filtration stack where it is evaluated against inference-grade quality thresholds. Titles that pass are stored with metadata and deposited into the interactive catalog. Titles that fail are discarded. The threshold is proprietary.</div>
+      <div class="line-desc">
+        Raw title material from the #song-titles channel is passed through the
+        filtration stack where it is evaluated against inference-grade quality
+        thresholds. Titles that pass are stored with metadata and deposited into
+        the interactive catalog. Titles that fail are discarded. The threshold
+        is proprietary.
+      </div>
     </div>
 
     <div class="line-item">
       <div class="line-header">
         <span class="line-id">Line 7 — Ritual Degradation</span>
-        <span class="line-specs">Cycle: daily | Recipes: 149 | Effects: 40+</span>
+        <span class="line-specs"
+          >Cycle: daily | Recipes: 149 | Effects: 40+</span
+        >
       </div>
       <div class="line-name">SPG-149 Destruction Array</div>
-      <div class="line-desc">Automated image dismemberment through glitch, decay, and neural corruption. Retrieves source material from the Slack conveyor, chains it through 149 pre-configured destruction recipes combining 40+ effects — from 1980s byte corruption through contemporary neural style transfer. Multi-input compositing system supports 1–5 source images per cycle. Output is deposited back onto the conveyor. Destruction is irreversible by design.</div>
-      <div class="line-ref">ref: <a href="https://github.com/A-U-Supply/sparagmos">SPG-149 technical manual</a></div>
+      <div class="line-desc">
+        Automated image dismemberment through glitch, decay, and neural
+        corruption. Retrieves source material from the Slack conveyor, chains it
+        through 149 pre-configured destruction recipes combining 40+ effects —
+        from 1980s byte corruption through contemporary neural style transfer.
+        Multi-input compositing system supports 1–5 source images per cycle.
+        Output is deposited back onto the conveyor. Destruction is irreversible
+        by design.
+      </div>
+      <div class="line-ref">
+        ref: <a href="https://github.com/A-U-Supply/sparagmos"
+          >SPG-149 technical manual</a>
+      </div>
     </div>
 
     <div class="line-item">
       <div class="line-header">
         <span class="line-id">Line 8 — Rapid Collage Assembly</span>
-        <span class="line-specs">Cycle: continuous | Bots: 30+ | Input: conveyor</span>
+        <span class="line-specs"
+          >Cycle: continuous | Bots: 30+ | Input: conveyor</span
+        >
       </div>
       <div class="line-name">CLG-30 Assembly Station</div>
-      <div class="line-desc">Monitors the image generation conveyor for uploaded material. Thirty specialized transformation bots — kaleidoscope, penrose, halftone, cyanotype, oil spiral, displacement, stencil, zellij lattice, and others — each apply distinct geometric or photographic processing. Output is returned to the conveyor for downstream consumption or recirculation.</div>
-      <div class="line-ref">ref: <a href="https://github.com/A-U-Supply/collage-bot">CLG-30 technical manual</a></div>
+      <div class="line-desc">
+        Monitors the image generation conveyor for uploaded material. Thirty
+        specialized transformation bots — kaleidoscope, penrose, halftone,
+        cyanotype, oil spiral, displacement, stencil, zellij lattice, and others
+        — each apply distinct geometric or photographic processing. Output is
+        returned to the conveyor for downstream consumption or recirculation.
+      </div>
+      <div class="line-ref">
+        ref: <a href="https://github.com/A-U-Supply/collage-bot"
+          >CLG-30 technical manual</a>
+      </div>
     </div>
 
     <div class="line-item">
       <div class="line-header">
         <span class="line-id">Line 9 — Neural Audio Reinterpretation</span>
-        <span class="line-specs">Cycle: on-demand | Models: 9 | Recipes: 41</span>
+        <span class="line-specs"
+          >Cycle: on-demand | Models: 9 | Recipes: 41</span
+        >
       </div>
       <div class="line-name">RGZ-9 Latent Space Press</div>
-      <div class="line-desc">Feeds audio through RAVE (Realtime Audio Variational autoEncoder) neural networks to deliberately distort and reinterpret sound. Nine pretrained models (percussion, vintage, NASA, VCTK vocal, orchestral, instrumental, and others) warp audio in the latent space with configurable transformation intensity. 41 built-in TOML recipes organized by aesthetic: ambient, glitch, vocal, cosmic, industrial. Intensity range from subtle to fever-dream. Bone music for the machine age.</div>
-      <div class="line-ref">ref: <a href="https://github.com/A-U-Supply/rottengenizdat">RGZ-9 technical manual</a></div>
+      <div class="line-desc">
+        Feeds audio through RAVE (Realtime Audio Variational autoEncoder) neural
+        networks to deliberately distort and reinterpret sound. Nine pretrained
+        models (percussion, vintage, NASA, VCTK vocal, orchestral, instrumental,
+        and others) warp audio in the latent space with configurable
+        transformation intensity. 41 built-in TOML recipes organized by
+        aesthetic: ambient, glitch, vocal, cosmic, industrial. Intensity range
+        from subtle to fever-dream. Bone music for the machine age.
+      </div>
+      <div class="line-ref">
+        ref: <a href="https://github.com/A-U-Supply/rottengenizdat"
+          >RGZ-9 technical manual</a>
+      </div>
     </div>
 
     <div class="line-item">
       <div class="line-header">
         <span class="line-id">Line 10 — Conformal Distortion</span>
-        <span class="line-specs">Cycle: on-demand | Type: mathematical | Status: in calibration</span>
+        <span class="line-specs"
+          >Cycle: on-demand | Type: mathematical | Status: in calibration</span
+        >
       </div>
       <div class="line-name">PRT-C Transformation Module</div>
-      <div class="line-desc">Image transformation through conformal maps and coordinate warping. Named after Proteus, the Greek shapeshifter. Applies mathematical distortions derived from complex analysis to source images. Currently undergoing initial calibration. Foundation modules and conveyor integration in place.</div>
-      <div class="line-ref">ref: <a href="https://github.com/A-U-Supply/protease-bots">PRT-C technical manual</a></div>
+      <div class="line-desc">
+        Image transformation through conformal maps and coordinate warping.
+        Named after Proteus, the Greek shapeshifter. Applies mathematical
+        distortions derived from complex analysis to source images. Currently
+        undergoing initial calibration. Foundation modules and conveyor
+        integration in place.
+      </div>
+      <div class="line-ref">
+        ref: <a href="https://github.com/A-U-Supply/protease-bots"
+          >PRT-C technical manual</a>
+      </div>
     </div>
 
     <div class="line-item">
       <div class="line-header">
         <span class="line-id">Line 11 — Source Arrangement Pipeline</span>
-        <span class="line-specs">Cycle: daily | Stages: 5 | Input: YouTube trending</span>
+        <span class="line-specs"
+          >Cycle: daily | Stages: 5 | Input: YouTube trending</span
+        >
       </div>
       <div class="line-name">PPB-4 Arrangement Generator</div>
-      <div class="line-desc">Multi-stage pipeline: fetches top YouTube music videos, stem-separates audio into individual instruments, converts stems to MIDI, generates arrangements, and posts results to the Slack conveyor. Five modular stages (fetcher, stemmer, converter, arranger, poster) operate in sequence. Output enters the supply chain as raw arrangement material.</div>
-      <div class="line-ref">ref: <a href="https://github.com/A-U-Supply/popped-bits">PPB-4 technical manual</a></div>
+      <div class="line-desc">
+        Multi-stage pipeline: fetches top YouTube music videos, stem-separates
+        audio into individual instruments, converts stems to MIDI, generates
+        arrangements, and posts results to the Slack conveyor. Five modular
+        stages (fetcher, stemmer, converter, arranger, poster) operate in
+        sequence. Output enters the supply chain as raw arrangement material.
+      </div>
+      <div class="line-ref">
+        ref: <a href="https://github.com/A-U-Supply/popped-bits"
+          >PPB-4 technical manual</a>
+      </div>
     </div>
 
     <div class="line-item">
       <div class="line-header">
         <span class="line-id">Line 12 — Deterministic Emo Synthesis</span>
-        <span class="line-specs">Cycle: batch | Output: 34 units | Duration: 30s/unit</span>
+        <span class="line-specs"
+          >Cycle: batch | Output: 34 units | Duration: 30s/unit</span
+        >
       </div>
       <div class="line-name">RXP-34 Composition Unit</div>
-      <div class="line-desc">Programmatically generates a 34-track experimental emo album. Every composition is exactly 30 seconds long. Harmonic constraints: Am, Em, Bm, Dm, F#m primary keys. Mode specialization: Phrygian for aggression, Dorian for melancholy. Tempo range 90–160 BPM with mixed time signatures. Eight special compositional directives govern structure. Seed-controlled randomization ensures reproducibility. Output: individual MIDI/WAV units plus assembled full-album WAV.</div>
-      <div class="line-ref">ref: <a href="https://github.com/A-U-Supply/regular-expression">RXP-34 technical manual</a></div>
+      <div class="line-desc">
+        Programmatically generates a 34-track experimental emo album. Every
+        composition is exactly 30 seconds long. Harmonic constraints: Am, Em,
+        Bm, Dm, F#m primary keys. Mode specialization: Phrygian for aggression,
+        Dorian for melancholy. Tempo range 90–160 BPM with mixed time
+        signatures. Eight special compositional directives govern structure.
+        Seed-controlled randomization ensures reproducibility. Output:
+        individual MIDI/WAV units plus assembled full-album WAV.
+      </div>
+      <div class="line-ref">
+        ref: <a href="https://github.com/A-U-Supply/regular-expression"
+          >RXP-34 technical manual</a>
+      </div>
     </div>
 
     <h3 class="subsection-title">Standalone Equipment</h3>
@@ -131,50 +258,104 @@ import Base from '../layouts/Base.astro';
     <div class="line-item">
       <div class="line-header">
         <span class="line-id">BTV-1</span>
-        <span class="line-specs">Type: portable unit | Language: Rust | Dependencies: none</span>
+        <span class="line-specs"
+          >Type: portable unit | Language: Rust | Dependencies: none</span
+        >
       </div>
       <div class="line-name">Broadcast Reclamation Tool</div>
-      <div class="line-desc">Accepts a phrase. Searches the TV News word archive per token. Extracts aligned audio at word-level precision via whisper-grade alignment. Applies normalization, compression, equalization, and reverb in sequence. Output: single stitched unit (WAV). Fully self-contained. No external tube connections required.</div>
-      <div class="line-ref">ref: <a href="https://github.com/A-U-Supply/BadTV">BTV-1 technical manual</a></div>
+      <div class="line-desc">
+        Accepts a phrase. Searches the TV News word archive per token. Extracts
+        aligned audio at word-level precision via whisper-grade alignment.
+        Applies normalization, compression, equalization, and reverb in
+        sequence. Output: single stitched unit (WAV). Fully self-contained. No
+        external tube connections required.
+      </div>
+      <div class="line-ref">
+        ref: <a href="https://github.com/A-U-Supply/BadTV"
+          >BTV-1 technical manual</a>
+      </div>
     </div>
 
     <div class="line-item">
       <div class="line-header">
         <span class="line-id">YBB-4</span>
-        <span class="line-specs">Type: portable unit | Language: Rust | Model: HTDemucs</span>
+        <span class="line-specs"
+          >Type: portable unit | Language: Rust | Model: HTDemucs</span
+        >
       </div>
       <div class="line-name">Source Separation Press</div>
-      <div class="line-desc">Accepts a single audiovisual input. Separates the audio layer into four stems (vocals, drums, bass, other) via hydraulic neural press (Meta HTDemucs). Supports 2-stem, 4-stem, and 6-stem decomposition modes. Multi-format output (WAV, FLAC, MP3, OGG). Batch processing capable. Input is not returned.</div>
-      <div class="line-ref">ref: <a href="https://github.com/A-U-Supply/youboob">YBB-4 technical manual</a></div>
+      <div class="line-desc">
+        Accepts a single audiovisual input. Separates the audio layer into four
+        stems (vocals, drums, bass, other) via hydraulic neural press (Meta
+        HTDemucs). Supports 2-stem, 4-stem, and 6-stem decomposition modes.
+        Multi-format output (WAV, FLAC, MP3, OGG). Batch processing capable.
+        Input is not returned.
+      </div>
+      <div class="line-ref">
+        ref: <a href="https://github.com/A-U-Supply/youboob"
+          >YBB-4 technical manual</a>
+      </div>
     </div>
 
     <div class="line-item">
       <div class="line-header">
         <span class="line-id">GLD-3</span>
-        <span class="line-specs">Type: bench unit | Language: Rust | Model: Whisper</span>
+        <span class="line-specs"
+          >Type: bench unit | Language: Rust | Model: Whisper</span
+        >
       </div>
       <div class="line-name">Phonetic Reconstruction Bench</div>
-      <div class="line-desc">Advanced syllable-level audio processing with three operational modes. Collage: surreal audio collages from rearranged syllables with prosodic grouping. Sing: MIDI-driven vocal synthesis creating pitched vocal effects with timing control. Speak: phonetic speech reconstruction — rebuilds target text from source audio fragments. Equipped with pitch normalization, breath detection, room tone extraction, and time stretching. Interactive GUI with syllable bank and timeline editor. Automatic Whisper model download (~140 MB). No external runtime dependencies.</div>
-      <div class="line-ref">ref: <a href="https://github.com/A-U-Supply/glottisdale">GLD-3 technical manual</a></div>
+      <div class="line-desc">
+        Advanced syllable-level audio processing with three operational modes.
+        Collage: surreal audio collages from rearranged syllables with prosodic
+        grouping. Sing: MIDI-driven vocal synthesis creating pitched vocal
+        effects with timing control. Speak: phonetic speech reconstruction —
+        rebuilds target text from source audio fragments. Equipped with pitch
+        normalization, breath detection, room tone extraction, and time
+        stretching. Interactive GUI with syllable bank and timeline editor.
+        Automatic Whisper model download (~140 MB). No external runtime
+        dependencies.
+      </div>
+      <div class="line-ref">
+        ref: <a href="https://github.com/A-U-Supply/glottisdale"
+          >GLD-3 technical manual</a>
+      </div>
     </div>
 
     <div class="line-item">
       <div class="line-header">
         <span class="line-id">GPG-1</span>
-        <span class="line-specs">Type: furnace | Language: Rust | Facility: private</span>
+        <span class="line-specs"
+          >Type: furnace | Language: Rust | Facility: private</span
+        >
       </div>
       <div class="line-name">Character-Level Text Furnace</div>
-      <div class="line-desc">Trains character-level GPT neural network models on individual books sourced from Project Gutenberg or local archives. Burns through text at configurable model sizes — small (~1M parameters, 2–5 min), medium (~10M, 10–20 min), large (~85M, 1–2 hrs), xl (~170M, 4–8 hrs). Output: weird text. Optional GPU acceleration. Private facility — inspection by appointment only.</div>
-      <div class="line-ref">ref: <a href="https://github.com/A-U-Supply/garpug">GPG-1 technical manual</a> [restricted]</div>
+      <div class="line-desc">
+        Trains character-level GPT neural network models on individual books
+        sourced from Project Gutenberg or local archives. Burns through text at
+        configurable model sizes — small (~1M parameters, 2–5 min), medium
+        (~10M, 10–20 min), large (~85M, 1–2 hrs), xl (~170M, 4–8 hrs). Output:
+        weird text. Optional GPU acceleration. Private facility — inspection by
+        appointment only.
+      </div>
+      <div class="line-ref">
+        ref: <a href="https://github.com/A-U-Supply/garpug"
+          >GPG-1 technical manual</a
+        > [restricted]
+      </div>
     </div>
 
     <div class="notice-box facility-notice">
       <strong>FACILITY INSPECTION RECORDS</strong><br /><br />
-      All production line schematics, maintenance logs, and operating procedures are filed with the Bureau of Open Source Compliance and may be reviewed at:<br /><br />
-      <strong>Registry:</strong> <a href="https://github.com/A-U-Supply">github.com/A-U-Supply</a><br />
+      All production line schematics, maintenance logs, and operating procedures are
+      filed with the Bureau of Open Source Compliance and may be reviewed at:<br
+      /><br />
+      <strong>Registry:</strong>
+      <a href="https://github.com/A-U-Supply">github.com/A-U-Supply</a><br />
       <strong>Filing Status:</strong> PUBLIC (except where noted)<br />
       <strong>Last Audit:</strong> 2026-04-11<br /><br />
-      Individual line documentation is cross-referenced by equipment designation in the registry index.
+      Individual line documentation is cross-referenced by equipment designation in
+      the registry index.
     </div>
   </main>
 </Base>

@@ -6,7 +6,11 @@ import Admin from '../../layouts/Admin.astro';
   <h1>Settings</h1>
 
   <section id="user-management" style="display:none;">
-    <h3 style="margin-top: var(--space-md); margin-bottom: var(--space-sm); font-size: var(--text-base); text-transform: uppercase; letter-spacing: 1pt;">Users</h3>
+    <h3
+      style="margin-top: var(--space-md); margin-bottom: var(--space-sm); font-size: var(--text-base); text-transform: uppercase; letter-spacing: 1pt;"
+    >
+      Users
+    </h3>
 
     <table class="release-table" id="release-table">
       <thead>
@@ -20,13 +24,22 @@ import Admin from '../../layouts/Admin.astro';
       <tbody id="user-tbody"></tbody>
     </table>
 
-    <h3 style="margin-top: var(--space-lg); margin-bottom: var(--space-sm); font-size: var(--text-base); text-transform: uppercase; letter-spacing: 1pt;">Invite User</h3>
+    <h3
+      style="margin-top: var(--space-lg); margin-bottom: var(--space-sm); font-size: var(--text-base); text-transform: uppercase; letter-spacing: 1pt;"
+    >
+      Invite User
+    </h3>
 
     <form id="invite-form" class="invite-form">
       <div class="invite-form__row">
         <input type="text" name="name" placeholder="Name" required />
         <input type="email" name="email" placeholder="Email" required />
-        <input type="password" name="password" placeholder="Password" required />
+        <input
+          type="password"
+          name="password"
+          placeholder="Password"
+          required
+        />
         <select name="role">
           <option value="member">Member</option>
           <option value="admin">Admin</option>
@@ -34,24 +47,49 @@ import Admin from '../../layouts/Admin.astro';
         <button type="submit">Invite</button>
       </div>
       <div id="invite-error" class="login-error" style="display:none;"></div>
-      <div id="invite-success" style="display:none; color: green; font-size: var(--text-sm); margin-top: var(--space-xs);"></div>
+      <div
+        id="invite-success"
+        style="display:none; color: green; font-size: var(--text-sm); margin-top: var(--space-xs);"
+      >
+      </div>
     </form>
   </section>
 
   <section class="password-section">
-    <h3 style="margin-top: var(--space-lg); margin-bottom: var(--space-sm); font-size: var(--text-base); text-transform: uppercase; letter-spacing: 1pt;">Change Password</h3>
+    <h3
+      style="margin-top: var(--space-lg); margin-bottom: var(--space-sm); font-size: var(--text-base); text-transform: uppercase; letter-spacing: 1pt;"
+    >
+      Change Password
+    </h3>
     <form id="password-form" class="invite-form">
       <div class="invite-form__row">
-        <input type="password" name="current_password" placeholder="Current password" required />
-        <input type="password" name="new_password" placeholder="New password (8+ chars)" required minlength="8" />
+        <input
+          type="password"
+          name="current_password"
+          placeholder="Current password"
+          required
+        />
+        <input
+          type="password"
+          name="new_password"
+          placeholder="New password (8+ chars)"
+          required
+          minlength="8"
+        />
         <button type="submit">Update</button>
       </div>
       <div id="pw-error" class="login-error" style="display:none;"></div>
-      <div id="pw-success" style="display:none; color: green; font-size: var(--text-sm); margin-top: var(--space-xs);"></div>
+      <div
+        id="pw-success"
+        style="display:none; color: green; font-size: var(--text-sm); margin-top: var(--space-xs);"
+      >
+      </div>
     </form>
   </section>
 
-  <p id="no-admin" style="color: var(--color-muted); display:none;">Admin access required for user management.</p>
+  <p id="no-admin" style="color: var(--color-muted); display:none;">
+    Admin access required for user management.
+  </p>
 </Admin>
 
 <style>
@@ -75,14 +113,19 @@ import Admin from '../../layouts/Admin.astro';
     border: none;
     cursor: pointer;
   }
-  .invite-form button:hover { background: #333; }
+  .invite-form button:hover {
+    background: #333;
+  }
   .invite-form__row {
     display: flex;
     gap: var(--space-xs);
     flex-wrap: wrap;
   }
   .invite-form__row input,
-  .invite-form__row select { flex: 1; min-width: 120px; }
+  .invite-form__row select {
+    flex: 1;
+    min-width: 120px;
+  }
 </style>
 
 <script>
@@ -106,18 +149,23 @@ import Admin from '../../layouts/Admin.astro';
       if (!res.ok) return;
       const users = await res.json();
       const tbody = document.getElementById('user-tbody')!;
-      tbody.innerHTML = users.map((u: any) => `
+      tbody.innerHTML = users
+        .map(
+          (u: any) => `
         <tr>
           <td>${u.name}</td>
           <td>${u.email}</td>
           <td>${u.role}</td>
           <td>${u.id !== currentUserId ? `<button onclick="deleteUser(${u.id})">Delete</button>` : ''}</td>
         </tr>
-      `).join('');
+      `,
+        )
+        .join('');
     }
 
     (window as any).deleteUser = async (id: number) => {
-      if (!await (window as any).confirmDialog('Delete this user?', 'Delete')) return;
+      if (!(await (window as any).confirmDialog('Delete this user?', 'Delete')))
+        return;
       const res = await fetch(`/api/admin/users/${id}`, {
         method: 'DELETE',
         credentials: 'include',
@@ -125,75 +173,83 @@ import Admin from '../../layouts/Admin.astro';
       if (res.ok) loadUsers();
     };
 
-    document.getElementById('password-form')?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const form = e.target as HTMLFormElement;
-      const data = Object.fromEntries(new FormData(form));
-      const errorEl = document.getElementById('pw-error')!;
-      const successEl = document.getElementById('pw-success')!;
-      errorEl.style.display = 'none';
-      successEl.style.display = 'none';
+    document
+      .getElementById('password-form')
+      ?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = e.target as HTMLFormElement;
+        const data = Object.fromEntries(new FormData(form));
+        const errorEl = document.getElementById('pw-error')!;
+        const successEl = document.getElementById('pw-success')!;
+        errorEl.style.display = 'none';
+        successEl.style.display = 'none';
 
-      let csrf_token = '';
-      try {
-        const csrfRes = await fetch('/api/csrf');
-        const csrfData = await csrfRes.json();
-        csrf_token = csrfData.csrf_token;
-      } catch { /* continue */ }
+        let csrf_token = '';
+        try {
+          const csrfRes = await fetch('/api/csrf');
+          const csrfData = await csrfRes.json();
+          csrf_token = csrfData.csrf_token;
+        } catch {
+          /* continue */
+        }
 
-      const res = await fetch('/api/me/password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ ...data, csrf_token }),
+        const res = await fetch('/api/me/password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ ...data, csrf_token }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          errorEl.textContent = err.detail || 'Failed to change password';
+          errorEl.style.display = 'block';
+          return;
+        }
+
+        form.reset();
+        successEl.textContent = 'Password updated';
+        successEl.style.display = 'block';
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        errorEl.textContent = err.detail || 'Failed to change password';
-        errorEl.style.display = 'block';
-        return;
-      }
+    document
+      .getElementById('invite-form')
+      ?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = e.target as HTMLFormElement;
+        const data = Object.fromEntries(new FormData(form));
+        const errorEl = document.getElementById('invite-error')!;
+        const successEl = document.getElementById('invite-success')!;
+        errorEl.style.display = 'none';
+        successEl.style.display = 'none';
 
-      form.reset();
-      successEl.textContent = 'Password updated';
-      successEl.style.display = 'block';
-    });
+        let csrf_token = '';
+        try {
+          const csrfRes = await fetch('/api/csrf');
+          const csrfData = await csrfRes.json();
+          csrf_token = csrfData.csrf_token;
+        } catch {
+          /* continue */
+        }
 
-    document.getElementById('invite-form')?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const form = e.target as HTMLFormElement;
-      const data = Object.fromEntries(new FormData(form));
-      const errorEl = document.getElementById('invite-error')!;
-      const successEl = document.getElementById('invite-success')!;
-      errorEl.style.display = 'none';
-      successEl.style.display = 'none';
+        const res = await fetch('/api/admin/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ ...data, csrf_token }),
+        });
 
-      let csrf_token = '';
-      try {
-        const csrfRes = await fetch('/api/csrf');
-        const csrfData = await csrfRes.json();
-        csrf_token = csrfData.csrf_token;
-      } catch { /* continue */ }
+        if (!res.ok) {
+          const err = await res.json();
+          errorEl.textContent = err.detail || 'Failed to create user';
+          errorEl.style.display = 'block';
+          return;
+        }
 
-      const res = await fetch('/api/admin/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ ...data, csrf_token }),
+        form.reset();
+        successEl.textContent = `Invited ${data.name}`;
+        successEl.style.display = 'block';
+        loadUsers();
       });
-
-      if (!res.ok) {
-        const err = await res.json();
-        errorEl.textContent = err.detail || 'Failed to create user';
-        errorEl.style.display = 'block';
-        return;
-      }
-
-      form.reset();
-      successEl.textContent = `Invited ${data.name}`;
-      successEl.style.display = 'block';
-      loadUsers();
-    });
   });
 </script>

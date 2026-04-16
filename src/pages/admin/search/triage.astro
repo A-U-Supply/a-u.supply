@@ -15,17 +15,32 @@ import Admin from '../../../layouts/Admin.astro';
       <select id="triage-channel">
         <option value="">All Channels</option>
       </select>
-      <label class="filter-label" style="display:inline; margin-left: var(--space-sm);">
+      <label
+        class="filter-label"
+        style="display:inline; margin-left: var(--space-sm);"
+      >
         Max Tags:
-        <input type="number" id="triage-max-tags" value="0" min="0" max="10" style="width: 50px;" />
+        <input
+          type="number"
+          id="triage-max-tags"
+          value="0"
+          min="0"
+          max="10"
+          style="width: 50px;"
+        />
       </label>
       <button class="action-btn" id="triage-refresh">Refresh</button>
     </div>
   </div>
 
-  <div id="triage-loading" style="color: var(--color-muted);"><span class="loading-dots">Loading</span></div>
+  <div id="triage-loading" style="color: var(--color-muted);">
+    <span class="loading-dots">Loading</span>
+  </div>
   <div id="triage-error" class="login-error" style="display:none;"></div>
-  <div id="triage-empty" style="display:none; color: var(--color-muted); padding: var(--space-lg) 0; text-align: center;">
+  <div
+    id="triage-empty"
+    style="display:none; color: var(--color-muted); padding: var(--space-lg) 0; text-align: center;"
+  >
     No items in triage queue. All caught up!
   </div>
 
@@ -48,22 +63,44 @@ import Admin from '../../../layouts/Admin.astro';
         <div class="triage-current-tags" id="current-tags"></div>
         <div class="triage-quick-tags" id="quick-tags"></div>
         <div class="tag-input-row">
-          <input type="text" id="triage-tag-input" placeholder="Type tag and press Enter..." autocomplete="off" />
-          <div class="tag-suggestions" id="triage-suggestions" style="display:none;"></div>
+          <input
+            type="text"
+            id="triage-tag-input"
+            placeholder="Type tag and press Enter..."
+            autocomplete="off"
+          />
+          <div
+            class="tag-suggestions"
+            id="triage-suggestions"
+            style="display:none;"
+          >
+          </div>
         </div>
         <div class="triage-pending-tags" id="pending-tags"></div>
       </div>
 
       <div class="triage-actions">
-        <button class="triage-btn triage-btn--skip" id="btn-skip" title="Skip (Tab)">Skip</button>
-        <button class="triage-btn triage-btn--submit" id="btn-submit" title="Submit (Enter)">Submit & Next</button>
+        <button
+          class="triage-btn triage-btn--skip"
+          id="btn-skip"
+          title="Skip (Tab)">Skip</button
+        >
+        <button
+          class="triage-btn triage-btn--submit"
+          id="btn-submit"
+          title="Submit (Enter)">Submit & Next</button
+        >
       </div>
     </div>
 
     <div class="triage-nav">
-      <button class="action-btn" id="btn-prev" title="Previous (Left arrow)">Prev</button>
+      <button class="action-btn" id="btn-prev" title="Previous (Left arrow)"
+        >Prev</button
+      >
       <span id="item-counter">1 / 1</span>
-      <button class="action-btn" id="btn-next" title="Next (Right arrow)">Next</button>
+      <button class="action-btn" id="btn-next" title="Next (Right arrow)"
+        >Next</button
+      >
     </div>
 
     <div class="triage-shortcuts">
@@ -184,8 +221,13 @@ import Admin from '../../../layouts/Admin.astro';
     text-transform: uppercase;
     letter-spacing: 0.5pt;
   }
-  .tag-chip--existing { color: var(--color-muted); }
-  .tag-chip--pending { border-color: var(--color-accent); color: var(--color-accent); }
+  .tag-chip--existing {
+    color: var(--color-muted);
+  }
+  .tag-chip--pending {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
   .tag-chip button {
     background: none;
     border: none;
@@ -213,7 +255,10 @@ import Admin from '../../../layouts/Admin.astro';
     color: var(--color-text);
     position: relative;
   }
-  .quick-tag:hover { border-color: var(--color-accent); color: var(--color-accent); }
+  .quick-tag:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
   .quick-tag .key-hint {
     font-size: 0.55rem;
     color: var(--color-muted);
@@ -257,7 +302,9 @@ import Admin from '../../../layouts/Admin.astro';
     font-size: var(--text-sm);
     cursor: pointer;
   }
-  .tag-suggestion:hover { background: #f0f0f0; }
+  .tag-suggestion:hover {
+    background: #f0f0f0;
+  }
 
   .triage-pending-tags {
     display: flex;
@@ -286,13 +333,19 @@ import Admin from '../../../layouts/Admin.astro';
     border-color: var(--color-border);
     color: var(--color-muted);
   }
-  .triage-btn--skip:hover { border-color: var(--color-text); color: var(--color-text); }
+  .triage-btn--skip:hover {
+    border-color: var(--color-text);
+    color: var(--color-text);
+  }
   .triage-btn--submit {
     background: #1a1a1a;
     border-color: #1a1a1a;
     color: #fff;
   }
-  .triage-btn--submit:hover { background: #333; border-color: #333; }
+  .triage-btn--submit:hover {
+    background: #333;
+    border-color: #333;
+  }
 
   .triage-nav {
     display: flex;
@@ -323,11 +376,22 @@ import Admin from '../../../layouts/Admin.astro';
   }
 
   @media (max-width: 640px) {
-    .triage-header { flex-direction: column; }
-    .triage-preview { min-height: 200px; max-height: 300px; }
-    .triage-shortcuts { display: none; }
-    .triage-actions { flex-direction: column; }
-    .triage-btn { text-align: center; }
+    .triage-header {
+      flex-direction: column;
+    }
+    .triage-preview {
+      min-height: 200px;
+      max-height: 300px;
+    }
+    .triage-shortcuts {
+      display: none;
+    }
+    .triage-actions {
+      flex-direction: column;
+    }
+    .triage-btn {
+      text-align: center;
+    }
   }
 </style>
 
@@ -349,12 +413,23 @@ import Admin from '../../../layouts/Admin.astro';
     let reviewed = 0;
     let totalCount = 0;
     let pendingTags: string[] = [];
-    let quickTags = ['logo', 'sample', 'reference', 'screenshot', 'render', 'photo', 'music', 'sfx'];
+    let quickTags = [
+      'logo',
+      'sample',
+      'reference',
+      'screenshot',
+      'render',
+      'photo',
+      'music',
+      'sfx',
+    ];
 
     // Load channels
     function loadChannels() {
-      const select = document.getElementById('triage-channel') as HTMLSelectElement;
-      ['image-gen', 'sample-sale'].forEach(ch => {
+      const select = document.getElementById(
+        'triage-channel',
+      ) as HTMLSelectElement;
+      ['image-gen', 'sample-sale'].forEach((ch) => {
         const opt = document.createElement('option');
         opt.value = ch;
         opt.textContent = ch;
@@ -368,9 +443,17 @@ import Admin from '../../../layouts/Admin.astro';
       emptyEl.style.display = 'none';
       contentEl.style.display = 'none';
 
-      const mediaType = (document.getElementById('triage-type') as HTMLSelectElement).value;
-      const channel = (document.getElementById('triage-channel') as HTMLSelectElement).value;
-      const maxTags = parseInt((document.getElementById('triage-max-tags') as HTMLInputElement).value) || 0;
+      const mediaType = (
+        document.getElementById('triage-type') as HTMLSelectElement
+      ).value;
+      const channel = (
+        document.getElementById('triage-channel') as HTMLSelectElement
+      ).value;
+      const maxTags =
+        parseInt(
+          (document.getElementById('triage-max-tags') as HTMLInputElement)
+            .value,
+        ) || 0;
 
       const body: any = {
         query: '',
@@ -419,12 +502,15 @@ import Admin from '../../../layouts/Admin.astro';
       pendingTags = [];
 
       // Progress
-      document.getElementById('triage-progress')!.textContent = `${reviewed} of ${totalCount} reviewed`;
+      document.getElementById('triage-progress')!.textContent =
+        `${reviewed} of ${totalCount} reviewed`;
       const pct = totalCount > 0 ? (reviewed / totalCount) * 100 : 0;
-      (document.getElementById('progress-fill') as HTMLElement).style.width = pct + '%';
+      (document.getElementById('progress-fill') as HTMLElement).style.width =
+        pct + '%';
 
       // Counter
-      document.getElementById('item-counter')!.textContent = `${currentIndex + 1} / ${items.length}`;
+      document.getElementById('item-counter')!.textContent =
+        `${currentIndex + 1} / ${items.length}`;
 
       // Preview
       const previewEl = document.getElementById('triage-preview')!;
@@ -441,36 +527,56 @@ import Admin from '../../../layouts/Admin.astro';
       }
 
       // Info
-      document.getElementById('triage-filename')!.textContent = item.filename || 'Untitled';
+      document.getElementById('triage-filename')!.textContent =
+        item.filename || 'Untitled';
       const size = item.file_size_bytes ? formatSize(item.file_size_bytes) : '';
       const channels = (item.source_channels || []).join(', ');
-      document.getElementById('triage-meta')!.textContent = [item.media_type, size, channels].filter(Boolean).join(' / ');
+      document.getElementById('triage-meta')!.textContent = [
+        item.media_type,
+        size,
+        channels,
+      ]
+        .filter(Boolean)
+        .join(' / ');
 
       // Existing tags
       const currentTagsEl = document.getElementById('current-tags')!;
       const existingTags = item.tags || [];
-      currentTagsEl.innerHTML = existingTags.map((t: string) =>
-        `<span class="tag-chip tag-chip--existing">${t}</span>`
-      ).join('') || '<span style="color: var(--color-muted); font-size: var(--text-sm);">No tags</span>';
+      currentTagsEl.innerHTML =
+        existingTags
+          .map(
+            (t: string) =>
+              `<span class="tag-chip tag-chip--existing">${t}</span>`,
+          )
+          .join('') ||
+        '<span style="color: var(--color-muted); font-size: var(--text-sm);">No tags</span>';
 
       // Quick tags
       const quickEl = document.getElementById('quick-tags')!;
-      quickEl.innerHTML = quickTags.map((t, i) =>
-        `<button class="quick-tag" data-quick-tag="${t}">${t}<span class="key-hint">${i + 1}</span></button>`
-      ).join('');
+      quickEl.innerHTML = quickTags
+        .map(
+          (t, i) =>
+            `<button class="quick-tag" data-quick-tag="${t}">${t}<span class="key-hint">${i + 1}</span></button>`,
+        )
+        .join('');
 
       renderPendingTags();
 
       // Clear tag input
-      const tagInput = document.getElementById('triage-tag-input') as HTMLInputElement;
+      const tagInput = document.getElementById(
+        'triage-tag-input',
+      ) as HTMLInputElement;
       if (tagInput) tagInput.value = '';
     }
 
     function renderPendingTags() {
       const el = document.getElementById('pending-tags')!;
-      el.innerHTML = pendingTags.map(t =>
-        `<span class="tag-chip tag-chip--pending">${t}<button data-remove-pending="${t}">&times;</button></span>`
-      ).join('');
+      el.innerHTML = pendingTags
+        .map(
+          (t) =>
+            `<span class="tag-chip tag-chip--pending">${t}<button data-remove-pending="${t}">&times;</button></span>`,
+        )
+        .join('');
     }
 
     function formatSize(bytes: number): string {
@@ -489,7 +595,10 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     async function submitTags() {
-      if (pendingTags.length === 0 && (items[currentIndex]?.tags || []).length > 0) {
+      if (
+        pendingTags.length === 0 &&
+        (items[currentIndex]?.tags || []).length > 0
+      ) {
         skipItem();
         return;
       }
@@ -502,7 +611,10 @@ import Admin from '../../../layouts/Admin.astro';
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tags: pendingTags }),
           });
-        } catch { (window as any).toast.error('Failed to save tags'); return; }
+        } catch {
+          (window as any).toast.error('Failed to save tags');
+          return;
+        }
       }
       reviewed++;
       // Remove the tagged item from the list so it doesn't reappear
@@ -518,16 +630,25 @@ import Admin from '../../../layouts/Admin.astro';
       if (items.length === 0) {
         document.getElementById('triage-content')!.style.display = 'none';
         document.getElementById('triage-empty')!.style.display = 'block';
-        document.getElementById('triage-empty')!.textContent = 'All caught up! No more untagged items.';
+        document.getElementById('triage-empty')!.textContent =
+          'All caught up! No more untagged items.';
       } else {
         renderCurrentItem();
       }
     }
 
     async function fetchMoreItems() {
-      const mediaType = (document.getElementById('triage-type') as HTMLSelectElement).value;
-      const channel = (document.getElementById('triage-channel') as HTMLSelectElement).value;
-      const maxTags = parseInt((document.getElementById('triage-max-tags') as HTMLInputElement).value) || 0;
+      const mediaType = (
+        document.getElementById('triage-type') as HTMLSelectElement
+      ).value;
+      const channel = (
+        document.getElementById('triage-channel') as HTMLSelectElement
+      ).value;
+      const maxTags =
+        parseInt(
+          (document.getElementById('triage-max-tags') as HTMLInputElement)
+            .value,
+        ) || 0;
       const existingIds = new Set(items.map((i: any) => i.id));
       const body: any = {
         query: '',
@@ -547,7 +668,9 @@ import Admin from '../../../layouts/Admin.astro';
         });
         if (!res.ok) return;
         const data = await res.json();
-        const newItems = (data.results || data.hits || []).filter((i: any) => !existingIds.has(i.id));
+        const newItems = (data.results || data.hits || []).filter(
+          (i: any) => !existingIds.has(i.id),
+        );
         items.push(...newItems);
         totalCount = data.total || items.length;
       } catch {}
@@ -560,7 +683,8 @@ import Admin from '../../../layouts/Admin.astro';
       } else {
         document.getElementById('triage-content')!.style.display = 'none';
         document.getElementById('triage-empty')!.style.display = 'block';
-        document.getElementById('triage-empty')!.textContent = 'All caught up! No more untagged items.';
+        document.getElementById('triage-empty')!.textContent =
+          'All caught up! No more untagged items.';
       }
     }
 
@@ -569,60 +693,93 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     // Event listeners
-    document.getElementById('triage-refresh')?.addEventListener('click', loadItems);
+    document
+      .getElementById('triage-refresh')
+      ?.addEventListener('click', loadItems);
 
     document.getElementById('btn-prev')?.addEventListener('click', () => {
-      if (currentIndex > 0) { currentIndex--; renderCurrentItem(); }
+      if (currentIndex > 0) {
+        currentIndex--;
+        renderCurrentItem();
+      }
     });
     document.getElementById('btn-next')?.addEventListener('click', () => {
-      if (currentIndex < items.length - 1) { currentIndex++; renderCurrentItem(); }
+      if (currentIndex < items.length - 1) {
+        currentIndex++;
+        renderCurrentItem();
+      }
     });
 
     document.getElementById('btn-skip')?.addEventListener('click', skipItem);
-    document.getElementById('btn-submit')?.addEventListener('click', submitTags);
+    document
+      .getElementById('btn-submit')
+      ?.addEventListener('click', submitTags);
 
     // Quick tags
     document.getElementById('quick-tags')?.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement).closest('[data-quick-tag]') as HTMLElement | null;
+      const btn = (e.target as HTMLElement).closest(
+        '[data-quick-tag]',
+      ) as HTMLElement | null;
       if (btn) addPendingTag(btn.dataset.quickTag!);
     });
 
     // Remove pending tag
     document.getElementById('pending-tags')?.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement).closest('[data-remove-pending]') as HTMLElement | null;
+      const btn = (e.target as HTMLElement).closest(
+        '[data-remove-pending]',
+      ) as HTMLElement | null;
       if (btn) {
-        pendingTags = pendingTags.filter(t => t !== btn.dataset.removePending);
+        pendingTags = pendingTags.filter(
+          (t) => t !== btn.dataset.removePending,
+        );
         renderPendingTags();
       }
     });
 
     // Tag input with autocomplete
     let suggestTimeout: ReturnType<typeof setTimeout>;
-    const tagInput = document.getElementById('triage-tag-input') as HTMLInputElement;
+    const tagInput = document.getElementById(
+      'triage-tag-input',
+    ) as HTMLInputElement;
     const suggestionsEl = document.getElementById('triage-suggestions')!;
 
     tagInput?.addEventListener('input', () => {
       clearTimeout(suggestTimeout);
       const q = tagInput.value.trim();
-      if (q.length < 1) { suggestionsEl.style.display = 'none'; return; }
+      if (q.length < 1) {
+        suggestionsEl.style.display = 'none';
+        return;
+      }
       suggestTimeout = setTimeout(async () => {
         try {
-          const res = await fetch(`/api/tags/suggest?q=${encodeURIComponent(q)}`, { credentials: 'include' });
+          const res = await fetch(
+            `/api/tags/suggest?q=${encodeURIComponent(q)}`,
+            { credentials: 'include' },
+          );
           if (res.ok) {
             const suggestions: any[] = await res.json();
             if (suggestions.length > 0) {
-              suggestionsEl.innerHTML = suggestions.map(s => `<div class="tag-suggestion" data-tag="${s.tag}">${s.tag} (${s.usage_count})</div>`).join('');
+              suggestionsEl.innerHTML = suggestions
+                .map(
+                  (s) =>
+                    `<div class="tag-suggestion" data-tag="${s.tag}">${s.tag} (${s.usage_count})</div>`,
+                )
+                .join('');
               suggestionsEl.style.display = 'block';
             } else {
               suggestionsEl.style.display = 'none';
             }
           }
-        } catch { suggestionsEl.style.display = 'none'; }
+        } catch {
+          suggestionsEl.style.display = 'none';
+        }
       }, 200);
     });
 
     suggestionsEl?.addEventListener('click', (e) => {
-      const el = (e.target as HTMLElement).closest('.tag-suggestion') as HTMLElement | null;
+      const el = (e.target as HTMLElement).closest(
+        '.tag-suggestion',
+      ) as HTMLElement | null;
       if (el) {
         addPendingTag(el.dataset.tag!);
         suggestionsEl.style.display = 'none';
@@ -634,14 +791,22 @@ import Admin from '../../../layouts/Admin.astro';
       if (e.key === 'Enter') {
         e.preventDefault();
         const tag = tagInput.value.trim();
-        if (tag) { addPendingTag(tag); tagInput.value = ''; suggestionsEl.style.display = 'none'; }
+        if (tag) {
+          addPendingTag(tag);
+          tagInput.value = '';
+          suggestionsEl.style.display = 'none';
+        }
       }
     });
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
       // Don't intercept when typing in inputs
-      if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA' || (e.target as HTMLElement).tagName === 'SELECT') {
+      if (
+        (e.target as HTMLElement).tagName === 'INPUT' ||
+        (e.target as HTMLElement).tagName === 'TEXTAREA' ||
+        (e.target as HTMLElement).tagName === 'SELECT'
+      ) {
         return;
       }
       // Only act if triage content is visible
@@ -649,14 +814,25 @@ import Admin from '../../../layouts/Admin.astro';
 
       if (e.key === ' ') {
         e.preventDefault();
-        const media = document.getElementById('triage-media') as HTMLAudioElement | HTMLVideoElement | null;
-        if (media) { media.paused ? media.play() : media.pause(); }
+        const media = document.getElementById('triage-media') as
+          | HTMLAudioElement
+          | HTMLVideoElement
+          | null;
+        if (media) {
+          media.paused ? media.play() : media.pause();
+        }
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        if (currentIndex > 0) { currentIndex--; renderCurrentItem(); }
+        if (currentIndex > 0) {
+          currentIndex--;
+          renderCurrentItem();
+        }
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        if (currentIndex < items.length - 1) { currentIndex++; renderCurrentItem(); }
+        if (currentIndex < items.length - 1) {
+          currentIndex++;
+          renderCurrentItem();
+        }
       } else if (e.key === 'Enter') {
         e.preventDefault();
         submitTags();
@@ -674,18 +850,31 @@ import Admin from '../../../layouts/Admin.astro';
     // Touch swipe support
     let touchStartX = 0;
     let touchStartY = 0;
-    triageCard.addEventListener('touchstart', (e: TouchEvent) => {
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
-    }, { passive: true });
-    triageCard.addEventListener('touchend', (e: TouchEvent) => {
-      const dx = e.changedTouches[0].clientX - touchStartX;
-      const dy = e.changedTouches[0].clientY - touchStartY;
-      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
-        if (dx > 0 && currentIndex > 0) { currentIndex--; renderCurrentItem(); }
-        else if (dx < 0 && currentIndex < items.length - 1) { currentIndex++; renderCurrentItem(); }
-      }
-    }, { passive: true });
+    triageCard.addEventListener(
+      'touchstart',
+      (e: TouchEvent) => {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+      },
+      { passive: true },
+    );
+    triageCard.addEventListener(
+      'touchend',
+      (e: TouchEvent) => {
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        const dy = e.changedTouches[0].clientY - touchStartY;
+        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+          if (dx > 0 && currentIndex > 0) {
+            currentIndex--;
+            renderCurrentItem();
+          } else if (dx < 0 && currentIndex < items.length - 1) {
+            currentIndex++;
+            renderCurrentItem();
+          }
+        }
+      },
+      { passive: true },
+    );
 
     loadChannels();
     loadItems();

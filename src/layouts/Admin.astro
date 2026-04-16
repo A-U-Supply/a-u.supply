@@ -10,69 +10,138 @@ const { title, current } = Astro.props;
 ---
 
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="icon" type="image/jpeg" href="/favicon.jpg">
-  <title>{title} — A-U.SUPPLY Admin</title>
-  <ViewTransitions />
-</head>
-<body>
-  <button class="sidebar__toggle" id="sidebar-toggle">|||</button>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/jpeg" href="/favicon.jpg" />
+    <title>{title} — A-U.SUPPLY Admin</title>
+    <ViewTransitions />
+  </head>
+  <body>
+    <button class="sidebar__toggle" id="sidebar-toggle">|||</button>
 
-  <div class="admin-shell">
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar__brand">
-        <a href="/">A-U.SUPPLY</a>
-      </div>
+    <div class="admin-shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar__brand">
+          <a href="/">A-U.SUPPLY</a>
+        </div>
 
-      <div class="sidebar__section">Navigation</div>
-      <ul class="sidebar__nav">
-        <li><a href="/admin/catalog" aria-current={current === 'catalog' ? 'page' : undefined}>Catalog</a></li>
-        <li><a href="/admin/catalog/new" aria-current={current === 'catalog-new' ? 'page' : undefined}>New Release</a></li>
-        <li><a href="/admin/dashboard" aria-current={current === 'dashboard' ? 'page' : undefined}>Dashboard</a></li>
-        <li><a href="/admin/files" aria-current={current === 'files' ? 'page' : undefined}>Files</a></li>
-        <li><a href="/admin/settings" aria-current={current === 'settings' ? 'page' : undefined}>Settings</a></li>
-      </ul>
+        <div class="sidebar__section">Navigation</div>
+        <ul class="sidebar__nav">
+          <li>
+            <a
+              href="/admin/catalog"
+              aria-current={current === 'catalog' ? 'page' : undefined}
+              >Catalog</a>
+          </li>
+          <li>
+            <a
+              href="/admin/catalog/new"
+              aria-current={current === 'catalog-new' ? 'page' : undefined}
+              >New Release</a>
+          </li>
+          <li>
+            <a
+              href="/admin/dashboard"
+              aria-current={current === 'dashboard' ? 'page' : undefined}
+              >Dashboard</a>
+          </li>
+          <li>
+            <a
+              href="/admin/files"
+              aria-current={current === 'files' ? 'page' : undefined}>Files</a>
+          </li>
+          <li>
+            <a
+              href="/admin/settings"
+              aria-current={current === 'settings' ? 'page' : undefined}
+              >Settings</a>
+          </li>
+        </ul>
 
-      <div class="sidebar__section">Library</div>
-      <ul class="sidebar__nav">
-        <li><a href="/admin/bookmarks" aria-current={current === 'bookmarks' ? 'page' : undefined}>Bookmarks</a></li>
-      </ul>
+        <div class="sidebar__section">Library</div>
+        <ul class="sidebar__nav">
+          <li>
+            <a
+              href="/admin/bookmarks"
+              aria-current={current === 'bookmarks' ? 'page' : undefined}
+              >Bookmarks</a>
+          </li>
+        </ul>
 
-      <div class="sidebar__section">Search Engine</div>
-      <ul class="sidebar__nav">
-        <li><a href="/admin/search" aria-current={current === 'search' ? 'page' : undefined}>Search</a></li>
-        <li><a href="/admin/search/triage" aria-current={current === 'triage' ? 'page' : undefined}>Triage</a></li>
-        <li><a href="/admin/search/upload" aria-current={current === 'upload' ? 'page' : undefined}>Upload</a></li>
-        <li><a href="/admin/search/failures" aria-current={current === 'failures' ? 'page' : undefined}>Failures</a></li>
-        <li><a href="/admin/api-keys" aria-current={current === 'api-keys' ? 'page' : undefined}>API Keys</a></li>
-      </ul>
+        <div class="sidebar__section">Search Engine</div>
+        <ul class="sidebar__nav">
+          <li>
+            <a
+              href="/admin/search"
+              aria-current={current === 'search' ? 'page' : undefined}
+              >Search</a>
+          </li>
+          <li>
+            <a
+              href="/admin/search/triage"
+              aria-current={current === 'triage' ? 'page' : undefined}
+              >Triage</a>
+          </li>
+          <li>
+            <a
+              href="/admin/search/upload"
+              aria-current={current === 'upload' ? 'page' : undefined}
+              >Upload</a>
+          </li>
+          <li>
+            <a
+              href="/admin/search/failures"
+              aria-current={current === 'failures' ? 'page' : undefined}
+              >Failures</a>
+          </li>
+          <li>
+            <a
+              href="/admin/search/slop"
+              aria-current={current === 'slop' ? 'page' : undefined}
+              >Slop Bucket</a>
+          </li>
+          <li>
+            <a
+              href="/admin/api-keys"
+              aria-current={current === 'api-keys' ? 'page' : undefined}
+              >API Keys</a>
+          </li>
+        </ul>
 
-      <div class="sidebar__section">App Runner</div>
-      <ul class="sidebar__nav">
-        <li><a href="/admin/search/workspace" aria-current={current === 'workspace' ? 'page' : undefined}>Workspace</a></li>
-        <li><a href="/admin/jobs" aria-current={current === 'jobs' ? 'page' : undefined}>Jobs</a></li>
-      </ul>
+        <div class="sidebar__section">App Runner</div>
+        <ul class="sidebar__nav">
+          <li>
+            <a
+              href="/admin/search/workspace"
+              aria-current={current === 'workspace' ? 'page' : undefined}
+              >Workspace</a>
+          </li>
+          <li>
+            <a
+              href="/admin/jobs"
+              aria-current={current === 'jobs' ? 'page' : undefined}>Jobs</a>
+          </li>
+        </ul>
 
-      <div class="sidebar__footer">
-        <div class="sidebar__user" id="sidebar-user"></div>
-        <button class="sidebar__logout" id="logout-btn">Log Out</button>
-      </div>
-    </aside>
+        <div class="sidebar__footer">
+          <div class="sidebar__user" id="sidebar-user"></div>
+          <button class="sidebar__logout" id="logout-btn">Log Out</button>
+        </div>
+      </aside>
 
-    <main class="admin-main">
-      <div class="page-loading" id="page-loading" style="display:none;">
-        <span class="loading-dots">Loading</span>
-      </div>
-      <slot />
-    </main>
-  </div>
-  <div class="player-slot" transition:persist="audio-player">
-    <Player client:only="svelte" />
-  </div>
-  <div class="toast-container" id="toast-container"></div>
-</body>
+      <main class="admin-main">
+        <div class="page-loading" id="page-loading" style="display:none;">
+          <span class="loading-dots">Loading</span>
+        </div>
+        <slot />
+      </main>
+    </div>
+    <div class="player-slot" transition:persist="audio-player">
+      <Player client:only="svelte" />
+    </div>
+    <div class="toast-container" id="toast-container"></div>
+  </body>
 </html>
 
 <style is:global>
@@ -95,7 +164,9 @@ const { title, current } = Astro.props;
     // Expose as a promise on window so page scripts can await it
     // regardless of script loading order (no race condition)
     let resolveAuth: (user: any) => void;
-    (window as any).__authReady = new Promise((r) => { resolveAuth = r; });
+    (window as any).__authReady = new Promise((r) => {
+      resolveAuth = r;
+    });
 
     async function checkAuth() {
       try {
@@ -116,13 +187,17 @@ const { title, current } = Astro.props;
 
     // Bookmarks helper — shared across all admin pages
     const bmCache = new Map<string, Set<string>>();
-    async function bmCheck(targetType: string, ids: string[]): Promise<Set<string>> {
+    async function bmCheck(
+      targetType: string,
+      ids: string[],
+    ): Promise<Set<string>> {
       if (ids.length === 0) return new Set();
       const cached = bmCache.get(targetType);
       if (cached) return cached;
       try {
         const res = await fetch('/api/bookmarks/check', {
-          method: 'POST', credentials: 'include',
+          method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ target_type: targetType, target_ids: ids }),
         });
@@ -131,14 +206,23 @@ const { title, current } = Astro.props;
         const set = new Set<string>(data.bookmarked_ids);
         bmCache.set(targetType, set);
         return set;
-      } catch { return new Set(); }
+      } catch {
+        return new Set();
+      }
     }
-    async function bmToggle(targetType: string, targetId: string): Promise<boolean> {
+    async function bmToggle(
+      targetType: string,
+      targetId: string,
+    ): Promise<boolean> {
       try {
         const res = await fetch('/api/bookmarks', {
-          method: 'POST', credentials: 'include',
+          method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target_type: targetType, target_id: targetId }),
+          body: JSON.stringify({
+            target_type: targetType,
+            target_id: targetId,
+          }),
         });
         if (!res.ok) return false;
         const data = await res.json();
@@ -147,20 +231,35 @@ const { title, current } = Astro.props;
         else set.delete(targetId);
         bmCache.set(targetType, set);
         // Update all star elements on the page
-        document.querySelectorAll(`[data-bm-type="${targetType}"][data-bm-id="${targetId}"]`).forEach(el => {
-          el.classList.toggle('bookmarked', data.bookmarked);
-          el.setAttribute('title', data.bookmarked ? 'Remove bookmark' : 'Bookmark');
-        });
+        document
+          .querySelectorAll(
+            `[data-bm-type="${targetType}"][data-bm-id="${targetId}"]`,
+          )
+          .forEach((el) => {
+            el.classList.toggle('bookmarked', data.bookmarked);
+            el.setAttribute(
+              'title',
+              data.bookmarked ? 'Remove bookmark' : 'Bookmark',
+            );
+          });
         return data.bookmarked;
-      } catch { return false; }
+      } catch {
+        return false;
+      }
     }
-    (window as any).__bookmarks = { check: bmCheck, toggle: bmToggle, cache: bmCache };
+    (window as any).__bookmarks = {
+      check: bmCheck,
+      toggle: bmToggle,
+      cache: bmCache,
+    };
 
     // Logout
-    document.getElementById('logout-btn')?.addEventListener('click', async () => {
-      await fetch('/api/logout', { method: 'POST', credentials: 'include' });
-      window.location.href = '/login';
-    });
+    document
+      .getElementById('logout-btn')
+      ?.addEventListener('click', async () => {
+        await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+        window.location.href = '/login';
+      });
 
     // Mobile sidebar toggle
     document.getElementById('sidebar-toggle')?.addEventListener('click', () => {
@@ -171,9 +270,11 @@ const { title, current } = Astro.props;
     document.addEventListener('click', (e) => {
       const sidebar = document.getElementById('sidebar');
       const toggle = document.getElementById('sidebar-toggle');
-      if (sidebar?.classList.contains('open') &&
-          !sidebar.contains(e.target as Node) &&
-          !toggle?.contains(e.target as Node)) {
+      if (
+        sidebar?.classList.contains('open') &&
+        !sidebar.contains(e.target as Node) &&
+        !toggle?.contains(e.target as Node)
+      ) {
         sidebar.classList.remove('open');
       }
     });
@@ -181,8 +282,13 @@ const { title, current } = Astro.props;
     // Dialog dismiss: Escape key and click-outside
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        const open = document.querySelector('.dialog-overlay[style*="flex"]') as HTMLElement | null;
-        if (open) { open.style.display = 'none'; e.preventDefault(); }
+        const open = document.querySelector(
+          '.dialog-overlay[style*="flex"]',
+        ) as HTMLElement | null;
+        if (open) {
+          open.style.display = 'none';
+          e.preventDefault();
+        }
       }
     });
     document.addEventListener('click', (e) => {
@@ -194,11 +300,17 @@ const { title, current } = Astro.props;
 
     // Toast notification system
     const toastContainer = document.getElementById('toast-container')!;
-    function showToast(message: string, type: 'success' | 'error' = 'success', duration = 4000) {
+    function showToast(
+      message: string,
+      type: 'success' | 'error' = 'success',
+      duration = 4000,
+    ) {
       const toast = document.createElement('div');
       toast.className = `toast toast--${type}`;
       toast.innerHTML = `<span>${message}</span><button class="toast__close">&times;</button>`;
-      toast.querySelector('.toast__close')!.addEventListener('click', () => removeToast(toast));
+      toast
+        .querySelector('.toast__close')!
+        .addEventListener('click', () => removeToast(toast));
       toastContainer.appendChild(toast);
       setTimeout(() => removeToast(toast), duration);
     }
@@ -208,12 +320,16 @@ const { title, current } = Astro.props;
       toast.addEventListener('animationend', () => toast.remove());
     }
     (window as any).toast = {
-      success: (msg: string, ms?: number) => showToast(msg, 'success', ms ?? 4000),
+      success: (msg: string, ms?: number) =>
+        showToast(msg, 'success', ms ?? 4000),
       error: (msg: string, ms?: number) => showToast(msg, 'error', ms ?? 6000),
     };
 
     // Confirm dialog: returns a Promise<boolean>
-    (window as any).confirmDialog = (message: string, dangerLabel = 'Confirm') => {
+    (window as any).confirmDialog = (
+      message: string,
+      dangerLabel = 'Confirm',
+    ) => {
       return new Promise<boolean>((resolve) => {
         let overlay = document.getElementById('shared-confirm-dialog');
         if (!overlay) {

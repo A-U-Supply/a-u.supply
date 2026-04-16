@@ -8,7 +8,9 @@ import Admin from '../../../layouts/Admin.astro';
     <a href="/admin/catalog" class="back-link">&larr; Back to Catalog</a>
   </div>
 
-  <div id="loading" style="color: var(--color-muted);"><span class="loading-dots">Loading release</span></div>
+  <div id="loading" style="color: var(--color-muted);">
+    <span class="loading-dots">Loading release</span>
+  </div>
   <div id="page-error" class="login-error" style="display:none;"></div>
 
   <div id="edit-form" style="display:none;">
@@ -19,8 +21,18 @@ import Admin from '../../../layouts/Admin.astro';
         <div class="form-row">
           <div class="form-group">
             <label for="title">Title</label>
-            <input type="text" id="title" placeholder="Release title" required />
-            <div id="title-error" class="login-error" style="display:none; text-align:left;"></div>
+            <input
+              type="text"
+              id="title"
+              placeholder="Release title"
+              required
+            />
+            <div
+              id="title-error"
+              class="login-error"
+              style="display:none; text-align:left;"
+            >
+            </div>
           </div>
         </div>
 
@@ -29,8 +41,18 @@ import Admin from '../../../layouts/Admin.astro';
             <label>Entities</label>
             <div class="entity-select" id="entity-select">
               <div class="entity-tags" id="entity-tags"></div>
-              <input type="text" id="entity-search" placeholder="Search or create entity..." autocomplete="off" />
-              <div class="entity-dropdown" id="entity-dropdown" style="display:none;"></div>
+              <input
+                type="text"
+                id="entity-search"
+                placeholder="Search or create entity..."
+                autocomplete="off"
+              />
+              <div
+                class="entity-dropdown"
+                id="entity-dropdown"
+                style="display:none;"
+              >
+              </div>
             </div>
           </div>
         </div>
@@ -55,21 +77,33 @@ import Admin from '../../../layouts/Admin.astro';
           </div>
           <div class="form-group">
             <label for="product-code">Product Code</label>
-            <input type="text" id="product-code" readonly style="background: #f0f0f0;" />
+            <input
+              type="text"
+              id="product-code"
+              readonly
+              style="background: #f0f0f0;"
+            />
           </div>
         </div>
 
         <div class="form-row">
           <div class="form-group">
             <label for="format-specs">Format Specs</label>
-            <input type="text" id="format-specs" placeholder="e.g. Digital, 320kbps MP3 + FLAC" />
+            <input
+              type="text"
+              id="format-specs"
+              placeholder="e.g. Digital, 320kbps MP3 + FLAC"
+            />
           </div>
         </div>
 
         <div class="form-row">
           <div class="form-group">
             <label for="description">Description</label>
-            <textarea id="description" rows="4" placeholder="Release description..."></textarea>
+            <textarea
+              id="description"
+              rows="4"
+              placeholder="Release description..."></textarea>
           </div>
         </div>
 
@@ -87,17 +121,34 @@ import Admin from '../../../layouts/Admin.astro';
       <h2 class="collapsible__heading">Cover Art</h2>
       <div class="collapsible__body">
         <div id="existing-cover" style="display:none;">
-          <img id="existing-cover-img" alt="Current cover" style="max-width:300px; max-height:300px; border:1px solid var(--color-border); margin-bottom: var(--space-sm);" />
-          <p style="font-size: var(--text-sm); color: var(--color-muted); margin-bottom: var(--space-sm);">Current cover art. Upload a new image below to replace it.</p>
+          <img
+            id="existing-cover-img"
+            alt="Current cover"
+            style="max-width:300px; max-height:300px; border:1px solid var(--color-border); margin-bottom: var(--space-sm);"
+          />
+          <p
+            style="font-size: var(--text-sm); color: var(--color-muted); margin-bottom: var(--space-sm);"
+          >
+            Current cover art. Upload a new image below to replace it.
+          </p>
         </div>
         <div class="drop-zone" id="cover-drop">
           <div class="drop-zone__inner" id="cover-inner">
             <p>Drag & drop new cover image here, or click to browse</p>
-            <input type="file" id="cover-input" accept="image/*" style="display:none;" />
+            <input
+              type="file"
+              id="cover-input"
+              accept="image/*"
+              style="display:none;"
+            />
           </div>
           <div id="cover-preview" style="display:none;">
             <img id="cover-img" alt="Cover preview" />
-            <button type="button" class="btn-sm btn-sm--danger" id="cover-remove">Remove</button>
+            <button
+              type="button"
+              class="btn-sm btn-sm--danger"
+              id="cover-remove">Remove</button
+            >
           </div>
         </div>
       </div>
@@ -108,11 +159,23 @@ import Admin from '../../../layouts/Admin.astro';
       <h2 class="collapsible__heading">Audio Files</h2>
       <div class="collapsible__body">
         <div id="existing-tracks"></div>
-        <div class="drop-zone" id="audio-drop" style="margin-top: var(--space-sm);">
+        <div
+          class="drop-zone"
+          id="audio-drop"
+          style="margin-top: var(--space-sm);"
+        >
           <div class="drop-zone__inner" id="audio-inner">
             <p>Drag & drop audio files to add more tracks</p>
-            <p style="font-size: var(--text-sm); color: var(--color-muted);">MP3, FLAC, WAV, OGG, AIFF</p>
-            <input type="file" id="audio-input" accept="audio/*" multiple style="display:none;" />
+            <p style="font-size: var(--text-sm); color: var(--color-muted);">
+              MP3, FLAC, WAV, OGG, AIFF
+            </p>
+            <input
+              type="file"
+              id="audio-input"
+              accept="audio/*"
+              multiple
+              style="display:none;"
+            />
           </div>
         </div>
         <div id="new-track-list"></div>
@@ -124,7 +187,9 @@ import Admin from '../../../layouts/Admin.astro';
       <h2 class="collapsible__heading">Distribution Links</h2>
       <div class="collapsible__body">
         <div id="links-list"></div>
-        <button type="button" class="btn-sm" id="add-link-btn">+ Add Link</button>
+        <button type="button" class="btn-sm" id="add-link-btn"
+          >+ Add Link</button
+        >
       </div>
     </section>
 
@@ -143,7 +208,9 @@ import Admin from '../../../layouts/Admin.astro';
           <span class="chip" data-key="Label">Label</span>
         </div>
         <div id="freeform-list"></div>
-        <button type="button" class="btn-sm" id="add-freeform-btn">+ Add Field</button>
+        <button type="button" class="btn-sm" id="add-freeform-btn"
+          >+ Add Field</button
+        >
       </div>
     </section>
 
@@ -152,14 +219,29 @@ import Admin from '../../../layouts/Admin.astro';
       <h2 class="collapsible__heading">Save Changes</h2>
       <div class="collapsible__body">
         <div id="save-progress" style="display:none;">
-          <div class="progress-bar"><div class="progress-bar__fill" id="progress-fill"></div></div>
-          <p id="progress-text" style="font-size: var(--text-sm); color: var(--color-muted); margin-top: var(--space-xs);"></p>
+          <div class="progress-bar">
+            <div class="progress-bar__fill" id="progress-fill"></div>
+          </div>
+          <p
+            id="progress-text"
+            style="font-size: var(--text-sm); color: var(--color-muted); margin-top: var(--space-xs);"
+          >
+          </p>
         </div>
         <div id="save-error" class="login-error" style="display:none;"></div>
-        <div id="save-success" style="display:none; color: green; font-size: var(--text-sm); margin-top: var(--space-sm);"></div>
+        <div
+          id="save-success"
+          style="display:none; color: green; font-size: var(--text-sm); margin-top: var(--space-sm);"
+        >
+        </div>
         <div class="save-actions">
-          <button type="button" class="btn-save" id="save-btn">Save Changes</button>
-          <button type="button" class="btn-save btn-save--publish" id="toggle-publish-btn"></button>
+          <button type="button" class="btn-save" id="save-btn"
+            >Save Changes</button
+          >
+          <button
+            type="button"
+            class="btn-save btn-save--publish"
+            id="toggle-publish-btn"></button>
         </div>
       </div>
     </section>
@@ -184,7 +266,9 @@ import Admin from '../../../layouts/Admin.astro';
     color: var(--color-muted);
     text-decoration: none;
   }
-  .back-link:hover { color: var(--color-text); }
+  .back-link:hover {
+    color: var(--color-text);
+  }
 
   /* Collapsible sections */
   .collapsible {
@@ -282,7 +366,9 @@ import Admin from '../../../layouts/Admin.astro';
     padding: 0;
     line-height: 1;
   }
-  .entity-tag button:hover { color: #c00; }
+  .entity-tag button:hover {
+    color: #c00;
+  }
   #entity-search {
     border: none;
     outline: none;
@@ -309,7 +395,9 @@ import Admin from '../../../layouts/Admin.astro';
     cursor: pointer;
     font-size: var(--text-sm);
   }
-  .entity-option:hover { background: #f0f0f0; }
+  .entity-option:hover {
+    background: #f0f0f0;
+  }
   .entity-option--create {
     color: var(--color-accent);
     font-style: italic;
@@ -327,14 +415,22 @@ import Admin from '../../../layouts/Admin.astro';
     border: none;
     cursor: pointer;
   }
-  .btn-sm:hover { background: #333; }
-  .btn-sm--danger { background: #c00; }
-  .btn-sm--danger:hover { background: #a00; }
+  .btn-sm:hover {
+    background: #333;
+  }
+  .btn-sm--danger {
+    background: #c00;
+  }
+  .btn-sm--danger:hover {
+    background: #a00;
+  }
 
   /* Drop zones */
   .drop-zone {
     border: 2px dashed var(--color-border);
-    transition: background 0.15s, border-color 0.15s;
+    transition:
+      background 0.15s,
+      border-color 0.15s;
   }
   .drop-zone.dragover {
     background: #f8f6f0;
@@ -402,7 +498,10 @@ import Admin from '../../../layouts/Admin.astro';
     cursor: pointer;
     text-transform: uppercase;
   }
-  .track-item__remove:hover { background: #c00; color: #fff; }
+  .track-item__remove:hover {
+    background: #c00;
+    color: #fff;
+  }
 
   .track-item--queued {
     border-left: 3px solid var(--color-muted, #999);
@@ -413,8 +512,13 @@ import Admin from '../../../layouts/Admin.astro';
     animation: pulse-bg 1.2s ease-in-out infinite;
   }
   @keyframes pulse-bg {
-    0%, 100% { background: transparent; }
-    50% { background: rgba(128, 128, 128, 0.1); }
+    0%,
+    100% {
+      background: transparent;
+    }
+    50% {
+      background: rgba(128, 128, 128, 0.1);
+    }
   }
   .track-item--done {
     border-left: 3px solid #2a2;
@@ -440,8 +544,13 @@ import Admin from '../../../layouts/Admin.astro';
     border: 1px solid var(--color-border);
     background: #fff;
   }
-  .link-row select { min-width: 130px; }
-  .link-row input { flex: 1; min-width: 150px; }
+  .link-row select {
+    min-width: 130px;
+  }
+  .link-row input {
+    flex: 1;
+    min-width: 150px;
+  }
 
   /* Freeform rows */
   .freeform-row {
@@ -457,8 +566,13 @@ import Admin from '../../../layouts/Admin.astro';
     border: 1px solid var(--color-border);
     background: #fff;
   }
-  .freeform-row input:first-child { width: 160px; }
-  .freeform-row input:nth-child(2) { flex: 1; min-width: 150px; }
+  .freeform-row input:first-child {
+    width: 160px;
+  }
+  .freeform-row input:nth-child(2) {
+    flex: 1;
+    min-width: 150px;
+  }
 
   .chip-suggestions {
     display: flex;
@@ -476,7 +590,10 @@ import Admin from '../../../layouts/Admin.astro';
     background: #fff;
     font-family: var(--font-mono);
   }
-  .chip:hover { border-color: var(--color-accent); color: var(--color-accent); }
+  .chip:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
 
   /* Save section */
   .save-actions {
@@ -496,12 +613,19 @@ import Admin from '../../../layouts/Admin.astro';
     border: none;
     cursor: pointer;
   }
-  .btn-save:hover { background: #333; }
-  .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-save:hover {
+    background: #333;
+  }
+  .btn-save:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
   .btn-save--publish {
     background: var(--color-accent);
   }
-  .btn-save--publish:hover { background: #9a7209; }
+  .btn-save--publish:hover {
+    background: #9a7209;
+  }
 
   .progress-bar {
     width: 100%;
@@ -528,383 +652,458 @@ import Admin from '../../../layouts/Admin.astro';
 
 <script>
   document.addEventListener('astro:page-load', () => {
-  if (!document.getElementById('edit-form')) return;
+    if (!document.getElementById('edit-form')) return;
 
-  const releaseCodeRaw = new URLSearchParams(window.location.search).get('code') || '';
-  const releaseCode = encodeURIComponent(releaseCodeRaw);
+    const releaseCodeRaw =
+      new URLSearchParams(window.location.search).get('code') || '';
+    const releaseCode = encodeURIComponent(releaseCodeRaw);
 
-  // ---- State ----
-  let entities: any[] = [];
-  let selectedEntities: any[] = [];
-  let coverFile: File | null = null;
-  let uploadQueue: { file: File; title: string; status: 'queued' | 'uploading' | 'done' | 'failed'; error?: string }[] = [];
-  let uploadRunning = false;
-  let existingTracks: any[] = [];
-  let links: { platform: string; url: string; label: string }[] = [];
-  let freeformFields: { key: string; value: string }[] = [];
-  let releaseStatus = 'draft';
+    // ---- State ----
+    let entities: any[] = [];
+    let selectedEntities: any[] = [];
+    let coverFile: File | null = null;
+    let uploadQueue: {
+      file: File;
+      title: string;
+      status: 'queued' | 'uploading' | 'done' | 'failed';
+      error?: string;
+    }[] = [];
+    let uploadRunning = false;
+    let existingTracks: any[] = [];
+    let links: { platform: string; url: string; label: string }[] = [];
+    let freeformFields: { key: string; value: string }[] = [];
+    let releaseStatus = 'draft';
 
-  // ---- Init ----
-  (window as any).__authReady.then(async () => {
-    await loadEntities();
-    await loadRelease();
-  });
-
-  // ---- Collapsible sections ----
-  document.querySelectorAll('.collapsible__heading').forEach(heading => {
-    heading.addEventListener('click', () => {
-      heading.parentElement!.classList.toggle('open');
+    // ---- Init ----
+    (window as any).__authReady.then(async () => {
+      await loadEntities();
+      await loadRelease();
     });
-  });
 
-  // ---- Load entities ----
-  async function loadEntities() {
-    try {
-      const res = await fetch('/api/entities', { credentials: 'include' });
-      if (res.ok) entities = await res.json();
-    } catch { /* empty */ }
-  }
+    // ---- Collapsible sections ----
+    document.querySelectorAll('.collapsible__heading').forEach((heading) => {
+      heading.addEventListener('click', () => {
+        heading.parentElement!.classList.toggle('open');
+      });
+    });
 
-  // ---- Load release data ----
-  async function loadRelease() {
-    const loadingEl = document.getElementById('loading')!;
-    const errorEl = document.getElementById('page-error')!;
-    const formEl = document.getElementById('edit-form')!;
-
-    try {
-      const res = await fetch(`/api/releases/${releaseCode}`, { credentials: 'include' });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: 'Release not found' }));
-        throw new Error(err.detail || 'Release not found');
-      }
-
-      const release = await res.json();
-      loadingEl.style.display = 'none';
-      formEl.style.display = 'block';
-
-      // Populate fields
-      (document.getElementById('title') as HTMLInputElement).value = release.title || '';
-      (document.getElementById('release-date') as HTMLInputElement).value = release.release_date || '';
-      (document.getElementById('category') as HTMLSelectElement).value = release.category || '';
-      (document.getElementById('product-code') as HTMLInputElement).value = release.product_code || '';
-      (document.getElementById('format-specs') as HTMLInputElement).value = release.format_specs || '';
-      (document.getElementById('description') as HTMLTextAreaElement).value = release.description || '';
-
-      // Status
-      releaseStatus = release.status || 'draft';
-      const badge = document.getElementById('status-badge')!;
-      badge.textContent = releaseStatus;
-      badge.className = `badge badge--${releaseStatus}`;
-
-      // Toggle publish button
-      const toggleBtn = document.getElementById('toggle-publish-btn') as HTMLButtonElement;
-      if (releaseStatus === 'published') {
-        toggleBtn.textContent = 'Unpublish';
-        toggleBtn.className = 'btn-save';
-      } else {
-        toggleBtn.textContent = 'Save & Publish';
-        toggleBtn.className = 'btn-save btn-save--publish';
-      }
-
-      // Entities
-      if (release.entities) {
-        selectedEntities = release.entities;
-        renderEntityTags();
-      }
-
-      // Cover art
-      if (release.cover_art_url) {
-        const existingCover = document.getElementById('existing-cover')!;
-        const existingImg = document.getElementById('existing-cover-img') as HTMLImageElement;
-        existingImg.src = release.cover_art_url;
-        existingCover.style.display = 'block';
-      }
-
-      // Existing tracks
-      if (release.tracks && release.tracks.length > 0) {
-        existingTracks = release.tracks;
-        renderExistingTracks();
-      }
-
-      // Distribution links
-      if (release.distribution_links && release.distribution_links.length > 0) {
-        links = release.distribution_links.map((l: any) => ({
-          platform: l.platform || '',
-          url: l.url || '',
-          label: l.label || '',
-        }));
-      }
-      renderLinks();
-
-      // Freeform metadata
-      if (release.freeform_metadata && typeof release.freeform_metadata === 'object') {
-        freeformFields = Object.entries(release.freeform_metadata).map(([k, v]) => ({
-          key: k,
-          value: String(v),
-        }));
-      }
-      renderFreeform();
-
-    } catch (err: any) {
-      loadingEl.style.display = 'none';
-      errorEl.textContent = err.message;
-      errorEl.style.display = 'block';
-    }
-  }
-
-  // ---- Entity multi-select ----
-  const entitySearch = document.getElementById('entity-search') as HTMLInputElement;
-  const entityDropdown = document.getElementById('entity-dropdown')!;
-
-  entitySearch.addEventListener('focus', () => showEntityDropdown());
-  entitySearch.addEventListener('input', () => showEntityDropdown());
-
-  document.addEventListener('click', (e) => {
-    if (!(e.target as HTMLElement).closest('#entity-select')) {
-      entityDropdown.style.display = 'none';
-    }
-  });
-
-  function showEntityDropdown() {
-    const query = entitySearch.value.toLowerCase().trim();
-    const selectedIds = new Set(selectedEntities.map(e => e.id));
-    const filtered = entities.filter(e =>
-      !selectedIds.has(e.id) && e.name.toLowerCase().includes(query)
-    );
-
-    let html = filtered.map(e =>
-      `<div class="entity-option" data-id="${e.id}" data-name="${e.name}">${e.name}</div>`
-    ).join('');
-
-    if (query && !entities.some(e => e.name.toLowerCase() === query)) {
-      html += `<div class="entity-option entity-option--create" data-create="${query}">Create "${query}"...</div>`;
-    }
-
-    if (!html) {
-      entityDropdown.style.display = 'none';
-      return;
-    }
-
-    entityDropdown.innerHTML = html;
-    entityDropdown.style.display = 'block';
-  }
-
-  entityDropdown.addEventListener('click', async (e) => {
-    const opt = (e.target as HTMLElement).closest('.entity-option') as HTMLElement | null;
-    if (!opt) return;
-
-    if (opt.dataset.create) {
+    // ---- Load entities ----
+    async function loadEntities() {
       try {
-        const res = await fetch('/api/entities', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const res = await fetch('/api/entities', { credentials: 'include' });
+        if (res.ok) entities = await res.json();
+      } catch {
+        /* empty */
+      }
+    }
+
+    // ---- Load release data ----
+    async function loadRelease() {
+      const loadingEl = document.getElementById('loading')!;
+      const errorEl = document.getElementById('page-error')!;
+      const formEl = document.getElementById('edit-form')!;
+
+      try {
+        const res = await fetch(`/api/releases/${releaseCode}`, {
           credentials: 'include',
-          body: JSON.stringify({ name: opt.dataset.create }),
         });
-        if (!res.ok) throw new Error('Failed to create entity');
-        const newEntity = await res.json();
-        entities.push(newEntity);
-        selectedEntities.push(newEntity);
+        if (!res.ok) {
+          const err = await res
+            .json()
+            .catch(() => ({ detail: 'Release not found' }));
+          throw new Error(err.detail || 'Release not found');
+        }
+
+        const release = await res.json();
+        loadingEl.style.display = 'none';
+        formEl.style.display = 'block';
+
+        // Populate fields
+        (document.getElementById('title') as HTMLInputElement).value =
+          release.title || '';
+        (document.getElementById('release-date') as HTMLInputElement).value =
+          release.release_date || '';
+        (document.getElementById('category') as HTMLSelectElement).value =
+          release.category || '';
+        (document.getElementById('product-code') as HTMLInputElement).value =
+          release.product_code || '';
+        (document.getElementById('format-specs') as HTMLInputElement).value =
+          release.format_specs || '';
+        (document.getElementById('description') as HTMLTextAreaElement).value =
+          release.description || '';
+
+        // Status
+        releaseStatus = release.status || 'draft';
+        const badge = document.getElementById('status-badge')!;
+        badge.textContent = releaseStatus;
+        badge.className = `badge badge--${releaseStatus}`;
+
+        // Toggle publish button
+        const toggleBtn = document.getElementById(
+          'toggle-publish-btn',
+        ) as HTMLButtonElement;
+        if (releaseStatus === 'published') {
+          toggleBtn.textContent = 'Unpublish';
+          toggleBtn.className = 'btn-save';
+        } else {
+          toggleBtn.textContent = 'Save & Publish';
+          toggleBtn.className = 'btn-save btn-save--publish';
+        }
+
+        // Entities
+        if (release.entities) {
+          selectedEntities = release.entities;
+          renderEntityTags();
+        }
+
+        // Cover art
+        if (release.cover_art_url) {
+          const existingCover = document.getElementById('existing-cover')!;
+          const existingImg = document.getElementById(
+            'existing-cover-img',
+          ) as HTMLImageElement;
+          existingImg.src = release.cover_art_url;
+          existingCover.style.display = 'block';
+        }
+
+        // Existing tracks
+        if (release.tracks && release.tracks.length > 0) {
+          existingTracks = release.tracks;
+          renderExistingTracks();
+        }
+
+        // Distribution links
+        if (
+          release.distribution_links &&
+          release.distribution_links.length > 0
+        ) {
+          links = release.distribution_links.map((l: any) => ({
+            platform: l.platform || '',
+            url: l.url || '',
+            label: l.label || '',
+          }));
+        }
+        renderLinks();
+
+        // Freeform metadata
+        if (
+          release.freeform_metadata &&
+          typeof release.freeform_metadata === 'object'
+        ) {
+          freeformFields = Object.entries(release.freeform_metadata).map(
+            ([k, v]) => ({
+              key: k,
+              value: String(v),
+            }),
+          );
+        }
+        renderFreeform();
       } catch (err: any) {
-        (window as any).toast.error(err.message);
+        loadingEl.style.display = 'none';
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+      }
+    }
+
+    // ---- Entity multi-select ----
+    const entitySearch = document.getElementById(
+      'entity-search',
+    ) as HTMLInputElement;
+    const entityDropdown = document.getElementById('entity-dropdown')!;
+
+    entitySearch.addEventListener('focus', () => showEntityDropdown());
+    entitySearch.addEventListener('input', () => showEntityDropdown());
+
+    document.addEventListener('click', (e) => {
+      if (!(e.target as HTMLElement).closest('#entity-select')) {
+        entityDropdown.style.display = 'none';
+      }
+    });
+
+    function showEntityDropdown() {
+      const query = entitySearch.value.toLowerCase().trim();
+      const selectedIds = new Set(selectedEntities.map((e) => e.id));
+      const filtered = entities.filter(
+        (e) => !selectedIds.has(e.id) && e.name.toLowerCase().includes(query),
+      );
+
+      let html = filtered
+        .map(
+          (e) =>
+            `<div class="entity-option" data-id="${e.id}" data-name="${e.name}">${e.name}</div>`,
+        )
+        .join('');
+
+      if (query && !entities.some((e) => e.name.toLowerCase() === query)) {
+        html += `<div class="entity-option entity-option--create" data-create="${query}">Create "${query}"...</div>`;
+      }
+
+      if (!html) {
+        entityDropdown.style.display = 'none';
         return;
       }
-    } else {
-      const entity = entities.find(e => String(e.id) === opt.dataset.id);
-      if (entity) selectedEntities.push(entity);
+
+      entityDropdown.innerHTML = html;
+      entityDropdown.style.display = 'block';
     }
 
-    entitySearch.value = '';
-    entityDropdown.style.display = 'none';
-    renderEntityTags();
-  });
+    entityDropdown.addEventListener('click', async (e) => {
+      const opt = (e.target as HTMLElement).closest(
+        '.entity-option',
+      ) as HTMLElement | null;
+      if (!opt) return;
 
-  function renderEntityTags() {
-    const container = document.getElementById('entity-tags')!;
-    container.innerHTML = selectedEntities.map((e, i) =>
-      `<span class="entity-tag">${e.name}<button data-idx="${i}">&times;</button></span>`
-    ).join('');
-  }
+      if (opt.dataset.create) {
+        try {
+          const res = await fetch('/api/entities', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ name: opt.dataset.create }),
+          });
+          if (!res.ok) throw new Error('Failed to create entity');
+          const newEntity = await res.json();
+          entities.push(newEntity);
+          selectedEntities.push(newEntity);
+        } catch (err: any) {
+          (window as any).toast.error(err.message);
+          return;
+        }
+      } else {
+        const entity = entities.find((e) => String(e.id) === opt.dataset.id);
+        if (entity) selectedEntities.push(entity);
+      }
 
-  document.getElementById('entity-tags')!.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement).closest('button') as HTMLButtonElement | null;
-    if (!btn) return;
-    const idx = parseInt(btn.dataset.idx || '0');
-    selectedEntities.splice(idx, 1);
-    renderEntityTags();
-  });
+      entitySearch.value = '';
+      entityDropdown.style.display = 'none';
+      renderEntityTags();
+    });
 
-  // ---- Cover art ----
-  const coverDrop = document.getElementById('cover-drop')!;
-  const coverInner = document.getElementById('cover-inner')!;
-  const coverInput = document.getElementById('cover-input') as HTMLInputElement;
-  const coverPreview = document.getElementById('cover-preview')!;
-  const coverImg = document.getElementById('cover-img') as HTMLImageElement;
-
-  coverInner.addEventListener('click', () => coverInput.click());
-
-  coverInput.addEventListener('change', () => {
-    if (coverInput.files?.[0]) setCoverFile(coverInput.files[0]);
-  });
-
-  ['dragenter', 'dragover'].forEach(evt => {
-    coverDrop.addEventListener(evt, (e) => { e.preventDefault(); coverDrop.classList.add('dragover'); });
-  });
-  ['dragleave', 'drop'].forEach(evt => {
-    coverDrop.addEventListener(evt, () => coverDrop.classList.remove('dragover'));
-  });
-  coverDrop.addEventListener('drop', (e) => {
-    e.preventDefault();
-    const file = (e as DragEvent).dataTransfer?.files[0];
-    if (file && file.type.startsWith('image/')) setCoverFile(file);
-  });
-
-  function setCoverFile(file: File) {
-    coverFile = file;
-    const url = URL.createObjectURL(file);
-    coverImg.src = url;
-    coverInner.style.display = 'none';
-    coverPreview.style.display = 'block';
-  }
-
-  document.getElementById('cover-remove')?.addEventListener('click', () => {
-    coverFile = null;
-    coverInner.style.display = 'block';
-    coverPreview.style.display = 'none';
-    coverInput.value = '';
-  });
-
-  // ---- Existing tracks ----
-  function renderExistingTracks() {
-    const container = document.getElementById('existing-tracks')!;
-    if (existingTracks.length === 0) {
-      container.innerHTML = '<p style="color: var(--color-muted); font-size: var(--text-sm);">No tracks.</p>';
-      return;
+    function renderEntityTags() {
+      const container = document.getElementById('entity-tags')!;
+      container.innerHTML = selectedEntities
+        .map(
+          (e, i) =>
+            `<span class="entity-tag">${e.name}<button data-idx="${i}">&times;</button></span>`,
+        )
+        .join('');
     }
-    container.innerHTML = existingTracks.map((t: any, i: number) => {
-      const duration = t.duration_seconds ? formatDuration(t.duration_seconds) : '';
-      return `<div class="track-item" data-track-id="${t.id || ''}">
+
+    document.getElementById('entity-tags')!.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest(
+        'button',
+      ) as HTMLButtonElement | null;
+      if (!btn) return;
+      const idx = parseInt(btn.dataset.idx || '0');
+      selectedEntities.splice(idx, 1);
+      renderEntityTags();
+    });
+
+    // ---- Cover art ----
+    const coverDrop = document.getElementById('cover-drop')!;
+    const coverInner = document.getElementById('cover-inner')!;
+    const coverInput = document.getElementById(
+      'cover-input',
+    ) as HTMLInputElement;
+    const coverPreview = document.getElementById('cover-preview')!;
+    const coverImg = document.getElementById('cover-img') as HTMLImageElement;
+
+    coverInner.addEventListener('click', () => coverInput.click());
+
+    coverInput.addEventListener('change', () => {
+      if (coverInput.files?.[0]) setCoverFile(coverInput.files[0]);
+    });
+
+    ['dragenter', 'dragover'].forEach((evt) => {
+      coverDrop.addEventListener(evt, (e) => {
+        e.preventDefault();
+        coverDrop.classList.add('dragover');
+      });
+    });
+    ['dragleave', 'drop'].forEach((evt) => {
+      coverDrop.addEventListener(evt, () =>
+        coverDrop.classList.remove('dragover'),
+      );
+    });
+    coverDrop.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const file = (e as DragEvent).dataTransfer?.files[0];
+      if (file && file.type.startsWith('image/')) setCoverFile(file);
+    });
+
+    function setCoverFile(file: File) {
+      coverFile = file;
+      const url = URL.createObjectURL(file);
+      coverImg.src = url;
+      coverInner.style.display = 'none';
+      coverPreview.style.display = 'block';
+    }
+
+    document.getElementById('cover-remove')?.addEventListener('click', () => {
+      coverFile = null;
+      coverInner.style.display = 'block';
+      coverPreview.style.display = 'none';
+      coverInput.value = '';
+    });
+
+    // ---- Existing tracks ----
+    function renderExistingTracks() {
+      const container = document.getElementById('existing-tracks')!;
+      if (existingTracks.length === 0) {
+        container.innerHTML =
+          '<p style="color: var(--color-muted); font-size: var(--text-sm);">No tracks.</p>';
+        return;
+      }
+      container.innerHTML = existingTracks
+        .map((t: any, i: number) => {
+          const duration = t.duration_seconds
+            ? formatDuration(t.duration_seconds)
+            : '';
+          return `<div class="track-item" data-track-id="${t.id || ''}">
         <span class="track-item__num">${i + 1}.</span>
         <input class="track-item__title" type="text" value="${t.title || ''}" data-existing-idx="${i}" />
         <span class="track-item__duration">${duration}</span>
         <button class="track-item__remove" data-remove-existing="${i}">&times;</button>
       </div>`;
-    }).join('');
-  }
-
-  function formatDuration(seconds: number): string {
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  }
-
-  function formatSize(bytes: number): string {
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  }
-
-  document.getElementById('existing-tracks')!.addEventListener('input', (e) => {
-    const input = e.target as HTMLInputElement;
-    if (input.dataset.existingIdx !== undefined) {
-      existingTracks[parseInt(input.dataset.existingIdx)].title = input.value;
+        })
+        .join('');
     }
-  });
 
-  document.getElementById('existing-tracks')!.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement).closest('[data-remove-existing]') as HTMLElement | null;
-    if (!btn || btn.dataset.removeExisting === undefined) return;
-    existingTracks.splice(parseInt(btn.dataset.removeExisting), 1);
-    renderExistingTracks();
-  });
+    function formatDuration(seconds: number): string {
+      const m = Math.floor(seconds / 60);
+      const s = Math.floor(seconds % 60);
+      return `${m}:${s.toString().padStart(2, '0')}`;
+    }
 
-  // ---- New audio files ----
-  const audioDrop = document.getElementById('audio-drop')!;
-  const audioInput = document.getElementById('audio-input') as HTMLInputElement;
-  const audioInner = document.getElementById('audio-inner')!;
+    function formatSize(bytes: number): string {
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
 
-  audioInner.addEventListener('click', () => audioInput.click());
+    document
+      .getElementById('existing-tracks')!
+      .addEventListener('input', (e) => {
+        const input = e.target as HTMLInputElement;
+        if (input.dataset.existingIdx !== undefined) {
+          existingTracks[parseInt(input.dataset.existingIdx)].title =
+            input.value;
+        }
+      });
 
-  audioInput.addEventListener('change', () => {
-    if (audioInput.files) addAudioFiles(Array.from(audioInput.files));
-  });
+    document
+      .getElementById('existing-tracks')!
+      .addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest(
+          '[data-remove-existing]',
+        ) as HTMLElement | null;
+        if (!btn || btn.dataset.removeExisting === undefined) return;
+        existingTracks.splice(parseInt(btn.dataset.removeExisting), 1);
+        renderExistingTracks();
+      });
 
-  ['dragenter', 'dragover'].forEach(evt => {
-    audioDrop.addEventListener(evt, (e) => { e.preventDefault(); audioDrop.classList.add('dragover'); });
-  });
-  ['dragleave', 'drop'].forEach(evt => {
-    audioDrop.addEventListener(evt, () => audioDrop.classList.remove('dragover'));
-  });
-  audioDrop.addEventListener('drop', (e) => {
-    e.preventDefault();
-    const files = Array.from((e as DragEvent).dataTransfer?.files || []).filter(f => f.type.startsWith('audio/'));
-    if (files.length) addAudioFiles(files);
-  });
+    // ---- New audio files ----
+    const audioDrop = document.getElementById('audio-drop')!;
+    const audioInput = document.getElementById(
+      'audio-input',
+    ) as HTMLInputElement;
+    const audioInner = document.getElementById('audio-inner')!;
 
-  function addAudioFiles(files: File[]) {
-    files.forEach(f => {
-      const name = f.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
-      uploadQueue.push({ file: f, title: name, status: 'queued' });
+    audioInner.addEventListener('click', () => audioInput.click());
+
+    audioInput.addEventListener('change', () => {
+      if (audioInput.files) addAudioFiles(Array.from(audioInput.files));
     });
-    renderUploadQueue();
-    processUploadQueue();
-  }
 
-  async function processUploadQueue() {
-    if (uploadRunning) return;
-    uploadRunning = true;
+    ['dragenter', 'dragover'].forEach((evt) => {
+      audioDrop.addEventListener(evt, (e) => {
+        e.preventDefault();
+        audioDrop.classList.add('dragover');
+      });
+    });
+    ['dragleave', 'drop'].forEach((evt) => {
+      audioDrop.addEventListener(evt, () =>
+        audioDrop.classList.remove('dragover'),
+      );
+    });
+    audioDrop.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const files = Array.from(
+        (e as DragEvent).dataTransfer?.files || [],
+      ).filter((f) => f.type.startsWith('audio/'));
+      if (files.length) addAudioFiles(files);
+    });
 
-    while (true) {
-      const idx = uploadQueue.findIndex(t => t.status === 'queued');
-      if (idx === -1) break;
-
-      const item = uploadQueue[idx];
-      item.status = 'uploading';
+    function addAudioFiles(files: File[]) {
+      files.forEach((f) => {
+        const name = f.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
+        uploadQueue.push({ file: f, title: name, status: 'queued' });
+      });
       renderUploadQueue();
+      processUploadQueue();
+    }
 
-      try {
-        const trackForm = new FormData();
-        trackForm.append('files', item.file);
-        trackForm.append('titles', JSON.stringify([item.title]));
-        const res = await fetch(`/api/releases/${releaseCode}/tracks`, {
-          method: 'POST',
-          credentials: 'include',
-          body: trackForm,
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ detail: 'Upload failed' }));
-          throw new Error(err.detail || 'Upload failed');
+    async function processUploadQueue() {
+      if (uploadRunning) return;
+      uploadRunning = true;
+
+      while (true) {
+        const idx = uploadQueue.findIndex((t) => t.status === 'queued');
+        if (idx === -1) break;
+
+        const item = uploadQueue[idx];
+        item.status = 'uploading';
+        renderUploadQueue();
+
+        try {
+          const trackForm = new FormData();
+          trackForm.append('files', item.file);
+          trackForm.append('titles', JSON.stringify([item.title]));
+          const res = await fetch(`/api/releases/${releaseCode}/tracks`, {
+            method: 'POST',
+            credentials: 'include',
+            body: trackForm,
+          });
+          if (!res.ok) {
+            const err = await res
+              .json()
+              .catch(() => ({ detail: 'Upload failed' }));
+            throw new Error(err.detail || 'Upload failed');
+          }
+          const created = await res.json();
+          if (created.length > 0) {
+            existingTracks.push(created[0]);
+          }
+          item.status = 'done';
+        } catch (err: any) {
+          item.status = 'failed';
+          item.error = err.message;
         }
-        const created = await res.json();
-        if (created.length > 0) {
-          existingTracks.push(created[0]);
-        }
-        item.status = 'done';
-      } catch (err: any) {
-        item.status = 'failed';
-        item.error = err.message;
+        renderUploadQueue();
+        renderExistingTracks();
       }
+
+      // Keep done items visible briefly, then clear
+      await new Promise((r) => setTimeout(r, 1500));
+      uploadQueue = uploadQueue.filter((t) => t.status !== 'done');
       renderUploadQueue();
-      renderExistingTracks();
+      uploadRunning = false;
     }
 
-    // Keep done items visible briefly, then clear
-    await new Promise(r => setTimeout(r, 1500));
-    uploadQueue = uploadQueue.filter(t => t.status !== 'done');
-    renderUploadQueue();
-    uploadRunning = false;
-  }
-
-  function renderUploadQueue() {
-    const container = document.getElementById('new-track-list')!;
-    const active = uploadQueue.filter(t => t.status !== 'done');
-    if (active.length === 0) {
-      container.innerHTML = '';
-      return;
-    }
-    const offset = existingTracks.length;
-    const statusIcon = (s: string) => s === 'uploading' ? '↑' : s === 'failed' ? '✗' : '…';
-    container.innerHTML = '<p style="font-size: var(--text-sm); color: var(--color-muted); padding: var(--space-xs) var(--space-sm); margin-top: var(--space-xs);">Uploading tracks:</p>' +
-      active.map((t, i) => `
+    function renderUploadQueue() {
+      const container = document.getElementById('new-track-list')!;
+      const active = uploadQueue.filter((t) => t.status !== 'done');
+      if (active.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+      const offset = existingTracks.length;
+      const statusIcon = (s: string) =>
+        s === 'uploading' ? '↑' : s === 'failed' ? '✗' : '…';
+      container.innerHTML =
+        '<p style="font-size: var(--text-sm); color: var(--color-muted); padding: var(--space-xs) var(--space-sm); margin-top: var(--space-xs);">Uploading tracks:</p>' +
+        active
+          .map(
+            (t, i) => `
       <div class="track-item track-item--${t.status}" data-queue-idx="${i}">
         <span class="track-item__num">${statusIcon(t.status)}</span>
         <input class="track-item__title" type="text" value="${t.title}" data-queue-idx="${i}" ${t.status === 'uploading' ? 'readonly' : ''} />
@@ -912,45 +1111,57 @@ import Admin from '../../../layouts/Admin.astro';
         ${t.status === 'failed' ? `<button class="btn-sm" data-retry-idx="${i}" style="font-size:var(--text-xs);">Retry</button>` : ''}
         ${t.status !== 'uploading' ? `<button class="track-item__remove" data-remove-queue="${i}">&times;</button>` : ''}
       </div>
-    `).join('');
-  }
-
-  document.getElementById('new-track-list')!.addEventListener('input', (e) => {
-    const input = e.target as HTMLInputElement;
-    if (input.dataset.queueIdx !== undefined) {
-      const active = uploadQueue.filter(t => t.status !== 'done');
-      const item = active[parseInt(input.dataset.queueIdx)];
-      if (item) item.title = input.value;
+    `,
+          )
+          .join('');
     }
-  });
 
-  document.getElementById('new-track-list')!.addEventListener('click', (e) => {
-    const active = uploadQueue.filter(t => t.status !== 'done');
-    const removeBtn = (e.target as HTMLElement).closest('[data-remove-queue]') as HTMLElement | null;
-    if (removeBtn && removeBtn.dataset.removeQueue !== undefined) {
-      const item = active[parseInt(removeBtn.dataset.removeQueue)];
-      if (item) {
-        uploadQueue = uploadQueue.filter(t => t !== item);
-        renderUploadQueue();
-      }
-      return;
-    }
-    const retryBtn = (e.target as HTMLElement).closest('[data-retry-idx]') as HTMLElement | null;
-    if (retryBtn && retryBtn.dataset.retryIdx !== undefined) {
-      const item = active[parseInt(retryBtn.dataset.retryIdx)];
-      if (item) {
-        item.status = 'queued';
-        item.error = undefined;
-        renderUploadQueue();
-        processUploadQueue();
-      }
-    }
-  });
+    document
+      .getElementById('new-track-list')!
+      .addEventListener('input', (e) => {
+        const input = e.target as HTMLInputElement;
+        if (input.dataset.queueIdx !== undefined) {
+          const active = uploadQueue.filter((t) => t.status !== 'done');
+          const item = active[parseInt(input.dataset.queueIdx)];
+          if (item) item.title = input.value;
+        }
+      });
 
-  // ---- Distribution Links ----
-  function renderLinks() {
-    const container = document.getElementById('links-list')!;
-    container.innerHTML = links.map((l, i) => `
+    document
+      .getElementById('new-track-list')!
+      .addEventListener('click', (e) => {
+        const active = uploadQueue.filter((t) => t.status !== 'done');
+        const removeBtn = (e.target as HTMLElement).closest(
+          '[data-remove-queue]',
+        ) as HTMLElement | null;
+        if (removeBtn && removeBtn.dataset.removeQueue !== undefined) {
+          const item = active[parseInt(removeBtn.dataset.removeQueue)];
+          if (item) {
+            uploadQueue = uploadQueue.filter((t) => t !== item);
+            renderUploadQueue();
+          }
+          return;
+        }
+        const retryBtn = (e.target as HTMLElement).closest(
+          '[data-retry-idx]',
+        ) as HTMLElement | null;
+        if (retryBtn && retryBtn.dataset.retryIdx !== undefined) {
+          const item = active[parseInt(retryBtn.dataset.retryIdx)];
+          if (item) {
+            item.status = 'queued';
+            item.error = undefined;
+            renderUploadQueue();
+            processUploadQueue();
+          }
+        }
+      });
+
+    // ---- Distribution Links ----
+    function renderLinks() {
+      const container = document.getElementById('links-list')!;
+      container.innerHTML = links
+        .map(
+          (l, i) => `
       <div class="link-row" data-idx="${i}">
         <select data-field="platform" data-idx="${i}">
           <option value="">Platform...</option>
@@ -964,245 +1175,293 @@ import Admin from '../../../layouts/Admin.astro';
         <input type="text" placeholder="Label (optional)" value="${l.label}" data-field="label" data-idx="${i}" />
         <button class="btn-sm btn-sm--danger" data-remove="link" data-idx="${i}">&times;</button>
       </div>
-    `).join('');
-  }
-
-  document.getElementById('add-link-btn')?.addEventListener('click', () => {
-    links.push({ platform: '', url: '', label: '' });
-    renderLinks();
-  });
-
-  document.getElementById('links-list')!.addEventListener('input', (e) => {
-    const el = e.target as HTMLInputElement | HTMLSelectElement;
-    const idx = parseInt(el.dataset.idx || '0');
-    const field = el.dataset.field as 'platform' | 'url' | 'label';
-    if (field && links[idx]) {
-      links[idx][field] = el.value;
+    `,
+        )
+        .join('');
     }
-  });
 
-  document.getElementById('links-list')!.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement).closest('[data-remove="link"]') as HTMLElement | null;
-    if (!btn || btn.dataset.idx === undefined) return;
-    links.splice(parseInt(btn.dataset.idx), 1);
-    renderLinks();
-  });
+    document.getElementById('add-link-btn')?.addEventListener('click', () => {
+      links.push({ platform: '', url: '', label: '' });
+      renderLinks();
+    });
 
-  // ---- Freeform Metadata ----
-  function renderFreeform() {
-    const container = document.getElementById('freeform-list')!;
-    container.innerHTML = freeformFields.map((f, i) => `
+    document.getElementById('links-list')!.addEventListener('input', (e) => {
+      const el = e.target as HTMLInputElement | HTMLSelectElement;
+      const idx = parseInt(el.dataset.idx || '0');
+      const field = el.dataset.field as 'platform' | 'url' | 'label';
+      if (field && links[idx]) {
+        links[idx][field] = el.value;
+      }
+    });
+
+    document.getElementById('links-list')!.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest(
+        '[data-remove="link"]',
+      ) as HTMLElement | null;
+      if (!btn || btn.dataset.idx === undefined) return;
+      links.splice(parseInt(btn.dataset.idx), 1);
+      renderLinks();
+    });
+
+    // ---- Freeform Metadata ----
+    function renderFreeform() {
+      const container = document.getElementById('freeform-list')!;
+      container.innerHTML = freeformFields
+        .map(
+          (f, i) => `
       <div class="freeform-row" data-idx="${i}">
         <input type="text" placeholder="Key" value="${f.key}" data-field="key" data-idx="${i}" />
         <input type="text" placeholder="Value" value="${f.value}" data-field="value" data-idx="${i}" />
         <button class="btn-sm btn-sm--danger" data-remove="freeform" data-idx="${i}">&times;</button>
       </div>
-    `).join('');
-  }
+    `,
+        )
+        .join('');
+    }
 
-  document.getElementById('add-freeform-btn')?.addEventListener('click', () => {
-    freeformFields.push({ key: '', value: '' });
-    renderFreeform();
-  });
+    document
+      .getElementById('add-freeform-btn')
+      ?.addEventListener('click', () => {
+        freeformFields.push({ key: '', value: '' });
+        renderFreeform();
+      });
 
-  document.getElementById('key-suggestions')?.addEventListener('click', (e) => {
-    const chip = (e.target as HTMLElement).closest('.chip') as HTMLElement | null;
-    if (!chip || !chip.dataset.key) return;
-    const existing = freeformFields.some(f => f.key === chip.dataset.key);
-    if (!existing) {
-      freeformFields.push({ key: chip.dataset.key!, value: '' });
+    document
+      .getElementById('key-suggestions')
+      ?.addEventListener('click', (e) => {
+        const chip = (e.target as HTMLElement).closest(
+          '.chip',
+        ) as HTMLElement | null;
+        if (!chip || !chip.dataset.key) return;
+        const existing = freeformFields.some((f) => f.key === chip.dataset.key);
+        if (!existing) {
+          freeformFields.push({ key: chip.dataset.key!, value: '' });
+          renderFreeform();
+        }
+      });
+
+    document.getElementById('freeform-list')!.addEventListener('input', (e) => {
+      const el = e.target as HTMLInputElement;
+      const idx = parseInt(el.dataset.idx || '0');
+      const field = el.dataset.field as 'key' | 'value';
+      if (field && freeformFields[idx]) {
+        freeformFields[idx][field] = el.value;
+      }
+    });
+
+    document.getElementById('freeform-list')!.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest(
+        '[data-remove="freeform"]',
+      ) as HTMLElement | null;
+      if (!btn || btn.dataset.idx === undefined) return;
+      freeformFields.splice(parseInt(btn.dataset.idx), 1);
       renderFreeform();
-    }
-  });
+    });
 
-  document.getElementById('freeform-list')!.addEventListener('input', (e) => {
-    const el = e.target as HTMLInputElement;
-    const idx = parseInt(el.dataset.idx || '0');
-    const field = el.dataset.field as 'key' | 'value';
-    if (field && freeformFields[idx]) {
-      freeformFields[idx][field] = el.value;
-    }
-  });
+    // Clear inline validation errors on input
+    document.getElementById('title')?.addEventListener('input', () => {
+      document.getElementById('title-error')!.style.display = 'none';
+    });
 
-  document.getElementById('freeform-list')!.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement).closest('[data-remove="freeform"]') as HTMLElement | null;
-    if (!btn || btn.dataset.idx === undefined) return;
-    freeformFields.splice(parseInt(btn.dataset.idx), 1);
-    renderFreeform();
-  });
-
-  // Clear inline validation errors on input
-  document.getElementById('title')?.addEventListener('input', () => {
-    document.getElementById('title-error')!.style.display = 'none';
-  });
-
-  // ---- Save ----
-  document.getElementById('save-btn')?.addEventListener('click', () => saveChanges(false));
-  document.getElementById('toggle-publish-btn')?.addEventListener('click', () => {
-    if (releaseStatus === 'published') {
-      unpublishRelease();
-    } else {
-      saveChanges(true);
-    }
-  });
-
-  async function saveChanges(publish: boolean) {
-    const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
-    const toggleBtn = document.getElementById('toggle-publish-btn') as HTMLButtonElement;
-    const progressEl = document.getElementById('save-progress')!;
-    const progressFill = document.getElementById('progress-fill')!;
-    const progressText = document.getElementById('progress-text')!;
-    const errorEl = document.getElementById('save-error')!;
-    const successEl = document.getElementById('save-success')!;
-
-    errorEl.style.display = 'none';
-    successEl.style.display = 'none';
-    saveBtn.disabled = true;
-    toggleBtn.disabled = true;
-    progressEl.style.display = 'block';
-    progressFill.style.width = '0%';
-
-    const title = (document.getElementById('title') as HTMLInputElement).value;
-    const releaseDate = (document.getElementById('release-date') as HTMLInputElement).value;
-    const category = (document.getElementById('category') as HTMLSelectElement).value;
-    const formatSpecs = (document.getElementById('format-specs') as HTMLInputElement).value;
-    const description = (document.getElementById('description') as HTMLTextAreaElement).value;
-
-    const titleError = document.getElementById('title-error')!;
-    titleError.style.display = 'none';
-
-    if (!title) {
-      titleError.textContent = 'Title is required';
-      titleError.style.display = 'block';
-      progressEl.style.display = 'none';
-      saveBtn.disabled = false;
-      toggleBtn.disabled = false;
-      return;
-    }
-
-    try {
-      // Step 1: Update release metadata
-      progressText.textContent = 'Updating release...';
-      progressFill.style.width = '10%';
-
-      const releaseData: any = {
-        title,
-        entity_ids: selectedEntities.map(e => e.id),
-        release_date: releaseDate || null,
-        category: category || null,
-        format_specs: formatSpecs || null,
-        description: description || null,
-        distribution_links: links.filter(l => l.url).map(l => ({
-          platform: l.platform,
-          url: l.url,
-          label: l.label || null,
-        })),
-        freeform_metadata: Object.fromEntries(
-          freeformFields.filter(f => f.key && f.value).map(f => [f.key, f.value])
-        ),
-        tracks: existingTracks.map((t: any, i: number) => ({
-          id: t.id,
-          title: t.title,
-          position: i + 1,
-        })),
-      };
-
-      const updateRes = await fetch(`/api/releases/${releaseCode}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(releaseData),
+    // ---- Save ----
+    document
+      .getElementById('save-btn')
+      ?.addEventListener('click', () => saveChanges(false));
+    document
+      .getElementById('toggle-publish-btn')
+      ?.addEventListener('click', () => {
+        if (releaseStatus === 'published') {
+          unpublishRelease();
+        } else {
+          saveChanges(true);
+        }
       });
 
-      if (!updateRes.ok) {
-        const err = await updateRes.json().catch(() => ({ detail: 'Failed to update release' }));
-        throw new Error(err.detail || 'Failed to update release');
+    async function saveChanges(publish: boolean) {
+      const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
+      const toggleBtn = document.getElementById(
+        'toggle-publish-btn',
+      ) as HTMLButtonElement;
+      const progressEl = document.getElementById('save-progress')!;
+      const progressFill = document.getElementById('progress-fill')!;
+      const progressText = document.getElementById('progress-text')!;
+      const errorEl = document.getElementById('save-error')!;
+      const successEl = document.getElementById('save-success')!;
+
+      errorEl.style.display = 'none';
+      successEl.style.display = 'none';
+      saveBtn.disabled = true;
+      toggleBtn.disabled = true;
+      progressEl.style.display = 'block';
+      progressFill.style.width = '0%';
+
+      const title = (document.getElementById('title') as HTMLInputElement)
+        .value;
+      const releaseDate = (
+        document.getElementById('release-date') as HTMLInputElement
+      ).value;
+      const category = (
+        document.getElementById('category') as HTMLSelectElement
+      ).value;
+      const formatSpecs = (
+        document.getElementById('format-specs') as HTMLInputElement
+      ).value;
+      const description = (
+        document.getElementById('description') as HTMLTextAreaElement
+      ).value;
+
+      const titleError = document.getElementById('title-error')!;
+      titleError.style.display = 'none';
+
+      if (!title) {
+        titleError.textContent = 'Title is required';
+        titleError.style.display = 'block';
+        progressEl.style.display = 'none';
+        saveBtn.disabled = false;
+        toggleBtn.disabled = false;
+        return;
       }
 
-      progressFill.style.width = '30%';
+      try {
+        // Step 1: Update release metadata
+        progressText.textContent = 'Updating release...';
+        progressFill.style.width = '10%';
 
-      // Step 2: Upload new cover art if changed
-      if (coverFile) {
-        progressText.textContent = 'Uploading cover art...';
-        const coverForm = new FormData();
-        coverForm.append('file', coverFile);
-        const coverRes = await fetch(`/api/releases/${releaseCode}/cover`, {
+        const releaseData: any = {
+          title,
+          entity_ids: selectedEntities.map((e) => e.id),
+          release_date: releaseDate || null,
+          category: category || null,
+          format_specs: formatSpecs || null,
+          description: description || null,
+          distribution_links: links
+            .filter((l) => l.url)
+            .map((l) => ({
+              platform: l.platform,
+              url: l.url,
+              label: l.label || null,
+            })),
+          freeform_metadata: Object.fromEntries(
+            freeformFields
+              .filter((f) => f.key && f.value)
+              .map((f) => [f.key, f.value]),
+          ),
+          tracks: existingTracks.map((t: any, i: number) => ({
+            id: t.id,
+            title: t.title,
+            position: i + 1,
+          })),
+        };
+
+        const updateRes = await fetch(`/api/releases/${releaseCode}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(releaseData),
+        });
+
+        if (!updateRes.ok) {
+          const err = await updateRes
+            .json()
+            .catch(() => ({ detail: 'Failed to update release' }));
+          throw new Error(err.detail || 'Failed to update release');
+        }
+
+        progressFill.style.width = '30%';
+
+        // Step 2: Upload new cover art if changed
+        if (coverFile) {
+          progressText.textContent = 'Uploading cover art...';
+          const coverForm = new FormData();
+          coverForm.append('file', coverFile);
+          const coverRes = await fetch(`/api/releases/${releaseCode}/cover`, {
+            method: 'POST',
+            credentials: 'include',
+            body: coverForm,
+          });
+          if (!coverRes.ok) {
+            console.warn('Cover upload failed');
+          }
+        }
+        progressFill.style.width = '60%';
+
+        // Step 3: Wait for any in-progress track uploads
+        const pending = uploadQueue.filter(
+          (t) => t.status === 'queued' || t.status === 'uploading',
+        );
+        if (pending.length > 0) {
+          progressText.textContent = 'Waiting for track uploads to finish...';
+          while (
+            uploadQueue.some(
+              (t) => t.status === 'queued' || t.status === 'uploading',
+            )
+          ) {
+            await new Promise((r) => setTimeout(r, 300));
+          }
+        }
+        const failed = uploadQueue.filter((t) => t.status === 'failed');
+        if (failed.length > 0) {
+          throw new Error(
+            `${failed.length} track(s) failed to upload. Retry or remove them before saving.`,
+          );
+        }
+        progressFill.style.width = '85%';
+
+        // Step 4: Publish if requested
+        if (publish) {
+          progressText.textContent = 'Publishing...';
+          await fetch(`/api/releases/${releaseCode}/publish`, {
+            method: 'POST',
+            credentials: 'include',
+          });
+        }
+
+        progressFill.style.width = '100%';
+        progressText.textContent = 'Done!';
+        successEl.textContent = 'Changes saved successfully.';
+        successEl.style.display = 'block';
+
+        // Reload to show updated state
+        setTimeout(() => window.location.reload(), 1000);
+      } catch (err: any) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+        progressEl.style.display = 'none';
+        saveBtn.disabled = false;
+        toggleBtn.disabled = false;
+      }
+    }
+
+    async function unpublishRelease() {
+      const toggleBtn = document.getElementById(
+        'toggle-publish-btn',
+      ) as HTMLButtonElement;
+      const errorEl = document.getElementById('save-error')!;
+      const successEl = document.getElementById('save-success')!;
+
+      errorEl.style.display = 'none';
+      successEl.style.display = 'none';
+      toggleBtn.disabled = true;
+
+      try {
+        const res = await fetch(`/api/releases/${releaseCode}/unpublish`, {
           method: 'POST',
           credentials: 'include',
-          body: coverForm,
         });
-        if (!coverRes.ok) {
-          console.warn('Cover upload failed');
+        if (!res.ok) {
+          const err = await res
+            .json()
+            .catch(() => ({ detail: 'Failed to unpublish' }));
+          throw new Error(err.detail || 'Failed to unpublish');
         }
+        successEl.textContent = 'Release unpublished.';
+        successEl.style.display = 'block';
+        setTimeout(() => window.location.reload(), 1000);
+      } catch (err: any) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+        toggleBtn.disabled = false;
       }
-      progressFill.style.width = '60%';
-
-      // Step 3: Wait for any in-progress track uploads
-      const pending = uploadQueue.filter(t => t.status === 'queued' || t.status === 'uploading');
-      if (pending.length > 0) {
-        progressText.textContent = 'Waiting for track uploads to finish...';
-        while (uploadQueue.some(t => t.status === 'queued' || t.status === 'uploading')) {
-          await new Promise(r => setTimeout(r, 300));
-        }
-      }
-      const failed = uploadQueue.filter(t => t.status === 'failed');
-      if (failed.length > 0) {
-        throw new Error(`${failed.length} track(s) failed to upload. Retry or remove them before saving.`);
-      }
-      progressFill.style.width = '85%';
-
-      // Step 4: Publish if requested
-      if (publish) {
-        progressText.textContent = 'Publishing...';
-        await fetch(`/api/releases/${releaseCode}/publish`, {
-          method: 'POST',
-          credentials: 'include',
-        });
-      }
-
-      progressFill.style.width = '100%';
-      progressText.textContent = 'Done!';
-      successEl.textContent = 'Changes saved successfully.';
-      successEl.style.display = 'block';
-
-      // Reload to show updated state
-      setTimeout(() => window.location.reload(), 1000);
-
-    } catch (err: any) {
-      errorEl.textContent = err.message;
-      errorEl.style.display = 'block';
-      progressEl.style.display = 'none';
-      saveBtn.disabled = false;
-      toggleBtn.disabled = false;
     }
-  }
-
-  async function unpublishRelease() {
-    const toggleBtn = document.getElementById('toggle-publish-btn') as HTMLButtonElement;
-    const errorEl = document.getElementById('save-error')!;
-    const successEl = document.getElementById('save-success')!;
-
-    errorEl.style.display = 'none';
-    successEl.style.display = 'none';
-    toggleBtn.disabled = true;
-
-    try {
-      const res = await fetch(`/api/releases/${releaseCode}/unpublish`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: 'Failed to unpublish' }));
-        throw new Error(err.detail || 'Failed to unpublish');
-      }
-      successEl.textContent = 'Release unpublished.';
-      successEl.style.display = 'block';
-      setTimeout(() => window.location.reload(), 1000);
-    } catch (err: any) {
-      errorEl.textContent = err.message;
-      errorEl.style.display = 'block';
-      toggleBtn.disabled = false;
-    }
-  }
   });
 </script>

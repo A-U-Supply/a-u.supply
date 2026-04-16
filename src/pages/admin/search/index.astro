@@ -6,18 +6,37 @@ import Admin from '../../../layouts/Admin.astro';
   <div class="page-header">
     <h1>Media Search</h1>
     <div class="header-actions">
-      <a class="workspace-badge" id="workspace-badge" href="/admin/search/workspace" style="display:none;" title="View workspace">Workspace: <span id="workspace-count">0</span></a>
-      <button class="sync-btn" id="sync-now-btn" title="Sync new media from Slack">Sync Now</button>
+      <a
+        class="workspace-badge"
+        id="workspace-badge"
+        href="/admin/search/workspace"
+        style="display:none;"
+        title="View workspace">Workspace: <span id="workspace-count">0</span></a
+      >
+      <button
+        class="sync-btn"
+        id="sync-now-btn"
+        title="Sync new media from Slack">Sync Now</button
+      >
       <span class="sync-status" id="sync-status"></span>
       <div class="view-toggle">
-        <button class="toggle-btn active" id="grid-view-btn" title="Grid view">Grid</button>
-        <button class="toggle-btn" id="list-view-btn" title="List view">List</button>
+        <button class="toggle-btn active" id="grid-view-btn" title="Grid view"
+          >Grid</button
+        >
+        <button class="toggle-btn" id="list-view-btn" title="List view"
+          >List</button
+        >
       </div>
     </div>
   </div>
 
   <form id="search-form" class="search-bar">
-    <input type="text" id="search-input" placeholder="Search media..." autocomplete="off" />
+    <input
+      type="text"
+      id="search-input"
+      placeholder="Search media..."
+      autocomplete="off"
+    />
     <button type="submit" class="search-submit">Search</button>
   </form>
 
@@ -28,9 +47,15 @@ import Admin from '../../../layouts/Admin.astro';
       <div class="filter-body" id="filter-body">
         <div class="filter-group">
           <label class="filter-label">Media Type</label>
-          <label class="filter-check"><input type="checkbox" value="image" checked /> Image</label>
-          <label class="filter-check"><input type="checkbox" value="audio" checked /> Audio</label>
-          <label class="filter-check"><input type="checkbox" value="video" checked /> Video</label>
+          <label class="filter-check"
+            ><input type="checkbox" value="image" checked /> Image</label
+          >
+          <label class="filter-check"
+            ><input type="checkbox" value="audio" checked /> Audio</label
+          >
+          <label class="filter-check"
+            ><input type="checkbox" value="video" checked /> Video</label
+          >
         </div>
 
         <div class="filter-group">
@@ -44,6 +69,51 @@ import Admin from '../../../layouts/Admin.astro';
           <label class="filter-label">Date Range</label>
           <input type="date" id="filter-date-from" placeholder="From" />
           <input type="date" id="filter-date-to" placeholder="To" />
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Color</label>
+          <div class="color-checks">
+            <label class="filter-check"
+              ><input type="checkbox" name="color-group" value="red" /> Red</label
+            >
+            <label class="filter-check"
+              ><input type="checkbox" name="color-group" value="orange" /> Orange</label
+            >
+            <label class="filter-check"
+              ><input type="checkbox" name="color-group" value="yellow" /> Yellow</label
+            >
+            <label class="filter-check"
+              ><input type="checkbox" name="color-group" value="green" /> Green</label
+            >
+            <label class="filter-check"
+              ><input type="checkbox" name="color-group" value="teal" /> Teal</label
+            >
+            <label class="filter-check"
+              ><input type="checkbox" name="color-group" value="blue" /> Blue</label
+            >
+            <label class="filter-check"
+              ><input type="checkbox" name="color-group" value="purple" /> Purple</label
+            >
+            <label class="filter-check"
+              ><input type="checkbox" name="color-group" value="pink" /> Pink</label
+            >
+            <label class="filter-check"
+              ><input type="checkbox" name="color-group" value="brown" /> Brown</label
+            >
+            <label class="filter-check"
+              ><input type="checkbox" name="color-group" value="beige" /> Beige</label
+            >
+            <label class="filter-check"
+              ><input type="checkbox" name="color-group" value="gray" /> Gray</label
+            >
+            <label class="filter-check"
+              ><input type="checkbox" name="color-group" value="black" /> Black</label
+            >
+            <label class="filter-check"
+              ><input type="checkbox" name="color-group" value="white" /> White</label
+            >
+          </div>
         </div>
 
         <div class="filter-group">
@@ -62,33 +132,12 @@ import Admin from '../../../layouts/Admin.astro';
         </div>
 
         <div class="filter-group">
-          <label class="filter-label">App</label>
-          <select id="filter-job-app">
-            <option value="">All</option>
-          </select>
-        </div>
-
-        <div class="filter-group">
-          <label class="filter-label">Has Transcript</label>
-          <select id="filter-has-transcript">
-            <option value="">All</option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
-        </div>
-
-        <div class="filter-group">
-          <label class="filter-label">Has Text (OCR)</label>
-          <select id="filter-has-text">
-            <option value="">All</option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
-        </div>
-
-        <div class="filter-group">
           <label class="filter-label">Tags</label>
-          <input type="text" id="filter-tags" placeholder="Comma-separated tags" />
+          <input
+            type="text"
+            id="filter-tags"
+            placeholder="Comma-separated tags"
+          />
         </div>
 
         <div class="filter-group">
@@ -113,28 +162,17 @@ import Admin from '../../../layouts/Admin.astro';
           </select>
         </div>
 
-        <div class="filter-group">
-          <label class="filter-label">Color</label>
-          <select id="filter-color-group" multiple size="4">
-            <option value="red">Red</option>
-            <option value="orange">Orange</option>
-            <option value="yellow">Yellow</option>
-            <option value="green">Green</option>
-            <option value="teal">Teal</option>
-            <option value="blue">Blue</option>
-            <option value="purple">Purple</option>
-            <option value="pink">Pink</option>
-            <option value="brown">Brown</option>
-            <option value="beige">Beige</option>
-            <option value="gray">Gray</option>
-            <option value="black">Black</option>
-            <option value="white">White</option>
-          </select>
-        </div>
+        <button
+          class="action-btn"
+          id="apply-filters"
+          style="width:100%; margin-top: var(--space-xs);">Apply Filters</button
+        >
 
-        <button class="action-btn" id="apply-filters" style="width:100%; margin-top: var(--space-xs);">Apply Filters</button>
-
-        <div class="insights-section" id="insights-section" style="display:none;">
+        <div
+          class="insights-section"
+          id="insights-section"
+          style="display:none;"
+        >
           <button class="insights-toggle" id="insights-toggle">Insights</button>
           <div class="insights-body" id="insights-body">
             <div class="insight-group" id="insight-uploaders"></div>
@@ -149,18 +187,23 @@ import Admin from '../../../layouts/Admin.astro';
 
     <div class="results-area">
       <div class="stats-bar" id="stats-bar" style="display:none;"></div>
-      <div id="active-filters" class="active-filters" style="display:none;"></div>
+      <div id="active-filters" class="active-filters" style="display:none;">
+      </div>
       <div class="batch-bar" id="batch-bar" style="display:none;">
         <span id="selected-count">0 selected</span>
         <button class="action-btn" data-batch="tag">Tag</button>
         <button class="action-btn" data-batch="workspace">+ Workspace</button>
         <button class="action-btn" data-batch="re-extract">Re-extract</button>
         <button class="action-btn" data-batch="export">Export</button>
-        <button class="action-btn action-btn--danger" data-batch="delete">Delete</button>
+        <button class="action-btn action-btn--danger" data-batch="delete"
+          >Delete</button
+        >
         <button class="action-btn" id="clear-selection">Clear</button>
       </div>
 
-      <div id="loading" style="color: var(--color-muted);"><span class="loading-dots">Loading</span></div>
+      <div id="loading" style="color: var(--color-muted);">
+        <span class="loading-dots">Loading</span>
+      </div>
       <div id="error" class="login-error" style="display:none;"></div>
       <div id="empty" class="empty-state" style="display:none;">
         <div class="empty-state__icon">&#128269;</div>
@@ -200,7 +243,12 @@ import Admin from '../../../layouts/Admin.astro';
   <div class="dialog-overlay" id="batch-tag-dialog" style="display:none;">
     <div class="dialog">
       <p>Add tags to selected items</p>
-      <input type="text" id="batch-tag-input" placeholder="Comma-separated tags" style="width:100%; margin-top: var(--space-sm); padding: var(--space-xs); font-family: var(--font-mono); font-size: var(--text-sm); border: 1px solid var(--color-border);" />
+      <input
+        type="text"
+        id="batch-tag-input"
+        placeholder="Comma-separated tags"
+        style="width:100%; margin-top: var(--space-sm); padding: var(--space-xs); font-family: var(--font-mono); font-size: var(--text-sm); border: 1px solid var(--color-border);"
+      />
       <div class="dialog-actions">
         <button class="btn-cancel" id="batch-tag-cancel">Cancel</button>
         <button class="action-btn" id="batch-tag-confirm">Apply Tags</button>
@@ -212,7 +260,11 @@ import Admin from '../../../layouts/Admin.astro';
   <div class="dialog-overlay" id="delete-dialog" style="display:none;">
     <div class="dialog">
       <p>Delete <strong id="delete-count">0</strong> selected items?</p>
-      <p style="color: var(--color-muted); font-size: var(--text-sm); margin-top: var(--space-xs);">This action cannot be undone.</p>
+      <p
+        style="color: var(--color-muted); font-size: var(--text-sm); margin-top: var(--space-xs);"
+      >
+        This action cannot be undone.
+      </p>
       <div class="dialog-actions">
         <button class="btn-cancel" id="delete-cancel">Cancel</button>
         <button class="btn-danger" id="delete-confirm">Delete</button>
@@ -231,7 +283,9 @@ import Admin from '../../../layouts/Admin.astro';
     border: 1px solid var(--color-border);
     text-decoration: none;
   }
-  .workspace-badge:hover { border-color: var(--color-text); }
+  .workspace-badge:hover {
+    border-color: var(--color-text);
+  }
   .sync-btn {
     padding: var(--space-xs) var(--space-sm);
     font-family: var(--font-mono);
@@ -244,7 +298,10 @@ import Admin from '../../../layouts/Admin.astro';
     border: 2px solid #1a1a1a;
     cursor: pointer;
   }
-  .sync-btn:hover { background: #333; border-color: #333; }
+  .sync-btn:hover {
+    background: #333;
+    border-color: #333;
+  }
   .sync-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -275,7 +332,9 @@ import Admin from '../../../layouts/Admin.astro';
     cursor: pointer;
     color: var(--color-muted);
   }
-  .toggle-btn:first-child { border-right: none; }
+  .toggle-btn:first-child {
+    border-right: none;
+  }
   .toggle-btn.active {
     color: var(--color-text);
     font-weight: bold;
@@ -314,7 +373,10 @@ import Admin from '../../../layouts/Admin.astro';
     border: 2px solid #1a1a1a;
     cursor: pointer;
   }
-  .search-submit:hover { background: #333; border-color: #333; }
+  .search-submit:hover {
+    background: #333;
+    border-color: #333;
+  }
 
   .search-layout {
     display: grid;
@@ -356,10 +418,12 @@ import Admin from '../../../layouts/Admin.astro';
     margin-bottom: 2px;
     cursor: pointer;
   }
-  .filter-check input { margin-right: 4px; }
-  .filter-group input[type="text"],
-  .filter-group input[type="number"],
-  .filter-group input[type="date"],
+  .filter-check input {
+    margin-right: 4px;
+  }
+  .filter-group input[type='text'],
+  .filter-group input[type='number'],
+  .filter-group input[type='date'],
   .filter-group select {
     width: 100%;
     padding: 4px 6px;
@@ -460,15 +524,21 @@ import Admin from '../../../layouts/Admin.astro';
     cursor: pointer;
     color: var(--color-text);
   }
-  .insights-toggle:hover { border-color: var(--color-text); }
+  .insights-toggle:hover {
+    border-color: var(--color-text);
+  }
   .insights-body {
     margin-top: var(--space-sm);
   }
-  .insights-body.collapsed { display: none; }
+  .insights-body.collapsed {
+    display: none;
+  }
   .insight-group {
     margin-bottom: var(--space-md);
   }
-  .insight-group:empty { display: none; }
+  .insight-group:empty {
+    display: none;
+  }
   .insight-title {
     font-size: 0.6rem;
     color: var(--color-muted);
@@ -484,7 +554,9 @@ import Admin from '../../../layouts/Admin.astro';
     font-size: 0.6rem;
     cursor: pointer;
   }
-  .insight-bar-row:hover { color: var(--color-accent); }
+  .insight-bar-row:hover {
+    color: var(--color-accent);
+  }
   .insight-bar-label {
     flex: 0 0 70px;
     overflow: hidden;
@@ -503,7 +575,9 @@ import Admin from '../../../layouts/Admin.astro';
     background: var(--color-text);
     transition: width 0.3s;
   }
-  .insight-bar-row:hover .insight-bar-fill { background: var(--color-accent); }
+  .insight-bar-row:hover .insight-bar-fill {
+    background: var(--color-accent);
+  }
   .insight-bar-count {
     flex: 0 0 30px;
     text-align: right;
@@ -527,18 +601,34 @@ import Admin from '../../../layouts/Admin.astro';
     margin-right: auto;
   }
 
-  .pagination { justify-content: center; }
+  .pagination {
+    justify-content: center;
+  }
 
   @media (max-width: 640px) {
-    .page-header { flex-direction: column; align-items: stretch; }
-    .header-actions { flex-wrap: wrap; }
-    .search-bar input { font-size: 16px; } /* prevent iOS zoom */
+    .page-header {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .header-actions {
+      flex-wrap: wrap;
+    }
+    .search-bar input {
+      font-size: 16px;
+    } /* prevent iOS zoom */
     .search-layout {
       grid-template-columns: 1fr;
     }
-    .filter-toggle { display: block; }
-    .filter-body { display: none; }
-    .filter-body.open { display: block; margin-top: var(--space-sm); }
+    .filter-toggle {
+      display: block;
+    }
+    .filter-body {
+      display: none;
+    }
+    .filter-body.open {
+      display: block;
+      margin-top: var(--space-sm);
+    }
   }
 </style>
 
@@ -557,8 +647,13 @@ import Admin from '../../../layouts/Admin.astro';
     overflow: hidden;
     min-width: 0;
   }
-  .results-grid .grid-item:hover { border-color: var(--color-text); }
-  .results-grid .grid-item.selected { border-color: var(--color-accent); border-width: 2px; }
+  .results-grid .grid-item:hover {
+    border-color: var(--color-text);
+  }
+  .results-grid .grid-item.selected {
+    border-color: var(--color-accent);
+    border-width: 2px;
+  }
   .results-grid .grid-item__check {
     position: absolute;
     top: 4px;
@@ -590,27 +685,29 @@ import Admin from '../../../layouts/Admin.astro';
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0,0,0,0.35);
+    background: rgba(0, 0, 0, 0.35);
     opacity: 0;
     transition: opacity 0.15s;
     cursor: pointer;
     border: none;
     padding: 0;
   }
-  .results-grid .grid-item__thumb:hover .grid-item__play { opacity: 1; }
+  .results-grid .grid-item__thumb:hover .grid-item__play {
+    opacity: 1;
+  }
   .results-grid .grid-item__play svg {
     width: 32px;
     height: 32px;
     fill: #fff;
-    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
   }
   .results-grid .grid-item__add {
     position: absolute;
     bottom: 4px;
     right: 4px;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0, 0, 0, 0.6);
     color: #fff;
-    border: 1px solid rgba(255,255,255,0.3);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     font-family: var(--font-mono);
     font-size: 0.85rem;
     font-weight: bold;
@@ -625,15 +722,20 @@ import Admin from '../../../layouts/Admin.astro';
     padding: 0;
     z-index: 1;
   }
-  .results-grid .grid-item__thumb:hover .grid-item__add { opacity: 1; }
-  .results-grid .grid-item__add:hover { background: rgba(184,134,11,0.8); border-color: #b8860b; }
+  .results-grid .grid-item__thumb:hover .grid-item__add {
+    opacity: 1;
+  }
+  .results-grid .grid-item__add:hover {
+    background: rgba(184, 134, 11, 0.8);
+    border-color: #b8860b;
+  }
   .results-grid .grid-item__dl {
     position: absolute;
     bottom: 4px;
     left: 4px;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0, 0, 0, 0.6);
     color: #fff;
-    border: 1px solid rgba(255,255,255,0.3);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     font-family: var(--font-mono);
     font-size: 0.85rem;
     font-weight: bold;
@@ -649,15 +751,20 @@ import Admin from '../../../layouts/Admin.astro';
     z-index: 1;
     text-decoration: none;
   }
-  .results-grid .grid-item__thumb:hover .grid-item__dl { opacity: 1; }
-  .results-grid .grid-item__dl:hover { background: rgba(184,134,11,0.8); border-color: #b8860b; }
+  .results-grid .grid-item__thumb:hover .grid-item__dl {
+    opacity: 1;
+  }
+  .results-grid .grid-item__dl:hover {
+    background: rgba(184, 134, 11, 0.8);
+    border-color: #b8860b;
+  }
   .results-grid .grid-item__ws {
     position: absolute;
     top: 4px;
     right: 4px;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0, 0, 0, 0.6);
     color: #fff;
-    border: 1px solid rgba(255,255,255,0.3);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     font-size: 0.65rem;
     width: 24px;
     height: 24px;
@@ -670,9 +777,18 @@ import Admin from '../../../layouts/Admin.astro';
     padding: 0;
     z-index: 1;
   }
-  .results-grid .grid-item__thumb:hover .grid-item__ws { opacity: 1; }
-  .results-grid .grid-item__ws:hover { background: rgba(184,134,11,0.8); border-color: #b8860b; }
-  .results-grid .grid-item__ws svg { width: 14px; height: 14px; fill: #fff; }
+  .results-grid .grid-item__thumb:hover .grid-item__ws {
+    opacity: 1;
+  }
+  .results-grid .grid-item__ws:hover {
+    background: rgba(184, 134, 11, 0.8);
+    border-color: #b8860b;
+  }
+  .results-grid .grid-item__ws svg {
+    width: 14px;
+    height: 14px;
+    fill: #fff;
+  }
   .results-grid .grid-item__info {
     padding: 4px 6px;
     font-size: 0.65rem;
@@ -698,9 +814,17 @@ import Admin from '../../../layouts/Admin.astro';
       grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
       gap: 4px;
     }
-    .results-grid .grid-item__info { font-size: 0.55rem; }
-    .batch-bar { font-size: 0.6rem; gap: 4px; }
-    .batch-bar .action-btn { font-size: 0.55rem; padding: 2px 4px; }
+    .results-grid .grid-item__info {
+      font-size: 0.55rem;
+    }
+    .batch-bar {
+      font-size: 0.6rem;
+      gap: 4px;
+    }
+    .batch-bar .action-btn {
+      font-size: 0.55rem;
+      padding: 2px 4px;
+    }
     /* Hide less important columns on mobile */
     .release-table th:nth-child(4),
     .release-table td:nth-child(4),
@@ -715,14 +839,18 @@ import Admin from '../../../layouts/Admin.astro';
 
 <script>
   document.addEventListener('astro:page-load', async () => {
-    const searchForm = document.getElementById('search-form') as HTMLFormElement | null;
+    const searchForm = document.getElementById(
+      'search-form',
+    ) as HTMLFormElement | null;
     if (!searchForm) return;
 
     const user = await (window as any).__authReady;
     if (!user) return;
 
     // Sync Now button
-    const syncBtn = document.getElementById('sync-now-btn') as HTMLButtonElement | null;
+    const syncBtn = document.getElementById(
+      'sync-now-btn',
+    ) as HTMLButtonElement | null;
     const syncStatus = document.getElementById('sync-status');
     syncBtn?.addEventListener('click', async () => {
       if (syncBtn.disabled) return;
@@ -739,7 +867,8 @@ import Admin from '../../../layouts/Admin.astro';
         const data = await res.json();
         if (data.ok) {
           const reactionsUpdated = data.reactions?.updated || 0;
-          if (syncStatus) syncStatus.textContent = `Reactions: ${reactionsUpdated} updated. Scrape: ${data.scrape?.status || 'started'}`;
+          if (syncStatus)
+            syncStatus.textContent = `Reactions: ${reactionsUpdated} updated. Scrape: ${data.scrape?.status || 'started'}`;
           // Poll for scrape completion, then refresh results
           if (data.scrape?.status === 'started') {
             pollScrapeStatus();
@@ -761,15 +890,20 @@ import Admin from '../../../layouts/Admin.astro';
     async function pollScrapeStatus() {
       const poll = async () => {
         try {
-          const res = await fetch('/api/ingest/slack/status', { credentials: 'include' });
+          const res = await fetch('/api/ingest/slack/status', {
+            credentials: 'include',
+          });
           const data = await res.json();
           if (data.ok && data.status?.running) {
-            if (syncStatus) syncStatus.textContent = `Scraping: ${data.status.current_channel || '...'}`;
+            if (syncStatus)
+              syncStatus.textContent = `Scraping: ${data.status.current_channel || '...'}`;
             setTimeout(poll, 3000);
           } else {
             if (syncStatus) syncStatus.textContent = 'Sync complete';
             doSearch();
-            setTimeout(() => { if (syncStatus) syncStatus.textContent = ''; }, 5000);
+            setTimeout(() => {
+              if (syncStatus) syncStatus.textContent = '';
+            }, 5000);
           }
         } catch {
           if (syncStatus) syncStatus.textContent = '';
@@ -785,7 +919,9 @@ import Admin from '../../../layouts/Admin.astro';
     let allResults: any[] = [];
     let selectedIds = new Set<string>();
 
-    const searchInput = document.getElementById('search-input') as HTMLInputElement;
+    const searchInput = document.getElementById(
+      'search-input',
+    ) as HTMLInputElement;
     const loadingEl = document.getElementById('loading')!;
     const errorEl = document.getElementById('error')!;
     const emptyEl = document.getElementById('empty')!;
@@ -817,9 +953,11 @@ import Admin from '../../../layouts/Admin.astro';
     });
 
     // Insights toggle
-    document.getElementById('insights-toggle')?.addEventListener('click', () => {
-      document.getElementById('insights-body')?.classList.toggle('collapsed');
-    });
+    document
+      .getElementById('insights-toggle')
+      ?.addEventListener('click', () => {
+        document.getElementById('insights-body')?.classList.toggle('collapsed');
+      });
 
     // Apply filters button
     document.getElementById('apply-filters')?.addEventListener('click', () => {
@@ -836,16 +974,22 @@ import Admin from '../../../layouts/Admin.astro';
 
     // Pagination
     document.getElementById('prev-page')?.addEventListener('click', () => {
-      if (currentPage > 1) { currentPage--; doSearch(); }
+      if (currentPage > 1) {
+        currentPage--;
+        doSearch();
+      }
     });
     document.getElementById('next-page')?.addEventListener('click', () => {
-      if (currentPage * pageSize < totalResults) { currentPage++; doSearch(); }
+      if (currentPage * pageSize < totalResults) {
+        currentPage++;
+        doSearch();
+      }
     });
 
     // Select all
     document.getElementById('select-all')?.addEventListener('change', (e) => {
       const checked = (e.target as HTMLInputElement).checked;
-      allResults.forEach(r => {
+      allResults.forEach((r) => {
         if (checked) selectedIds.add(r.id);
         else selectedIds.delete(r.id);
       });
@@ -854,7 +998,7 @@ import Admin from '../../../layouts/Admin.astro';
     });
 
     // Batch actions
-    document.querySelectorAll('[data-batch]').forEach(btn => {
+    document.querySelectorAll('[data-batch]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const action = (btn as HTMLElement).dataset.batch;
         if (action === 'tag') {
@@ -862,7 +1006,9 @@ import Admin from '../../../layouts/Admin.astro';
         } else if (action === 'workspace') {
           addToWorkspace();
         } else if (action === 'delete') {
-          document.getElementById('delete-count')!.textContent = String(selectedIds.size);
+          document.getElementById('delete-count')!.textContent = String(
+            selectedIds.size,
+          );
           document.getElementById('delete-dialog')!.style.display = 'flex';
         } else if (action === 're-extract') {
           batchReExtract();
@@ -872,50 +1018,67 @@ import Admin from '../../../layouts/Admin.astro';
       });
     });
 
-    document.getElementById('clear-selection')?.addEventListener('click', () => {
-      selectedIds.clear();
-      updateSelection();
-      renderResults();
-    });
+    document
+      .getElementById('clear-selection')
+      ?.addEventListener('click', () => {
+        selectedIds.clear();
+        updateSelection();
+        renderResults();
+      });
 
     // Batch tag dialog
-    document.getElementById('batch-tag-cancel')?.addEventListener('click', () => {
-      document.getElementById('batch-tag-dialog')!.style.display = 'none';
-    });
-    document.getElementById('batch-tag-confirm')?.addEventListener('click', async () => {
-      const input = document.getElementById('batch-tag-input') as HTMLInputElement;
-      const tags = input.value.split(',').map(t => t.trim()).filter(Boolean);
-      if (tags.length === 0) return;
-      try {
-        await fetch('/api/media/batch/tags', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ media_ids: Array.from(selectedIds), tags }),
-        });
+    document
+      .getElementById('batch-tag-cancel')
+      ?.addEventListener('click', () => {
         document.getElementById('batch-tag-dialog')!.style.display = 'none';
-        input.value = '';
-        doSearch();
-      } catch { (window as any).toast.error('Failed to apply tags'); }
-    });
+      });
+    document
+      .getElementById('batch-tag-confirm')
+      ?.addEventListener('click', async () => {
+        const input = document.getElementById(
+          'batch-tag-input',
+        ) as HTMLInputElement;
+        const tags = input.value
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean);
+        if (tags.length === 0) return;
+        try {
+          await fetch('/api/media/batch/tags', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ media_ids: Array.from(selectedIds), tags }),
+          });
+          document.getElementById('batch-tag-dialog')!.style.display = 'none';
+          input.value = '';
+          doSearch();
+        } catch {
+          (window as any).toast.error('Failed to apply tags');
+        }
+      });
 
     // Delete dialog
     document.getElementById('delete-cancel')?.addEventListener('click', () => {
       document.getElementById('delete-dialog')!.style.display = 'none';
     });
-    document.getElementById('delete-confirm')?.addEventListener('click', async () => {
-      try {
-        await fetch('/api/media/batch/delete', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ media_ids: Array.from(selectedIds) }),
-        });
-        document.getElementById('delete-dialog')!.style.display = 'none';
-        selectedIds.clear();
-        doSearch();
-      } catch { (window as any).toast.error('Delete failed'); }
-    });
+    document
+      .getElementById('delete-confirm')
+      ?.addEventListener('click', async () => {
+        try {
+          await fetch('/api/media/batch/delete', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ media_ids: Array.from(selectedIds) }),
+          });
+          document.getElementById('delete-dialog')!.style.display = 'none';
+          selectedIds.clear();
+          doSearch();
+        } catch {
+          (window as any).toast.error('Delete failed');
+        }
+      });
 
     async function batchReExtract() {
       try {
@@ -925,8 +1088,12 @@ import Admin from '../../../layouts/Admin.astro';
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ media_ids: Array.from(selectedIds) }),
         });
-        (window as any).toast.success('Re-extraction queued for ' + selectedIds.size + ' items');
-      } catch { (window as any).toast.error('Re-extraction failed'); }
+        (window as any).toast.success(
+          'Re-extraction queued for ' + selectedIds.size + ' items',
+        );
+      } catch {
+        (window as any).toast.error('Re-extraction failed');
+      }
     }
 
     async function batchExport() {
@@ -946,16 +1113,21 @@ import Admin from '../../../layouts/Admin.astro';
           a.click();
           URL.revokeObjectURL(url);
         }
-      } catch { (window as any).toast.error('Export failed'); }
+      } catch {
+        (window as any).toast.error('Export failed');
+      }
     }
 
     // --- Workspace ---
     async function ensureWorkspace(): Promise<string> {
       let wsId = localStorage.getItem('active_workspace_id');
       if (wsId) return wsId;
-      const res = await fetch('/api/workspaces', { method: 'POST', credentials: 'include',
+      const res = await fetch('/api/workspaces', {
+        method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'My Workspace' }) });
+        body: JSON.stringify({ name: 'My Workspace' }),
+      });
       const data = await res.json();
       wsId = data.id;
       localStorage.setItem('active_workspace_id', wsId!);
@@ -966,54 +1138,106 @@ import Admin from '../../../layouts/Admin.astro';
       const wsId = localStorage.getItem('active_workspace_id');
       const badge = document.getElementById('workspace-badge')!;
       const countEl = document.getElementById('workspace-count')!;
-      if (!wsId) { badge.style.display = 'none'; return; }
+      if (!wsId) {
+        badge.style.display = 'none';
+        return;
+      }
       try {
-        const res = await fetch(`/api/workspaces/${wsId}`, { credentials: 'include' });
-        if (!res.ok) { badge.style.display = 'none'; return; }
+        const res = await fetch(`/api/workspaces/${wsId}`, {
+          credentials: 'include',
+        });
+        if (!res.ok) {
+          badge.style.display = 'none';
+          return;
+        }
         const data = await res.json();
         countEl.textContent = String(data.item_count);
         badge.style.display = data.item_count > 0 ? '' : 'none';
-      } catch { badge.style.display = 'none'; }
+      } catch {
+        badge.style.display = 'none';
+      }
     }
 
     async function addToWorkspace() {
       const wsId = await ensureWorkspace();
       try {
-        const res = await fetch(`/api/workspaces/${wsId}/items`, { method: 'POST', credentials: 'include',
+        const res = await fetch(`/api/workspaces/${wsId}/items`, {
+          method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ media_item_ids: Array.from(selectedIds) }) });
+          body: JSON.stringify({ media_item_ids: Array.from(selectedIds) }),
+        });
         const data = await res.json();
         if (data.ok) {
-          (window as any).toast.success(`Added ${data.added} item(s) to workspace`);
+          (window as any).toast.success(
+            `Added ${data.added} item(s) to workspace`,
+          );
           refreshWorkspaceBadge();
         }
-      } catch { (window as any).toast.error('Failed to add to workspace'); }
+      } catch {
+        (window as any).toast.error('Failed to add to workspace');
+      }
     }
 
     refreshWorkspaceBadge();
 
     function getFilters() {
       const types: string[] = [];
-      document.querySelectorAll('.filter-check input[type="checkbox"]:checked').forEach(cb => {
-        const input = cb as HTMLInputElement;
-        if (!input.name) types.push(input.value);
-      });
-      const channel = document.getElementById('filter-channel') as HTMLSelectElement;
-      const channels = Array.from(channel.selectedOptions).map(o => o.value).filter(Boolean);
-      const dateFrom = (document.getElementById('filter-date-from') as HTMLInputElement).value;
-      const dateTo = (document.getElementById('filter-date-to') as HTMLInputElement).value;
-      const poster = (document.getElementById('filter-poster') as HTMLSelectElement).value;
-      const colorGroupSelect = document.getElementById('filter-color-group') as HTMLSelectElement;
-      const colorGroups = Array.from(colorGroupSelect.selectedOptions).map(o => o.value);
-      const outputIndex = (document.getElementById('filter-output-index') as HTMLSelectElement).value;
-      const jobApp = (document.getElementById('filter-job-app') as HTMLSelectElement).value;
-      const hasTranscript = (document.getElementById('filter-has-transcript') as HTMLSelectElement).value;
-      const hasText = (document.getElementById('filter-has-text') as HTMLSelectElement).value;
-      const tags = (document.getElementById('filter-tags') as HTMLInputElement).value;
-      const reactionsMin = parseInt((document.getElementById('filter-reactions-min') as HTMLInputElement).value) || 0;
-      const tagsMin = parseInt((document.getElementById('filter-tags-min') as HTMLInputElement).value) || 0;
-      const sortBy = (document.getElementById('sort-by') as HTMLSelectElement).value;
-      return { types, channels, poster, outputIndex, jobApp, hasTranscript, hasText, colorGroups, dateFrom, dateTo, tags, reactionsMin, tagsMin, sortBy };
+      document
+        .querySelectorAll('.filter-check input[type="checkbox"]:checked')
+        .forEach((cb) => {
+          const input = cb as HTMLInputElement;
+          // Only media type checkboxes (not color group)
+          if (!input.name) types.push(input.value);
+        });
+      const channel = document.getElementById(
+        'filter-channel',
+      ) as HTMLSelectElement;
+      const channels = Array.from(channel.selectedOptions)
+        .map((o) => o.value)
+        .filter(Boolean);
+      const dateFrom = (
+        document.getElementById('filter-date-from') as HTMLInputElement
+      ).value;
+      const dateTo = (
+        document.getElementById('filter-date-to') as HTMLInputElement
+      ).value;
+      const poster = (
+        document.getElementById('filter-poster') as HTMLSelectElement
+      ).value;
+      const colorGroups = Array.from(
+        document.querySelectorAll('input[name="color-group"]:checked'),
+      ).map((cb) => (cb as HTMLInputElement).value);
+      const outputIndex = (
+        document.getElementById('filter-output-index') as HTMLSelectElement
+      ).value;
+      const tags = (document.getElementById('filter-tags') as HTMLInputElement)
+        .value;
+      const reactionsMin =
+        parseInt(
+          (document.getElementById('filter-reactions-min') as HTMLInputElement)
+            .value,
+        ) || 0;
+      const tagsMin =
+        parseInt(
+          (document.getElementById('filter-tags-min') as HTMLInputElement)
+            .value,
+        ) || 0;
+      const sortBy = (document.getElementById('sort-by') as HTMLSelectElement)
+        .value;
+      return {
+        types,
+        channels,
+        poster,
+        outputIndex,
+        colorGroups,
+        dateFrom,
+        dateTo,
+        tags,
+        reactionsMin,
+        tagsMin,
+        sortBy,
+      };
     }
 
     async function doSearch() {
@@ -1041,35 +1265,48 @@ import Admin from '../../../layouts/Admin.astro';
         per_page: pageSize,
         filters: {},
       };
-      if (filters.channels.length) body.filters.source_channels = filters.channels;
+      if (filters.channels.length)
+        body.filters.source_channels = filters.channels;
       if (filters.poster) body.filters.poster = filters.poster;
       body.filters.output_index = filters.outputIndex;
-      if (filters.colorGroups.length) body.filters.color_group = filters.colorGroups;
-      if (filters.jobApp) body.filters.job_app = filters.jobApp;
-      if (filters.hasTranscript) body.filters.has_transcript = filters.hasTranscript === 'true';
-      if (filters.hasText) body.filters.has_text = filters.hasText === 'true';
-      if (filters.dateFrom || filters.dateTo) body.filters.date_range = { from: filters.dateFrom || undefined, to: filters.dateTo || undefined };
-      if (filters.tags) body.filters.tags = filters.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
-      if (filters.reactionsMin > 0) body.filters.reaction_count = { min: filters.reactionsMin };
-      if (filters.tagsMin > 0) body.filters.tag_count = { min: filters.tagsMin };
+      if (filters.colorGroups.length) {
+        body.filters.color_group = filters.colorGroups;
+      }
+      if (filters.dateFrom || filters.dateTo)
+        body.filters.date_range = {
+          from: filters.dateFrom || undefined,
+          to: filters.dateTo || undefined,
+        };
+      if (filters.tags)
+        body.filters.tags = filters.tags
+          .split(',')
+          .map((t: string) => t.trim())
+          .filter(Boolean);
+      if (filters.reactionsMin > 0)
+        body.filters.reaction_count = { min: filters.reactionsMin };
+      if (filters.tagsMin > 0)
+        body.filters.tag_count = { min: filters.tagsMin };
 
       // Update URL to reflect current search state (shareable, back/forward friendly)
       const stateParams = new URLSearchParams();
       if (searchInput.value) stateParams.set('q', searchInput.value);
       if (filters.poster) stateParams.set('poster', filters.poster);
-      if (filters.colorGroups.length) stateParams.set('colorgroup', filters.colorGroups.join(','));
-      if (filters.channels.length) stateParams.set('channel', filters.channels.join(','));
+      if (filters.colorGroups.length)
+        stateParams.set('colorgroup', filters.colorGroups.join(','));
+      if (filters.channels.length)
+        stateParams.set('channel', filters.channels.join(','));
       if (filters.tags) stateParams.set('tags', filters.tags);
       if (filters.dateFrom) stateParams.set('from', filters.dateFrom);
       if (filters.dateTo) stateParams.set('to', filters.dateTo);
-      if (filters.reactionsMin > 0) stateParams.set('rxn', String(filters.reactionsMin));
-      if (filters.tagsMin > 0) stateParams.set('mintags', String(filters.tagsMin));
-      if (filters.outputIndex && filters.outputIndex !== '__inputs__') stateParams.set('output_index', filters.outputIndex);
-      if (filters.jobApp) stateParams.set('job_app', filters.jobApp);
-      if (filters.hasTranscript) stateParams.set('has_transcript', filters.hasTranscript);
-      if (filters.hasText) stateParams.set('has_text', filters.hasText);
+      if (filters.reactionsMin > 0)
+        stateParams.set('rxn', String(filters.reactionsMin));
+      if (filters.tagsMin > 0)
+        stateParams.set('mintags', String(filters.tagsMin));
+      if (filters.outputIndex && filters.outputIndex !== '__inputs__')
+        stateParams.set('output_index', filters.outputIndex);
       if (filters.sortBy !== 'newest') stateParams.set('sort', filters.sortBy);
-      if (filters.types.length < 3 && filters.types.length > 0) stateParams.set('types', filters.types.join(','));
+      if (filters.types.length < 3 && filters.types.length > 0)
+        stateParams.set('types', filters.types.join(','));
       if (currentPage > 1) stateParams.set('page', String(currentPage));
       const qs = stateParams.toString();
       const newUrl = window.location.pathname + (qs ? '?' + qs : '');
@@ -1127,21 +1364,27 @@ import Admin from '../../../layouts/Admin.astro';
         gridEl.style.display = 'grid';
         const playSvg = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
         const briefcaseSvg = `<svg viewBox="0 0 24 24"><path d="M20 7h-4V5c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zM10 5h4v2h-4V5z"/></svg>`;
-        gridEl.innerHTML = allResults.map(item => {
-          const checked = selectedIds.has(item.id) ? 'checked' : '';
-          const selectedClass = selectedIds.has(item.id) ? ' selected' : '';
-          const thumb = (item.media_type === 'image' || item.media_type === 'video')
-            ? `<img src="/api/media/${item.id}/thumbnail" alt="" loading="lazy" />`
-            : `<img src="/assets/default-cover.jpg" alt="${item.media_type || '?'}" loading="lazy" style="image-rendering: pixelated;" />`;
-          const canPlay = item.media_type === 'audio' || item.media_type === 'video';
-          const dlBtn = `<a class="grid-item__dl" href="/api/media/${item.id}/file" download title="Download">&#8615;</a>`;
-          const wsBtn = `<button class="grid-item__ws" data-ws-id="${item.id}" title="Add to workspace">${briefcaseSvg}</button>`;
-          const playBtn = canPlay
-            ? `<button class="grid-item__play" data-play-id="${item.id}" data-play-type="${item.media_type}" title="Play">${playSvg}</button><button class="grid-item__add" data-play-id="${item.id}" data-play-type="${item.media_type}" title="Add to queue">+</button>${dlBtn}`
-            : dlBtn;
-          const poster = (item.sources || []).map((s: any) => s.uploader).filter(Boolean)[0] || '';
-          const rxn = item.total_reaction_count ?? 0;
-          return `<div class="grid-item${selectedClass}" data-id="${item.id}">
+        gridEl.innerHTML = allResults
+          .map((item) => {
+            const checked = selectedIds.has(item.id) ? 'checked' : '';
+            const selectedClass = selectedIds.has(item.id) ? ' selected' : '';
+            const thumb =
+              item.media_type === 'image' || item.media_type === 'video'
+                ? `<img src="/api/media/${item.id}/thumbnail" alt="" loading="lazy" />`
+                : `<img src="/assets/default-cover.jpg" alt="${item.media_type || '?'}" loading="lazy" style="image-rendering: pixelated;" />`;
+            const canPlay =
+              item.media_type === 'audio' || item.media_type === 'video';
+            const dlBtn = `<a class="grid-item__dl" href="/api/media/${item.id}/file" download title="Download">&#8615;</a>`;
+            const wsBtn = `<button class="grid-item__ws" data-ws-id="${item.id}" title="Add to workspace">${briefcaseSvg}</button>`;
+            const playBtn = canPlay
+              ? `<button class="grid-item__play" data-play-id="${item.id}" data-play-type="${item.media_type}" title="Play">${playSvg}</button><button class="grid-item__add" data-play-id="${item.id}" data-play-type="${item.media_type}" title="Add to queue">+</button>${dlBtn}`
+              : dlBtn;
+            const poster =
+              (item.sources || [])
+                .map((s: any) => s.uploader)
+                .filter(Boolean)[0] || '';
+            const rxn = item.total_reaction_count ?? 0;
+            return `<div class="grid-item${selectedClass}" data-id="${item.id}">
             <input type="checkbox" class="grid-item__check" data-select="${item.id}" ${checked} />
             <div class="grid-item__thumb">${thumb}${playBtn}${wsBtn}</div>
             <div class="grid-item__info">
@@ -1156,18 +1399,25 @@ import Admin from '../../../layouts/Admin.astro';
               </div>
             </div>
           </div>`;
-        }).join('');
+          })
+          .join('');
       } else {
         gridEl.style.display = 'none';
         tableEl.style.display = 'block';
-        tbodyEl.innerHTML = allResults.map(item => {
-          const checked = selectedIds.has(item.id) ? 'checked' : '';
-          const tags = (item.tags || []).join(', ') || '--';
-          const date = item.created_at ? new Date(item.created_at * 1000).toLocaleDateString() : '--';
-          const poster = (item.sources || []).map((s: any) => s.uploader).filter(Boolean)[0] || '--';
-          const channel = (item.source_channels || [])[0] || '--';
-          const rxn = item.total_reaction_count ?? 0;
-          return `<tr>
+        tbodyEl.innerHTML = allResults
+          .map((item) => {
+            const checked = selectedIds.has(item.id) ? 'checked' : '';
+            const tags = (item.tags || []).join(', ') || '--';
+            const date = item.created_at
+              ? new Date(item.created_at * 1000).toLocaleDateString()
+              : '--';
+            const poster =
+              (item.sources || [])
+                .map((s: any) => s.uploader)
+                .filter(Boolean)[0] || '--';
+            const channel = (item.source_channels || [])[0] || '--';
+            const rxn = item.total_reaction_count ?? 0;
+            return `<tr>
             <td><input type="checkbox" data-select="${item.id}" ${checked} /></td>
             <td><a href="/admin/search/detail?id=${item.id}" style="color: var(--color-text); text-decoration: underline;">${item.filename || 'Untitled'}</a></td>
             <td>${item.media_type || '--'}</td>
@@ -1178,7 +1428,8 @@ import Admin from '../../../layouts/Admin.astro';
             <td>${tags}</td>
             <td style="white-space:nowrap;">${date}</td>
           </tr>`;
-        }).join('');
+          })
+          .join('');
       }
 
       // Pagination
@@ -1186,8 +1437,10 @@ import Admin from '../../../layouts/Admin.astro';
       if (totalPages > 1) {
         paginationEl.style.display = 'flex';
         pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
-        (document.getElementById('prev-page') as HTMLButtonElement).disabled = currentPage <= 1;
-        (document.getElementById('next-page') as HTMLButtonElement).disabled = currentPage >= totalPages;
+        (document.getElementById('prev-page') as HTMLButtonElement).disabled =
+          currentPage <= 1;
+        (document.getElementById('next-page') as HTMLButtonElement).disabled =
+          currentPage >= totalPages;
       }
 
       updateSelection();
@@ -1197,13 +1450,15 @@ import Admin from '../../../layouts/Admin.astro';
       if (bm) {
         const ids = allResults.map((i: any) => i.id);
         bm.check('media_item', ids).then((set: Set<string>) => {
-          document.querySelectorAll('.bm-star[data-bm-type="media_item"]').forEach((el: Element) => {
-            const id = (el as HTMLElement).dataset.bmId!;
-            if (set.has(id)) {
-              el.classList.add('bookmarked');
-              el.setAttribute('title', 'Remove bookmark');
-            }
-          });
+          document
+            .querySelectorAll('.bm-star[data-bm-type="media_item"]')
+            .forEach((el: Element) => {
+              const id = (el as HTMLElement).dataset.bmId!;
+              if (set.has(id)) {
+                el.classList.add('bookmarked');
+                el.setAttribute('title', 'Remove bookmark');
+              }
+            });
         });
       }
     }
@@ -1231,23 +1486,29 @@ import Admin from '../../../layouts/Admin.astro';
         const mediaType = playBtn.dataset.playType!;
         const item = allResults.find((i: any) => i.id === mediaId);
         if (!item) return;
-        document.dispatchEvent(new CustomEvent('player:queue', {
-          detail: {
-            tracks: [{
-              track_id: mediaId,
-              title: item.filename || 'Untitled',
-              release_title: '',
-              release_code: '',
-              media_type: mediaType,
-              stream_url: `/api/media/${mediaId}/file`,
-              cover_url: (mediaType === 'image' || mediaType === 'video')
-                ? `/api/media/${mediaId}/thumbnail` : '/assets/default-cover.jpg',
-              duration: 0,
-              entity_name: '',
-            }],
-            startIndex: 0,
-          },
-        }));
+        document.dispatchEvent(
+          new CustomEvent('player:queue', {
+            detail: {
+              tracks: [
+                {
+                  track_id: mediaId,
+                  title: item.filename || 'Untitled',
+                  release_title: '',
+                  release_code: '',
+                  media_type: mediaType,
+                  stream_url: `/api/media/${mediaId}/file`,
+                  cover_url:
+                    mediaType === 'image' || mediaType === 'video'
+                      ? `/api/media/${mediaId}/thumbnail`
+                      : '/assets/default-cover.jpg',
+                  duration: 0,
+                  entity_name: '',
+                },
+              ],
+              startIndex: 0,
+            },
+          }),
+        );
         return;
       }
 
@@ -1260,22 +1521,28 @@ import Admin from '../../../layouts/Admin.astro';
         const mediaType = addBtn.dataset.playType!;
         const item = allResults.find((i: any) => i.id === mediaId);
         if (!item) return;
-        document.dispatchEvent(new CustomEvent('player:add', {
-          detail: {
-            tracks: [{
-              track_id: mediaId,
-              title: item.filename || 'Untitled',
-              release_title: '',
-              release_code: '',
-              media_type: mediaType,
-              stream_url: `/api/media/${mediaId}/file`,
-              cover_url: (mediaType === 'image' || mediaType === 'video')
-                ? `/api/media/${mediaId}/thumbnail` : '/assets/default-cover.jpg',
-              duration: 0,
-              entity_name: '',
-            }],
-          },
-        }));
+        document.dispatchEvent(
+          new CustomEvent('player:add', {
+            detail: {
+              tracks: [
+                {
+                  track_id: mediaId,
+                  title: item.filename || 'Untitled',
+                  release_title: '',
+                  release_code: '',
+                  media_type: mediaType,
+                  stream_url: `/api/media/${mediaId}/file`,
+                  cover_url:
+                    mediaType === 'image' || mediaType === 'video'
+                      ? `/api/media/${mediaId}/thumbnail`
+                      : '/assets/default-cover.jpg',
+                  duration: 0,
+                  entity_name: '',
+                },
+              ],
+            },
+          }),
+        );
         return;
       }
 
@@ -1287,28 +1554,36 @@ import Admin from '../../../layouts/Admin.astro';
         const mediaId = wsBtn.dataset.wsId!;
         const wsId = localStorage.getItem('active_workspace_id');
         if (!wsId) {
-          (window as any).toast.error('No active workspace. Create one from the workspace page first.');
+          (window as any).toast.error(
+            'No active workspace. Create one from the workspace page first.',
+          );
           return;
         }
         try {
           const res = await fetch(`/api/workspaces/${wsId}/items`, {
-            method: 'POST', credentials: 'include',
+            method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ media_item_ids: [mediaId] }),
           });
           if (res.ok) {
             const data = await res.json();
-            if (data.already_present > 0) (window as any).toast.success('Already in workspace');
+            if (data.already_present > 0)
+              (window as any).toast.success('Already in workspace');
             else (window as any).toast.success('Added to workspace');
           } else {
             (window as any).toast.error('Failed to add to workspace');
           }
-        } catch { (window as any).toast.error('Failed to add to workspace'); }
+        } catch {
+          (window as any).toast.error('Failed to add to workspace');
+        }
         return;
       }
 
       // Checkbox selection
-      const checkbox = target.closest('[data-select]') as HTMLInputElement | null;
+      const checkbox = target.closest(
+        '[data-select]',
+      ) as HTMLInputElement | null;
       if (checkbox) {
         e.stopPropagation();
         const id = checkbox.dataset.select!;
@@ -1320,7 +1595,14 @@ import Admin from '../../../layouts/Admin.astro';
 
       // Grid item click (navigate)
       const gridItem = target.closest('.grid-item') as HTMLElement | null;
-      if (gridItem && !target.closest('.grid-item__check') && !target.closest('.grid-item__play') && !target.closest('.grid-item__add') && !target.closest('.grid-item__dl') && !target.closest('.grid-item__ws')) {
+      if (
+        gridItem &&
+        !target.closest('.grid-item__check') &&
+        !target.closest('.grid-item__play') &&
+        !target.closest('.grid-item__add') &&
+        !target.closest('.grid-item__dl') &&
+        !target.closest('.grid-item__ws')
+      ) {
         const id = gridItem.dataset.id;
         if (id) window.location.href = `/admin/search/detail?id=${id}`;
       }
@@ -1328,28 +1610,41 @@ import Admin from '../../../layouts/Admin.astro';
 
     async function loadFacets() {
       try {
-        const res = await fetch('/api/search/facets', { credentials: 'include' });
+        const res = await fetch('/api/search/facets', {
+          credentials: 'include',
+        });
         if (!res.ok) return;
         const data = await res.json();
-        const channelSelect = document.getElementById('filter-channel') as HTMLSelectElement;
-        channelSelect.innerHTML = (data.channels || []).map((ch: string) => `<option value="${ch}">${ch}</option>`).join('');
-        const posterSelect = document.getElementById('filter-poster') as HTMLSelectElement;
-        posterSelect.innerHTML = '<option value="">All</option>' +
-          (data.uploaders || []).map((u: string) => `<option value="${u}">${u}</option>`).join('');
-        const outputIndexSelect = document.getElementById('filter-output-index') as HTMLSelectElement;
-        outputIndexSelect.innerHTML = '<option value="__inputs__">Inputs</option>' +
+        const channelSelect = document.getElementById(
+          'filter-channel',
+        ) as HTMLSelectElement;
+        channelSelect.innerHTML = (data.channels || [])
+          .map((ch: string) => `<option value="${ch}">${ch}</option>`)
+          .join('');
+        const posterSelect = document.getElementById(
+          'filter-poster',
+        ) as HTMLSelectElement;
+        posterSelect.innerHTML =
+          '<option value="">All</option>' +
+          (data.uploaders || [])
+            .map((u: string) => `<option value="${u}">${u}</option>`)
+            .join('');
+        const outputIndexSelect = document.getElementById(
+          'filter-output-index',
+        ) as HTMLSelectElement;
+        outputIndexSelect.innerHTML =
+          '<option value="__inputs__">Inputs</option>' +
           '<option value="outputs">Outputs</option>';
-        const jobAppSelect = document.getElementById('filter-job-app') as HTMLSelectElement;
-        jobAppSelect.innerHTML = '<option value="">All</option>' +
-          (data.job_apps || []).map((a: string) => `<option value="${a}">${a}</option>`).join('');
         // Restore from URL after dropdowns are populated
         const p = new URLSearchParams(window.location.search);
         if (p.get('poster')) posterSelect.value = p.get('poster')!;
-        if (p.get('output_index')) outputIndexSelect.value = p.get('output_index')!;
-        if (p.get('job_app')) jobAppSelect.value = p.get('job_app')!;
+        if (p.get('output_index'))
+          outputIndexSelect.value = p.get('output_index')!;
         if (p.get('channel')) {
           const chs = p.get('channel')!.split(',');
-          Array.from(channelSelect.options).forEach(o => { o.selected = chs.includes(o.value); });
+          Array.from(channelSelect.options).forEach((o) => {
+            o.selected = chs.includes(o.value);
+          });
         }
       } catch {}
     }
@@ -1364,39 +1659,57 @@ import Admin from '../../../layouts/Admin.astro';
       const ft = document.getElementById('filter-tags') as HTMLInputElement;
       const tagVals: string[] = [];
       if (initParams.get('tag')) tagVals.push(initParams.get('tag')!);
-      if (initParams.get('tags')) tagVals.push(...initParams.get('tags')!.split(',').map(t => t.trim()).filter(Boolean));
+      if (initParams.get('tags'))
+        tagVals.push(
+          ...initParams
+            .get('tags')!
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean),
+        );
       if (tagVals.length && ft) ft.value = [...new Set(tagVals)].join(', ');
 
-      const fr = document.getElementById('filter-reactions-min') as HTMLInputElement;
+      const fr = document.getElementById(
+        'filter-reactions-min',
+      ) as HTMLInputElement;
       if (initParams.get('rxn') && fr) fr.value = initParams.get('rxn')!;
       const fm = document.getElementById('filter-tags-min') as HTMLInputElement;
-      if (initParams.get('mintags') && fm) fm.value = initParams.get('mintags')!;
+      if (initParams.get('mintags') && fm)
+        fm.value = initParams.get('mintags')!;
       const sb = document.getElementById('sort-by') as HTMLSelectElement;
       if (initParams.get('sort') && sb) sb.value = initParams.get('sort')!;
 
-      // Color group select
+      // Color group checkboxes
       if (initParams.get('colorgroup')) {
         const groups = initParams.get('colorgroup')!.split(',');
-        const cgs = document.getElementById('filter-color-group') as HTMLSelectElement;
-        Array.from(cgs.options).forEach(o => { o.selected = groups.includes(o.value); });
+        document.querySelectorAll('input[name="color-group"]').forEach((cb) => {
+          (cb as HTMLInputElement).checked = groups.includes(
+            (cb as HTMLInputElement).value,
+          );
+        });
       }
-      // Has transcript / has text
-      if (initParams.get('has_transcript')) (document.getElementById('filter-has-transcript') as HTMLSelectElement).value = initParams.get('has_transcript')!;
-      if (initParams.get('has_text')) (document.getElementById('filter-has-text') as HTMLSelectElement).value = initParams.get('has_text')!;
       // Date range
-      if (initParams.get('from')) (document.getElementById('filter-date-from') as HTMLInputElement).value = initParams.get('from')!;
-      if (initParams.get('to')) (document.getElementById('filter-date-to') as HTMLInputElement).value = initParams.get('to')!;
+      if (initParams.get('from'))
+        (
+          document.getElementById('filter-date-from') as HTMLInputElement
+        ).value = initParams.get('from')!;
+      if (initParams.get('to'))
+        (document.getElementById('filter-date-to') as HTMLInputElement).value =
+          initParams.get('to')!;
 
       // Media types
       if (initParams.get('types')) {
         const types = initParams.get('types')!.split(',');
-        document.querySelectorAll('.filter-check input[type="checkbox"]').forEach(cb => {
-          const input = cb as HTMLInputElement;
-          if (!input.name) input.checked = types.includes(input.value);
-        });
+        document
+          .querySelectorAll('.filter-check input[type="checkbox"]')
+          .forEach((cb) => {
+            const input = cb as HTMLInputElement;
+            if (!input.name) input.checked = types.includes(input.value);
+          });
       }
 
-      if (initParams.get('page')) currentPage = parseInt(initParams.get('page')!) || 1;
+      if (initParams.get('page'))
+        currentPage = parseInt(initParams.get('page')!) || 1;
 
       // Legacy ?color= param: convert to colorgroup if possible
       if (initParams.get('color') && !initParams.get('colorgroup')) {
@@ -1406,25 +1719,62 @@ import Admin from '../../../layouts/Admin.astro';
 
     function clearFilter(filterName: string) {
       switch (filterName) {
-        case 'q': searchInput.value = ''; break;
-        case 'color': break; // no longer used
-        case 'poster': (document.getElementById('filter-poster') as HTMLSelectElement).value = ''; break;
-        case 'tags': (document.getElementById('filter-tags') as HTMLInputElement).value = ''; break;
+        case 'q':
+          searchInput.value = '';
+          break;
+        case 'color':
+          break; // no longer used
+        case 'poster':
+          (
+            document.getElementById('filter-poster') as HTMLSelectElement
+          ).value = '';
+          break;
+        case 'tags':
+          (document.getElementById('filter-tags') as HTMLInputElement).value =
+            '';
+          break;
         case 'colorgroup':
-          Array.from((document.getElementById('filter-color-group') as HTMLSelectElement).options).forEach(o => { o.selected = false; });
+          document
+            .querySelectorAll('input[name="color-group"]')
+            .forEach((cb) => {
+              (cb as HTMLInputElement).checked = false;
+            });
           break;
         case 'channel':
-          Array.from((document.getElementById('filter-channel') as HTMLSelectElement).options).forEach(o => { o.selected = false; });
-          break;
-        case 'dateFrom': (document.getElementById('filter-date-from') as HTMLInputElement).value = ''; break;
-        case 'dateTo': (document.getElementById('filter-date-to') as HTMLInputElement).value = ''; break;
-        case 'rxn': (document.getElementById('filter-reactions-min') as HTMLInputElement).value = '0'; break;
-        case 'mintags': (document.getElementById('filter-tags-min') as HTMLInputElement).value = '0'; break;
-        case 'types':
-          document.querySelectorAll('.filter-check input[type="checkbox"]').forEach(cb => {
-            const input = cb as HTMLInputElement;
-            if (!input.name) input.checked = true;
+          Array.from(
+            (document.getElementById('filter-channel') as HTMLSelectElement)
+              .options,
+          ).forEach((o) => {
+            o.selected = false;
           });
+          break;
+        case 'dateFrom':
+          (
+            document.getElementById('filter-date-from') as HTMLInputElement
+          ).value = '';
+          break;
+        case 'dateTo':
+          (
+            document.getElementById('filter-date-to') as HTMLInputElement
+          ).value = '';
+          break;
+        case 'rxn':
+          (
+            document.getElementById('filter-reactions-min') as HTMLInputElement
+          ).value = '0';
+          break;
+        case 'mintags':
+          (
+            document.getElementById('filter-tags-min') as HTMLInputElement
+          ).value = '0';
+          break;
+        case 'types':
+          document
+            .querySelectorAll('.filter-check input[type="checkbox"]')
+            .forEach((cb) => {
+              const input = cb as HTMLInputElement;
+              if (!input.name) input.checked = true;
+            });
           break;
       }
       currentPage = 1;
@@ -1439,38 +1789,60 @@ import Admin from '../../../layouts/Admin.astro';
       const chips: string[] = [];
 
       if (searchInput.value) {
-        chips.push(`<span class="active-filter">Query: "${searchInput.value}" <button class="active-filter__remove" onclick="__clearFilter('q')">&times;</button></span>`);
+        chips.push(
+          `<span class="active-filter">Query: "${searchInput.value}" <button class="active-filter__remove" onclick="__clearFilter('q')">&times;</button></span>`,
+        );
       }
       if (filters.colorGroups.length) {
-        chips.push(`<span class="active-filter">Colors: ${filters.colorGroups.join(', ')} <button class="active-filter__remove" onclick="__clearFilter('colorgroup')">&times;</button></span>`);
+        chips.push(
+          `<span class="active-filter">Colors: ${filters.colorGroups.join(', ')} <button class="active-filter__remove" onclick="__clearFilter('colorgroup')">&times;</button></span>`,
+        );
       }
       if (filters.tags) {
-        chips.push(`<span class="active-filter">Tags: ${filters.tags} <button class="active-filter__remove" onclick="__clearFilter('tags')">&times;</button></span>`);
+        chips.push(
+          `<span class="active-filter">Tags: ${filters.tags} <button class="active-filter__remove" onclick="__clearFilter('tags')">&times;</button></span>`,
+        );
       }
       if (filters.poster) {
-        chips.push(`<span class="active-filter">Posted by: ${filters.poster} <button class="active-filter__remove" onclick="__clearFilter('poster')">&times;</button></span>`);
+        chips.push(
+          `<span class="active-filter">Posted by: ${filters.poster} <button class="active-filter__remove" onclick="__clearFilter('poster')">&times;</button></span>`,
+        );
       }
       if (filters.channels.length) {
-        chips.push(`<span class="active-filter">Channel: ${filters.channels.join(', ')} <button class="active-filter__remove" onclick="__clearFilter('channel')">&times;</button></span>`);
+        chips.push(
+          `<span class="active-filter">Channel: ${filters.channels.join(', ')} <button class="active-filter__remove" onclick="__clearFilter('channel')">&times;</button></span>`,
+        );
       }
       if (filters.dateFrom) {
-        chips.push(`<span class="active-filter">From: ${filters.dateFrom} <button class="active-filter__remove" onclick="__clearFilter('dateFrom')">&times;</button></span>`);
+        chips.push(
+          `<span class="active-filter">From: ${filters.dateFrom} <button class="active-filter__remove" onclick="__clearFilter('dateFrom')">&times;</button></span>`,
+        );
       }
       if (filters.dateTo) {
-        chips.push(`<span class="active-filter">To: ${filters.dateTo} <button class="active-filter__remove" onclick="__clearFilter('dateTo')">&times;</button></span>`);
+        chips.push(
+          `<span class="active-filter">To: ${filters.dateTo} <button class="active-filter__remove" onclick="__clearFilter('dateTo')">&times;</button></span>`,
+        );
       }
       if (filters.reactionsMin > 0) {
-        chips.push(`<span class="active-filter">Min reactions: ${filters.reactionsMin} <button class="active-filter__remove" onclick="__clearFilter('rxn')">&times;</button></span>`);
+        chips.push(
+          `<span class="active-filter">Min reactions: ${filters.reactionsMin} <button class="active-filter__remove" onclick="__clearFilter('rxn')">&times;</button></span>`,
+        );
       }
       if (filters.tagsMin > 0) {
-        chips.push(`<span class="active-filter">Min tags: ${filters.tagsMin} <button class="active-filter__remove" onclick="__clearFilter('mintags')">&times;</button></span>`);
+        chips.push(
+          `<span class="active-filter">Min tags: ${filters.tagsMin} <button class="active-filter__remove" onclick="__clearFilter('mintags')">&times;</button></span>`,
+        );
       }
       if (filters.types.length < 3 && filters.types.length > 0) {
-        chips.push(`<span class="active-filter">Types: ${filters.types.join(', ')} <button class="active-filter__remove" onclick="__clearFilter('types')">&times;</button></span>`);
+        chips.push(
+          `<span class="active-filter">Types: ${filters.types.join(', ')} <button class="active-filter__remove" onclick="__clearFilter('types')">&times;</button></span>`,
+        );
       }
 
       if (chips.length > 0) {
-        chips.push(`<button class="action-btn" onclick="location.href='/admin/search'" style="margin-left:auto;">Clear All</button>`);
+        chips.push(
+          `<button class="action-btn" onclick="location.href='/admin/search'" style="margin-left:auto;">Clear All</button>`,
+        );
         el.innerHTML = chips.join('');
         el.style.display = 'flex';
       } else {
@@ -1481,30 +1853,46 @@ import Admin from '../../../layouts/Admin.astro';
 
     // --- Stats bar & Insights rendering ---
 
-    function renderStatsBar(countsByType: Record<string, number>, total: number) {
+    function renderStatsBar(
+      countsByType: Record<string, number>,
+      total: number,
+    ) {
       const statsBar = document.getElementById('stats-bar')!;
-      if (total === 0) { statsBar.style.display = 'none'; return; }
+      if (total === 0) {
+        statsBar.style.display = 'none';
+        return;
+      }
 
-      const parts: string[] = [`<span class="stat-total">${total.toLocaleString()} results</span>`];
-      const typeLabels: Record<string, string> = { image: 'images', audio: 'audio', video: 'videos' };
+      const parts: string[] = [
+        `<span class="stat-total">${total.toLocaleString()} results</span>`,
+      ];
+      const typeLabels: Record<string, string> = {
+        image: 'images',
+        audio: 'audio',
+        video: 'videos',
+      };
       for (const [type, label] of Object.entries(typeLabels)) {
         const count = countsByType[type];
         if (count > 0) {
           parts.push(`<span class="stat-sep">/</span>`);
-          parts.push(`<span class="stat-type" data-type-filter="${type}">${count} ${label}</span>`);
+          parts.push(
+            `<span class="stat-type" data-type-filter="${type}">${count} ${label}</span>`,
+          );
         }
       }
       statsBar.innerHTML = parts.join(' ');
       statsBar.style.display = 'flex';
 
       // Click type counts to filter
-      statsBar.querySelectorAll('.stat-type').forEach(el => {
+      statsBar.querySelectorAll('.stat-type').forEach((el) => {
         el.addEventListener('click', () => {
           const type = (el as HTMLElement).dataset.typeFilter!;
-          document.querySelectorAll('.filter-check input[type="checkbox"]').forEach(cb => {
-            const input = cb as HTMLInputElement;
-            if (!input.name) input.checked = input.value === type;
-          });
+          document
+            .querySelectorAll('.filter-check input[type="checkbox"]')
+            .forEach((cb) => {
+              const input = cb as HTMLInputElement;
+              if (!input.name) input.checked = input.value === type;
+            });
           currentPage = 1;
           doSearch();
         });
@@ -1529,42 +1917,73 @@ import Admin from '../../../layouts/Admin.astro';
       const section = document.getElementById('insights-section')!;
       section.style.display = 'block';
 
-      renderBarChart('insight-uploaders', 'Top Posters', stats.top_uploaders || [], 'uploader', 'count');
-      renderBarChart('insight-tags', 'Top Tags', stats.top_tags || [], 'tag', 'count');
+      renderBarChart(
+        'insight-uploaders',
+        'Top Posters',
+        stats.top_uploaders || [],
+        'uploader',
+        'count',
+      );
+      renderBarChart(
+        'insight-tags',
+        'Top Tags',
+        stats.top_tags || [],
+        'tag',
+        'count',
+      );
       renderReactionChart(stats.reaction_buckets || []);
       renderTimeline(stats.date_histogram || []);
       renderColorChart(stats.color_groups || {});
     }
 
-    function renderBarChart(containerId: string, title: string, items: any[], labelKey: string, countKey: string) {
+    function renderBarChart(
+      containerId: string,
+      title: string,
+      items: any[],
+      labelKey: string,
+      countKey: string,
+    ) {
       const el = document.getElementById(containerId)!;
-      if (!items.length) { el.innerHTML = ''; return; }
-      const max = Math.max(...items.map(i => i[countKey]), 1);
-      const rows = items.slice(0, 10).map(item => {
-        const pct = Math.round((item[countKey] / max) * 100);
-        const label = item[labelKey];
-        return `<div class="insight-bar-row insight-clickable" data-insight-type="${labelKey}" data-insight-value="${label}" title="${label}: ${item[countKey]}">
+      if (!items.length) {
+        el.innerHTML = '';
+        return;
+      }
+      const max = Math.max(...items.map((i) => i[countKey]), 1);
+      const rows = items
+        .slice(0, 10)
+        .map((item) => {
+          const pct = Math.round((item[countKey] / max) * 100);
+          const label = item[labelKey];
+          return `<div class="insight-bar-row insight-clickable" data-insight-type="${labelKey}" data-insight-value="${label}" title="${label}: ${item[countKey]}">
           <span class="insight-bar-label">${label}</span>
           <span class="insight-bar-track"><span class="insight-bar-fill" style="width:${pct}%"></span></span>
           <span class="insight-bar-count">${item[countKey]}</span>
         </div>`;
-      }).join('');
+        })
+        .join('');
       el.innerHTML = `<div class="insight-title">${title}</div>${rows}`;
 
       // Click to filter
-      el.querySelectorAll('.insight-clickable').forEach(row => {
+      el.querySelectorAll('.insight-clickable').forEach((row) => {
         row.addEventListener('click', () => {
           const type = (row as HTMLElement).dataset.insightType!;
           const value = (row as HTMLElement).dataset.insightValue!;
           if (type === 'tag') {
-            const tagInput = document.getElementById('filter-tags') as HTMLInputElement;
-            const existing = tagInput.value.split(',').map(t => t.trim()).filter(Boolean);
+            const tagInput = document.getElementById(
+              'filter-tags',
+            ) as HTMLInputElement;
+            const existing = tagInput.value
+              .split(',')
+              .map((t) => t.trim())
+              .filter(Boolean);
             if (!existing.includes(value)) {
               existing.push(value);
               tagInput.value = existing.join(', ');
             }
           } else if (type === 'uploader') {
-            (document.getElementById('filter-poster') as HTMLSelectElement).value = value;
+            (
+              document.getElementById('filter-poster') as HTMLSelectElement
+            ).value = value;
           }
           currentPage = 1;
           doSearch();
@@ -1574,24 +1993,31 @@ import Admin from '../../../layouts/Admin.astro';
 
     function renderReactionChart(buckets: any[]) {
       const el = document.getElementById('insight-reactions')!;
-      if (!buckets.length) { el.innerHTML = ''; return; }
-      const max = Math.max(...buckets.map(b => b.count), 1);
-      const rows = buckets.map(b => {
-        // Extract minimum value from label (e.g. "3-5" → 3, "26+" → 26, "0" → 0)
-        const minVal = parseInt(b.label.replace('+', ''));
-        const pct = Math.round((b.count / max) * 100);
-        return `<div class="insight-bar-row insight-clickable" data-reaction-min="${minVal}" title="${b.label} reactions: ${b.count} items">
+      if (!buckets.length) {
+        el.innerHTML = '';
+        return;
+      }
+      const max = Math.max(...buckets.map((b) => b.count), 1);
+      const rows = buckets
+        .map((b) => {
+          // Extract minimum value from label (e.g. "3-5" → 3, "26+" → 26, "0" → 0)
+          const minVal = parseInt(b.label.replace('+', ''));
+          const pct = Math.round((b.count / max) * 100);
+          return `<div class="insight-bar-row insight-clickable" data-reaction-min="${minVal}" title="${b.label} reactions: ${b.count} items">
           <span class="insight-bar-label">${b.label}</span>
           <span class="insight-bar-track"><span class="insight-bar-fill" style="width:${pct}%"></span></span>
           <span class="insight-bar-count">${b.count}</span>
         </div>`;
-      }).join('');
+        })
+        .join('');
       el.innerHTML = `<div class="insight-title">Reactions</div>${rows}`;
 
-      el.querySelectorAll('.insight-clickable').forEach(row => {
+      el.querySelectorAll('.insight-clickable').forEach((row) => {
         row.addEventListener('click', () => {
           const minVal = (row as HTMLElement).dataset.reactionMin!;
-          (document.getElementById('filter-reactions-min') as HTMLInputElement).value = minVal;
+          (
+            document.getElementById('filter-reactions-min') as HTMLInputElement
+          ).value = minVal;
           currentPage = 1;
           doSearch();
         });
@@ -1600,27 +2026,36 @@ import Admin from '../../../layouts/Admin.astro';
 
     function renderTimeline(histogram: any[]) {
       const el = document.getElementById('insight-timeline')!;
-      if (!histogram.length) { el.innerHTML = ''; return; }
-      const max = Math.max(...histogram.map(h => h.count), 1);
+      if (!histogram.length) {
+        el.innerHTML = '';
+        return;
+      }
+      const max = Math.max(...histogram.map((h) => h.count), 1);
       // Show last 12 months max
       const recent = histogram.slice(-12);
-      const rows = recent.map(h => {
-        const pct = Math.round((h.count / max) * 100);
-        return `<div class="insight-bar-row insight-clickable" data-month="${h.month}" title="${h.month}: ${h.count} items">
+      const rows = recent
+        .map((h) => {
+          const pct = Math.round((h.count / max) * 100);
+          return `<div class="insight-bar-row insight-clickable" data-month="${h.month}" title="${h.month}: ${h.count} items">
           <span class="insight-bar-label">${h.month}</span>
           <span class="insight-bar-track"><span class="insight-bar-fill" style="width:${pct}%"></span></span>
           <span class="insight-bar-count">${h.count}</span>
         </div>`;
-      }).join('');
+        })
+        .join('');
       el.innerHTML = `<div class="insight-title">Timeline</div>${rows}`;
 
-      el.querySelectorAll('.insight-clickable').forEach(row => {
+      el.querySelectorAll('.insight-clickable').forEach((row) => {
         row.addEventListener('click', () => {
           const month = (row as HTMLElement).dataset.month!; // "YYYY-MM"
           const [year, mon] = month.split('-').map(Number);
           const lastDay = new Date(year, mon, 0).getDate();
-          (document.getElementById('filter-date-from') as HTMLInputElement).value = `${month}-01`;
-          (document.getElementById('filter-date-to') as HTMLInputElement).value = `${month}-${String(lastDay).padStart(2, '0')}`;
+          (
+            document.getElementById('filter-date-from') as HTMLInputElement
+          ).value = `${month}-01`;
+          (
+            document.getElementById('filter-date-to') as HTMLInputElement
+          ).value = `${month}-${String(lastDay).padStart(2, '0')}`;
           currentPage = 1;
           doSearch();
         });
@@ -1630,17 +2065,31 @@ import Admin from '../../../layouts/Admin.astro';
     function renderColorChart(colorGroups: Record<string, number>) {
       const el = document.getElementById('insight-colors')!;
       const entries = Object.entries(colorGroups).sort((a, b) => b[1] - a[1]);
-      if (!entries.length) { el.innerHTML = ''; return; }
-      const max = Math.max(...entries.map(e => e[1]), 1);
+      if (!entries.length) {
+        el.innerHTML = '';
+        return;
+      }
+      const max = Math.max(...entries.map((e) => e[1]), 1);
       const colorMap: Record<string, string> = {
-        red: '#e53935', orange: '#fb8c00', yellow: '#fdd835', green: '#43a047',
-        teal: '#00897b', blue: '#1e88e5', purple: '#8e24aa', pink: '#d81b60',
-        brown: '#6d4c41', beige: '#d7ccc8', gray: '#9e9e9e', black: '#212121', white: '#f5f5f5',
+        red: '#e53935',
+        orange: '#fb8c00',
+        yellow: '#fdd835',
+        green: '#43a047',
+        teal: '#00897b',
+        blue: '#1e88e5',
+        purple: '#8e24aa',
+        pink: '#d81b60',
+        brown: '#6d4c41',
+        beige: '#d7ccc8',
+        gray: '#9e9e9e',
+        black: '#212121',
+        white: '#f5f5f5',
       };
-      const rows = entries.map(([color, count]) => {
-        const pct = Math.round((count / max) * 100);
-        const hex = colorMap[color] || '#999';
-        return `<div class="insight-bar-row" title="${color}: ${count} items" data-color-filter="${color}">
+      const rows = entries
+        .map(([color, count]) => {
+          const pct = Math.round((count / max) * 100);
+          const hex = colorMap[color] || '#999';
+          return `<div class="insight-bar-row" title="${color}: ${count} items" data-color-filter="${color}">
           <span class="insight-bar-label" style="display:flex;align-items:center;justify-content:flex-end;gap:4px;">
             <span style="display:inline-block;width:10px;height:10px;background:${hex};border:1px solid #ccc;flex-shrink:0;"></span>
             ${color}
@@ -1648,16 +2097,20 @@ import Admin from '../../../layouts/Admin.astro';
           <span class="insight-bar-track"><span class="insight-bar-fill" style="width:${pct}%;background:${hex}"></span></span>
           <span class="insight-bar-count">${count}</span>
         </div>`;
-      }).join('');
+        })
+        .join('');
       el.innerHTML = `<div class="insight-title">Colors</div>${rows}`;
 
       // Click to filter by color
-      el.querySelectorAll('[data-color-filter]').forEach(row => {
+      el.querySelectorAll('[data-color-filter]').forEach((row) => {
         row.addEventListener('click', () => {
           const color = (row as HTMLElement).dataset.colorFilter!;
-          document.querySelectorAll('input[name="color-group"]').forEach(cb => {
-            (cb as HTMLInputElement).checked = (cb as HTMLInputElement).value === color;
-          });
+          document
+            .querySelectorAll('input[name="color-group"]')
+            .forEach((cb) => {
+              (cb as HTMLInputElement).checked =
+                (cb as HTMLInputElement).value === color;
+            });
           currentPage = 1;
           doSearch();
         });

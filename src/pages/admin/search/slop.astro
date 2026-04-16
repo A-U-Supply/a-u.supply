@@ -1,0 +1,641 @@
+---
+import Admin from '../../../layouts/Admin.astro';
+---
+
+<Admin title="Slop Bucket" current="slop">
+  <div class="page-header">
+    <h1>Slop Bucket</h1>
+    <div class="slop-summary" id="slop-summary"></div>
+  </div>
+
+  <div class="slop-controls">
+    <select id="filter-type">
+      <option value="">All Types</option>
+      <option value="image">Image</option>
+      <option value="audio">Audio</option>
+      <option value="video">Video</option>
+    </select>
+    <select id="filter-app">
+      <option value="">All Apps</option>
+    </select>
+    <button class="action-btn" id="btn-refresh">Refresh</button>
+    <div class="slop-bulk-actions">
+      <button class="action-btn" id="btn-play-all" style="display:none;"
+        >Play All</button
+      >
+      <button class="action-btn" id="btn-index-all" style="display:none;"
+        >Index All</button
+      >
+      <button
+        class="action-btn action-btn--danger"
+        id="btn-discard-all"
+        style="display:none;">Discard All</button
+      >
+    </div>
+  </div>
+
+  <div id="slop-loading" style="color: var(--color-muted);">
+    <span class="loading-dots">Loading</span>
+  </div>
+  <div id="slop-error" class="login-error" style="display:none;"></div>
+  <div
+    id="slop-empty"
+    style="display:none; color: var(--color-muted); padding: var(--space-lg) 0; text-align: center;"
+  >
+    No unindexed outputs. The bucket is empty.
+  </div>
+
+  <div id="slop-grid" class="slop-grid" style="display:none;"></div>
+
+  <!-- Index metadata dialog -->
+  <div class="dialog-overlay" id="index-dialog" style="display:none;">
+    <div
+      class="dialog"
+      style="max-width: 560px; max-height: 90vh; overflow-y: auto;"
+    >
+      <h3>Index to Search</h3>
+      <div id="idx-info" class="idx-info"></div>
+      <input id="idx-output-index" type="hidden" />
+      <div class="idx-field">
+        <label>Title</label>
+        <input
+          id="idx-description"
+          type="text"
+          placeholder="Editable — auto-generated from job context"
+        />
+        <div class="idx-hint">
+          Searchable title for these outputs. Edit freely.
+        </div>
+      </div>
+      <div class="idx-field">
+        <label>Notes</label>
+        <textarea id="idx-notes" rows="2" placeholder="Optional freeform notes"
+        ></textarea>
+      </div>
+      <div class="idx-field">
+        <label>Additional Tags</label>
+        <input id="idx-tags" type="text" placeholder="comma-separated" />
+      </div>
+      <div
+        id="idx-auto-tags"
+        class="idx-info"
+        style="margin-top: var(--space-xs);"
+      >
+      </div>
+      <div class="dialog-actions">
+        <button class="btn-cancel" id="idx-cancel">Cancel</button>
+        <button class="action-btn" id="idx-confirm">Index</button>
+      </div>
+    </div>
+  </div>
+</Admin>
+
+<style>
+  .page-header {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+  }
+  .slop-summary {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+  .slop-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-top: var(--space-sm);
+    flex-wrap: wrap;
+  }
+  .slop-bulk-actions {
+    display: flex;
+    gap: var(--space-sm);
+    margin-left: auto;
+  }
+  .slop-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+  }
+  .slop-card {
+    border: 1px solid var(--color-border);
+    padding: var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+  .slop-preview {
+    width: 100%;
+    max-height: 400px;
+    object-fit: contain;
+    display: block;
+    margin-bottom: var(--space-xs);
+    border-radius: 2px;
+  }
+  .slop-card .slop-name {
+    font-weight: bold;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .slop-card .slop-meta {
+    color: var(--color-muted);
+    font-size: 0.65rem;
+    margin-top: 2px;
+  }
+  .slop-card .slop-job {
+    font-size: 0.65rem;
+    margin-top: 4px;
+  }
+  .slop-card .slop-job a {
+    color: var(--color-link);
+  }
+  .slop-card .slop-actions {
+    margin-top: var(--space-xs);
+    display: flex;
+    gap: var(--space-xs);
+    flex-wrap: wrap;
+  }
+  .status-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    font-size: 0.6rem;
+    border-radius: 2px;
+    text-transform: uppercase;
+  }
+  .status-completed {
+    background: #1a3a1a;
+    color: #40c040;
+  }
+  .status-failed {
+    background: #3a1a1a;
+    color: #e04040;
+  }
+  .status-running {
+    background: #1a2a3a;
+    color: #40a0e0;
+  }
+  .status-pending {
+    background: #2a2a1a;
+    color: #c0c040;
+  }
+  .status-cancelled {
+    background: #2a2a2a;
+    color: #a0a0a0;
+  }
+  .idx-info {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--color-muted);
+    border-left: 2px solid var(--color-border);
+    padding: var(--space-xs) var(--space-sm);
+    margin-bottom: var(--space-sm);
+    line-height: 1.5;
+    white-space: pre-line;
+  }
+  .idx-field {
+    margin-top: var(--space-sm);
+  }
+  .idx-field label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    margin-bottom: 2px;
+  }
+  .idx-field input,
+  .idx-field textarea {
+    width: 100%;
+    padding: var(--space-xs);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    color: var(--color-text);
+    box-sizing: border-box;
+  }
+  .idx-field textarea {
+    resize: vertical;
+  }
+  .idx-hint {
+    color: var(--color-muted);
+    font-size: 0.65rem;
+    margin-top: 2px;
+  }
+</style>
+
+<script>
+  document.addEventListener('astro:page-load', async () => {
+    await (window as any).__authReady;
+
+    let allOutputs: any[] = [];
+    let pendingIndexIds: string[] = [];
+    let pendingIndexJobId: string | null = null;
+
+    function formatSize(bytes: number): string {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function isPlayable(o: any): boolean {
+      return o.media_type === 'audio' || o.media_type === 'video';
+    }
+
+    function downloadUrl(o: any): string {
+      return `/api/jobs/${o.job_id}/outputs/${o.id}/download`;
+    }
+
+    // ---- Load outputs ----
+    async function loadOutputs() {
+      const loadingEl = document.getElementById('slop-loading')!;
+      const errorEl = document.getElementById('slop-error')!;
+      const emptyEl = document.getElementById('slop-empty')!;
+      const gridEl = document.getElementById('slop-grid')!;
+      const summaryEl = document.getElementById('slop-summary')!;
+
+      loadingEl.style.display = '';
+      errorEl.style.display = 'none';
+      emptyEl.style.display = 'none';
+      gridEl.style.display = 'none';
+
+      const mediaType = (
+        document.getElementById('filter-type') as HTMLSelectElement
+      ).value;
+      const appName = (
+        document.getElementById('filter-app') as HTMLSelectElement
+      ).value;
+
+      const params = new URLSearchParams();
+      if (mediaType) params.set('media_type', mediaType);
+      if (appName) params.set('app_name', appName);
+
+      const res = await fetch(`/api/jobs/outputs/unindexed?${params}`, {
+        credentials: 'include',
+      });
+      loadingEl.style.display = 'none';
+
+      if (!res.ok) {
+        errorEl.textContent = 'Failed to load outputs.';
+        errorEl.style.display = '';
+        return;
+      }
+
+      const data = await res.json();
+      allOutputs = data.outputs;
+
+      // Populate app filter dropdown (preserve selection)
+      const appSelect = document.getElementById(
+        'filter-app',
+      ) as HTMLSelectElement;
+      const currentApp = appSelect.value;
+      appSelect.innerHTML = '<option value="">All Apps</option>';
+      for (const name of data.app_names) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        if (name === currentApp) opt.selected = true;
+        appSelect.appendChild(opt);
+      }
+
+      if (allOutputs.length === 0) {
+        summaryEl.textContent = '';
+        emptyEl.style.display = '';
+        document.getElementById('btn-index-all')!.style.display = 'none';
+        document.getElementById('btn-discard-all')!.style.display = 'none';
+        document.getElementById('btn-play-all')!.style.display = 'none';
+        return;
+      }
+
+      summaryEl.textContent = `${data.total} output${data.total !== 1 ? 's' : ''} across ${data.job_count} job${data.job_count !== 1 ? 's' : ''}`;
+
+      // Show bulk actions
+      document.getElementById('btn-index-all')!.style.display = '';
+      document.getElementById('btn-discard-all')!.style.display = '';
+      const playable = allOutputs.filter(isPlayable);
+      document.getElementById('btn-play-all')!.style.display =
+        playable.length > 0 ? '' : 'none';
+
+      // Render grid
+      gridEl.innerHTML = allOutputs
+        .map((o: any) => {
+          const dlUrl = downloadUrl(o);
+          let preview = '';
+          if (o.media_type === 'image') {
+            preview = `<a href="${dlUrl}" target="_blank"><img class="slop-preview" src="${dlUrl}" alt="${o.filename}" loading="lazy"></a>`;
+          } else if (o.media_type === 'video') {
+            preview = `<video class="slop-preview" controls preload="none" src="${dlUrl}"></video>`;
+          } else if (o.media_type === 'audio') {
+            preview = `<audio controls preload="none" src="${dlUrl}" style="width:100%;margin-top:var(--space-xs);"></audio>`;
+          }
+          return `
+        <div class="slop-card" data-output-id="${o.id}">
+          ${preview}
+          <div class="slop-name" title="${o.filename}">${o.filename}</div>
+          <div class="slop-meta">
+            ${o.media_type || 'unknown'} &middot; ${o.file_size_bytes ? formatSize(o.file_size_bytes) : '?'}
+          </div>
+          <div class="slop-job">
+            <span class="status-badge status-${o.job_status}">${o.job_status}</span>
+            ${o.job_app_name} &middot;
+            <a href="/admin/jobs/detail?id=${o.job_id}">view job</a>
+          </div>
+          <div class="slop-actions">
+            ${isPlayable(o) ? `<button class="action-btn" data-play="${o.id}">Play</button>` : ''}
+            <a href="${dlUrl}" class="action-btn" style="text-decoration:none;">Download</a>
+            <button class="action-btn" data-index="${o.id}" data-job="${o.job_id}">Index</button>
+            <button class="action-btn action-btn--danger" data-discard="${o.id}" data-job="${o.job_id}">Discard</button>
+          </div>
+        </div>
+      `;
+        })
+        .join('');
+      gridEl.style.display = '';
+
+      // Wire up play buttons
+      gridEl.querySelectorAll('[data-play]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const oid = (btn as HTMLElement).dataset.play;
+          const o = allOutputs.find((x: any) => x.id === oid);
+          if (!o) return;
+          document.dispatchEvent(
+            new CustomEvent('player:queue', {
+              detail: {
+                tracks: [
+                  {
+                    track_id: o.id,
+                    title: o.filename,
+                    release_title: '',
+                    release_code: '',
+                    media_type: o.media_type,
+                    stream_url: downloadUrl(o),
+                    cover_url: '',
+                    duration: 0,
+                    entity_name: o.job_app_name,
+                  },
+                ],
+                startIndex: 0,
+              },
+            }),
+          );
+        });
+      });
+
+      // Wire up single index buttons
+      gridEl.querySelectorAll('[data-index]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const oid = (btn as HTMLElement).dataset.index!;
+          const jobId = (btn as HTMLElement).dataset.job!;
+          openIndexDialog([oid], jobId);
+        });
+      });
+
+      // Wire up single discard buttons
+      gridEl.querySelectorAll('[data-discard]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const oid = (btn as HTMLElement).dataset.discard!;
+          const jobId = (btn as HTMLElement).dataset.job!;
+          if (
+            !(await (window as any).confirmDialog(
+              'Discard this output? The file will be deleted.',
+              'Discard',
+            ))
+          )
+            return;
+          const res = await fetch(`/api/jobs/${jobId}/outputs/${oid}`, {
+            method: 'DELETE',
+            credentials: 'include',
+          });
+          if (res.ok) {
+            (window as any).toast.success('Output discarded');
+            loadOutputs();
+          } else {
+            (window as any).toast.error('Failed to discard output');
+          }
+        });
+      });
+    }
+
+    // ---- Index dialog ----
+    function openIndexDialog(outputIds: string[], singleJobId: string | null) {
+      pendingIndexIds = outputIds;
+
+      // Determine if all outputs are from the same job
+      const jobIds = new Set<string>();
+      for (const oid of outputIds) {
+        const o = allOutputs.find((x: any) => x.id === oid);
+        if (o) jobIds.add(o.job_id);
+      }
+      const isSingleJob = jobIds.size === 1;
+      pendingIndexJobId = isSingleJob ? [...jobIds][0] : null;
+
+      const infoEl = document.getElementById('idx-info')!;
+      const autoTagsEl = document.getElementById('idx-auto-tags')!;
+      const descInput = document.getElementById(
+        'idx-description',
+      ) as HTMLInputElement;
+      const notesInput = document.getElementById(
+        'idx-notes',
+      ) as HTMLTextAreaElement;
+      const tagsInput = document.getElementById('idx-tags') as HTMLInputElement;
+      const outputIndexInput = document.getElementById(
+        'idx-output-index',
+      ) as HTMLInputElement;
+
+      // Reset fields
+      descInput.value = '';
+      notesInput.value = '';
+      tagsInput.value = '';
+      outputIndexInput.value = '';
+
+      if (isSingleJob) {
+        const sample = allOutputs.find(
+          (x: any) => x.job_id === pendingIndexJobId,
+        );
+        if (sample) {
+          const params = sample.job_params || {};
+
+          // Auto description
+          const parts = [sample.job_app_name];
+          if (params.recipe) parts.push(params.recipe);
+          else if (params.model) parts.push(params.model);
+          if (params.input_combination && params.input_combination !== 'splice')
+            parts.push(params.input_combination);
+          descInput.value = parts.join(' / ');
+
+          // Info
+          const infoLines = [`App: ${sample.job_app_name}`];
+          if (params.processing_mode)
+            infoLines.push(`Mode: ${params.processing_mode}`);
+          if (params.recipe) infoLines.push(`Recipe: ${params.recipe}`);
+          if (params.model) infoLines.push(`Model: ${params.model}`);
+          infoLines.push(`Outputs: ${outputIds.length}`);
+          infoEl.textContent = infoLines.join('\n');
+
+          // Auto-tags preview
+          const autoTags = [`app:${sample.job_app_name}`];
+          if (params.recipe) autoTags.push(`recipe:${params.recipe}`);
+          if (params.model) autoTags.push(`model:${params.model}`);
+          autoTagsEl.textContent = `Auto-tags: ${autoTags.join(', ')}`;
+        }
+      } else {
+        infoEl.textContent = `Indexing ${outputIds.length} outputs from ${jobIds.size} jobs`;
+        autoTagsEl.textContent = 'Auto-tags will be generated per-job';
+      }
+
+      document.getElementById('index-dialog')!.style.display = 'flex';
+    }
+
+    document.getElementById('idx-cancel')?.addEventListener('click', () => {
+      document.getElementById('index-dialog')!.style.display = 'none';
+      pendingIndexIds = [];
+    });
+
+    document
+      .getElementById('idx-confirm')
+      ?.addEventListener('click', async () => {
+        const title = (
+          document.getElementById('idx-description') as HTMLInputElement
+        ).value.trim();
+        const notes = (
+          document.getElementById('idx-notes') as HTMLTextAreaElement
+        ).value.trim();
+        const description =
+          [title, notes].filter(Boolean).join('\n\n') || undefined;
+        const outputIndex =
+          (
+            document.getElementById('idx-output-index') as HTMLInputElement
+          ).value.trim() || undefined;
+        const tagsStr = (
+          document.getElementById('idx-tags') as HTMLInputElement
+        ).value.trim();
+        const tags = tagsStr
+          ? tagsStr
+              .split(',')
+              .map((t) => t.trim())
+              .filter(Boolean)
+          : [];
+
+        const meta = { description, tags, output_index: outputIndex };
+
+        let ok = true;
+
+        if (pendingIndexIds.length === 1 && pendingIndexJobId) {
+          // Single output, single job — use per-job endpoint
+          const res = await fetch(
+            `/api/jobs/${pendingIndexJobId}/outputs/${pendingIndexIds[0]}/index`,
+            {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(meta),
+            },
+          );
+          ok = res.ok;
+        } else if (pendingIndexJobId) {
+          // Multiple outputs, same job — use per-job bulk endpoint
+          const res = await fetch(
+            `/api/jobs/${pendingIndexJobId}/outputs/index`,
+            {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ output_ids: pendingIndexIds, ...meta }),
+            },
+          );
+          ok = res.ok;
+        } else {
+          // Cross-job — use bulk endpoint
+          const res = await fetch('/api/jobs/outputs/bulk-index', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ output_ids: pendingIndexIds, ...meta }),
+          });
+          ok = res.ok;
+        }
+
+        document.getElementById('index-dialog')!.style.display = 'none';
+        pendingIndexIds = [];
+        pendingIndexJobId = null;
+
+        if (ok) {
+          (window as any).toast.success('Indexed successfully');
+          loadOutputs();
+        } else {
+          (window as any).toast.error('Indexing failed');
+        }
+      });
+
+    // ---- Bulk actions ----
+    document.getElementById('btn-index-all')?.addEventListener('click', () => {
+      if (allOutputs.length === 0) return;
+      openIndexDialog(
+        allOutputs.map((o) => o.id),
+        null,
+      );
+    });
+
+    document
+      .getElementById('btn-discard-all')
+      ?.addEventListener('click', async () => {
+        if (allOutputs.length === 0) return;
+        if (
+          !(await (window as any).confirmDialog(
+            `Discard all ${allOutputs.length} unindexed outputs? Files will be permanently deleted.`,
+            'Discard All',
+          ))
+        )
+          return;
+
+        const res = await fetch('/api/jobs/outputs/bulk-discard', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ output_ids: allOutputs.map((o) => o.id) }),
+        });
+        if (res.ok) {
+          (window as any).toast.success('All outputs discarded');
+          loadOutputs();
+        } else {
+          (window as any).toast.error('Failed to discard outputs');
+        }
+      });
+
+    document.getElementById('btn-play-all')?.addEventListener('click', () => {
+      const playable = allOutputs.filter(isPlayable);
+      if (playable.length === 0) return;
+      const tracks = playable.map((o) => ({
+        track_id: o.id,
+        title: o.filename,
+        release_title: '',
+        release_code: '',
+        media_type: o.media_type,
+        stream_url: downloadUrl(o),
+        cover_url: '',
+        duration: 0,
+        entity_name: o.job_app_name,
+      }));
+      document.dispatchEvent(
+        new CustomEvent('player:queue', {
+          detail: { tracks, startIndex: 0 },
+        }),
+      );
+    });
+
+    // ---- Filters ----
+    document
+      .getElementById('filter-type')
+      ?.addEventListener('change', loadOutputs);
+    document
+      .getElementById('filter-app')
+      ?.addEventListener('change', loadOutputs);
+    document
+      .getElementById('btn-refresh')
+      ?.addEventListener('click', loadOutputs);
+
+    // Initial load
+    loadOutputs();
+  });
+</script>

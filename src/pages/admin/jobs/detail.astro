@@ -6,21 +6,41 @@ import Admin from '../../../layouts/Admin.astro';
   <div class="page-header">
     <h1 id="job-title">Job</h1>
     <div class="header-actions">
-      <a href="/admin/jobs" class="action-btn" style="text-decoration:none;">Back to Jobs</a>
+      <a href="/admin/jobs" class="action-btn" style="text-decoration:none;"
+        >Back to Jobs</a
+      >
     </div>
   </div>
 
-  <div id="loading" style="color: var(--color-muted);"><span class="loading-dots">Loading</span></div>
+  <div id="loading" style="color: var(--color-muted);">
+    <span class="loading-dots">Loading</span>
+  </div>
 
   <div id="job-detail" style="display:none;">
     <div class="detail-grid">
-      <div class="detail-row"><span class="detail-label">Status</span><span id="job-status"></span></div>
-      <div class="detail-row"><span class="detail-label">App</span><span id="job-app"></span></div>
-      <div class="detail-row"><span class="detail-label">Input Items</span><span id="job-items"></span></div>
-      <div class="detail-row"><span class="detail-label">Created</span><span id="job-created"></span></div>
-      <div class="detail-row"><span class="detail-label">Started</span><span id="job-started"></span></div>
-      <div class="detail-row"><span class="detail-label">Completed</span><span id="job-completed"></span></div>
-      <div class="detail-row"><span class="detail-label">Retries</span><span id="job-retries"></span></div>
+      <div class="detail-row">
+        <span class="detail-label">Status</span><span id="job-status"></span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">App</span><span id="job-app"></span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Input Items</span><span id="job-items"
+        ></span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Created</span><span id="job-created"></span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Started</span><span id="job-started"></span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Completed</span><span id="job-completed"
+        ></span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Retries</span><span id="job-retries"></span>
+      </div>
     </div>
 
     <div id="job-params-section" style="display:none;">
@@ -41,9 +61,15 @@ import Admin from '../../../layouts/Admin.astro';
     <div id="job-outputs-section" style="display:none;">
       <h2>Outputs</h2>
       <div class="output-actions">
-        <button class="action-btn" id="play-all-btn" style="display:none;">Play All</button>
-        <button class="action-btn" id="index-all-btn">Index All to Search</button>
-        <button class="action-btn action-btn--danger" id="discard-all-btn">Discard All</button>
+        <button class="action-btn" id="play-all-btn" style="display:none;"
+          >Play All</button
+        >
+        <button class="action-btn" id="index-all-btn"
+          >Index All to Search</button
+        >
+        <button class="action-btn action-btn--danger" id="discard-all-btn"
+          >Discard All</button
+        >
       </div>
       <div id="outputs-list" class="outputs-grid"></div>
     </div>
@@ -51,24 +77,39 @@ import Admin from '../../../layouts/Admin.astro';
 
   <!-- Index metadata dialog -->
   <div class="dialog-overlay" id="index-dialog" style="display:none;">
-    <div class="dialog" style="max-width: 560px; max-height: 90vh; overflow-y: auto;">
+    <div
+      class="dialog"
+      style="max-width: 560px; max-height: 90vh; overflow-y: auto;"
+    >
       <h3>Index to Search</h3>
       <div id="idx-job-info" class="idx-info"></div>
       <input id="idx-output-index" type="hidden" />
       <div class="idx-field">
         <label>Title</label>
-        <input id="idx-description" type="text" placeholder="Editable — auto-generated from job context" />
-        <div class="idx-hint">Searchable title for these outputs. Edit freely.</div>
+        <input
+          id="idx-description"
+          type="text"
+          placeholder="Editable — auto-generated from job context"
+        />
+        <div class="idx-hint">
+          Searchable title for these outputs. Edit freely.
+        </div>
       </div>
       <div class="idx-field">
         <label>Notes</label>
-        <textarea id="idx-notes" rows="2" placeholder="Optional freeform notes"></textarea>
+        <textarea id="idx-notes" rows="2" placeholder="Optional freeform notes"
+        ></textarea>
       </div>
       <div class="idx-field">
         <label>Additional Tags</label>
         <input id="idx-tags" type="text" placeholder="comma-separated" />
       </div>
-      <div id="idx-auto-tags" class="idx-info" style="margin-top: var(--space-xs);"></div>
+      <div
+        id="idx-auto-tags"
+        class="idx-info"
+        style="margin-top: var(--space-xs);"
+      >
+      </div>
       <div class="dialog-actions">
         <button class="btn-cancel" id="idx-cancel">Cancel</button>
         <button class="action-btn" id="idx-confirm">Index</button>
@@ -116,7 +157,9 @@ import Admin from '../../../layouts/Admin.astro';
     max-height: 400px;
     overflow-y: auto;
   }
-  .error-block { border-color: #e04040; }
+  .error-block {
+    border-color: #e04040;
+  }
   .output-actions {
     display: flex;
     gap: var(--space-sm);
@@ -181,7 +224,8 @@ import Admin from '../../../layouts/Admin.astro';
     font-size: var(--text-sm);
     margin-bottom: 2px;
   }
-  .idx-field input, .idx-field textarea {
+  .idx-field input,
+  .idx-field textarea {
     width: 100%;
     padding: var(--space-xs);
     font-family: var(--font-mono);
@@ -191,7 +235,9 @@ import Admin from '../../../layouts/Admin.astro';
     color: var(--color-text);
     box-sizing: border-box;
   }
-  .idx-field textarea { resize: vertical; }
+  .idx-field textarea {
+    resize: vertical;
+  }
   .idx-hint {
     color: var(--color-muted);
     font-size: 0.65rem;
@@ -204,7 +250,10 @@ import Admin from '../../../layouts/Admin.astro';
     await (window as any).__authReady;
 
     const jobId = new URLSearchParams(window.location.search).get('id');
-    if (!jobId) { window.location.href = '/admin/jobs'; return; }
+    if (!jobId) {
+      window.location.href = '/admin/jobs';
+      return;
+    }
 
     const loadingEl = document.getElementById('loading')!;
     const detailEl = document.getElementById('job-detail')!;
@@ -247,19 +296,28 @@ import Admin from '../../../layouts/Admin.astro';
       const inputFilenames = data.input_filenames || [];
 
       // Prepopulate output index
-      (document.getElementById('idx-output-index') as HTMLInputElement).value = manifestOutput.index || '';
+      (document.getElementById('idx-output-index') as HTMLInputElement).value =
+        manifestOutput.index || '';
 
       // Build auto description
       const parts = [job.app_name];
       if (params.recipe) parts.push(params.recipe);
       else if (params.model) parts.push(params.model);
-      if (params.input_combination && params.input_combination !== 'splice') parts.push(params.input_combination);
-      parts.push(`${job.input_item_count} input${job.input_item_count !== 1 ? 's' : ''}`);
+      if (params.input_combination && params.input_combination !== 'splice')
+        parts.push(params.input_combination);
+      parts.push(
+        `${job.input_item_count} input${job.input_item_count !== 1 ? 's' : ''}`,
+      );
       if (job.started_at && job.completed_at) {
-        const runtime = ((new Date(job.completed_at).getTime() - new Date(job.started_at).getTime()) / 1000).toFixed(1);
+        const runtime = (
+          (new Date(job.completed_at).getTime() -
+            new Date(job.started_at).getTime()) /
+          1000
+        ).toFixed(1);
         parts.push(`${runtime}s`);
       }
-      (document.getElementById('idx-description') as HTMLInputElement).value = parts.join(' / ');
+      (document.getElementById('idx-description') as HTMLInputElement).value =
+        parts.join(' / ');
       (document.getElementById('idx-notes') as HTMLTextAreaElement).value = '';
 
       // Clear user tags
@@ -267,23 +325,32 @@ import Admin from '../../../layouts/Admin.astro';
 
       // Job info
       const infoLines = [`App: ${job.app_name}`];
-      if (manifestOutput.index) infoLines.push(`Index: ${manifestOutput.index}`);
-      if (params.processing_mode) infoLines.push(`Mode: ${params.processing_mode}`);
+      if (manifestOutput.index)
+        infoLines.push(`Index: ${manifestOutput.index}`);
+      if (params.processing_mode)
+        infoLines.push(`Mode: ${params.processing_mode}`);
       if (params.recipe) infoLines.push(`Recipe: ${params.recipe}`);
       if (params.model) infoLines.push(`Model: ${params.model}`);
-      if (inputFilenames.length) infoLines.push(`Inputs: ${inputFilenames.join(', ')}`);
+      if (inputFilenames.length)
+        infoLines.push(`Inputs: ${inputFilenames.join(', ')}`);
       if (job.started_at && job.completed_at) {
-        const runtime = ((new Date(job.completed_at).getTime() - new Date(job.started_at).getTime()) / 1000).toFixed(1);
+        const runtime = (
+          (new Date(job.completed_at).getTime() -
+            new Date(job.started_at).getTime()) /
+          1000
+        ).toFixed(1);
         infoLines.push(`Runtime: ${runtime}s`);
       }
-      document.getElementById('idx-job-info')!.textContent = infoLines.join('\n');
+      document.getElementById('idx-job-info')!.textContent =
+        infoLines.join('\n');
 
       // Auto-tags preview
       const autoTags = [`app:${job.app_name}`];
       if (params.recipe) autoTags.push(`recipe:${params.recipe}`);
       if (params.model) autoTags.push(`model:${params.model}`);
       if (manifestOutput.index) autoTags.push(`index:${manifestOutput.index}`);
-      document.getElementById('idx-auto-tags')!.textContent = `Auto-tags: ${autoTags.join(', ')}`;
+      document.getElementById('idx-auto-tags')!.textContent =
+        `Auto-tags: ${autoTags.join(', ')}`;
 
       document.getElementById('index-dialog')!.style.display = 'flex';
     }
@@ -293,38 +360,63 @@ import Admin from '../../../layouts/Admin.astro';
       pendingIndexIds = [];
     });
 
-    document.getElementById('idx-confirm')?.addEventListener('click', async () => {
-      const title = (document.getElementById('idx-description') as HTMLInputElement).value.trim();
-      const notes = (document.getElementById('idx-notes') as HTMLTextAreaElement).value.trim();
-      const description = [title, notes].filter(Boolean).join('\n\n') || undefined;
-      const outputIndex = (document.getElementById('idx-output-index') as HTMLInputElement).value.trim() || undefined;
-      const tagsStr = (document.getElementById('idx-tags') as HTMLInputElement).value.trim();
-      const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
+    document
+      .getElementById('idx-confirm')
+      ?.addEventListener('click', async () => {
+        const title = (
+          document.getElementById('idx-description') as HTMLInputElement
+        ).value.trim();
+        const notes = (
+          document.getElementById('idx-notes') as HTMLTextAreaElement
+        ).value.trim();
+        const description =
+          [title, notes].filter(Boolean).join('\n\n') || undefined;
+        const outputIndex =
+          (
+            document.getElementById('idx-output-index') as HTMLInputElement
+          ).value.trim() || undefined;
+        const tagsStr = (
+          document.getElementById('idx-tags') as HTMLInputElement
+        ).value.trim();
+        const tags = tagsStr
+          ? tagsStr
+              .split(',')
+              .map((t) => t.trim())
+              .filter(Boolean)
+          : [];
 
-      const meta = { description, tags, output_index: outputIndex };
+        const meta = { description, tags, output_index: outputIndex };
 
-      let ok = true;
-      if (pendingIndexIds.length === 1) {
-        const res = await fetch(`/api/jobs/${jobId}/outputs/${pendingIndexIds[0]}/index`, {
-          method: 'POST', credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(meta),
-        });
-        ok = res.ok;
-      } else {
-        const res = await fetch(`/api/jobs/${jobId}/outputs/index`, {
-          method: 'POST', credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ output_ids: pendingIndexIds, ...meta }),
-        });
-        ok = res.ok;
-      }
+        let ok = true;
+        if (pendingIndexIds.length === 1) {
+          const res = await fetch(
+            `/api/jobs/${jobId}/outputs/${pendingIndexIds[0]}/index`,
+            {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(meta),
+            },
+          );
+          ok = res.ok;
+        } else {
+          const res = await fetch(`/api/jobs/${jobId}/outputs/index`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ output_ids: pendingIndexIds, ...meta }),
+          });
+          ok = res.ok;
+        }
 
-      document.getElementById('index-dialog')!.style.display = 'none';
-      pendingIndexIds = [];
-      if (ok) { loadJob(); }
-      else { (window as any).toast.error('Indexing failed'); }
-    });
+        document.getElementById('index-dialog')!.style.display = 'none';
+        pendingIndexIds = [];
+        if (ok) {
+          loadJob();
+        } else {
+          (window as any).toast.error('Indexing failed');
+        }
+      });
 
     // ---- Load job ----
     async function loadJob() {
@@ -332,7 +424,8 @@ import Admin from '../../../layouts/Admin.astro';
       loadingEl.style.display = 'none';
 
       if (!res.ok) {
-        detailEl.innerHTML = '<p style="color:var(--color-muted);">Job not found.</p>';
+        detailEl.innerHTML =
+          '<p style="color:var(--color-muted);">Job not found.</p>';
         detailEl.style.display = '';
         return;
       }
@@ -345,19 +438,34 @@ import Admin from '../../../layouts/Admin.astro';
       detailEl.style.display = '';
       titleEl.textContent = `Job: ${job.app_name}`;
 
-      document.getElementById('job-status')!.innerHTML = `<span class="status-badge status-${job.status}">${job.status}</span>`;
+      document.getElementById('job-status')!.innerHTML =
+        `<span class="status-badge status-${job.status}">${job.status}</span>`;
       document.getElementById('job-app')!.textContent = job.app_name;
-      document.getElementById('job-items')!.textContent = String(job.input_item_count);
-      document.getElementById('job-created')!.textContent = formatDate(job.created_at);
-      document.getElementById('job-started')!.textContent = formatDate(job.started_at);
-      document.getElementById('job-completed')!.textContent = formatDate(job.completed_at);
-      document.getElementById('job-retries')!.textContent = String(job.retry_count);
+      document.getElementById('job-items')!.textContent = String(
+        job.input_item_count,
+      );
+      document.getElementById('job-created')!.textContent = formatDate(
+        job.created_at,
+      );
+      document.getElementById('job-started')!.textContent = formatDate(
+        job.started_at,
+      );
+      document.getElementById('job-completed')!.textContent = formatDate(
+        job.completed_at,
+      );
+      document.getElementById('job-retries')!.textContent = String(
+        job.retry_count,
+      );
 
       // Params
       const paramsSection = document.getElementById('job-params-section')!;
       if (Object.keys(job.params).length > 0) {
         paramsSection.style.display = '';
-        document.getElementById('job-params')!.textContent = JSON.stringify(job.params, null, 2);
+        document.getElementById('job-params')!.textContent = JSON.stringify(
+          job.params,
+          null,
+          2,
+        );
       }
 
       // Error
@@ -385,17 +493,18 @@ import Admin from '../../../layouts/Admin.astro';
         const playAllBtn = document.getElementById('play-all-btn')!;
         playAllBtn.style.display = playable.length > 0 ? '' : 'none';
 
-        listEl.innerHTML = outputs.map((o: any) => {
-          const dlUrl = `/api/jobs/${jobId}/outputs/${o.id}/download`;
-          let preview = '';
-          if (o.media_type === 'image') {
-            preview = `<a href="${dlUrl}" target="_blank"><img class="output-preview" src="${dlUrl}" alt="${o.filename}"></a>`;
-          } else if (o.media_type === 'video') {
-            preview = `<video class="output-preview" controls src="${dlUrl}"></video>`;
-          } else if (o.media_type === 'audio') {
-            preview = `<audio controls src="${dlUrl}" style="width:100%;margin-top:var(--space-xs);"></audio>`;
-          }
-          return `
+        listEl.innerHTML = outputs
+          .map((o: any) => {
+            const dlUrl = `/api/jobs/${jobId}/outputs/${o.id}/download`;
+            let preview = '';
+            if (o.media_type === 'image') {
+              preview = `<a href="${dlUrl}" target="_blank"><img class="output-preview" src="${dlUrl}" alt="${o.filename}"></a>`;
+            } else if (o.media_type === 'video') {
+              preview = `<video class="output-preview" controls src="${dlUrl}"></video>`;
+            } else if (o.media_type === 'audio') {
+              preview = `<audio controls src="${dlUrl}" style="width:100%;margin-top:var(--space-xs);"></audio>`;
+            }
+            return `
           <div class="output-card">
             ${preview}
             <div class="output-name" title="${o.filename}">${o.filename}</div>
@@ -409,30 +518,36 @@ import Admin from '../../../layouts/Admin.astro';
               ${!o.indexed ? `<button class="action-btn" data-index="${o.id}">Index</button>` : ''}
             </div>
           </div>
-        `}).join('');
+        `;
+          })
+          .join('');
 
         // Play buttons
-        listEl.querySelectorAll('[data-play]').forEach(btn => {
+        listEl.querySelectorAll('[data-play]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const oid = (btn as HTMLElement).dataset.play;
             const o = outputs.find((x: any) => x.id === oid);
             if (!o) return;
-            document.dispatchEvent(new CustomEvent('player:queue', {
-              detail: {
-                tracks: [{
-                  track_id: o.media_item_id || o.id,
-                  title: o.filename,
-                  release_title: '',
-                  release_code: '',
-                  media_type: o.media_type,
-                  stream_url: streamUrl(o),
-                  cover_url: '',
-                  duration: 0,
-                  entity_name: job.app_name,
-                }],
-                startIndex: 0,
-              },
-            }));
+            document.dispatchEvent(
+              new CustomEvent('player:queue', {
+                detail: {
+                  tracks: [
+                    {
+                      track_id: o.media_item_id || o.id,
+                      title: o.filename,
+                      release_title: '',
+                      release_code: '',
+                      media_type: o.media_type,
+                      stream_url: streamUrl(o),
+                      cover_url: '',
+                      duration: 0,
+                      entity_name: job.app_name,
+                    },
+                  ],
+                  startIndex: 0,
+                },
+              }),
+            );
           });
         });
 
@@ -449,13 +564,15 @@ import Admin from '../../../layouts/Admin.astro';
             duration: 0,
             entity_name: job.app_name,
           }));
-          document.dispatchEvent(new CustomEvent('player:queue', {
-            detail: { tracks, startIndex: 0 },
-          }));
+          document.dispatchEvent(
+            new CustomEvent('player:queue', {
+              detail: { tracks, startIndex: 0 },
+            }),
+          );
         };
 
         // Index buttons → open dialog
-        listEl.querySelectorAll('[data-index]').forEach(btn => {
+        listEl.querySelectorAll('[data-index]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const oid = (btn as HTMLElement).dataset.index!;
             openIndexDialog([oid]);
@@ -463,19 +580,36 @@ import Admin from '../../../layouts/Admin.astro';
         });
 
         // Index all → open dialog
-        document.getElementById('index-all-btn')?.addEventListener('click', () => {
-          const unindexed = outputs.filter((o: any) => !o.indexed).map((o: any) => o.id);
-          if (unindexed.length === 0) { (window as any).toast.success('All outputs already indexed'); return; }
-          openIndexDialog(unindexed);
-        });
+        document
+          .getElementById('index-all-btn')
+          ?.addEventListener('click', () => {
+            const unindexed = outputs
+              .filter((o: any) => !o.indexed)
+              .map((o: any) => o.id);
+            if (unindexed.length === 0) {
+              (window as any).toast.success('All outputs already indexed');
+              return;
+            }
+            openIndexDialog(unindexed);
+          });
 
         // Discard all
-        document.getElementById('discard-all-btn')?.addEventListener('click', async () => {
-          if (!await (window as any).confirmDialog('Delete all output files? Indexed items in search are not affected.', 'Delete All')) return;
-          await fetch(`/api/jobs/${jobId}/outputs`, {
-            method: 'DELETE', credentials: 'include' });
-          loadJob();
-        });
+        document
+          .getElementById('discard-all-btn')
+          ?.addEventListener('click', async () => {
+            if (
+              !(await (window as any).confirmDialog(
+                'Delete all output files? Indexed items in search are not affected.',
+                'Delete All',
+              ))
+            )
+              return;
+            await fetch(`/api/jobs/${jobId}/outputs`, {
+              method: 'DELETE',
+              credentials: 'include',
+            });
+            loadJob();
+          });
       }
     }
 
@@ -483,9 +617,14 @@ import Admin from '../../../layouts/Admin.astro';
 
     // Auto-refresh if running
     const refreshInterval = setInterval(async () => {
-      const statusEl = document.querySelector('.status-running, .status-pending');
-      if (statusEl) { loadJob(); }
-      else { clearInterval(refreshInterval); }
+      const statusEl = document.querySelector(
+        '.status-running, .status-pending',
+      );
+      if (statusEl) {
+        loadJob();
+      } else {
+        clearInterval(refreshInterval);
+      }
     }, 3000);
   });
 </script>
