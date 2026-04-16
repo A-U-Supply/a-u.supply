@@ -57,6 +57,16 @@ if "batch_id" not in _job_cols:
         _conn.execute(_sa_text("ALTER TABLE jobs ADD COLUMN batch_id TEXT"))
         _conn.execute(_sa_text("CREATE INDEX IF NOT EXISTS ix_jobs_batch_id ON jobs(batch_id)"))
 
+# Migrate existing DB: add discarded_at / discarded_by columns to job_outputs (midden)
+_output_cols = [c["name"] for c in _sa_inspect(engine).get_columns("job_outputs")]
+if "discarded_at" not in _output_cols:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE job_outputs ADD COLUMN discarded_at DATETIME"))
+        _conn.execute(_sa_text("CREATE INDEX IF NOT EXISTS ix_job_outputs_discarded_at ON job_outputs(discarded_at)"))
+if "discarded_by" not in _output_cols:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE job_outputs ADD COLUMN discarded_by INTEGER REFERENCES users(id)"))
+
 # Migrate existing DB: add category column to releases if missing
 _release_cols = [c["name"] for c in _sa_inspect(engine).get_columns("releases")]
 if "category" not in _release_cols:
@@ -107,6 +117,67 @@ async def _auto_reactions_loop():
         await asyncio.sleep(SYNC_INTERVAL_REACTIONS)
 
 
+MIDDEN_REAPER_INTERVAL = int(os.environ.get("MIDDEN_REAPER_INTERVAL", "600"))  # seconds
+
+
+def _reap_midden_sync() -> dict:
+    """Hard-delete midden items past their TTL. Runs in a thread."""
+    from datetime import timezone as _tz
+
+    from sqlalchemy.orm import sessionmaker
+
+    from jobs_api import JOB_DATA_DIR, MIDDEN_TTL_HOURS
+    from models import JobOutput
+
+    from datetime import datetime as _dt, timedelta as _td
+
+    cutoff = _dt.now(_tz.utc) - _td(hours=MIDDEN_TTL_HOURS)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    purged = 0
+    file_errors = 0
+    try:
+        rows = (
+            session.query(JobOutput)
+            .filter(
+                JobOutput.indexed == False,  # noqa: E712
+                JobOutput.discarded_at.isnot(None),
+                JobOutput.discarded_at < cutoff,
+            )
+            .all()
+        )
+        for output in rows:
+            file_path = JOB_DATA_DIR / output.job_id / "output" / output.file_path
+            try:
+                if file_path.is_file():
+                    file_path.unlink()
+            except OSError:
+                file_errors += 1
+            session.delete(output)
+            purged += 1
+        session.commit()
+    finally:
+        session.close()
+    return {"purged": purged, "file_errors": file_errors}
+
+
+async def _midden_reaper_loop():
+    """Periodically hard-delete midden items past their 24h TTL."""
+    await asyncio.sleep(120)  # let the app settle before the first sweep
+    loop = asyncio.get_running_loop()
+    while True:
+        try:
+            result = await loop.run_in_executor(_sync_executor, _reap_midden_sync)
+            if result["purged"] or result["file_errors"]:
+                logger.info(
+                    "Midden reaper: purged=%s file_errors=%s",
+                    result["purged"], result["file_errors"],
+                )
+        except Exception:
+            logger.exception("Midden reaper failed")
+        await asyncio.sleep(MIDDEN_REAPER_INTERVAL)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage background tasks for the app lifecycle."""
@@ -120,6 +191,9 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(_auto_reactions_loop()))
     else:
         logger.info("Slack auto-sync disabled (set SLACK_AUTO_SYNC=true to enable)")
+
+    logger.info("Midden reaper enabled (every %ds, 24h TTL)", MIDDEN_REAPER_INTERVAL)
+    tasks.append(asyncio.create_task(_midden_reaper_loop()))
 
     yield
 

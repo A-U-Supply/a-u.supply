@@ -20,6 +20,7 @@ import logging
 import os
 import random
 import tomllib
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -1673,14 +1674,19 @@ def list_unindexed_outputs(
     auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
-    """List unindexed job outputs, newest first, paginated.
+    """List the current user's unindexed job outputs, newest first, paginated.
 
-    Used by the Slop Bucket page to surface outputs that would otherwise be
-    lost. ``app_names`` returns every app with unindexed outputs regardless
-    of the current ``app_name`` filter, so the filter dropdown stays complete
-    across pages.
+    The slop bucket is per-user: only outputs from jobs the caller submitted
+    are returned, and items sent to the midden (``discarded_at`` set) are
+    excluded. ``app_names`` returns every app with unindexed outputs for this
+    user regardless of the current ``app_name`` filter.
     """
-    base_filters = [JobOutput.indexed == False]  # noqa: E712
+    user = auth[0]
+    base_filters = [
+        JobOutput.indexed == False,  # noqa: E712
+        JobOutput.discarded_at.is_(None),
+        Job.created_by == user.id,
+    ]
     if media_type:
         base_filters.append(JobOutput.media_type == media_type)
     if app_name:
@@ -1732,13 +1738,18 @@ def list_unindexed_outputs(
             }
         )
 
-    # Distinct app names across ALL unindexed outputs (not just this page / filter),
-    # so the filter dropdown keeps every option visible.
+    # Distinct app names across all of THIS USER'S unindexed non-discarded
+    # outputs (not just this page / filter), so the filter dropdown stays
+    # complete when switching between apps.
     app_name_rows = (
         db.query(Job.app_name)
         .select_from(JobOutput)
         .join(Job, JobOutput.job_id == Job.id)
-        .filter(JobOutput.indexed == False)  # noqa: E712
+        .filter(
+            JobOutput.indexed == False,  # noqa: E712
+            JobOutput.discarded_at.is_(None),
+            Job.created_by == user.id,
+        )
         .distinct()
         .all()
     )
@@ -1766,13 +1777,19 @@ def list_unindexed_output_ids(
     auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
-    """Return just the IDs of unindexed outputs matching the given filters.
+    """Return just the IDs of the current user's unindexed outputs matching the filters.
 
     Used by the Slop Bucket's "apply to all pages" bulk actions — lets the
     client collect every matching ID in one request instead of paginating
-    through the full list just to build an ID list.
+    through the full list just to build an ID list. Per-user scoped; midden
+    items (``discarded_at`` set) are excluded.
     """
-    filters = [JobOutput.indexed == False]  # noqa: E712
+    user = auth[0]
+    filters = [
+        JobOutput.indexed == False,  # noqa: E712
+        JobOutput.discarded_at.is_(None),
+        Job.created_by == user.id,
+    ]
     if media_type:
         filters.append(JobOutput.media_type == media_type)
     if app_name:
@@ -1828,35 +1845,201 @@ def cross_job_bulk_index(
 @router.post(
     "/jobs/outputs/bulk-discard",
     tags=["Slop Bucket"],
-    summary="Bulk discard outputs across jobs",
+    summary="Bulk discard outputs to the midden",
 )
 def cross_job_bulk_discard(
     body: CrossJobBulkDiscardRequest,
     auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
-    """Delete multiple unindexed outputs from different jobs.
+    """Soft-delete multiple outputs — sends them to the shared midden.
 
-    Removes output files from disk and database records. Outputs that have
-    already been indexed are skipped.
+    Stamps ``discarded_at`` / ``discarded_by`` on each output. Files stay on
+    disk so other users can still rescue or index them from the midden for
+    24h before the reaper loop hard-deletes them. Only the job's submitter
+    can discard; already-indexed or already-discarded items are skipped.
     """
-    deleted = 0
+    user = auth[0]
+    discarded = 0
     skipped = 0
+    now = datetime.now(timezone.utc)
     for output_id in body.output_ids:
-        output = db.query(JobOutput).filter(JobOutput.id == output_id).first()
+        output = (
+            db.query(JobOutput).join(Job).filter(JobOutput.id == output_id).first()
+        )
         if not output:
             skipped += 1
             continue
-        if output.indexed:
+        if output.indexed or output.discarded_at is not None:
             skipped += 1
             continue
-        file_path = JOB_DATA_DIR / output.job_id / "output" / output.file_path
-        if file_path.is_file():
-            file_path.unlink()
-        db.delete(output)
-        deleted += 1
+        if output.job.created_by != user.id:
+            skipped += 1
+            continue
+        output.discarded_at = now
+        output.discarded_by = user.id
+        discarded += 1
     db.commit()
-    return {"ok": True, "deleted": deleted, "skipped": skipped}
+    return {"ok": True, "discarded": discarded, "skipped": skipped}
+
+
+# ---------------------------------------------------------------------------
+# The Midden — shared 24h holding ground for discarded outputs.
+#
+# When a user discards outputs from their slop bucket they are NOT hard-deleted;
+# instead they get ``discarded_at`` / ``discarded_by`` stamps and land in the
+# midden, where any OTHER user can still index or play them. After 24h the
+# reaper loop in main.py hard-deletes them (files + rows).
+# ---------------------------------------------------------------------------
+
+MIDDEN_TTL_HOURS = 24
+
+
+def _midden_cutoff() -> datetime:
+    """Oldest ``discarded_at`` timestamp still visible in the midden."""
+    return datetime.now(timezone.utc) - timedelta(hours=MIDDEN_TTL_HOURS)
+
+
+@router.get(
+    "/jobs/outputs/midden",
+    tags=["Midden"],
+    summary="List outputs in the shared midden",
+)
+def list_midden_outputs(
+    media_type: Optional[str] = Query(None),
+    app_name: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+    auth: tuple[User, str] = Depends(require_scope("write")),
+    db: Session = Depends(get_db),
+):
+    """List discarded outputs still within the 24h rescue window.
+
+    Items appear here after any user sends them to the midden. Any user other
+    than the original discarder can index them. Items show up for everyone
+    (including the discarder) so they can watch the clock tick down — but the
+    discarder's own actions are disabled in the UI.
+    """
+    user = auth[0]
+    cutoff = _midden_cutoff()
+    base_filters = [
+        JobOutput.indexed == False,  # noqa: E712
+        JobOutput.discarded_at.isnot(None),
+        JobOutput.discarded_at >= cutoff,
+    ]
+    if media_type:
+        base_filters.append(JobOutput.media_type == media_type)
+    if app_name:
+        base_filters.append(Job.app_name == app_name)
+
+    q = (
+        db.query(JobOutput, Job)
+        .join(Job, JobOutput.job_id == Job.id)
+        .filter(*base_filters)
+    )
+
+    total = q.count()
+    rows = (
+        q.order_by(JobOutput.discarded_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
+    discarder_ids = {o.discarded_by for o, _ in rows if o.discarded_by}
+    discarders = {
+        u.id: u.name
+        for u in db.query(User).filter(User.id.in_(discarder_ids)).all()
+    } if discarder_ids else {}
+
+    outputs = []
+    for output, job in rows:
+        discarded_at = output.discarded_at
+        if discarded_at.tzinfo is None:
+            discarded_at = discarded_at.replace(tzinfo=timezone.utc)
+        purge_at = discarded_at + timedelta(hours=MIDDEN_TTL_HOURS)
+        outputs.append(
+            {
+                "id": output.id,
+                "filename": output.filename,
+                "media_type": output.media_type,
+                "file_size_bytes": output.file_size_bytes,
+                "created_at": output.created_at.isoformat(),
+                "discarded_at": discarded_at.isoformat(),
+                "purge_at": purge_at.isoformat(),
+                "discarded_by_id": output.discarded_by,
+                "discarded_by_name": discarders.get(output.discarded_by, "someone"),
+                "is_own_discard": output.discarded_by == user.id,
+                "job_id": job.id,
+                "job_app_name": job.app_name,
+                "job_status": job.status,
+                "job_params": json.loads(job.params),
+                "job_batch_id": job.batch_id,
+            }
+        )
+
+    app_name_rows = (
+        db.query(Job.app_name)
+        .select_from(JobOutput)
+        .join(Job, JobOutput.job_id == Job.id)
+        .filter(
+            JobOutput.indexed == False,  # noqa: E712
+            JobOutput.discarded_at.isnot(None),
+            JobOutput.discarded_at >= cutoff,
+        )
+        .distinct()
+        .all()
+    )
+    app_names = sorted({row[0] for row in app_name_rows if row[0]})
+
+    return {
+        "outputs": outputs,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "ttl_hours": MIDDEN_TTL_HOURS,
+        "app_names": app_names,
+    }
+
+
+@router.get(
+    "/jobs/outputs/midden/ids",
+    tags=["Midden"],
+    summary="List midden output IDs the caller can index",
+)
+def list_midden_output_ids(
+    media_type: Optional[str] = Query(None),
+    app_name: Optional[str] = Query(None),
+    auth: tuple[User, str] = Depends(require_scope("write")),
+    db: Session = Depends(get_db),
+):
+    """Return IDs of midden items the caller is allowed to index.
+
+    Excludes items the caller themselves discarded (inverse rule: anyone BUT
+    the original discarder can rescue it from the midden). Used by the
+    "Index All" bulk action.
+    """
+    user = auth[0]
+    cutoff = _midden_cutoff()
+    filters = [
+        JobOutput.indexed == False,  # noqa: E712
+        JobOutput.discarded_at.isnot(None),
+        JobOutput.discarded_at >= cutoff,
+        (JobOutput.discarded_by != user.id) | (JobOutput.discarded_by.is_(None)),
+    ]
+    if media_type:
+        filters.append(JobOutput.media_type == media_type)
+    if app_name:
+        filters.append(Job.app_name == app_name)
+
+    rows = (
+        db.query(JobOutput.id)
+        .join(Job, JobOutput.job_id == Job.id)
+        .filter(*filters)
+        .order_by(JobOutput.discarded_at.desc())
+        .all()
+    )
+    return {"ids": [r[0] for r in rows], "total": len(rows)}
 
 
 @router.get("/jobs/{job_id}", tags=["Jobs"], summary="Get job details")
@@ -2110,6 +2293,14 @@ def _do_index_output(
     )
     if not output:
         raise HTTPException(status_code=404, detail="Output not found")
+    # Midden rule: the person who threw something into the midden cannot
+    # themselves be the one to rescue-by-indexing it. Someone else has to
+    # pull it back from the brink.
+    if output.discarded_at is not None and output.discarded_by == user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Your crime — awaiting absolution. Someone else must index this.",
+        )
     if output.indexed:
         # If the linked media item was deleted, allow re-indexing
         if (
@@ -2346,40 +2537,46 @@ def bulk_index_outputs(
 
 
 @router.delete(
-    "/jobs/{job_id}/outputs", tags=["Job Outputs"], summary="Discard all outputs"
+    "/jobs/{job_id}/outputs", tags=["Job Outputs"], summary="Discard all outputs to the midden"
 )
 def discard_outputs(
     job_id: str,
     auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
-    user = auth[0]
-    """Delete all output files for a job from disk and database.
+    """Soft-delete every unindexed output of a job — sends them to the midden.
 
-    Outputs that have already been indexed into the search engine are not
-    affected — only the job output records and files are removed.
+    Indexed outputs are untouched. Files stay on disk until the 24h reaper
+    runs so other users can rescue or index them from the midden.
     """
+    user = auth[0]
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    if job.created_by != user.id:
+        raise HTTPException(status_code=403, detail="Not your job")
 
-    output_dir = JOB_DATA_DIR / job_id / "output"
-    if output_dir.is_dir():
-        import shutil
-
-        shutil.rmtree(output_dir, ignore_errors=True)
-
-    db.query(JobOutput).filter(JobOutput.job_id == job_id).delete(
-        synchronize_session=False
+    now = datetime.now(timezone.utc)
+    rows = (
+        db.query(JobOutput)
+        .filter(
+            JobOutput.job_id == job_id,
+            JobOutput.indexed == False,  # noqa: E712
+            JobOutput.discarded_at.is_(None),
+        )
+        .all()
     )
+    for output in rows:
+        output.discarded_at = now
+        output.discarded_by = user.id
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "discarded": len(rows)}
 
 
 @router.delete(
     "/jobs/{job_id}/outputs/{output_id}",
     tags=["Job Outputs"],
-    summary="Discard a single output",
+    summary="Discard a single output to the midden",
 )
 def discard_single_output(
     job_id: str,
@@ -2387,9 +2584,11 @@ def discard_single_output(
     auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
-    """Delete a single unindexed output file from disk and database."""
+    """Soft-delete a single unindexed output — sends it to the shared midden."""
+    user = auth[0]
     output = (
         db.query(JobOutput)
+        .join(Job)
         .filter(JobOutput.id == output_id, JobOutput.job_id == job_id)
         .first()
     )
@@ -2397,10 +2596,12 @@ def discard_single_output(
         raise HTTPException(status_code=404, detail="Output not found")
     if output.indexed:
         raise HTTPException(status_code=400, detail="Cannot discard an indexed output")
+    if output.discarded_at is not None:
+        raise HTTPException(status_code=400, detail="Already in the midden")
+    if output.job.created_by != user.id:
+        raise HTTPException(status_code=403, detail="Not your output")
 
-    file_path = JOB_DATA_DIR / job_id / "output" / output.file_path
-    if file_path.is_file():
-        file_path.unlink()
-    db.delete(output)
+    output.discarded_at = datetime.now(timezone.utc)
+    output.discarded_by = user.id
     db.commit()
     return {"ok": True}

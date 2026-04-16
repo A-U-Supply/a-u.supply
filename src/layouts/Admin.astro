@@ -111,6 +111,13 @@ const { title, current } = Astro.props;
           </li>
           <li>
             <a
+              href="/admin/search/midden"
+              aria-current={current === 'midden' ? 'page' : undefined}
+              >The Midden</a
+            >
+          </li>
+          <li>
+            <a
               href="/admin/api-keys"
               aria-current={current === 'api-keys' ? 'page' : undefined}
               >API Keys</a
