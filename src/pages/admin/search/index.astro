@@ -47,25 +47,6 @@ import Admin from '../../../layouts/Admin.astro';
         </div>
 
         <div class="filter-group">
-          <label class="filter-label">Color</label>
-          <div class="color-checks">
-            <label class="filter-check"><input type="checkbox" name="color-group" value="red" /> Red</label>
-            <label class="filter-check"><input type="checkbox" name="color-group" value="orange" /> Orange</label>
-            <label class="filter-check"><input type="checkbox" name="color-group" value="yellow" /> Yellow</label>
-            <label class="filter-check"><input type="checkbox" name="color-group" value="green" /> Green</label>
-            <label class="filter-check"><input type="checkbox" name="color-group" value="teal" /> Teal</label>
-            <label class="filter-check"><input type="checkbox" name="color-group" value="blue" /> Blue</label>
-            <label class="filter-check"><input type="checkbox" name="color-group" value="purple" /> Purple</label>
-            <label class="filter-check"><input type="checkbox" name="color-group" value="pink" /> Pink</label>
-            <label class="filter-check"><input type="checkbox" name="color-group" value="brown" /> Brown</label>
-            <label class="filter-check"><input type="checkbox" name="color-group" value="beige" /> Beige</label>
-            <label class="filter-check"><input type="checkbox" name="color-group" value="gray" /> Gray</label>
-            <label class="filter-check"><input type="checkbox" name="color-group" value="black" /> Black</label>
-            <label class="filter-check"><input type="checkbox" name="color-group" value="white" /> White</label>
-          </div>
-        </div>
-
-        <div class="filter-group">
           <label class="filter-label">Posted By</label>
           <select id="filter-poster">
             <option value="">All</option>
@@ -77,6 +58,31 @@ import Admin from '../../../layouts/Admin.astro';
           <select id="filter-output-index">
             <option value="__inputs__">Inputs</option>
             <option value="outputs">Outputs</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">App</label>
+          <select id="filter-job-app">
+            <option value="">All</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Has Transcript</label>
+          <select id="filter-has-transcript">
+            <option value="">All</option>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Has Text (OCR)</label>
+          <select id="filter-has-text">
+            <option value="">All</option>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
           </select>
         </div>
 
@@ -104,6 +110,25 @@ import Admin from '../../../layouts/Admin.astro';
             <option value="most_reactions">Most Reactions</option>
             <option value="largest">Largest</option>
             <option value="longest">Longest</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Color</label>
+          <select id="filter-color-group" multiple size="4">
+            <option value="red">Red</option>
+            <option value="orange">Orange</option>
+            <option value="yellow">Yellow</option>
+            <option value="green">Green</option>
+            <option value="teal">Teal</option>
+            <option value="blue">Blue</option>
+            <option value="purple">Purple</option>
+            <option value="pink">Pink</option>
+            <option value="brown">Brown</option>
+            <option value="beige">Beige</option>
+            <option value="gray">Gray</option>
+            <option value="black">Black</option>
+            <option value="white">White</option>
           </select>
         </div>
 
@@ -971,7 +996,6 @@ import Admin from '../../../layouts/Admin.astro';
       const types: string[] = [];
       document.querySelectorAll('.filter-check input[type="checkbox"]:checked').forEach(cb => {
         const input = cb as HTMLInputElement;
-        // Only media type checkboxes (not color group)
         if (!input.name) types.push(input.value);
       });
       const channel = document.getElementById('filter-channel') as HTMLSelectElement;
@@ -979,13 +1003,17 @@ import Admin from '../../../layouts/Admin.astro';
       const dateFrom = (document.getElementById('filter-date-from') as HTMLInputElement).value;
       const dateTo = (document.getElementById('filter-date-to') as HTMLInputElement).value;
       const poster = (document.getElementById('filter-poster') as HTMLSelectElement).value;
-      const colorGroups = Array.from(document.querySelectorAll('input[name="color-group"]:checked')).map(cb => (cb as HTMLInputElement).value);
+      const colorGroupSelect = document.getElementById('filter-color-group') as HTMLSelectElement;
+      const colorGroups = Array.from(colorGroupSelect.selectedOptions).map(o => o.value);
       const outputIndex = (document.getElementById('filter-output-index') as HTMLSelectElement).value;
+      const jobApp = (document.getElementById('filter-job-app') as HTMLSelectElement).value;
+      const hasTranscript = (document.getElementById('filter-has-transcript') as HTMLSelectElement).value;
+      const hasText = (document.getElementById('filter-has-text') as HTMLSelectElement).value;
       const tags = (document.getElementById('filter-tags') as HTMLInputElement).value;
       const reactionsMin = parseInt((document.getElementById('filter-reactions-min') as HTMLInputElement).value) || 0;
       const tagsMin = parseInt((document.getElementById('filter-tags-min') as HTMLInputElement).value) || 0;
       const sortBy = (document.getElementById('sort-by') as HTMLSelectElement).value;
-      return { types, channels, poster, outputIndex, colorGroups, dateFrom, dateTo, tags, reactionsMin, tagsMin, sortBy };
+      return { types, channels, poster, outputIndex, jobApp, hasTranscript, hasText, colorGroups, dateFrom, dateTo, tags, reactionsMin, tagsMin, sortBy };
     }
 
     async function doSearch() {
@@ -1016,9 +1044,10 @@ import Admin from '../../../layouts/Admin.astro';
       if (filters.channels.length) body.filters.source_channels = filters.channels;
       if (filters.poster) body.filters.poster = filters.poster;
       body.filters.output_index = filters.outputIndex;
-      if (filters.colorGroups.length) {
-        body.filters.color_group = filters.colorGroups;
-      }
+      if (filters.colorGroups.length) body.filters.color_group = filters.colorGroups;
+      if (filters.jobApp) body.filters.job_app = filters.jobApp;
+      if (filters.hasTranscript) body.filters.has_transcript = filters.hasTranscript === 'true';
+      if (filters.hasText) body.filters.has_text = filters.hasText === 'true';
       if (filters.dateFrom || filters.dateTo) body.filters.date_range = { from: filters.dateFrom || undefined, to: filters.dateTo || undefined };
       if (filters.tags) body.filters.tags = filters.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
       if (filters.reactionsMin > 0) body.filters.reaction_count = { min: filters.reactionsMin };
@@ -1036,6 +1065,9 @@ import Admin from '../../../layouts/Admin.astro';
       if (filters.reactionsMin > 0) stateParams.set('rxn', String(filters.reactionsMin));
       if (filters.tagsMin > 0) stateParams.set('mintags', String(filters.tagsMin));
       if (filters.outputIndex && filters.outputIndex !== '__inputs__') stateParams.set('output_index', filters.outputIndex);
+      if (filters.jobApp) stateParams.set('job_app', filters.jobApp);
+      if (filters.hasTranscript) stateParams.set('has_transcript', filters.hasTranscript);
+      if (filters.hasText) stateParams.set('has_text', filters.hasText);
       if (filters.sortBy !== 'newest') stateParams.set('sort', filters.sortBy);
       if (filters.types.length < 3 && filters.types.length > 0) stateParams.set('types', filters.types.join(','));
       if (currentPage > 1) stateParams.set('page', String(currentPage));
@@ -1307,10 +1339,14 @@ import Admin from '../../../layouts/Admin.astro';
         const outputIndexSelect = document.getElementById('filter-output-index') as HTMLSelectElement;
         outputIndexSelect.innerHTML = '<option value="__inputs__">Inputs</option>' +
           '<option value="outputs">Outputs</option>';
+        const jobAppSelect = document.getElementById('filter-job-app') as HTMLSelectElement;
+        jobAppSelect.innerHTML = '<option value="">All</option>' +
+          (data.job_apps || []).map((a: string) => `<option value="${a}">${a}</option>`).join('');
         // Restore from URL after dropdowns are populated
         const p = new URLSearchParams(window.location.search);
         if (p.get('poster')) posterSelect.value = p.get('poster')!;
         if (p.get('output_index')) outputIndexSelect.value = p.get('output_index')!;
+        if (p.get('job_app')) jobAppSelect.value = p.get('job_app')!;
         if (p.get('channel')) {
           const chs = p.get('channel')!.split(',');
           Array.from(channelSelect.options).forEach(o => { o.selected = chs.includes(o.value); });
@@ -1338,13 +1374,15 @@ import Admin from '../../../layouts/Admin.astro';
       const sb = document.getElementById('sort-by') as HTMLSelectElement;
       if (initParams.get('sort') && sb) sb.value = initParams.get('sort')!;
 
-      // Color group checkboxes
+      // Color group select
       if (initParams.get('colorgroup')) {
         const groups = initParams.get('colorgroup')!.split(',');
-        document.querySelectorAll('input[name="color-group"]').forEach(cb => {
-          (cb as HTMLInputElement).checked = groups.includes((cb as HTMLInputElement).value);
-        });
+        const cgs = document.getElementById('filter-color-group') as HTMLSelectElement;
+        Array.from(cgs.options).forEach(o => { o.selected = groups.includes(o.value); });
       }
+      // Has transcript / has text
+      if (initParams.get('has_transcript')) (document.getElementById('filter-has-transcript') as HTMLSelectElement).value = initParams.get('has_transcript')!;
+      if (initParams.get('has_text')) (document.getElementById('filter-has-text') as HTMLSelectElement).value = initParams.get('has_text')!;
       // Date range
       if (initParams.get('from')) (document.getElementById('filter-date-from') as HTMLInputElement).value = initParams.get('from')!;
       if (initParams.get('to')) (document.getElementById('filter-date-to') as HTMLInputElement).value = initParams.get('to')!;
@@ -1373,7 +1411,7 @@ import Admin from '../../../layouts/Admin.astro';
         case 'poster': (document.getElementById('filter-poster') as HTMLSelectElement).value = ''; break;
         case 'tags': (document.getElementById('filter-tags') as HTMLInputElement).value = ''; break;
         case 'colorgroup':
-          document.querySelectorAll('input[name="color-group"]').forEach(cb => { (cb as HTMLInputElement).checked = false; });
+          Array.from((document.getElementById('filter-color-group') as HTMLSelectElement).options).forEach(o => { o.selected = false; });
           break;
         case 'channel':
           Array.from((document.getElementById('filter-channel') as HTMLSelectElement).options).forEach(o => { o.selected = false; });

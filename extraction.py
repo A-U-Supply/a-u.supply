@@ -121,6 +121,26 @@ def _dominant_colors_quantize(img, num_colors: int) -> list[str]:
     return colors
 
 
+def extract_text_ocr(file_path: str) -> str | None:
+    """Extract text from an image using Tesseract OCR.
+
+    Returns the extracted text or None if no text is found or
+    pytesseract/tesseract is not available.
+    """
+    try:
+        import pytesseract
+        from PIL import Image
+    except ImportError:
+        logger.warning("pytesseract not installed, skipping OCR.")
+        return None
+
+    with Image.open(file_path) as img:
+        img = img.convert("RGB")
+        text = pytesseract.image_to_string(img).strip()
+
+    return text if text else None
+
+
 # ---------------------------------------------------------------------------
 # Audio extraction
 # ---------------------------------------------------------------------------
@@ -482,6 +502,14 @@ def _run_image_extraction(db, media_item_id: str, file_path: str, MediaImageMeta
         logger.error("Dominant color extraction failed for %s: %s", media_item_id, exc)
         _log_failure(db, media_item_id, "dominant_colors", exc)
 
+    # Step 3: OCR text extraction
+    try:
+        ocr_text = extract_text_ocr(file_path)
+        meta_kwargs["caption"] = ocr_text or ""
+    except Exception as exc:
+        logger.error("OCR extraction failed for %s: %s", media_item_id, exc)
+        _log_failure(db, media_item_id, "ocr", exc)
+
     if not meta_kwargs.get("width"):
         # Can't create meta record without basic dimensions
         return
@@ -695,6 +723,10 @@ def _retry_single_step(db, media_item, file_path: str, extraction_type: str):
     elif extraction_type == "dominant_colors":
         colors = extract_dominant_colors(file_path)
         _upsert_meta(db, MediaImageMeta, media_item_id, {"dominant_colors": json.dumps(colors)})
+
+    elif extraction_type == "ocr":
+        ocr_text = extract_text_ocr(file_path)
+        _upsert_meta(db, MediaImageMeta, media_item_id, {"caption": ocr_text or ""})
 
     elif extraction_type == "ffprobe":
         if media_item.media_type == "audio":

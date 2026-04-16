@@ -417,6 +417,62 @@ def backfill_transcripts():
     reindex_search()
 
 
+def backfill_ocr():
+    """Find images missing OCR text and run tesseract on them."""
+    import os
+    from models import MediaItem, MediaImageMeta
+    from extraction import extract_text_ocr, _upsert_meta, SEARCH_MEDIA_DIR
+
+    db = SessionLocal()
+
+    images_missing = (
+        db.query(MediaItem)
+        .outerjoin(MediaImageMeta)
+        .filter(
+            MediaItem.media_type == "image",
+            (MediaImageMeta.caption.is_(None)) | (MediaImageMeta.media_item_id.is_(None)),
+        )
+        .all()
+    )
+
+    total = len(images_missing)
+    log(f"Found {total} images missing OCR text")
+
+    if total == 0:
+        log("Nothing to do!")
+        db.close()
+        return
+
+    done = 0
+    errors = 0
+    for i, item in enumerate(images_missing):
+        full_path = os.path.join(SEARCH_MEDIA_DIR, item.file_path)
+        if not os.path.exists(full_path):
+            log(f"  SKIP {item.id} — file not found: {full_path}")
+            errors += 1
+            continue
+
+        log(f"  [{i + 1}/{total}] {item.filename}")
+
+        try:
+            text = extract_text_ocr(full_path)
+            _upsert_meta(db, MediaImageMeta, item.id, {"caption": text or ""})
+            if text:
+                log(f"    OK ({len(text)} chars)")
+            else:
+                log(f"    No text (marked)")
+            done += 1
+        except Exception as exc:
+            log(f"    ERROR: {exc}")
+            errors += 1
+
+    log(f"Done! OCR processed: {done}, Errors: {errors}")
+    db.close()
+
+    log("Re-indexing all items to populate has_text filter...")
+    reindex_search()
+
+
 def list_users():
     db = SessionLocal()
     users = db.query(User).all()
@@ -488,6 +544,9 @@ if __name__ == "__main__":
 
     elif cmd == "backfill-transcripts":
         backfill_transcripts()
+
+    elif cmd == "backfill-ocr":
+        backfill_ocr()
 
     elif cmd == "migrate-index":
         if len(sys.argv) < 4:
