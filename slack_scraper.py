@@ -21,7 +21,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from models import MediaItem, MediaSource, SessionLocal
+from models import MediaItem, MediaSource, SessionLocal, SlackUserMapping, User
 
 logger = logging.getLogger(__name__)
 
@@ -471,6 +471,18 @@ def _update_source_text_by_url(db, source_url: str, channel_name: str, text: str
             pass
 
 
+def _lookup_user_id_for_slack(db, slack_user_id: str | None) -> int | None:
+    """Resolve a Slack user id to a site User.id via slack_user_mappings, or None."""
+    if not slack_user_id:
+        return None
+    row = (
+        db.query(SlackUserMapping.user_id)
+        .filter(SlackUserMapping.slack_user_id == slack_user_id)
+        .first()
+    )
+    return row[0] if row else None
+
+
 def _ingest_file(
     db,
     file_path: Path,
@@ -485,6 +497,7 @@ def _ingest_file(
     reaction_count: int = 0,
     source_url: str | None = None,
     source_metadata: dict | None = None,
+    slack_user_id: str | None = None,
 ) -> dict:
     """Hash a downloaded file, dedup, create MediaItem + MediaSource.
 
@@ -535,6 +548,7 @@ def _ingest_file(
         media_item_id=media_item.id,
         source_type=source_type,
         source_channel=source_channel,
+        uploader_id=_lookup_user_id_for_slack(db, slack_user_id),
         slack_file_id=slack_file_id,
         slack_message_ts=slack_message_ts,
         slack_message_text=slack_message_text,
@@ -647,6 +661,7 @@ def _process_message_files(
                 slack_reactions=reactions,
                 reaction_count=reaction_count,
                 source_metadata={"poster": poster, "slack_user_id": user_id} if poster else None,
+                slack_user_id=user_id or None,
             )
             if result["status"] == "skipped":
                 stats["files_skipped_dedup"] += 1
@@ -675,6 +690,7 @@ def _process_message_urls(
 
     text = message.get("text", "")
     ts = message.get("ts", "")
+    user_id = message.get("user", "")
     reactions, reaction_count = _extract_reactions_from_message(message)
 
     urls = extract_urls(text)
@@ -707,8 +723,11 @@ def _process_message_urls(
             shutil.rmtree(str(tmp_dir), ignore_errors=True)
             continue
 
-        # Parse yt-dlp metadata
-        ytdlp_meta = _parse_ytdlp_info(downloaded_path)
+        # Parse yt-dlp metadata, then stamp with the Slack poster for audit/backfill
+        ytdlp_meta = _parse_ytdlp_info(downloaded_path) or {}
+        if user_id:
+            ytdlp_meta.setdefault("slack_user_id", user_id)
+            ytdlp_meta.setdefault("poster", _get_slack_username(user_id))
 
         try:
             result = _ingest_file(
@@ -722,7 +741,8 @@ def _process_message_urls(
                 slack_reactions=reactions,
                 reaction_count=reaction_count,
                 source_url=url,
-                source_metadata=ytdlp_meta,
+                source_metadata=ytdlp_meta or None,
+                slack_user_id=user_id or None,
             )
             if result["status"] == "skipped":
                 stats["files_skipped_dedup"] += 1
@@ -1212,6 +1232,159 @@ def backfill_message_text() -> dict:
         db.close()
 
     return {"updated": updated, "errors": errors}
+
+
+def seed_slack_user_mapping(dry_run: bool = False) -> dict:
+    """Populate slack_user_mappings by matching Slack user emails to User.email.
+
+    Calls Slack users.list, reads each member's profile.email, looks up the
+    matching User row, and upserts a SlackUserMapping. Reports mapped vs.
+    unmatched. Idempotent.
+    """
+    db = SessionLocal()
+    inserted = 0
+    updated = 0
+    unmatched: list[dict] = []
+    skipped_bots = 0
+
+    try:
+        cursor = None
+        members: list[dict] = []
+        while True:
+            params: dict = {"limit": "200"}
+            if cursor:
+                params["cursor"] = cursor
+            resp = slack_api("users.list", params)
+            if not resp.get("ok"):
+                logger.error("users.list failed: %s", resp.get("error"))
+                break
+            members.extend(resp.get("members", []))
+            cursor = resp.get("response_metadata", {}).get("next_cursor", "")
+            if not cursor:
+                break
+
+        logger.info("Fetched %d Slack workspace members", len(members))
+
+        for m in members:
+            slack_uid = m.get("id", "")
+            if not slack_uid:
+                continue
+            # Skip bots, deleted users, and the Slackbot itself
+            if m.get("is_bot") or m.get("deleted") or slack_uid == "USLACKBOT":
+                skipped_bots += 1
+                continue
+            email = (m.get("profile") or {}).get("email") or ""
+            display_name = (
+                (m.get("profile") or {}).get("display_name")
+                or (m.get("profile") or {}).get("real_name")
+                or m.get("real_name")
+                or m.get("name")
+                or slack_uid
+            )
+            if not email:
+                unmatched.append({"slack_user_id": slack_uid, "name": display_name, "reason": "no_email"})
+                continue
+
+            user = db.query(User).filter(User.email == email.lower()).first()
+            if not user:
+                # Try case-sensitive match as a fallback (email column is TEXT, should be case-insensitive but be safe)
+                user = db.query(User).filter(User.email == email).first()
+            if not user:
+                unmatched.append({"slack_user_id": slack_uid, "name": display_name, "email": email, "reason": "no_user"})
+                continue
+
+            existing = (
+                db.query(SlackUserMapping)
+                .filter(SlackUserMapping.slack_user_id == slack_uid)
+                .first()
+            )
+            if existing:
+                if existing.user_id != user.id or existing.email != email:
+                    if not dry_run:
+                        existing.user_id = user.id
+                        existing.email = email
+                    updated += 1
+            else:
+                if not dry_run:
+                    db.add(SlackUserMapping(slack_user_id=slack_uid, user_id=user.id, email=email))
+                inserted += 1
+
+        if not dry_run:
+            db.commit()
+        else:
+            db.rollback()
+    finally:
+        db.close()
+
+    return {
+        "inserted": inserted,
+        "updated": updated,
+        "skipped_bots_or_deleted": skipped_bots,
+        "unmatched": unmatched,
+        "dry_run": dry_run,
+    }
+
+
+def backfill_slack_uploader_id(dry_run: bool = False) -> dict:
+    """Populate MediaSource.uploader_id on existing slack rows using slack_user_mappings.
+
+    Reads source_metadata.slack_user_id from each slack_file/slack_link row
+    where uploader_id IS NULL, looks up the mapping, and updates uploader_id.
+    Run backfill-posters first to ensure slack_user_id is present in metadata.
+    Idempotent.
+    """
+    db = SessionLocal()
+    scanned = 0
+    updated = 0
+    missing_slack_uid = 0
+    no_mapping: dict[str, int] = {}
+
+    try:
+        rows = (
+            db.query(MediaSource)
+            .filter(
+                MediaSource.source_type.in_(("slack_file", "slack_link")),
+                MediaSource.uploader_id.is_(None),
+                MediaSource.source_metadata.isnot(None),
+            )
+            .all()
+        )
+        logger.info("Scanning %d candidate slack MediaSource rows", len(rows))
+
+        for source in rows:
+            scanned += 1
+            try:
+                meta = json.loads(source.source_metadata) if source.source_metadata else {}
+            except (json.JSONDecodeError, TypeError):
+                meta = {}
+            slack_uid = meta.get("slack_user_id") if isinstance(meta, dict) else None
+            if not slack_uid:
+                missing_slack_uid += 1
+                continue
+
+            mapped = _lookup_user_id_for_slack(db, slack_uid)
+            if not mapped:
+                no_mapping[slack_uid] = no_mapping.get(slack_uid, 0) + 1
+                continue
+
+            if not dry_run:
+                source.uploader_id = mapped
+            updated += 1
+
+        if not dry_run:
+            db.commit()
+        else:
+            db.rollback()
+    finally:
+        db.close()
+
+    return {
+        "scanned": scanned,
+        "updated": updated,
+        "missing_slack_user_id_in_metadata": missing_slack_uid,
+        "unmapped_slack_users": no_mapping,
+        "dry_run": dry_run,
+    }
 
 
 def trigger_incremental_scrape() -> dict:

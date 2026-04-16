@@ -53,6 +53,17 @@ class User(Base):
     created_at = Column(DateTime, default=_utcnow)
 
 
+class SlackUserMapping(Base):
+    __tablename__ = "slack_user_mappings"
+
+    slack_user_id = Column(String, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    email = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+
+    user = relationship("User")
+
+
 # --- Release Catalog Models ---
 
 release_entities = Table(
