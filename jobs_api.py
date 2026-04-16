@@ -1668,32 +1668,51 @@ def list_unindexed_outputs(
     batch_id: Optional[str] = Query(
         None, description="Filter to outputs from a single batch submission."
     ),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
     auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
-    """List all job outputs that have not been indexed into the search engine.
+    """List unindexed job outputs, newest first, paginated.
 
-    Returns outputs across all completed jobs, with parent job context for each.
-    Used by the Slop Bucket page to surface outputs that would otherwise be lost.
+    Used by the Slop Bucket page to surface outputs that would otherwise be
+    lost. ``app_names`` returns every app with unindexed outputs regardless
+    of the current ``app_name`` filter, so the filter dropdown stays complete
+    across pages.
     """
+    base_filters = [JobOutput.indexed == False]  # noqa: E712
+    if media_type:
+        base_filters.append(JobOutput.media_type == media_type)
+    if app_name:
+        base_filters.append(Job.app_name == app_name)
+    if batch_id:
+        base_filters.append(Job.batch_id == batch_id)
+
     q = (
         db.query(JobOutput, Job)
         .join(Job, JobOutput.job_id == Job.id)
-        .filter(JobOutput.indexed == False)  # noqa: E712
+        .filter(*base_filters)
     )
-    if media_type:
-        q = q.filter(JobOutput.media_type == media_type)
-    if app_name:
-        q = q.filter(Job.app_name == app_name)
-    if batch_id:
-        q = q.filter(Job.batch_id == batch_id)
 
-    rows = q.order_by(JobOutput.created_at.desc()).all()
+    total = q.count()
+    distinct_jobs = (
+        db.query(func.count(func.distinct(Job.id)))
+        .select_from(JobOutput)
+        .join(Job, JobOutput.job_id == Job.id)
+        .filter(*base_filters)
+        .scalar()
+        or 0
+    )
 
-    job_ids = set()
+    rows = (
+        q.order_by(JobOutput.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
     outputs = []
     for output, job in rows:
-        job_ids.add(job.id)
         outputs.append(
             {
                 "id": output.id,
@@ -1713,17 +1732,62 @@ def list_unindexed_outputs(
             }
         )
 
-    # Distinct app names for filter dropdown
-    app_names = sorted(
-        {o["job_app_name"] for o in outputs}
+    # Distinct app names across ALL unindexed outputs (not just this page / filter),
+    # so the filter dropdown keeps every option visible.
+    app_name_rows = (
+        db.query(Job.app_name)
+        .select_from(JobOutput)
+        .join(Job, JobOutput.job_id == Job.id)
+        .filter(JobOutput.indexed == False)  # noqa: E712
+        .distinct()
+        .all()
     )
+    app_names = sorted({row[0] for row in app_name_rows if row[0]})
 
     return {
         "outputs": outputs,
-        "total": len(outputs),
-        "job_count": len(job_ids),
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "job_count": distinct_jobs,
         "app_names": app_names,
     }
+
+
+@router.get(
+    "/jobs/outputs/unindexed/ids",
+    tags=["Slop Bucket"],
+    summary="List unindexed output IDs (for bulk actions across pages)",
+)
+def list_unindexed_output_ids(
+    media_type: Optional[str] = Query(None),
+    app_name: Optional[str] = Query(None),
+    batch_id: Optional[str] = Query(None),
+    auth: tuple[User, str] = Depends(require_scope("write")),
+    db: Session = Depends(get_db),
+):
+    """Return just the IDs of unindexed outputs matching the given filters.
+
+    Used by the Slop Bucket's "apply to all pages" bulk actions — lets the
+    client collect every matching ID in one request instead of paginating
+    through the full list just to build an ID list.
+    """
+    filters = [JobOutput.indexed == False]  # noqa: E712
+    if media_type:
+        filters.append(JobOutput.media_type == media_type)
+    if app_name:
+        filters.append(Job.app_name == app_name)
+    if batch_id:
+        filters.append(Job.batch_id == batch_id)
+
+    rows = (
+        db.query(JobOutput.id)
+        .join(Job, JobOutput.job_id == Job.id)
+        .filter(*filters)
+        .order_by(JobOutput.created_at.desc())
+        .all()
+    )
+    return {"ids": [r[0] for r in rows], "total": len(rows)}
 
 
 @router.post(
@@ -2002,10 +2066,22 @@ def download_output(
         raise HTTPException(status_code=404, detail="Output not found")
 
     file_path = JOB_DATA_DIR / job_id / "output" / output.file_path
+    filename = output.filename
+    # Release the DB connection before streaming the file so the pool isn't
+    # pinned for the entire download — otherwise a slop page with many <img>
+    # tags saturates QueuePool (size 5 + overflow 10).
+    db.close()
     if not file_path.is_file():
         raise HTTPException(status_code=404, detail="Output file missing from disk")
 
-    return FileResponse(file_path, filename=output.filename)
+    # Serve inline (not as attachment) so browsers can render images/video/audio
+    # previews and "open in new tab" shows full-size instead of downloading.
+    # Explicit download UI uses HTML <a download> which forces save client-side.
+    safe_filename = filename.replace('"', "")
+    return FileResponse(
+        file_path,
+        headers={"Content-Disposition": f'inline; filename="{safe_filename}"'},
+    )
 
 
 def _do_index_output(
