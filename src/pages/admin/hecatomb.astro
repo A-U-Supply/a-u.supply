@@ -1,0 +1,485 @@
+---
+import Admin from '../../layouts/Admin.astro';
+---
+
+<Admin title="Hecatomb" current="hecatomb">
+  <div class="page-header">
+    <h1>Hecatomb</h1>
+    <p class="hecatomb-subtitle">
+      Sacrifice of random inputs, to the queue, in quantity.
+    </p>
+  </div>
+
+  <div class="hecatomb-form">
+    <div class="hec-row">
+      <label class="hec-field">
+        <span class="hec-label">App</span>
+        <select id="hec-app"><option value="">Select an app…</option></select>
+      </label>
+    </div>
+
+    <div class="hec-row" id="hec-recipe-row" style="display:none;">
+      <label class="hec-field">
+        <span class="hec-label">Recipe</span>
+        <select id="hec-recipe"></select>
+      </label>
+      <label class="hec-field hec-inline-check">
+        <input type="checkbox" id="hec-random-recipe" />
+        <span>Random recipe per job</span>
+      </label>
+    </div>
+
+    <div class="hec-row">
+      <label class="hec-field">
+        <span class="hec-label">Count</span>
+        <input type="number" id="hec-count" min="1" max="100" value="10" />
+        <span class="hec-hint" id="hec-count-hint"
+          >1&ndash;100 jobs per offering.</span
+        >
+      </label>
+    </div>
+
+    <details class="hec-filters">
+      <summary>Filters (candidate pool)</summary>
+      <div class="hec-filter-grid">
+        <div class="hec-field">
+          <span class="hec-label">Search</span>
+          <input type="text" id="sf-query" placeholder="Text search…" />
+        </div>
+        <div class="hec-field">
+          <span class="hec-label">Channel</span>
+          <select id="sf-channel"><option value="">All</option></select>
+        </div>
+        <div class="hec-field">
+          <span class="hec-label">Tags</span>
+          <input type="text" id="sf-tags" placeholder="tag1, tag2" />
+        </div>
+        <div class="hec-field">
+          <span class="hec-label">Index</span>
+          <select id="sf-output-index">
+            <option value="__inputs__">Inputs</option>
+            <option value="outputs">Outputs</option>
+          </select>
+        </div>
+        <div class="hec-field">
+          <span class="hec-label">Min Reactions</span>
+          <input type="number" id="sf-reactions-min" min="0" value="0" />
+        </div>
+        <div class="hec-field">
+          <span class="hec-label">Min Tags</span>
+          <input type="number" id="sf-tags-min" min="0" value="0" />
+        </div>
+        <div class="hec-field hec-checks">
+          <label class="hec-inline-check">
+            <input type="checkbox" id="hec-exclude-app" />
+            <span>Exclude items already processed by this app</span>
+          </label>
+          <label class="hec-inline-check">
+            <input type="checkbox" id="hec-exclude-recipe" />
+            <span>Exclude items already processed with this recipe</span>
+          </label>
+        </div>
+      </div>
+    </details>
+
+    <div class="hec-actions">
+      <button class="action-btn" id="hec-submit" disabled
+        >Submit offering</button
+      >
+    </div>
+
+    <div class="hec-status" id="hec-status"></div>
+  </div>
+</Admin>
+
+<style>
+  .hecatomb-subtitle {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    margin-top: 0;
+  }
+  .hecatomb-form {
+    margin-top: var(--space-lg);
+    max-width: 720px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+  }
+  .hec-row {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+  }
+  .hec-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    min-width: 180px;
+  }
+  .hec-label {
+    color: var(--color-muted);
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .hec-field input[type='text'],
+  .hec-field input[type='number'],
+  .hec-field select {
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+  .hec-field input[type='number'] {
+    width: 100px;
+  }
+  .hec-hint {
+    color: var(--color-muted);
+    font-size: var(--text-xs);
+    margin-top: 2px;
+  }
+  .hec-inline-check {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+  .hec-inline-check input[type='checkbox'] {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--color-text);
+  }
+  .hec-filters {
+    border: 1px solid var(--color-border);
+    padding: var(--space-sm) var(--space-md);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+  .hec-filters summary {
+    cursor: pointer;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    font-size: var(--text-xs);
+    letter-spacing: 0.05em;
+  }
+  .hec-filter-grid {
+    margin-top: var(--space-sm);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--space-md);
+  }
+  .hec-checks {
+    grid-column: 1 / -1;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+  .hec-actions {
+    margin-top: var(--space-sm);
+    display: flex;
+    justify-content: flex-end;
+  }
+  .hec-actions .action-btn[disabled] {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .hec-status {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    min-height: 1.2em;
+  }
+  .hec-status.hec-err {
+    color: #e04040;
+  }
+</style>
+
+<script>
+  document.addEventListener('astro:page-load', async () => {
+    await (window as any).__authReady;
+
+    const appSelect = document.getElementById('hec-app') as HTMLSelectElement;
+    const recipeRow = document.getElementById('hec-recipe-row')!;
+    const recipeSelect = document.getElementById(
+      'hec-recipe',
+    ) as HTMLSelectElement;
+    const randomRecipeCb = document.getElementById(
+      'hec-random-recipe',
+    ) as HTMLInputElement;
+    const countInput = document.getElementById('hec-count') as HTMLInputElement;
+    const submitBtn = document.getElementById(
+      'hec-submit',
+    ) as HTMLButtonElement;
+    const statusEl = document.getElementById('hec-status')!;
+
+    let apps: any[] = [];
+
+    // Collect flat list of recipe options (values only) across option_groups + options
+    function collectRecipeOptions(
+      manifest: any,
+    ): Array<{ value: string; label: string; group?: string }> {
+      const recipeSpec = manifest?.params?.recipe;
+      if (!recipeSpec) return [];
+      const flat: Array<{ value: string; label: string; group?: string }> = [];
+      for (const opt of recipeSpec.options || []) {
+        if (opt && typeof opt === 'object' && opt.value) {
+          flat.push({ value: opt.value, label: opt.label || opt.value });
+        }
+      }
+      for (const group of recipeSpec.option_groups || []) {
+        for (const opt of group.options || []) {
+          if (opt && typeof opt === 'object' && opt.value) {
+            flat.push({
+              value: opt.value,
+              label: opt.label || opt.value,
+              group: group.label || group.name,
+            });
+          }
+        }
+      }
+      return flat;
+    }
+
+    function renderRecipes(manifest: any) {
+      recipeSelect.innerHTML = '';
+      const opts = collectRecipeOptions(manifest);
+      if (opts.length === 0) {
+        recipeRow.style.display = 'none';
+        return;
+      }
+      recipeRow.style.display = '';
+
+      // Group options if we have group labels
+      const groups = new Map<string, typeof opts>();
+      for (const o of opts) {
+        const g = o.group || '';
+        if (!groups.has(g)) groups.set(g, []);
+        groups.get(g)!.push(o);
+      }
+      for (const [groupLabel, items] of groups) {
+        if (groupLabel) {
+          const og = document.createElement('optgroup');
+          og.label = groupLabel;
+          for (const it of items) {
+            const o = document.createElement('option');
+            o.value = it.value;
+            o.textContent = it.label;
+            og.appendChild(o);
+          }
+          recipeSelect.appendChild(og);
+        } else {
+          for (const it of items) {
+            const o = document.createElement('option');
+            o.value = it.value;
+            o.textContent = it.label;
+            recipeSelect.appendChild(o);
+          }
+        }
+      }
+    }
+
+    // Load apps
+    try {
+      const res = await fetch('/api/apps', { credentials: 'include' });
+      if (res.ok) {
+        apps = await res.json();
+        for (const app of apps) {
+          const opt = document.createElement('option');
+          opt.value = app.name;
+          opt.textContent = app.display_name || app.name;
+          appSelect.appendChild(opt);
+        }
+      }
+    } catch {}
+
+    // Load channel facets
+    try {
+      const res = await fetch('/api/search/facets', {
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const channelSelect = document.getElementById(
+          'sf-channel',
+        ) as HTMLSelectElement;
+        channelSelect.innerHTML =
+          '<option value="">All</option>' +
+          (data.channels || [])
+            .map((ch: string) => `<option value="${ch}">${ch}</option>`)
+            .join('');
+      }
+    } catch {}
+
+    function selectedApp(): any | null {
+      return apps.find((a) => a.name === appSelect.value) || null;
+    }
+
+    function updateSubmitLabel() {
+      const n = parseInt(countInput.value) || 0;
+      if (n <= 0) {
+        submitBtn.textContent = 'Submit offering';
+      } else if (n === 1) {
+        submitBtn.textContent = 'Submit 1 offering';
+      } else {
+        submitBtn.textContent = `Submit ${n} offerings`;
+      }
+    }
+
+    function updateSubmitEnabled() {
+      const app = selectedApp();
+      const n = parseInt(countInput.value);
+      const valid =
+        !!app &&
+        Number.isFinite(n) &&
+        n >= 1 &&
+        n <= 100 &&
+        (randomRecipeCb.checked ||
+          recipeRow.style.display === 'none' ||
+          !!recipeSelect.value);
+      submitBtn.disabled = !valid;
+    }
+
+    appSelect.addEventListener('change', () => {
+      const app = selectedApp();
+      if (app) {
+        renderRecipes(app.manifest || {});
+      } else {
+        recipeRow.style.display = 'none';
+      }
+      updateSubmitEnabled();
+    });
+
+    randomRecipeCb.addEventListener('change', () => {
+      recipeSelect.disabled = randomRecipeCb.checked;
+      updateSubmitEnabled();
+    });
+
+    recipeSelect.addEventListener('change', updateSubmitEnabled);
+
+    countInput.addEventListener('input', () => {
+      updateSubmitLabel();
+      updateSubmitEnabled();
+    });
+
+    function buildShufflePayload() {
+      const query = (
+        document.getElementById('sf-query') as HTMLInputElement
+      ).value.trim();
+      const channel = (
+        document.getElementById('sf-channel') as HTMLSelectElement
+      ).value;
+      const tagsStr = (
+        document.getElementById('sf-tags') as HTMLInputElement
+      ).value.trim();
+      const outputIndex = (
+        document.getElementById('sf-output-index') as HTMLSelectElement
+      ).value;
+      const reactionsMin =
+        parseInt(
+          (document.getElementById('sf-reactions-min') as HTMLInputElement)
+            .value,
+        ) || 0;
+      const tagsMin =
+        parseInt(
+          (document.getElementById('sf-tags-min') as HTMLInputElement).value,
+        ) || 0;
+
+      const payload: any = {
+        query,
+        source_channels: channel ? [channel] : [],
+        tags: tagsStr
+          ? tagsStr
+              .split(',')
+              .map((t) => t.trim())
+              .filter(Boolean)
+          : [],
+        output_index: outputIndex || null,
+        reaction_count_min: reactionsMin > 0 ? reactionsMin : null,
+        tag_count_min: tagsMin > 0 ? tagsMin : null,
+        exclude_processed_by_app: (
+          document.getElementById('hec-exclude-app') as HTMLInputElement
+        ).checked,
+        exclude_processed_by_recipe: (
+          document.getElementById('hec-exclude-recipe') as HTMLInputElement
+        ).checked,
+      };
+      return payload;
+    }
+
+    submitBtn.addEventListener('click', async () => {
+      const app = selectedApp();
+      if (!app) return;
+      const count = parseInt(countInput.value);
+      if (!Number.isFinite(count) || count < 1 || count > 100) return;
+
+      const randomRecipe = randomRecipeCb.checked;
+      const params: Record<string, any> = {};
+      if (!randomRecipe && recipeSelect.value) {
+        params.recipe = recipeSelect.value;
+      }
+
+      statusEl.textContent = `Offering ${count} jobs…`;
+      statusEl.className = 'hec-status';
+      submitBtn.disabled = true;
+
+      try {
+        const res = await fetch('/api/jobs/batch', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            app_name: app.name,
+            count,
+            shuffle: buildShufflePayload(),
+            params,
+            random_recipe: randomRecipe,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          (window as any).toast.success(
+            `Submitted ${data.job_count} jobs. The queue accepts your offering.`,
+          );
+          window.location.href = `/admin/jobs?batch_id=${encodeURIComponent(data.batch_id)}`;
+          return;
+        }
+
+        // Error path
+        let msg = `Batch submission failed (HTTP ${res.status})`;
+        try {
+          const err = await res.json();
+          const detail = err.detail;
+          if (detail?.errors && Array.isArray(detail.errors)) {
+            msg = detail.errors
+              .map((e: any) => e.message || `${e.field}: unknown error`)
+              .join(' | ');
+          } else if (typeof detail === 'string') {
+            msg = detail;
+          } else if (detail?.detail) {
+            msg = detail.detail;
+          }
+        } catch {}
+        statusEl.textContent = msg;
+        statusEl.className = 'hec-status hec-err';
+        (window as any).toast.error(msg, 10000);
+      } catch (e) {
+        const msg = 'Failed to submit batch: ' + (e as Error).message;
+        statusEl.textContent = msg;
+        statusEl.className = 'hec-status hec-err';
+      } finally {
+        updateSubmitEnabled();
+      }
+    });
+
+    updateSubmitLabel();
+    updateSubmitEnabled();
+  });
+</script>
