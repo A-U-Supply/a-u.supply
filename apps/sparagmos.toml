@@ -22,9 +22,9 @@ allow_random_fill = true
 [command_map]
 param = "processing_mode"
 [command_map.values]
-recipe = ""
-random = ""
-chain = ""
+recipe = "--recipes-dir /app/recipes"
+random = "--recipes-dir /app/recipes"
+chain = "--recipes-dir /app/recipes"
 
 # --- Processing Mode ---
 [params.processing_mode]
