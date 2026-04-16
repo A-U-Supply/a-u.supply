@@ -2,9 +2,9 @@
 import Admin from '../../../layouts/Admin.astro';
 ---
 
-<Admin title="Triage Queue" current="triage">
+<Admin title="Nomenclator" current="nomenclator">
   <div class="triage-header">
-    <h1>Triage Queue</h1>
+    <h1>Nomenclator</h1>
     <div class="triage-controls">
       <select id="triage-type">
         <option value="">All Types</option>
@@ -29,6 +29,12 @@ import Admin from '../../../layouts/Admin.astro';
           style="width: 50px;"
         />
       </label>
+      <select id="triage-ingested">
+        <option value="">Any Age</option>
+        <option value="24h">Last 24h</option>
+        <option value="7d">Last 7 days</option>
+        <option value="30d">Last 30 days</option>
+      </select>
       <button class="action-btn" id="triage-refresh">Refresh</button>
     </div>
   </div>
@@ -41,7 +47,7 @@ import Admin from '../../../layouts/Admin.astro';
     id="triage-empty"
     style="display:none; color: var(--color-muted); padding: var(--space-lg) 0; text-align: center;"
   >
-    No items in triage queue. All caught up!
+    No items match. Try loosening the filters.
   </div>
 
   <div id="triage-content" style="display:none;">
@@ -424,6 +430,15 @@ import Admin from '../../../layouts/Admin.astro';
       'sfx',
     ];
 
+    function ingestedSinceISO(): string | null {
+      const val = (
+        document.getElementById('triage-ingested') as HTMLSelectElement
+      ).value;
+      if (!val) return null;
+      const days = val === '24h' ? 1 : val === '7d' ? 7 : 30;
+      return new Date(Date.now() - days * 86_400_000).toISOString();
+    }
+
     // Load channels
     function loadChannels() {
       const select = document.getElementById(
@@ -459,13 +474,15 @@ import Admin from '../../../layouts/Admin.astro';
         query: '',
         page: 1,
         per_page: 50,
-        sort: 'created_at:desc',
+        sort: 'random',
         filters: {
           tag_count: { max: maxTags },
         },
       };
       if (mediaType) body.media_types = [mediaType];
       if (channel) body.filters.source_channels = [channel];
+      const ingestedFrom = ingestedSinceISO();
+      if (ingestedFrom) body.filters.date_range = { from: ingestedFrom };
 
       try {
         const res = await fetch('/api/search', {
@@ -474,7 +491,7 @@ import Admin from '../../../layouts/Admin.astro';
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         });
-        if (!res.ok) throw new Error('Failed to load triage items');
+        if (!res.ok) throw new Error('Failed to load items');
         const data = await res.json();
         items = data.results || data.hits || [];
         totalCount = data.total || items.length;
@@ -631,7 +648,7 @@ import Admin from '../../../layouts/Admin.astro';
         document.getElementById('triage-content')!.style.display = 'none';
         document.getElementById('triage-empty')!.style.display = 'block';
         document.getElementById('triage-empty')!.textContent =
-          'All caught up! No more untagged items.';
+          'No more items. Refresh or loosen the filters.';
       } else {
         renderCurrentItem();
       }
@@ -654,11 +671,13 @@ import Admin from '../../../layouts/Admin.astro';
         query: '',
         page: 1,
         per_page: 50,
-        sort: 'created_at:desc',
+        sort: 'random',
         filters: { tag_count: { max: maxTags } },
       };
       if (mediaType) body.media_types = [mediaType];
       if (channel) body.filters.source_channels = [channel];
+      const ingestedFrom = ingestedSinceISO();
+      if (ingestedFrom) body.filters.date_range = { from: ingestedFrom };
       try {
         const res = await fetch('/api/search', {
           method: 'POST',
@@ -684,7 +703,7 @@ import Admin from '../../../layouts/Admin.astro';
         document.getElementById('triage-content')!.style.display = 'none';
         document.getElementById('triage-empty')!.style.display = 'block';
         document.getElementById('triage-empty')!.textContent =
-          'All caught up! No more untagged items.';
+          'No more items. Refresh or loosen the filters.';
       }
     }
 
