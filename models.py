@@ -86,6 +86,7 @@ class Release(Base):
     release_date = Column(Date, nullable=True)
     cover_art_path = Column(String, nullable=True)
     status = Column(String, nullable=False, default="draft")
+    category = Column(String, nullable=True)
     description = Column(String, nullable=True)
     format_specs = Column(String, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)

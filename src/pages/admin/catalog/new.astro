@@ -1206,11 +1206,9 @@ import Admin from '../../../layouts/Admin.astro';
               url: l.url,
               label: l.label || null,
             })),
-          freeform_metadata: Object.fromEntries(
-            freeformFields
-              .filter((f) => f.key && f.value)
-              .map((f) => [f.key, f.value]),
-          ),
+          metadata: freeformFields
+            .filter((f) => f.key && f.value)
+            .map((f, i) => ({ key: f.key, value: f.value, sort_order: i })),
         };
 
         const createRes = await fetch('/api/releases', {

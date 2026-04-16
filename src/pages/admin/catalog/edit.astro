@@ -786,16 +786,11 @@ import Admin from '../../../layouts/Admin.astro';
         renderLinks();
 
         // Freeform metadata
-        if (
-          release.freeform_metadata &&
-          typeof release.freeform_metadata === 'object'
-        ) {
-          freeformFields = Object.entries(release.freeform_metadata).map(
-            ([k, v]) => ({
-              key: k,
-              value: String(v),
-            }),
-          );
+        if (Array.isArray(release.metadata)) {
+          freeformFields = release.metadata.map((m: any) => ({
+            key: m.key,
+            value: String(m.value ?? ''),
+          }));
         }
         renderFreeform();
       } catch (err: any) {
@@ -1341,11 +1336,9 @@ import Admin from '../../../layouts/Admin.astro';
               url: l.url,
               label: l.label || null,
             })),
-          freeform_metadata: Object.fromEntries(
-            freeformFields
-              .filter((f) => f.key && f.value)
-              .map((f) => [f.key, f.value]),
-          ),
+          metadata: freeformFields
+            .filter((f) => f.key && f.value)
+            .map((f, i) => ({ key: f.key, value: f.value, sort_order: i })),
           tracks: existingTracks.map((t: any, i: number) => ({
             id: t.id,
             title: t.title,

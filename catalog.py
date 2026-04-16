@@ -134,6 +134,7 @@ def _release_detail(release: Release) -> dict:
     d.update({
         "description": release.description,
         "format_specs": release.format_specs,
+        "category": release.category,
         "created_by": {"id": release.creator.id, "name": release.creator.name} if release.creator else None,
         "created_at": release.created_at.isoformat() if release.created_at else None,
         "updated_at": release.updated_at.isoformat() if release.updated_at else None,
@@ -179,6 +180,7 @@ class ReleaseCreate(BaseModel):
     entity_ids: list[int] = Field([], description="List of entity (artist/manufacturer) IDs to link. Order determines display position.")
     product_code: str | None = Field(None, description="Custom product code. Must be unique. If omitted, one is auto-generated. Can contain special characters.")
     release_date: str | None = Field(None, description="Date of manufacture/release in `YYYY-MM-DD` format. Optional for drafts.")
+    category: str | None = Field(None, description="Two-letter category code (LP, EP, SG, DA, CX, AR, MX). Also used for auto-generated product codes.")
     description: str | None = Field(None, description="Liner notes or long-form description. Plain text.")
     format_specs: str | None = Field(None, description="Format specification string, e.g. `Digital (YouTube)`, `Digital (Bandcamp, 24-bit/44.1kHz)`.")
     status: str = Field("draft", description="Initial status: `draft` (default, only visible to authenticated users) or `published` (publicly visible).")
@@ -186,11 +188,25 @@ class ReleaseCreate(BaseModel):
     metadata: list[MetadataIn] = Field([], description="Freeform key-value metadata pairs.")
 
 
+class TrackUpdate(BaseModel):
+    """A track entry in a release-update payload. Identifies an existing track by `id` and
+    optionally renames/repositions it."""
+    id: int = Field(..., description="Existing track ID. Must belong to this release.")
+    title: str = Field(..., description="Track title (may be unchanged).")
+    position: int = Field(..., description="1-based position within the release. Determines `track_number`.")
+
+
 class ReleaseUpdate(BaseModel):
     """Update an existing release. Only provided fields are changed (partial update).
 
-    **Important:** `distribution_links` and `metadata` are replaced wholesale if provided —
-    send the full list, not just the changes. Omit them entirely to leave them unchanged.
+    **Important:** `distribution_links`, `metadata`, and `tracks` are replaced wholesale if
+    provided — send the full list, not just the changes. Omit them entirely to leave them
+    unchanged.
+
+    **Tracks:** Providing `tracks` deletes any existing track whose ID is not in the list
+    (including its audio file on disk), renames tracks in place, and renumbers them based
+    on `position`. To add new tracks, use `POST /releases/{code}/tracks` — they cannot be
+    created via this endpoint.
 
     **Product code rename:** If you change the product code, the media directory on disk is
     also renamed. All track stream URLs and cover art URLs will use the new code.
@@ -199,10 +215,12 @@ class ReleaseUpdate(BaseModel):
     entity_ids: list[int] | None = Field(None, description="Full list of entity IDs (replaces existing). Order determines display position.")
     product_code: str | None = Field(None, description="New product code. Must be unique. Renames the media directory on disk.")
     release_date: str | None = Field(None, description="New release date in `YYYY-MM-DD` format.")
+    category: str | None = Field(None, description="New category code (LP, EP, SG, DA, CX, AR, MX). Pass an empty string to clear.")
     description: str | None = Field(None, description="New description/liner notes.")
     format_specs: str | None = Field(None, description="New format specification string.")
     distribution_links: list[DistLinkIn] | None = Field(None, description="Full list of distribution links (replaces existing). Omit to leave unchanged.")
     metadata: list[MetadataIn] | None = Field(None, description="Full list of metadata pairs (replaces existing). Omit to leave unchanged.")
+    tracks: list[TrackUpdate] | None = Field(None, description="Full list of existing tracks after edits. Tracks with IDs not in this list are deleted. Titles and positions are updated in place. Omit to leave tracks unchanged.")
 
 
 class EntityCreate(BaseModel):
@@ -376,8 +394,7 @@ def create_release(body: ReleaseCreate, user: User = Depends(get_current_user), 
                 year = date.fromisoformat(body.release_date).year
             except ValueError:
                 pass
-        # Guess category from track count hint (not available yet, use MX)
-        product_code = generate_product_code(db, year, "MX")
+        product_code = generate_product_code(db, year, body.category or "MX")
 
     if db.query(Release).filter(Release.product_code == product_code).first():
         raise HTTPException(status_code=409, detail="Product code already exists")
@@ -393,6 +410,7 @@ def create_release(body: ReleaseCreate, user: User = Depends(get_current_user), 
         product_code=product_code,
         title=body.title,
         release_date=release_date_val,
+        category=body.category or None,
         description=body.description,
         format_specs=body.format_specs,
         status=body.status if body.status in ("draft", "published") else "draft",
@@ -527,6 +545,8 @@ def update_release(code: str, body: ReleaseUpdate, admin: User = Depends(require
         release.description = body.description
     if body.format_specs is not None:
         release.format_specs = body.format_specs
+    if body.category is not None:
+        release.category = body.category or None
     if body.release_date is not None:
         try:
             release.release_date = date.fromisoformat(body.release_date)
@@ -565,6 +585,38 @@ def update_release(code: str, body: ReleaseUpdate, admin: User = Depends(require
             db.delete(m)
         for m in body.metadata:
             db.add(ReleaseMetadata(release_id=release.id, key=m.key, value=m.value, sort_order=m.sort_order))
+
+    # Track edits: delete removed tracks, rename + renumber the rest
+    if body.tracks is not None:
+        current_tracks = {
+            t.id: t for t in db.query(Track).filter(Track.release_id == release.id).all()
+        }
+        incoming_ids = {t.id for t in body.tracks}
+
+        for t in body.tracks:
+            if t.id not in current_tracks:
+                raise HTTPException(status_code=400, detail=f"Track {t.id} not found in this release")
+
+        # Delete tracks not in the incoming list (along with their audio files)
+        for tid, track in list(current_tracks.items()):
+            if tid not in incoming_ids:
+                if track.audio_file_path:
+                    fpath = MEDIA_DIR / track.audio_file_path
+                    if fpath.exists():
+                        fpath.unlink()
+                db.delete(track)
+                del current_tracks[tid]
+        db.flush()
+
+        # Two-phase renumber: shift to negative temp numbers first to avoid
+        # collisions with the (release_id, track_number) unique constraint
+        for i, t in enumerate(body.tracks):
+            current_tracks[t.id].track_number = -(i + 1)
+        db.flush()
+
+        for t in body.tracks:
+            current_tracks[t.id].track_number = t.position
+            current_tracks[t.id].title = t.title
 
     db.commit()
     final_code = new_code if new_code else code

@@ -67,6 +67,12 @@ if "discarded_by" not in _output_cols:
     with engine.begin() as _conn:
         _conn.execute(_sa_text("ALTER TABLE job_outputs ADD COLUMN discarded_by INTEGER REFERENCES users(id)"))
 
+# Migrate existing DB: add category column to releases if missing
+_release_cols = [c["name"] for c in _sa_inspect(engine).get_columns("releases")]
+if "category" not in _release_cols:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE releases ADD COLUMN category TEXT"))
+
 
 # ---------------------------------------------------------------------------
 # Background auto-sync scheduler
