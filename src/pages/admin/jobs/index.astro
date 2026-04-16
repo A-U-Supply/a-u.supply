@@ -17,6 +17,24 @@ import Admin from '../../../layouts/Admin.astro';
     </div>
   </div>
 
+  <div id="batch-banner" class="batch-banner" style="display:none;">
+    <span>
+      Showing batch <code id="batch-banner-id"></code>
+      (<span id="batch-banner-count">0</span> jobs)
+    </span>
+    <span class="batch-banner-actions">
+      <a
+        id="batch-banner-slop"
+        class="action-btn"
+        href="#"
+        style="text-decoration:none;">View slop</a
+      >
+      <a class="action-btn" href="/admin/jobs" style="text-decoration:none;"
+        >Clear filter</a
+      >
+    </span>
+  </div>
+
   <div id="loading" style="color: var(--color-muted);">
     <span class="loading-dots">Loading</span>
   </div>
@@ -51,6 +69,28 @@ import Admin from '../../../layouts/Admin.astro';
 
 <style>
   /* page-specific styles only — shared styles in admin.css */
+  .batch-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--color-text);
+    background: rgba(255, 255, 255, 0.02);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+  .batch-banner code {
+    font-family: var(--font-mono);
+    padding: 1px 6px;
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .batch-banner-actions {
+    display: flex;
+    gap: var(--space-xs);
+  }
 </style>
 
 <script>
@@ -74,6 +114,18 @@ import Admin from '../../../layouts/Admin.astro';
     // Highlight param from workspace redirect
     const urlParams = new URLSearchParams(window.location.search);
     const highlightId = urlParams.get('highlight');
+    const batchId = urlParams.get('batch_id');
+
+    if (batchId) {
+      const banner = document.getElementById('batch-banner')!;
+      const idEl = document.getElementById('batch-banner-id')!;
+      const slopLink = document.getElementById(
+        'batch-banner-slop',
+      ) as HTMLAnchorElement;
+      idEl.textContent = batchId.slice(0, 8);
+      slopLink.href = `/admin/search/slop?batch_id=${encodeURIComponent(batchId)}`;
+      banner.style.display = '';
+    }
 
     function formatDuration(job: any): string {
       if (!job.started_at) return '-';
@@ -101,6 +153,7 @@ import Admin from '../../../layouts/Admin.astro';
         per_page: String(pageSize),
       });
       if (status) params.set('status', status);
+      if (batchId) params.set('batch_id', batchId);
 
       const res = await fetch(`/api/jobs?${params}`, {
         credentials: 'include',
@@ -113,6 +166,11 @@ import Admin from '../../../layouts/Admin.astro';
       }
       const data = await res.json();
       totalJobs = data.total;
+
+      if (batchId) {
+        const countEl = document.getElementById('batch-banner-count');
+        if (countEl) countEl.textContent = String(totalJobs);
+      }
 
       if (totalJobs === 0) {
         emptyEl.style.display = '';

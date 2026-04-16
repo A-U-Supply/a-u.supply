@@ -97,6 +97,35 @@ import Admin from '../../../layouts/Admin.astro';
       <div class="shuffle-status" id="shuffle-status"></div>
       <div class="shuffle-grid" id="shuffle-grid"></div>
     </div>
+    <div id="batch-section" class="batch-section" style="display:none;">
+      <label class="batch-toggle">
+        <input type="checkbox" id="batch-enable" /> Submit as batch
+      </label>
+      <div id="batch-controls" class="batch-controls" style="display:none;">
+        <div class="batch-row">
+          <div class="sf-field">
+            <label>Job count</label>
+            <input
+              type="number"
+              id="batch-count"
+              min="1"
+              max="100"
+              value="10"
+            />
+          </div>
+          <div class="sf-field sf-checks">
+            <label class="shuffle-filter"
+              ><input type="checkbox" id="batch-random-recipe" /> Random recipe per
+              job</label
+            >
+          </div>
+        </div>
+        <p class="batch-hint">
+          Each job picks fresh random inputs matching the shuffle filters above.
+          The preview grid is a sample — jobs roll independently.
+        </p>
+      </div>
+    </div>
     <div class="config-actions">
       <button class="action-btn" id="config-submit">Submit Job</button>
     </div>
@@ -592,6 +621,58 @@ import Admin from '../../../layouts/Admin.astro';
   .shuffle-grid .ws-item.locked {
     border-left: 3px solid var(--color-text);
   }
+  .batch-section {
+    margin-top: var(--space-md);
+    padding-top: var(--space-md);
+    border-top: 1px dashed var(--color-border);
+  }
+  .batch-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+  .batch-toggle input[type='checkbox'] {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--color-text);
+  }
+  .batch-controls {
+    margin-top: var(--space-sm);
+  }
+  .batch-row {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+  }
+  .batch-controls .sf-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+  .batch-controls .sf-field label {
+    color: var(--color-text-dim, var(--color-text));
+  }
+  .batch-controls input[type='number'] {
+    width: 80px;
+    padding: var(--space-xs);
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    font-family: var(--font-mono);
+  }
+  .batch-hint {
+    margin-top: var(--space-xs);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-dim, var(--color-text));
+    opacity: 0.75;
+  }
 </style>
 
 <style>
@@ -862,6 +943,7 @@ import Admin from '../../../layouts/Admin.astro';
       const section = document.getElementById('shuffle-section')!;
       if (section.style.display === 'none') loadShuffleFacets();
       section.style.display = '';
+      showBatchSection();
 
       const statusEl = document.getElementById('shuffle-status')!;
       statusEl.textContent = `Needs ${count} ${mediaTypes.join('/')} item(s). Click Shuffle to draw random inputs.`;
@@ -879,12 +961,66 @@ import Admin from '../../../layouts/Admin.astro';
       shuffleActive = false;
       document.getElementById('shuffle-grid')!.innerHTML = '';
       document.getElementById('shuffle-status')!.textContent = '';
+      hideBatchSection();
+    }
+
+    function showBatchSection() {
+      document.getElementById('batch-section')!.style.display = '';
+      updateSubmitLabel();
+    }
+
+    function hideBatchSection() {
+      document.getElementById('batch-section')!.style.display = 'none';
+      (document.getElementById('batch-enable') as HTMLInputElement).checked =
+        false;
+      document.getElementById('batch-controls')!.style.display = 'none';
+      updateSubmitLabel();
+    }
+
+    function isBatchEnabled(): boolean {
+      const el = document.getElementById(
+        'batch-enable',
+      ) as HTMLInputElement | null;
+      return !!el && el.checked;
+    }
+
+    function getBatchCount(): number {
+      const el = document.getElementById(
+        'batch-count',
+      ) as HTMLInputElement | null;
+      const n = el ? parseInt(el.value) : NaN;
+      if (!Number.isFinite(n) || n < 1) return 1;
+      return Math.min(100, Math.max(1, n));
+    }
+
+    function updateSubmitLabel() {
+      const btn = document.getElementById(
+        'config-submit',
+      ) as HTMLButtonElement | null;
+      if (!btn) return;
+      if (isBatchEnabled()) {
+        btn.textContent = `Submit ${getBatchCount()} jobs`;
+      } else {
+        btn.textContent = 'Submit Job';
+      }
     }
 
     // Wire shuffle button
     document
       .getElementById('shuffle-btn')
       ?.addEventListener('click', doShuffle);
+
+    // Wire batch controls
+    document.getElementById('batch-enable')?.addEventListener('change', () => {
+      const enabled = isBatchEnabled();
+      document.getElementById('batch-controls')!.style.display = enabled
+        ? ''
+        : 'none';
+      updateSubmitLabel();
+    });
+    document
+      .getElementById('batch-count')
+      ?.addEventListener('input', updateSubmitLabel);
 
     if (!wsId) {
       emptyEl.style.display = '';
@@ -1583,6 +1719,84 @@ import Admin from '../../../layouts/Admin.astro';
         }
 
         if (hasFieldError) return;
+
+        // Batch mode: delegate rolling to the server
+        if (isBatchEnabled()) {
+          const count = getBatchCount();
+          const randomRecipe = (
+            document.getElementById('batch-random-recipe') as HTMLInputElement
+          ).checked;
+
+          const sfBody = getShuffleFilters();
+          const shufflePayload: any = {
+            query: sfBody.query || '',
+            source_channels: sfBody.filters?.source_channels || [],
+            tags: sfBody.filters?.tags || [],
+            output_index: sfBody.filters?.output_index || null,
+            reaction_count_min: sfBody.filters?.reaction_count?.min ?? null,
+            tag_count_min: sfBody.filters?.tag_count?.min ?? null,
+            exclude_processed_by_app: (
+              document.getElementById('shuffle-exclude-app') as HTMLInputElement
+            ).checked,
+            exclude_processed_by_recipe: (
+              document.getElementById(
+                'shuffle-exclude-recipe',
+              ) as HTMLInputElement
+            ).checked,
+          };
+
+          const batchParams = { ...jobParams };
+          if (randomRecipe) delete batchParams.recipe;
+
+          try {
+            const res = await fetch('/api/jobs/batch', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                app_name: app.name,
+                count,
+                shuffle: shufflePayload,
+                params: batchParams,
+                random_recipe: randomRecipe,
+              }),
+            });
+            if (res.ok) {
+              const data = await res.json();
+              (window as any).toast.success(
+                `Submitted ${data.job_count} jobs. Draining queue...`,
+              );
+              document.getElementById('config-section')!.style.display = 'none';
+              window.location.href = `/admin/jobs?batch_id=${encodeURIComponent(data.batch_id)}`;
+            } else {
+              try {
+                const err = await res.json();
+                const detail = err.detail;
+                if (detail?.errors && Array.isArray(detail.errors)) {
+                  const msgs = detail.errors.map(
+                    (e: any) => e.message || `${e.field}: unknown error`,
+                  );
+                  (window as any).toast.error(msgs.join(' | '), 10000);
+                } else if (typeof detail === 'string') {
+                  (window as any).toast.error(detail);
+                } else {
+                  (window as any).toast.error(
+                    detail?.detail || 'Batch submission failed',
+                  );
+                }
+              } catch {
+                (window as any).toast.error(
+                  `Batch submission failed (HTTP ${res.status})`,
+                );
+              }
+            }
+          } catch (e) {
+            (window as any).toast.error(
+              'Failed to submit batch: ' + (e as Error).message,
+            );
+          }
+          return;
+        }
 
         // Get input item IDs — from shuffle if active, otherwise from workspace
         let mediaIds: string[];

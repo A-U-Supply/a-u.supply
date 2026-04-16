@@ -442,6 +442,61 @@ class JobResponse(BaseModel):
     retry_count: int
     log_tail: str | None
     output_count: int = 0
+    batch_id: str | None = None
+
+
+class BatchShuffleSpec(BaseModel):
+    """Filter spec for the candidate pool from which batch jobs draw inputs.
+
+    Mirrors the shuffle form on the workspace page: the same ``query`` and
+    ``filters`` you'd send to ``POST /api/search``. Only media items matching
+    these filters (after excluding already-processed ones, if requested)
+    are eligible to be drawn into batch jobs.
+    """
+
+    query: str = Field("", description="Full-text query string. Empty matches all items.")
+    source_channels: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    output_index: str | None = Field(None, description="`__inputs__` (default) or an output collection name.")
+    reaction_count_min: int | None = None
+    tag_count_min: int | None = None
+    exclude_processed_by_app: bool = Field(
+        False, description="Exclude items already used as inputs to a job for this app."
+    )
+    exclude_processed_by_recipe: bool = Field(
+        False, description="Exclude items already used for this app+recipe combo. Ignored if random_recipe is true.",
+    )
+
+
+class JobBatchCreate(BaseModel):
+    """Submit N jobs at once, each drawing fresh random inputs from a pool.
+
+    Example: ``{count: 20, app_name: "sparagmos", shuffle: {tags: ["clean"]},
+    params: {recipe: "dream-dissolve"}}`` submits 20 pending jobs that share
+    a ``batch_id``, each picking random items tagged ``clean`` as inputs.
+
+    Set ``random_recipe=true`` to pick a random recipe per job from the app's
+    manifest (ignores ``params.recipe`` / ``params.chain``).
+    """
+
+    app_name: str = Field(..., description="Name of the registered app to run.")
+    count: int = Field(..., ge=1, le=100, description="Number of jobs to submit (1-100).")
+    shuffle: BatchShuffleSpec = Field(default_factory=BatchShuffleSpec)
+    params: dict = Field(
+        default_factory=dict,
+        description="App-specific parameters shared across all jobs. Validated per job.",
+    )
+    random_recipe: bool = Field(
+        False,
+        description="Pick a random recipe per job. The app must define a `recipe` select param.",
+    )
+    priority: int = Field(100, description="Job priority. Lower runs first.")
+
+
+class JobBatchResponse(BaseModel):
+    batch_id: str
+    job_count: int
+    jobs: list["JobResponse"]
 
 
 class JobOutputResponse(BaseModel):
@@ -1288,6 +1343,259 @@ def create_job(
     return result
 
 
+def _collect_recipe_options(manifest: dict) -> list[dict]:
+    """Return the flat list of recipe option dicts (value, input_count, ...).
+
+    Looks at ``manifest['params']['recipe']`` and flattens both ``options`` and
+    ``option_groups[].options``. Returns ``[]`` if the app has no recipe param.
+    """
+    recipe_spec = manifest.get("params", {}).get("recipe")
+    if not recipe_spec:
+        return []
+    out: list[dict] = []
+    for opt in recipe_spec.get("options", []) or []:
+        if isinstance(opt, dict) and "value" in opt:
+            out.append(opt)
+    for group in recipe_spec.get("option_groups", []) or []:
+        for opt in group.get("options", []) or []:
+            if isinstance(opt, dict) and "value" in opt:
+                out.append(opt)
+    return out
+
+
+def _processed_exclusion_ids(
+    db: Session, app_name: str, recipe: str | None = None
+) -> set[str]:
+    """Media IDs already used as inputs to jobs for this app (and recipe)."""
+    params: dict = {"app_name": app_name}
+    recipe_clause = ""
+    if recipe:
+        recipe_clause = "AND json_extract(j.params, '$.recipe') = :recipe"
+        params["recipe"] = recipe
+    rows = db.execute(
+        text(f"""
+            SELECT DISTINCT je.value
+            FROM jobs j, json_each(j.input_items) je
+            WHERE j.app_name = :app_name
+            AND j.status IN ('completed', 'running', 'pending')
+            {recipe_clause}
+        """),
+        params,
+    ).fetchall()
+    return {row[0] for row in rows}
+
+
+def _build_batch_pool(
+    db: Session,
+    shuffle: BatchShuffleSpec,
+    allowed_media_types: list[str],
+    exclude_app: str | None,
+    exclude_recipe: str | None,
+    max_candidates: int = 500,
+) -> list[MediaItem]:
+    """Resolve a candidate pool from the search index, filter to media types,
+    subtract already-processed items, return MediaItem rows.
+    """
+    from search_api import SearchFilters, _build_meili_filter
+    from search_client import multi_search
+
+    filters = SearchFilters(
+        tags=shuffle.tags or None,
+        source_channels=shuffle.source_channels or None,
+        output_index=shuffle.output_index,
+        reaction_count={"min": shuffle.reaction_count_min}
+        if shuffle.reaction_count_min is not None
+        else None,
+        tag_count={"min": shuffle.tag_count_min}
+        if shuffle.tag_count_min is not None
+        else None,
+    )
+    meili_filter = _build_meili_filter(filters)
+    results = multi_search(
+        query=shuffle.query or "",
+        media_types=allowed_media_types,
+        filters=meili_filter,
+        sort=["random"],
+        page=1,
+        per_page=max_candidates,
+    )
+    hit_ids = [h.get("id") for h in results.get("hits", []) if h.get("id")]
+    if not hit_ids:
+        return []
+
+    excluded: set[str] = set()
+    if exclude_app:
+        excluded = _processed_exclusion_ids(db, exclude_app, exclude_recipe)
+    pool_ids = [hid for hid in hit_ids if hid not in excluded]
+    if not pool_ids:
+        return []
+
+    items = (
+        db.query(MediaItem)
+        .filter(
+            MediaItem.id.in_(pool_ids),
+            MediaItem.media_type.in_(allowed_media_types),
+        )
+        .all()
+    )
+    # Preserve the random order from Meilisearch
+    by_id = {item.id: item for item in items}
+    return [by_id[i] for i in pool_ids if i in by_id]
+
+
+@router.post(
+    "/jobs/batch",
+    tags=["Jobs"],
+    summary="Submit a batch of jobs with shared batch_id",
+    responses={422: {"model": ValidationErrorResponse}},
+)
+def create_job_batch(
+    body: JobBatchCreate,
+    auth: tuple[User, str] = Depends(require_scope("write")),
+    db: Session = Depends(get_db),
+):
+    """Submit N jobs at once. Each job picks fresh random inputs from a
+    filtered candidate pool, optionally with a random recipe per job.
+
+    All jobs are created in a single transaction and share a ``batch_id``.
+    Use ``GET /api/jobs?batch_id=<id>`` to list them.
+
+    Fails atomically: if any job fails validation, no jobs are created.
+    """
+    import uuid as _uuid
+
+    user = auth[0]
+
+    app = (
+        db.query(AppDefinition)
+        .filter(AppDefinition.name == body.app_name, AppDefinition.enabled == True)
+        .first()
+    )
+    if not app:
+        raise HTTPException(
+            status_code=404, detail=f"App '{body.app_name}' not found or disabled"
+        )
+
+    manifest = _parse_manifest(app.manifest)
+    input_spec = manifest.get("input", {})
+    allowed_types = input_spec.get("media_types", [])
+    if not allowed_types:
+        raise HTTPException(
+            status_code=422,
+            detail="App manifest must declare input.media_types to use batch submission.",
+        )
+
+    # Resolve recipe strategy
+    recipe_options: list[dict] = []
+    if body.random_recipe:
+        recipe_options = _collect_recipe_options(manifest)
+        if not recipe_options:
+            raise HTTPException(
+                status_code=422,
+                detail="random_recipe=true but this app has no `recipe` param with options.",
+            )
+
+    # Build the candidate pool (shared across all jobs in the batch)
+    exclude_app = body.app_name if body.shuffle.exclude_processed_by_app else None
+    fixed_recipe = body.params.get("recipe") if not body.random_recipe else None
+    exclude_recipe = (
+        fixed_recipe
+        if body.shuffle.exclude_processed_by_recipe and fixed_recipe
+        else None
+    )
+    pool = _build_batch_pool(
+        db=db,
+        shuffle=body.shuffle,
+        allowed_media_types=allowed_types,
+        exclude_app=exclude_app,
+        exclude_recipe=exclude_recipe,
+    )
+    if not pool:
+        raise HTTPException(
+            status_code=422,
+            detail="No candidate media items match the shuffle filters. Relax filters or add more media.",
+        )
+
+    # Determine per-job input_count requirement.
+    global_min = input_spec.get("min_items", 1)
+
+    def resolve_required_count(job_params: dict) -> int:
+        per_option = _get_required_input_count(manifest, job_params)
+        return per_option if per_option is not None else global_min
+
+    # Plan every job up front; validate each. If any fails, fail the whole batch.
+    batch_id = str(_uuid.uuid4())
+    planned: list[tuple[dict, list[MediaItem]]] = []
+    for i in range(body.count):
+        job_params = dict(body.params)
+        if body.random_recipe:
+            picked = random.choice(recipe_options)
+            job_params["recipe"] = picked["value"]
+
+        required = resolve_required_count(job_params)
+        if required > len(pool):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Recipe '{job_params.get('recipe')}' needs {required} input(s) "
+                    f"but pool only has {len(pool)} item(s) after filters."
+                ),
+            )
+
+        chosen = random.sample(pool, required)
+        errors = _validate_job_input(manifest, chosen, job_params)
+        if errors:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "detail": f"Validation failed for job #{i + 1} in batch",
+                    "errors": errors,
+                },
+            )
+        planned.append((job_params, chosen))
+
+    # All planned jobs validate — commit as a single batch.
+    created_jobs: list[Job] = []
+    for job_params, chosen in planned:
+        job = Job(
+            app_name=body.app_name,
+            input_items=json.dumps([c.id for c in chosen]),
+            params=json.dumps(job_params),
+            priority=body.priority,
+            created_by=user.id,
+            batch_id=batch_id,
+        )
+        db.add(job)
+        created_jobs.append(job)
+    db.commit()
+    for j in created_jobs:
+        db.refresh(j)
+
+    return {
+        "batch_id": batch_id,
+        "job_count": len(created_jobs),
+        "jobs": [
+            JobResponse(
+                id=j.id,
+                app_name=j.app_name,
+                status=j.status,
+                params=json.loads(j.params),
+                input_item_count=len(json.loads(j.input_items)),
+                priority=j.priority,
+                created_at=j.created_at.isoformat(),
+                started_at=j.started_at.isoformat() if j.started_at else None,
+                completed_at=j.completed_at.isoformat() if j.completed_at else None,
+                error_message=j.error_message,
+                retry_count=j.retry_count,
+                log_tail=j.log_tail,
+                output_count=0,
+                batch_id=j.batch_id,
+            )
+            for j in created_jobs
+        ],
+    }
+
+
 @router.get("/jobs", tags=["Jobs"], summary="List jobs")
 def list_jobs(
     status: Optional[str] = Query(
@@ -1295,18 +1603,23 @@ def list_jobs(
         description="Filter by status: pending, running, completed, failed, cancelled.",
     ),
     app_name: Optional[str] = Query(None, description="Filter by app name."),
+    batch_id: Optional[str] = Query(
+        None, description="Filter to a single batch (shared ID for jobs submitted together)."
+    ),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
     auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
     user = auth[0]
-    """List jobs, newest first. Filterable by status and app name."""
+    """List jobs, newest first. Filterable by status, app name, and batch_id."""
     q = db.query(Job).options(joinedload(Job.outputs))
     if status:
         q = q.filter(Job.status == status)
     if app_name:
         q = q.filter(Job.app_name == app_name)
+    if batch_id:
+        q = q.filter(Job.batch_id == batch_id)
 
     total = q.count()
     jobs = (
@@ -1332,6 +1645,7 @@ def list_jobs(
                 retry_count=j.retry_count,
                 log_tail=j.log_tail,
                 output_count=len(j.outputs),
+                batch_id=j.batch_id,
             )
             for j in jobs
         ],
@@ -1351,6 +1665,9 @@ def list_unindexed_outputs(
         None, description="Filter by media type: image, audio, video."
     ),
     app_name: Optional[str] = Query(None, description="Filter by app name."),
+    batch_id: Optional[str] = Query(
+        None, description="Filter to outputs from a single batch submission."
+    ),
     auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
@@ -1368,6 +1685,8 @@ def list_unindexed_outputs(
         q = q.filter(JobOutput.media_type == media_type)
     if app_name:
         q = q.filter(Job.app_name == app_name)
+    if batch_id:
+        q = q.filter(Job.batch_id == batch_id)
 
     rows = q.order_by(JobOutput.created_at.desc()).all()
 
@@ -1390,6 +1709,7 @@ def list_unindexed_outputs(
                 if job.completed_at
                 else None,
                 "job_params": json.loads(job.params),
+                "job_batch_id": job.batch_id,
             }
         )
 

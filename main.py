@@ -50,6 +50,13 @@ if "output_index" not in _cols:
     with engine.begin() as _conn:
         _conn.execute(_sa_text("ALTER TABLE media_items ADD COLUMN output_index TEXT"))
 
+# Migrate existing DB: add batch_id column to jobs if missing
+_job_cols = [c["name"] for c in _sa_inspect(engine).get_columns("jobs")]
+if "batch_id" not in _job_cols:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE jobs ADD COLUMN batch_id TEXT"))
+        _conn.execute(_sa_text("CREATE INDEX IF NOT EXISTS ix_jobs_batch_id ON jobs(batch_id)"))
+
 
 # ---------------------------------------------------------------------------
 # Background auto-sync scheduler
