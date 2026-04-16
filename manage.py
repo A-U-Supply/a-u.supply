@@ -359,22 +359,33 @@ def backfill_transcripts():
                         "transcript_confidence": result["confidence"],
                     })
                     log(f"    OK ({len(result['transcript'])} chars, confidence={result['confidence']})")
-                    done += 1
                 else:
-                    log(f"    No speech detected")
-                    skipped += 1
+                    _upsert_meta(db, MediaAudioMeta, item.id, {
+                        "transcript": "",
+                        "transcript_confidence": 0.0,
+                    })
+                    log(f"    No speech detected (marked)")
+                done += 1
 
             elif item.media_type == "video":
                 if not _has_audio_stream(full_path):
-                    log(f"    No audio stream, skipping")
-                    skipped += 1
+                    _upsert_meta(db, MediaVideoMeta, item.id, {
+                        "audio_transcript": "",
+                        "transcript_confidence": 0.0,
+                    })
+                    log(f"    No audio stream (marked)")
+                    done += 1
                     continue
                 with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
                     tmp_path = tmp.name
                 try:
                     if not _extract_audio_track(full_path, tmp_path):
-                        log(f"    Failed to extract audio track")
-                        errors += 1
+                        _upsert_meta(db, MediaVideoMeta, item.id, {
+                            "audio_transcript": "",
+                            "transcript_confidence": 0.0,
+                        })
+                        log(f"    Failed to extract audio (marked)")
+                        done += 1
                         continue
                     result = transcribe_audio(tmp_path)
                     if result:
@@ -383,10 +394,13 @@ def backfill_transcripts():
                             "transcript_confidence": result["confidence"],
                         })
                         log(f"    OK ({len(result['transcript'])} chars, confidence={result['confidence']})")
-                        done += 1
                     else:
-                        log(f"    No speech detected")
-                        skipped += 1
+                        _upsert_meta(db, MediaVideoMeta, item.id, {
+                            "audio_transcript": "",
+                            "transcript_confidence": 0.0,
+                        })
+                        log(f"    No speech detected (marked)")
+                    done += 1
                 finally:
                     if os.path.exists(tmp_path):
                         os.unlink(tmp_path)
