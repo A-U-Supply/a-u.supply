@@ -508,10 +508,10 @@ All endpoints require authentication (JWT cookie or API key).
 - Extraction status and any failure details
 - Delete button
 
-### `/admin/search/triage` — Tagging Triage Queue
+### `/admin/search/nomenclator` — Tagging Queue
 
-- Surfaces untagged or low-tag-count items
-- Filterable by media type, source channel
+- Surfaces untagged or low-tag-count items in **random order** so nothing gets stuck at the bottom of a backlog
+- Filterable by media type, source channel, max-tag-count (tuneable), and ingestion age (24h / 7d / 30d / any)
 - Shows one item at a time with preview
 - **Desktop**: Keyboard-driven workflow
   - Spacebar: play/pause audio and video
@@ -596,7 +596,7 @@ All endpoints require authentication (JWT cookie or API key).
 ### End-to-End Tests
 
 - Upload a file via API → search for it → verify result
-- Tag via triage UI → verify tag appears in search
+- Tag via Nomenclator UI → verify tag appears in search
 - Revoke API key → verify subsequent requests fail
 
 ---
