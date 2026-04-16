@@ -292,6 +292,68 @@ def check_meta():
     db.close()
 
 
+def backfill_transcripts():
+    """Find audio/video items missing transcripts and run whisper on them."""
+    import os
+    from sqlalchemy.orm import joinedload
+    from models import MediaItem, MediaAudioMeta, MediaVideoMeta
+    from extraction import run_extraction, SEARCH_MEDIA_DIR
+
+    db = SessionLocal()
+
+    # Audio items missing transcripts
+    audio_missing = (
+        db.query(MediaItem)
+        .outerjoin(MediaAudioMeta)
+        .filter(
+            MediaItem.media_type == "audio",
+            (MediaAudioMeta.transcript.is_(None)) | (MediaAudioMeta.media_item_id.is_(None)),
+        )
+        .all()
+    )
+
+    # Video items missing transcripts
+    video_missing = (
+        db.query(MediaItem)
+        .outerjoin(MediaVideoMeta)
+        .filter(
+            MediaItem.media_type == "video",
+            (MediaVideoMeta.audio_transcript.is_(None)) | (MediaVideoMeta.media_item_id.is_(None)),
+        )
+        .all()
+    )
+
+    total = len(audio_missing) + len(video_missing)
+    print(f"Found {len(audio_missing)} audio + {len(video_missing)} video items missing transcripts ({total} total)")
+
+    if total == 0:
+        print("Nothing to do!")
+        db.close()
+        return
+
+    done = 0
+    errors = 0
+    for item in audio_missing + video_missing:
+        full_path = os.path.join(SEARCH_MEDIA_DIR, item.file_path)
+        if not os.path.exists(full_path):
+            print(f"  SKIP {item.id} — file not found: {full_path}")
+            errors += 1
+            continue
+        try:
+            print(f"  [{done + 1}/{total}] Transcribing {item.media_type}: {item.filename}")
+            run_extraction(item.id, full_path, item.media_type)
+            done += 1
+        except Exception as exc:
+            print(f"  ERROR {item.id}: {exc}")
+            errors += 1
+
+    print(f"Done! Transcribed: {done}, Errors: {errors}")
+    db.close()
+
+    print("Re-indexing all items to populate has_transcript filter...")
+    reindex_search()
+
+
 def list_users():
     db = SessionLocal()
     users = db.query(User).all()
@@ -360,6 +422,9 @@ if __name__ == "__main__":
         from slack_scraper import backfill_message_text
         result = backfill_message_text()
         print(f"Updated: {result['updated']}, Errors: {result['errors']}")
+
+    elif cmd == "backfill-transcripts":
+        backfill_transcripts()
 
     else:
         print(f"Unknown command: {cmd}")
