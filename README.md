@@ -81,6 +81,15 @@ npm run dev
 
 Browse to `http://localhost:4321`. The Astro dev server proxies all `/api/*` requests to FastAPI on port 5000.
 
+### Formatting
+
+```bash
+npm run format        # Auto-format JS, Astro, Svelte, CSS files
+npm run format:check  # Check without writing
+```
+
+Uses Prettier with Astro and Svelte plugins.
+
 ### Building
 
 ```bash

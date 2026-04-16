@@ -11,6 +11,10 @@ wheels/
 node_modules/
 .astro/
 
+# Claude Code (settings.json is committed, personal config is not)
+.claude/settings.local.json
+.claude/worktrees/
+
 # App data
 data/*.db
 data/*.db-wal

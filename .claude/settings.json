@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreCommit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "branch=$(git rev-parse --abbrev-ref HEAD); if [ \"$branch\" = \"master\" ] || [ \"$branch\" = \"main\" ]; then echo 'BLOCKED: Do not commit directly to master. Create a feature branch first.' && exit 1; fi"
+          }
+        ]
+      }
+    ]
+  }
+}

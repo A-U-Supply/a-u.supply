@@ -1,33 +1,82 @@
 # A-U.SUPPLY — Project Guide
 
+## How We Work
+
+This repo is the web app for [a-u.supply](https://a-u.supply). Everyone contributes through **Claude Code** — describe what you want, Claude does the coding.
+
+### All Work Via PRs
+
+Never commit directly to master. Every change follows this flow:
+
+1. Claude creates a feature branch (using a worktree)
+2. Claude opens a PR on GitHub
+3. Tube reviews and merges
+4. Merging to master auto-deploys to production
+
+A hook will block any commit directly to master.
+
+### What Belongs Here vs. a New Repo
+
+This repo is the **web app only** — pages, API, catalog, player, admin UI.
+
+**Does NOT belong here:**
+- New bots / audio tools / CLI apps — these get their own repo + Docker image
+- Search engine internals — talk to Tube first
+- New services or standalone tools
+
+If you're trying to add new functionality that isn't a page, API endpoint, or UI feature for the existing web app: **TUBE IS WATCHING. WWTD??** Ask Claude to help you create a new repo instead. Bot code lives in its own repo and connects via a TOML manifest in `apps/`.
+
 ## Stack
 
-- **Frontend**: Astro 5.x (static SSG output). ALL pages are Astro pages — no exceptions.
-- **Player**: Svelte 5 island (`src/components/Player.svelte`) mounted via `@astrojs/svelte` in Base.astro with `transition:persist`
-- **Backend**: FastAPI (Python 3.12+), SQLAlchemy ORM, SQLite with WAL
-- **Auth**: JWT in httpOnly cookies, role-based (admin/member)
-- **Deployment**: Docker multi-stage build, pushed to Dokku via GitHub Actions
+- **Frontend**: Astro 5.x (static pages). ALL pages are `.astro` files — no exceptions
+- **Player**: Svelte 5 island (`src/components/Player.svelte`)
+- **Backend**: FastAPI (Python 3.12+), SQLAlchemy, SQLite
+- **Auth**: JWT cookies, roles: admin / member
+- **Deploy**: Docker → Dokku, auto-deploys on merge to master
+
+## Local Dev Setup
+
+### Prerequisites (Mac)
+
+```bash
+# Install Homebrew if you don't have it
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install what you need
+brew install node uv
+```
+
+### First-Time Setup
+
+```bash
+git clone git@github.com:A-U-Supply/a-u.supply.git
+cd a-u.supply
+npm install
+uv sync
+```
+
+### Running Locally
+
+Two terminals (or ask Claude to start them for you):
+
+```bash
+# Terminal 1: Backend API (port 5000)
+npm run dev:api
+
+# Terminal 2: Frontend (port 4321, proxies API calls to backend)
+npm run dev
+```
+
+Open http://localhost:4321.
+
+**Frontend only?** If you're just editing pages/styles, `npm run dev` alone works — API calls will fail but pages render fine.
 
 ## Rules
 
-- **One framework**: All pages use Astro. Never use Jinja2, Mako, or any other template engine for pages. FastAPI serves the Astro `dist/` output and the API.
-- **All work via PRs**: Never commit directly to master. Create a feature branch, open a PR, merge it. Deploys are triggered by merging to master.
-- **Use uv**: Python dependency management uses `uv`, not pip. Run `uv sync`, `uv run`, `uv lock`.
-- **Product codes can contain special characters** (`#`, spaces, dots). Always URL-encode with `encodeURIComponent()` in JS and `quote(code, safe='')` in Python when building URLs.
-
-## Deployment (Dokku)
-
-- **Server**: 204.168.201.89
-- **Domain**: `a-u.supply` (DNS points to the server IP)
-- **SSL**: Let's Encrypt via `dokku-letsencrypt` plugin, auto-renews via cron. HTTP redirects to HTTPS.
-- **App name**: au-supply
-- **Deploy method**: `git push dokku master:main` via GitHub Actions (`.github/workflows/deploy.yml`)
-- **SSH key**: `DOKKU_SSH_KEY` GitHub secret, connects as `dokku@204.168.201.89`
-- **Persistent storage**: `/var/lib/dokku/data/storage/au-supply-data:/app/data` (SQLite DB + media files survive deploys)
-- **Legacy site storage**: `/var/lib/dokku/data/storage/au-supply-legacy:/srv/legacy-site`
-- **Run commands on server**: `ssh dokku@204.168.201.89 enter au-supply web <command>` (use `enter`, not `run` — `run` creates a disposable container)
-- **ffmpeg** is installed in the Docker image for audio duration extraction
-- **No Caddy/external proxy**: Dokku's built-in nginx handles reverse proxying and SSL termination
+- **One framework**: All pages use Astro. Never introduce another template engine.
+- **Use uv for Python**: `uv sync`, `uv run`, `uv lock` — never pip.
+- **Product codes have special characters** (`#`, spaces, dots). URL-encode them: `encodeURIComponent()` in JS, `quote(code, safe='')` in Python.
+- **Format before committing**: Run `npm run format` to auto-format code.
 
 ## File Layout
 
@@ -36,37 +85,25 @@ src/
   components/Player.svelte    — persistent audio player (Svelte 5)
   layouts/Base.astro          — public layout (ViewTransitions + Player)
   layouts/Admin.astro         — admin layout (sidebar + auth + Player)
-  pages/
+  pages/                      — every .astro file here becomes a URL
     index.astro               — homepage
-    login.astro
-    catalog/
-      index.astro             — public catalog grid
-      release.astro           — release detail (?code=XXX)
-    admin/
-      catalog/
-        index.astro           — release list
-        new.astro             — create release
-        edit.astro            — edit release (?code=XXX)
-      dashboard.astro
-      files.astro
-      settings.astro
+    catalog/                  — public catalog
+    admin/                    — admin pages (dashboard, catalog, settings, jobs)
 
-catalog.py                    — release catalog API (FastAPI router)
-main.py                       — FastAPI app, auth routes, static file middleware
-models.py                     — SQLAlchemy models (User, Entity, Release, Track, etc.)
+main.py                       — FastAPI app, auth, static file serving
+catalog.py                    — release catalog API
+search_api.py                 — media search API
+jobs_api.py                   — workspace & job queue API
+models.py                     — database models
 auth.py                       — JWT auth helpers
 
-data/                         — SQLite DB + media (persistent via Dokku storage)
-  au.db
-  media/releases/{code}/
-    cover.{ext}
-    cover_thumb.webp
-    tracks/{nn}-{slug}.{ext}
+apps/*.toml                   — bot manifests (pointers to Docker images, not bot code)
+data/                         — SQLite DB + media (not committed, lives on server)
 ```
 
 ## Player Integration
 
-The Svelte player listens for `player:queue` events on `document`:
+Queue tracks from any page:
 
 ```js
 document.dispatchEvent(new CustomEvent('player:queue', {
@@ -77,82 +114,21 @@ document.dispatchEvent(new CustomEvent('player:queue', {
 }));
 ```
 
-## App Runner
+## App Runner (Bots)
 
-The app runner processes media through containerized apps (bots). Users select media into workspaces, pick an app, configure parameters, and submit jobs. A separate worker process polls for pending jobs and runs them in Docker containers.
+Bots are Docker images that process media. They live in **their own repos** — this repo only has TOML manifests pointing to them in `apps/`.
 
-### Architecture
+**To add a new bot:** Create a new repo with a Dockerfile, then add a manifest at `apps/<bot-name>.toml`. See existing manifests for the format.
 
-- **Manifests**: `apps/*.toml` — each file defines an app (Docker image, accepted inputs, parameter schema). These are pointers, not code. Bot code lives in its own repo.
-- **API**: `jobs_api.py` — workspace CRUD, app registry, job queue, output management. All endpoints use `require_scope()` so they work with both cookies and API keys.
-- **Worker**: `worker.py` — runs as a separate Dokku process type (`Procfile: worker`). Polls for pending jobs, pulls Docker images, mounts input/output dirs, runs containers.
-- **Models**: Workspace, WorkspaceItem, AppDefinition, Job, JobOutput (in `models.py`)
+**How it works:** Users select media into a workspace → pick an app → submit a job. The worker pulls the Docker image, mounts input files at `/work/input/`, runs the container, collects outputs from `/work/output/`.
 
-### How jobs work
+## Deployment
 
-1. Worker picks a pending job from the `jobs` table (priority order)
-2. Copies input media files from `/app/search-data/` into `/app/job-data/{job_id}/input/`
-3. Writes `/app/job-data/{job_id}/job.json` with params and input file list
-4. Runs `docker run` with the job dir mounted at `/work` inside the container
-5. Bot reads from `/work/input/`, writes to `/work/output/`
-6. Worker collects outputs, creates `job_output` rows
-7. Admin reviews outputs, indexes good ones into the search engine or discards
+- **Auto-deploy**: Merge to master → GitHub Actions → Dokku → live at a-u.supply
+- **Run commands on server**: `ssh dokku enter au-supply web <command>`
+- **Data persists** across deploys (DB + media in mounted volumes)
+- **SSL**: Auto-managed via Let's Encrypt
 
-### Bot container contract
+## API Docs
 
-Bots are Docker images. The worker mounts a job directory at `/work`:
-
-- `/work/input/` — input media files
-- `/work/job.json` — `{"job_id", "params", "input_files": [{filename, media_type, media_item_id}]}`
-- `/work/output/` — bot must write all result files here
-
-Exit codes: `0` = success, `1` = expected failure, `2` = config error.
-
-Optional: write `/work/output/manifest.json` to describe outputs with media types and descriptions. If absent, types are inferred from extensions.
-
-### How the worker invokes bots
-
-The worker builds a Docker command from the manifest. Every bot receives input files and params as CLI arguments — there is no magic. The manifest controls exactly how:
-
-1. **`command`** — the subcommand passed to the entrypoint (e.g. `rave` → `rotten rave`)
-2. **`input_mode`** — how input files are passed:
-   - `"positional"` (default) — appended as positional args: `rotten rave /work/input/a.wav /work/input/b.wav`
-   - `"flag"` — passed via a named flag (set `input_flag` in manifest)
-3. **`params.*.flag`** — each param maps to a CLI flag (e.g. `flag = "-m"` → `-m vintage`)
-   - Bool params: flag is included when true, omitted when false (e.g. `-r` for reverse)
-   - Params at their default value are omitted to keep the command clean
-4. **`output_flag`** — static string appended to command (e.g. `"-o /work/output/output.wav"`)
-
-Example: a job with model=vintage, temperature=1.5, reverse=true produces:
-```
-rotten rave /work/input/drums.wav -m vintage -t 1.5 -r -o /work/output/output.wav
-```
-
-### Adding a new bot
-
-1. Bot repo needs a `Dockerfile` with an `ENTRYPOINT` and a GitHub Actions workflow that builds + pushes to GHCR
-2. Create `apps/<bot-name>.toml` manifest in this repo (see `apps/rottengenizdat.toml` for the full example)
-3. Register via `POST /api/apps` with the TOML as `manifest_toml` (requires admin API key)
-4. Update the DB copy: `PUT /api/apps/<name>` with the updated TOML when the manifest changes
-
-### Dokku setup
-
-- Docker socket: `dokku storage:mount au-supply /var/run/docker.sock:/var/run/docker.sock`
-- Job data volume: `dokku storage:mount au-supply /var/lib/dokku/data/storage/au-supply-jobs:/app/job-data`
-- Worker scaling: `dokku ps:scale au-supply worker=1`
-- GHCR auth: set `GHCR_USER` and `GHCR_TOKEN` via `dokku config:set` (worker uses these to `docker login` before pulling)
-
-### Key pages
-
-- `/admin/search` — "+ Workspace" button in batch bar to add selected items
-- `/admin/search/workspace` — workspace management, "Process with..." app selector
-- `/admin/jobs` — job list with status, cancel, retry
-- `/admin/jobs/detail?id=X` — job detail with logs, outputs, index/discard
-- `/docs` — full API documentation including manifest format and container contract
-
-## Dev
-
-```sh
-npm run dev          # Astro dev server (port 4321, proxies /api to 5000)
-uv run uvicorn main:app --reload --port 5000   # FastAPI backend
-```
+Interactive API docs at [a-u.supply/docs](https://a-u.supply/docs).
