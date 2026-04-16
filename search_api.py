@@ -624,27 +624,29 @@ def get_media_og_thumb(media_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Not found")
 
     media_dir = _get_search_media_dir()
+    resolved: tuple[Path, str] | None = None
 
-    # Video thumbnail
     if item.media_type == "video" and item.video_meta and item.video_meta.thumbnail_path:
         thumb_path = media_dir / item.video_meta.thumbnail_path
         if thumb_path.exists():
-            return FileResponse(thumb_path, media_type="image/webp")
+            resolved = (thumb_path, "image/webp")
 
-    # Image thumbnail (_thumb.webp)
-    if item.file_path:
+    if resolved is None and item.file_path:
         original = media_dir / item.file_path
         thumb = original.with_name(original.stem + "_thumb.webp")
         if thumb.exists():
-            return FileResponse(thumb, media_type="image/webp")
+            resolved = (thumb, "image/webp")
 
-    # Fallback: serve original for images
-    if item.media_type == "image" and item.file_path:
+    if resolved is None and item.media_type == "image" and item.file_path:
         file_path = media_dir / item.file_path
         if file_path.exists():
-            return FileResponse(file_path, media_type=item.mime_type or "application/octet-stream")
+            resolved = (file_path, item.mime_type or "application/octet-stream")
 
-    raise HTTPException(status_code=404, detail="Thumbnail not found")
+    db.close()
+    if resolved is None:
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+    path, mime = resolved
+    return FileResponse(path, media_type=mime)
 
 
 # ---------------------------------------------------------------------------
@@ -1034,10 +1036,22 @@ def get_media_file(
     """
     item = _get_media_item_or_404(db, media_id)
     file_path = _get_search_media_dir() / item.file_path
+    mime = item.mime_type or "application/octet-stream"
+    filename = item.filename
+    # Close the DB session before streaming so the pool isn't pinned for the
+    # whole download. Without this, pages that embed many file URLs can
+    # exhaust QueuePool.
+    db.close()
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found on disk")
-    mime = item.mime_type or "application/octet-stream"
-    return FileResponse(file_path, media_type=mime, filename=item.filename)
+    # Serve inline so clicking a media URL opens full-size in the browser
+    # instead of forcing a download. Explicit Download UI uses <a download>.
+    safe_filename = filename.replace('"', "")
+    return FileResponse(
+        file_path,
+        media_type=mime,
+        headers={"Content-Disposition": f'inline; filename="{safe_filename}"'},
+    )
 
 
 @router.get("/media/{media_id}/thumbnail", tags=["Media Items"], summary="Get media thumbnail")
@@ -1060,26 +1074,32 @@ def get_media_thumbnail(
     """
     item = _get_media_item_or_404(db, media_id)
 
-    # For videos, use the thumbnail_path from video meta
-    if item.media_type == "video" and item.video_meta and item.video_meta.thumbnail_path:
-        thumb_path = _get_search_media_dir() / item.video_meta.thumbnail_path
-        if thumb_path.exists():
-            return FileResponse(thumb_path, media_type="image/webp")
+    # Resolve the path to serve while the session is still live, then close
+    # so the connection isn't held for the entire file stream.
+    media_dir = _get_search_media_dir()
+    resolved: tuple[Path, str] | None = None
 
-    # For images (and fallback), look for _thumb.webp alongside the original
-    if item.file_path:
-        original = _get_search_media_dir() / item.file_path
+    if item.media_type == "video" and item.video_meta and item.video_meta.thumbnail_path:
+        thumb_path = media_dir / item.video_meta.thumbnail_path
+        if thumb_path.exists():
+            resolved = (thumb_path, "image/webp")
+
+    if resolved is None and item.file_path:
+        original = media_dir / item.file_path
         thumb = original.with_name(original.stem + "_thumb.webp")
         if thumb.exists():
-            return FileResponse(thumb, media_type="image/webp")
+            resolved = (thumb, "image/webp")
 
-    # Fallback: serve the original for images
-    if item.media_type == "image":
-        file_path = _get_search_media_dir() / item.file_path
+    if resolved is None and item.media_type == "image" and item.file_path:
+        file_path = media_dir / item.file_path
         if file_path.exists():
-            return FileResponse(file_path, media_type=item.mime_type or "application/octet-stream")
+            resolved = (file_path, item.mime_type or "application/octet-stream")
 
-    raise HTTPException(status_code=404, detail="Thumbnail not found")
+    db.close()
+    if resolved is None:
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+    path, mime = resolved
+    return FileResponse(path, media_type=mime)
 
 
 @router.put("/media/{media_id}", tags=["Media Items"], summary="Update media description")

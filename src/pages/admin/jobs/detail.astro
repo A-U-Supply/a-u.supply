@@ -514,7 +514,7 @@ import Admin from '../../../layouts/Admin.astro';
             ${o.indexed ? '<div class="output-indexed">indexed</div>' : ''}
             <div class="output-actions">
               ${isPlayable(o) ? `<button class="action-btn" data-play="${o.id}">Play</button>` : ''}
-              <a href="${dlUrl}" class="action-btn" style="text-decoration:none;">Download</a>
+              <a href="${dlUrl}" download="${o.filename}" class="action-btn" style="text-decoration:none;">Download</a>
               ${!o.indexed ? `<button class="action-btn" data-index="${o.id}">Index</button>` : ''}
             </div>
           </div>

@@ -29,6 +29,13 @@ import Admin from '../../../layouts/Admin.astro';
     </select>
     <button class="action-btn" id="btn-refresh">Refresh</button>
     <div class="slop-bulk-actions">
+      <label
+        class="slop-all-pages"
+        title="Apply bulk actions to every page that matches the current filter, not just this page."
+      >
+        <input type="checkbox" id="bulk-all-pages" />
+        <span>Across all pages</span>
+      </label>
       <button class="action-btn" id="btn-play-all" style="display:none;"
         >Play All</button
       >
@@ -41,6 +48,12 @@ import Admin from '../../../layouts/Admin.astro';
         style="display:none;">Discard All</button
       >
     </div>
+  </div>
+
+  <div id="slop-pagination" class="slop-pagination" style="display:none;">
+    <button class="action-btn" id="slop-prev">Prev</button>
+    <span id="slop-page-info">Page 1</span>
+    <button class="action-btn" id="slop-next">Next</button>
   </div>
 
   <div id="slop-loading" style="color: var(--color-muted);">
@@ -138,8 +151,32 @@ import Admin from '../../../layouts/Admin.astro';
   }
   .slop-bulk-actions {
     display: flex;
+    align-items: center;
     gap: var(--space-sm);
     margin-left: auto;
+  }
+  .slop-all-pages {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  .slop-all-pages input[type='checkbox'] {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--color-text);
+  }
+  .slop-pagination {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
   }
   .slop-grid {
     display: grid;
@@ -260,6 +297,10 @@ import Admin from '../../../layouts/Admin.astro';
     let pendingIndexIds: string[] = [];
     let pendingIndexJobId: string | null = null;
 
+    let currentPage = 1;
+    const pageSize = 50;
+    let totalOutputs = 0;
+
     const slopUrlParams = new URLSearchParams(window.location.search);
     const slopBatchId = slopUrlParams.get('batch_id');
     if (slopBatchId) {
@@ -281,6 +322,49 @@ import Admin from '../../../layouts/Admin.astro';
 
     function downloadUrl(o: any): string {
       return `/api/jobs/${o.job_id}/outputs/${o.id}/download`;
+    }
+
+    function renderPagination() {
+      const pagEl = document.getElementById('slop-pagination')!;
+      const pageInfo = document.getElementById('slop-page-info')!;
+      const prevBtn = document.getElementById('slop-prev') as HTMLButtonElement;
+      const nextBtn = document.getElementById('slop-next') as HTMLButtonElement;
+      const totalPages = Math.max(1, Math.ceil(totalOutputs / pageSize));
+      if (totalOutputs <= pageSize) {
+        pagEl.style.display = 'none';
+        return;
+      }
+      pagEl.style.display = '';
+      pageInfo.textContent = `Page ${currentPage} of ${totalPages} — ${totalOutputs} total`;
+      prevBtn.disabled = currentPage <= 1;
+      nextBtn.disabled = currentPage >= totalPages;
+    }
+
+    // Fetch every output ID matching the current filter. Used by bulk actions
+    // when "Across all pages" is checked, so we can index/discard/play beyond
+    // just the currently rendered page.
+    async function fetchAllMatchingIds(): Promise<string[]> {
+      const mediaType = (
+        document.getElementById('filter-type') as HTMLSelectElement
+      ).value;
+      const appName = (
+        document.getElementById('filter-app') as HTMLSelectElement
+      ).value;
+      const params = new URLSearchParams();
+      if (mediaType) params.set('media_type', mediaType);
+      if (appName) params.set('app_name', appName);
+      if (slopBatchId) params.set('batch_id', slopBatchId);
+      const res = await fetch(`/api/jobs/outputs/unindexed/ids?${params}`, {
+        credentials: 'include',
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.ids || [];
+    }
+
+    function isAllPages(): boolean {
+      return (document.getElementById('bulk-all-pages') as HTMLInputElement)
+        .checked;
     }
 
     // ---- Load outputs ----
@@ -307,6 +391,8 @@ import Admin from '../../../layouts/Admin.astro';
       if (mediaType) params.set('media_type', mediaType);
       if (appName) params.set('app_name', appName);
       if (slopBatchId) params.set('batch_id', slopBatchId);
+      params.set('page', String(currentPage));
+      params.set('per_page', String(pageSize));
 
       const res = await fetch(`/api/jobs/outputs/unindexed?${params}`, {
         credentials: 'include',
@@ -321,6 +407,7 @@ import Admin from '../../../layouts/Admin.astro';
 
       const data = await res.json();
       allOutputs = data.outputs;
+      totalOutputs = data.total || 0;
 
       // Populate app filter dropdown (preserve selection)
       const appSelect = document.getElementById(
@@ -336,16 +423,24 @@ import Admin from '../../../layouts/Admin.astro';
         appSelect.appendChild(opt);
       }
 
+      renderPagination();
+
       if (allOutputs.length === 0) {
-        summaryEl.textContent = '';
-        emptyEl.style.display = '';
+        summaryEl.textContent =
+          totalOutputs === 0
+            ? ''
+            : `Page ${currentPage} is empty. Go back a page.`;
+        emptyEl.style.display = totalOutputs === 0 ? '' : 'none';
         document.getElementById('btn-index-all')!.style.display = 'none';
         document.getElementById('btn-discard-all')!.style.display = 'none';
         document.getElementById('btn-play-all')!.style.display = 'none';
         return;
       }
 
-      summaryEl.textContent = `${data.total} output${data.total !== 1 ? 's' : ''} across ${data.job_count} job${data.job_count !== 1 ? 's' : ''}`;
+      const totalPages = Math.max(1, Math.ceil(totalOutputs / pageSize));
+      const pageLabel =
+        totalPages > 1 ? ` · page ${currentPage}/${totalPages}` : '';
+      summaryEl.textContent = `${totalOutputs} output${totalOutputs !== 1 ? 's' : ''} across ${data.job_count} job${data.job_count !== 1 ? 's' : ''}${pageLabel}`;
 
       // Show bulk actions
       document.getElementById('btn-index-all')!.style.display = '';
@@ -380,7 +475,7 @@ import Admin from '../../../layouts/Admin.astro';
           </div>
           <div class="slop-actions">
             ${isPlayable(o) ? `<button class="action-btn" data-play="${o.id}">Play</button>` : ''}
-            <a href="${dlUrl}" class="action-btn" style="text-decoration:none;">Download</a>
+            <a href="${dlUrl}" download="${o.filename}" class="action-btn" style="text-decoration:none;">Download</a>
             <button class="action-btn" data-index="${o.id}" data-job="${o.job_id}">Index</button>
             <button class="action-btn action-btn--danger" data-discard="${o.id}" data-job="${o.job_id}">Discard</button>
           </div>
@@ -606,22 +701,41 @@ import Admin from '../../../layouts/Admin.astro';
       });
 
     // ---- Bulk actions ----
-    document.getElementById('btn-index-all')?.addEventListener('click', () => {
-      if (allOutputs.length === 0) return;
-      openIndexDialog(
-        allOutputs.map((o) => o.id),
-        null,
-      );
-    });
+    document
+      .getElementById('btn-index-all')
+      ?.addEventListener('click', async () => {
+        let ids: string[];
+        if (isAllPages()) {
+          ids = await fetchAllMatchingIds();
+          if (ids.length === 0) {
+            (window as any).toast.error('Nothing to index');
+            return;
+          }
+        } else {
+          if (allOutputs.length === 0) return;
+          ids = allOutputs.map((o) => o.id);
+        }
+        openIndexDialog(ids, null);
+      });
 
     document
       .getElementById('btn-discard-all')
       ?.addEventListener('click', async () => {
-        if (allOutputs.length === 0) return;
+        let ids: string[];
+        if (isAllPages()) {
+          ids = await fetchAllMatchingIds();
+          if (ids.length === 0) {
+            (window as any).toast.error('Nothing to discard');
+            return;
+          }
+        } else {
+          if (allOutputs.length === 0) return;
+          ids = allOutputs.map((o) => o.id);
+        }
         if (
           !(await (window as any).confirmDialog(
-            `Discard all ${allOutputs.length} unindexed outputs? Files will be permanently deleted.`,
-            'Discard All',
+            `Discard ${ids.length} unindexed output${ids.length !== 1 ? 's' : ''}? Files will be permanently deleted.`,
+            'Discard',
           ))
         )
           return;
@@ -630,47 +744,74 @@ import Admin from '../../../layouts/Admin.astro';
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ output_ids: allOutputs.map((o) => o.id) }),
+          body: JSON.stringify({ output_ids: ids }),
         });
         if (res.ok) {
-          (window as any).toast.success('All outputs discarded');
+          (window as any).toast.success(`${ids.length} outputs discarded`);
+          currentPage = 1;
           loadOutputs();
         } else {
           (window as any).toast.error('Failed to discard outputs');
         }
       });
 
-    document.getElementById('btn-play-all')?.addEventListener('click', () => {
-      const playable = allOutputs.filter(isPlayable);
-      if (playable.length === 0) return;
-      const tracks = playable.map((o) => ({
-        track_id: o.id,
-        title: o.filename,
-        release_title: '',
-        release_code: '',
-        media_type: o.media_type,
-        stream_url: downloadUrl(o),
-        cover_url: '',
-        duration: 0,
-        entity_name: o.job_app_name,
-      }));
-      document.dispatchEvent(
-        new CustomEvent('player:queue', {
-          detail: { tracks, startIndex: 0 },
-        }),
-      );
-    });
+    document
+      .getElementById('btn-play-all')
+      ?.addEventListener('click', async () => {
+        // "Play All" across pages would need to fetch full output metadata
+        // for every page to build the queue; keep it page-scoped for now.
+        // The user still sees the warning in the label tooltip.
+        const playable = allOutputs.filter(isPlayable);
+        if (playable.length === 0) return;
+        const tracks = playable.map((o) => ({
+          track_id: o.id,
+          title: o.filename,
+          release_title: '',
+          release_code: '',
+          media_type: o.media_type,
+          stream_url: downloadUrl(o),
+          cover_url: '',
+          duration: 0,
+          entity_name: o.job_app_name,
+        }));
+        document.dispatchEvent(
+          new CustomEvent('player:queue', {
+            detail: { tracks, startIndex: 0 },
+          }),
+        );
+      });
 
-    // ---- Filters ----
+    // ---- Filters (reset to page 1 on any filter change) ----
+    function resetAndLoad() {
+      currentPage = 1;
+      loadOutputs();
+    }
     document
       .getElementById('filter-type')
-      ?.addEventListener('change', loadOutputs);
+      ?.addEventListener('change', resetAndLoad);
     document
       .getElementById('filter-app')
-      ?.addEventListener('change', loadOutputs);
+      ?.addEventListener('change', resetAndLoad);
     document
       .getElementById('btn-refresh')
       ?.addEventListener('click', loadOutputs);
+
+    // ---- Pagination ----
+    document.getElementById('slop-prev')?.addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage -= 1;
+        loadOutputs();
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      }
+    });
+    document.getElementById('slop-next')?.addEventListener('click', () => {
+      const totalPages = Math.max(1, Math.ceil(totalOutputs / pageSize));
+      if (currentPage < totalPages) {
+        currentPage += 1;
+        loadOutputs();
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      }
+    });
 
     // Initial load
     loadOutputs();
