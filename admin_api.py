@@ -240,26 +240,40 @@ def get_activity_feed(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/altar", summary="Random playable media item for the Altar of the Day")
+@router.get("/altar", summary="Daily media item for the Altar of the Day")
 def get_altar(
     _auth=Depends(require_scope("admin")),
     db: Session = Depends(get_db),
 ):
-    """Pick one random audio or video MediaItem and return enough detail to
-    queue it in the site player, plus an uploader name when resolvable.
+    """Pick one MediaItem (audio, video, or image) that stays stable for the
+    whole UTC day, and return enough detail for the dashboard card to render
+    it inline and/or queue it in the site player.
 
-    A slimmer, join-friendly sibling to `/api/media/random` (jobs_api.py) that
-    returns what the dashboard card needs in one round trip.
+    Stability is achieved by seeding Python's RNG with today's ISO date and
+    sampling an offset into the qualifying set — same day, same item; new UTC
+    day, new item.
     """
+    import random as _random
+
+    base = db.query(MediaItem).filter(
+        MediaItem.media_type.in_(["audio", "video", "image"])
+    )
+    total = base.with_entities(func.count(MediaItem.id)).scalar() or 0
+    if total == 0:
+        return {"item": None}
+
+    today_key = datetime.now(timezone.utc).date().isoformat()
+    offset = _random.Random(today_key).randrange(total)
+
     item = (
-        db.query(MediaItem)
-        .filter(MediaItem.media_type.in_(["audio", "video"]))
-        .options(
+        base.options(
             joinedload(MediaItem.audio_meta),
             joinedload(MediaItem.video_meta),
+            joinedload(MediaItem.image_meta),
             joinedload(MediaItem.sources).joinedload(MediaSource.uploader),
         )
-        .order_by(func.random())
+        .order_by(MediaItem.id)
+        .offset(offset)
         .limit(1)
         .first()
     )
