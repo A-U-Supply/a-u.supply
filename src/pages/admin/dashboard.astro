@@ -23,8 +23,8 @@ import Admin from '../../layouts/Admin.astro';
     </div>
     <div class="stat-card">
       <div class="stat-card__num" data-stat="media_items">—</div>
-      <div class="stat-card__label">Stores</div>
-      <div class="stat-card__hint">items in the depot</div>
+      <div class="stat-card__label">Stacks</div>
+      <div class="stat-card__hint">items in the Stacks</div>
     </div>
     <div class="stat-card">
       <div class="stat-card__num" data-stat="jobs">—</div>
@@ -47,7 +47,7 @@ import Admin from '../../layouts/Admin.astro';
     <div class="auspices-panel">
       <h2 class="section-heading">Altar of the Day</h2>
       <p class="section-hint">
-        One offering, drawn by lot from the depot. Refresh for another.
+        Today's offering, drawn by lot from the Stacks. A new one tomorrow.
       </p>
       <div class="altar" id="altar">
         <div class="altar__loading">
@@ -190,34 +190,15 @@ import Admin from '../../layouts/Admin.astro';
     border: 1px solid var(--color-border);
     padding: var(--space-md);
     display: flex;
-    gap: var(--space-md);
-    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--space-sm);
     min-height: 160px;
   }
   .altar__loading,
   .altar__empty {
     color: var(--color-muted);
     font-style: italic;
-    align-self: center;
-    margin: 0 auto;
-  }
-  .altar__cover {
-    flex: 0 0 auto;
-    width: 120px;
-    height: 120px;
-    border: 1px solid var(--color-border);
-    background: var(--color-bg) center/cover no-repeat;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--color-muted);
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-  .altar__body {
-    flex: 1 1 auto;
-    min-width: 0;
+    margin: auto;
   }
   .altar__title {
     font-size: var(--text-lg);
@@ -225,10 +206,53 @@ import Admin from '../../layouts/Admin.astro';
     word-break: break-word;
     line-height: 1.2;
   }
+  .altar__media {
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    background: #00000006;
+    border: 1px solid var(--color-border);
+    padding: var(--space-xs);
+  }
+  .altar__audio-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+    width: 100%;
+  }
+  .altar__audio-cover {
+    width: 160px;
+    height: 160px;
+    object-fit: cover;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+  }
+  .altar__audio,
+  .altar__video {
+    width: 100%;
+    max-width: 100%;
+    display: block;
+  }
+  .altar__video {
+    max-height: 360px;
+    background: #000;
+  }
+  .altar__image {
+    max-height: 360px;
+    max-width: 100%;
+    width: auto;
+    object-fit: contain;
+    display: block;
+    border: 1px solid var(--color-border);
+  }
+  .altar__image-link {
+    display: block;
+    line-height: 0;
+  }
   .altar__meta {
     color: var(--color-muted);
     font-size: var(--text-sm);
-    margin-top: var(--space-xs);
   }
   .altar__meta a {
     color: var(--color-muted);
@@ -236,7 +260,6 @@ import Admin from '../../layouts/Admin.astro';
     text-decoration: none;
   }
   .altar__actions {
-    margin-top: var(--space-sm);
     display: flex;
     gap: var(--space-xs);
     flex-wrap: wrap;
@@ -249,6 +272,8 @@ import Admin from '../../layouts/Admin.astro';
     background: var(--color-bg);
     color: var(--color-text);
     cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
   }
   .altar__btn:hover {
     border-color: var(--color-text);
@@ -341,7 +366,7 @@ import Admin from '../../layouts/Admin.astro';
   type AltarItem = {
     id: string;
     filename: string;
-    media_type: 'audio' | 'video';
+    media_type: 'audio' | 'video' | 'image';
     duration_seconds: number;
     uploader_name: string | null;
     source_channel: string | null;
@@ -506,32 +531,68 @@ import Admin from '../../layouts/Admin.astro';
     if (item.duration_seconds > 0) {
       bits.push(formatDuration(item.duration_seconds));
     }
-    const meta =
-      bits.length > 0 ? bits.join(' · ') : escapeHtml(item.media_type);
-    const coverStyle = `background-image: url('${escapeAttr(item.cover_url)}');`;
+    bits.push(escapeHtml(item.media_type));
+    const meta = bits.join(' · ');
     const detailLink = `/admin/search/detail?id=${encodeURIComponent(item.id)}`;
+    const mediaBlock = renderAltarMedia(item, detailLink);
 
     el.innerHTML = `
-      <div class="altar__cover" style="${coverStyle}" aria-hidden="true"></div>
-      <div class="altar__body">
-        <div class="altar__title">${escapeHtml(item.filename)}</div>
-        <div class="altar__meta">
-          ${meta}
-          · <a href="${detailLink}">details</a>
-        </div>
-        <div class="altar__actions">
-          <button class="altar__btn altar__btn--primary" data-altar-play>
-            ▶ Consecrate
-          </button>
-          <button class="altar__btn" data-altar-refresh>↻ Re-draw</button>
-        </div>
+      <div class="altar__title">${escapeHtml(item.filename)}</div>
+      ${mediaBlock}
+      <div class="altar__meta">
+        ${meta} · <a href="${detailLink}">details</a>
+      </div>
+      <div class="altar__actions">
+        <button class="altar__btn altar__btn--primary" data-altar-play>
+          ▶ Consecrate to queue
+        </button>
+        <a class="altar__btn" href="${detailLink}">Open</a>
       </div>
     `;
 
     const playBtn = el.querySelector('[data-altar-play]');
     playBtn?.addEventListener('click', () => queueAltar(item));
-    const refreshBtn = el.querySelector('[data-altar-refresh]');
-    refreshBtn?.addEventListener('click', () => fetchAltar());
+  }
+
+  function renderAltarMedia(item: AltarItem, detailLink: string): string {
+    const stream = escapeAttr(item.stream_url);
+    const cover = escapeAttr(item.cover_url);
+    const alt = escapeAttr(item.filename);
+
+    if (item.media_type === 'image') {
+      return `
+        <figure class="altar__media">
+          <a class="altar__image-link" href="${escapeAttr(detailLink)}">
+            <img class="altar__image" src="${cover}" alt="${alt}" loading="lazy" />
+          </a>
+        </figure>
+      `;
+    }
+
+    if (item.media_type === 'video') {
+      return `
+        <figure class="altar__media">
+          <video
+            class="altar__video"
+            controls
+            preload="metadata"
+            poster="${cover}"
+            src="${stream}"
+          ></video>
+        </figure>
+      `;
+    }
+
+    // audio
+    return `
+      <figure class="altar__media">
+        <div class="altar__audio-wrap">
+          <img class="altar__audio-cover" src="${cover}" alt="" loading="lazy"
+            onerror="this.style.display='none';" />
+          <audio class="altar__audio" controls preload="metadata" src="${stream}"></audio>
+        </div>
+      </figure>
+    `;
   }
 
   function queueAltar(item: AltarItem) {
