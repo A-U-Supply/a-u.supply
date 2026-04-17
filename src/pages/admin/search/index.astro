@@ -46,6 +46,14 @@ import Admin from '../../../layouts/Admin.astro';
 
       <div class="filter-body" id="filter-body">
         <div class="filter-group">
+          <label class="filter-label">Index</label>
+          <select id="filter-output-index">
+            <option value="__inputs__">Inputs</option>
+            <option value="outputs">Outputs</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
           <label class="filter-label">Media Type</label>
           <label class="filter-check"
             ><input type="checkbox" value="image" checked /> Image</label
@@ -73,46 +81,26 @@ import Admin from '../../../layouts/Admin.astro';
 
         <div class="filter-group">
           <label class="filter-label">Color</label>
-          <div class="color-checks">
-            <label class="filter-check"
-              ><input type="checkbox" name="color-group" value="red" /> Red</label
-            >
-            <label class="filter-check"
-              ><input type="checkbox" name="color-group" value="orange" /> Orange</label
-            >
-            <label class="filter-check"
-              ><input type="checkbox" name="color-group" value="yellow" /> Yellow</label
-            >
-            <label class="filter-check"
-              ><input type="checkbox" name="color-group" value="green" /> Green</label
-            >
-            <label class="filter-check"
-              ><input type="checkbox" name="color-group" value="teal" /> Teal</label
-            >
-            <label class="filter-check"
-              ><input type="checkbox" name="color-group" value="blue" /> Blue</label
-            >
-            <label class="filter-check"
-              ><input type="checkbox" name="color-group" value="purple" /> Purple</label
-            >
-            <label class="filter-check"
-              ><input type="checkbox" name="color-group" value="pink" /> Pink</label
-            >
-            <label class="filter-check"
-              ><input type="checkbox" name="color-group" value="brown" /> Brown</label
-            >
-            <label class="filter-check"
-              ><input type="checkbox" name="color-group" value="beige" /> Beige</label
-            >
-            <label class="filter-check"
-              ><input type="checkbox" name="color-group" value="gray" /> Gray</label
-            >
-            <label class="filter-check"
-              ><input type="checkbox" name="color-group" value="black" /> Black</label
-            >
-            <label class="filter-check"
-              ><input type="checkbox" name="color-group" value="white" /> White</label
-            >
+          <select id="filter-color-group">
+            <option value="">Any color</option>
+            <option value="red">Red</option>
+            <option value="orange">Orange</option>
+            <option value="yellow">Yellow</option>
+            <option value="green">Green</option>
+            <option value="teal">Teal</option>
+            <option value="blue">Blue</option>
+            <option value="purple">Purple</option>
+            <option value="pink">Pink</option>
+            <option value="brown">Brown</option>
+            <option value="beige">Beige</option>
+            <option value="gray">Gray</option>
+            <option value="black">Black</option>
+            <option value="white">White</option>
+          </select>
+          <div
+            id="color-multi-hint"
+            style="display:none; font-size:0.6rem; color: var(--color-muted); margin-top:2px;"
+          >
           </div>
         </div>
 
@@ -123,12 +111,17 @@ import Admin from '../../../layouts/Admin.astro';
           </select>
         </div>
 
-        <div class="filter-group">
-          <label class="filter-label">Index</label>
-          <select id="filter-output-index">
-            <option value="__inputs__">Inputs</option>
-            <option value="outputs">Outputs</option>
+        <div class="filter-group" id="filter-group-job-app">
+          <label class="filter-label">Job App</label>
+          <select id="filter-job-app">
+            <option value="">All</option>
           </select>
+          <div
+            id="job-app-hint"
+            style="display:none; font-size:0.6rem; color: var(--color-muted); margin-top:2px;"
+          >
+            Outputs only — switch Index to Outputs.
+          </div>
         </div>
 
         <div class="filter-group">
@@ -148,6 +141,36 @@ import Admin from '../../../layouts/Admin.astro';
         <div class="filter-group">
           <label class="filter-label">Min Tags</label>
           <input type="number" id="filter-tags-min" min="0" value="0" />
+        </div>
+
+        <div class="filter-group" id="filter-group-transcript">
+          <label class="filter-label">Transcript</label>
+          <select id="filter-has-transcript">
+            <option value="">Any</option>
+            <option value="yes">With transcript</option>
+            <option value="no">Without transcript</option>
+          </select>
+          <div
+            id="transcript-hint"
+            style="display:none; font-size:0.6rem; color: var(--color-muted); margin-top:2px;"
+          >
+            Audio/video only.
+          </div>
+        </div>
+
+        <div class="filter-group" id="filter-group-ocr">
+          <label class="filter-label">OCR Text</label>
+          <select id="filter-has-text">
+            <option value="">Any</option>
+            <option value="yes">With OCR text</option>
+            <option value="no">Without OCR text</option>
+          </select>
+          <div
+            id="ocr-hint"
+            style="display:none; font-size:0.6rem; color: var(--color-muted); margin-top:2px;"
+          >
+            Images only.
+          </div>
         </div>
 
         <div class="filter-group">
@@ -437,9 +460,6 @@ import Admin from '../../../layouts/Admin.astro';
   .filter-group select:focus {
     outline: 2px solid var(--color-accent);
     outline-offset: -1px;
-  }
-
-  .color-checks {
   }
 
   .active-filters {
@@ -965,6 +985,27 @@ import Admin from '../../../layouts/Admin.astro';
       doSearch();
     });
 
+    // Cross-filter listeners: disable incompatible filters on the fly.
+    document
+      .getElementById('filter-output-index')
+      ?.addEventListener('change', updateCrossFilterState);
+    document
+      .querySelectorAll('.filter-check input[type="checkbox"]')
+      .forEach((cb) => {
+        const input = cb as HTMLInputElement;
+        if (!input.name) {
+          input.addEventListener('change', updateCrossFilterState);
+        }
+      });
+
+    // Changing the color dropdown overrides any URL-preserved multi selection.
+    document
+      .getElementById('filter-color-group')
+      ?.addEventListener('change', () => {
+        preservedMultiColors = [];
+        updateColorMultiHint();
+      });
+
     // Search form
     searchForm.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -1181,13 +1222,17 @@ import Admin from '../../../layouts/Admin.astro';
 
     refreshWorkspaceBadge();
 
+    // Multi-color state preserved from URL (?colorgroup=a,b,c).
+    // The dropdown itself is single-select; multi values from the URL stay
+    // active until the user changes the dropdown.
+    let preservedMultiColors: string[] = [];
+
     function getFilters() {
       const types: string[] = [];
       document
         .querySelectorAll('.filter-check input[type="checkbox"]:checked')
         .forEach((cb) => {
           const input = cb as HTMLInputElement;
-          // Only media type checkboxes (not color group)
           if (!input.name) types.push(input.value);
         });
       const channel = document.getElementById(
@@ -1205,9 +1250,12 @@ import Admin from '../../../layouts/Admin.astro';
       const poster = (
         document.getElementById('filter-poster') as HTMLSelectElement
       ).value;
-      const colorGroups = Array.from(
-        document.querySelectorAll('input[name="color-group"]:checked'),
-      ).map((cb) => (cb as HTMLInputElement).value);
+      const colorGroupVal = (
+        document.getElementById('filter-color-group') as HTMLSelectElement
+      ).value;
+      const colorGroups = colorGroupVal
+        ? [colorGroupVal]
+        : preservedMultiColors.slice();
       const outputIndex = (
         document.getElementById('filter-output-index') as HTMLSelectElement
       ).value;
@@ -1225,6 +1273,18 @@ import Admin from '../../../layouts/Admin.astro';
         ) || 0;
       const sortBy = (document.getElementById('sort-by') as HTMLSelectElement)
         .value;
+      const jobAppEl = document.getElementById(
+        'filter-job-app',
+      ) as HTMLSelectElement;
+      const jobApp = jobAppEl.disabled ? '' : jobAppEl.value;
+      const transcriptEl = document.getElementById(
+        'filter-has-transcript',
+      ) as HTMLSelectElement;
+      const hasTranscript = transcriptEl.disabled ? '' : transcriptEl.value;
+      const textEl = document.getElementById(
+        'filter-has-text',
+      ) as HTMLSelectElement;
+      const hasText = textEl.disabled ? '' : textEl.value;
       return {
         types,
         channels,
@@ -1237,7 +1297,59 @@ import Admin from '../../../layouts/Admin.astro';
         reactionsMin,
         tagsMin,
         sortBy,
+        jobApp,
+        hasTranscript,
+        hasText,
       };
+    }
+
+    // Enable/disable filters that only make sense in specific contexts:
+    // - Job App requires Index=Outputs (inputs have no job_app).
+    // - Transcript requires audio or video checked.
+    // - OCR Text requires image checked.
+    function updateCrossFilterState() {
+      const outputIndex = (
+        document.getElementById('filter-output-index') as HTMLSelectElement
+      ).value;
+      const jobAppEl = document.getElementById(
+        'filter-job-app',
+      ) as HTMLSelectElement;
+      const jobAppHint = document.getElementById('job-app-hint')!;
+      const isInputs = outputIndex === '__inputs__';
+      jobAppEl.disabled = isInputs;
+      if (isInputs) jobAppEl.value = '';
+      jobAppHint.style.display = isInputs ? 'block' : 'none';
+
+      const typeChecks = Array.from(
+        document.querySelectorAll('.filter-check input[type="checkbox"]'),
+      ) as HTMLInputElement[];
+      const selectedTypes = typeChecks
+        .filter((cb) => !cb.name && cb.checked)
+        .map((cb) => cb.value);
+      const hasAV =
+        selectedTypes.length === 0 ||
+        selectedTypes.includes('audio') ||
+        selectedTypes.includes('video');
+      const hasImage =
+        selectedTypes.length === 0 || selectedTypes.includes('image');
+
+      const transcriptEl = document.getElementById(
+        'filter-has-transcript',
+      ) as HTMLSelectElement;
+      transcriptEl.disabled = !hasAV;
+      if (!hasAV) transcriptEl.value = '';
+      document.getElementById('transcript-hint')!.style.display = hasAV
+        ? 'none'
+        : 'block';
+
+      const textEl = document.getElementById(
+        'filter-has-text',
+      ) as HTMLSelectElement;
+      textEl.disabled = !hasImage;
+      if (!hasImage) textEl.value = '';
+      document.getElementById('ocr-hint')!.style.display = hasImage
+        ? 'none'
+        : 'block';
     }
 
     async function doSearch() {
@@ -1286,6 +1398,10 @@ import Admin from '../../../layouts/Admin.astro';
         body.filters.reaction_count = { min: filters.reactionsMin };
       if (filters.tagsMin > 0)
         body.filters.tag_count = { min: filters.tagsMin };
+      if (filters.jobApp) body.filters.job_app = filters.jobApp;
+      if (filters.hasTranscript)
+        body.filters.has_transcript = filters.hasTranscript === 'yes';
+      if (filters.hasText) body.filters.has_text = filters.hasText === 'yes';
 
       // Update URL to reflect current search state (shareable, back/forward friendly)
       const stateParams = new URLSearchParams();
@@ -1304,6 +1420,10 @@ import Admin from '../../../layouts/Admin.astro';
         stateParams.set('mintags', String(filters.tagsMin));
       if (filters.outputIndex && filters.outputIndex !== '__inputs__')
         stateParams.set('output_index', filters.outputIndex);
+      if (filters.jobApp) stateParams.set('app', filters.jobApp);
+      if (filters.hasTranscript)
+        stateParams.set('transcript', filters.hasTranscript);
+      if (filters.hasText) stateParams.set('ocr', filters.hasText);
       if (filters.sortBy !== 'newest') stateParams.set('sort', filters.sortBy);
       if (filters.types.length < 3 && filters.types.length > 0)
         stateParams.set('types', filters.types.join(','));
@@ -1635,17 +1755,27 @@ import Admin from '../../../layouts/Admin.astro';
         outputIndexSelect.innerHTML =
           '<option value="__inputs__">Inputs</option>' +
           '<option value="outputs">Outputs</option>';
+        const jobAppSelect = document.getElementById(
+          'filter-job-app',
+        ) as HTMLSelectElement;
+        jobAppSelect.innerHTML =
+          '<option value="">All</option>' +
+          (data.job_apps || [])
+            .map((a: string) => `<option value="${a}">${a}</option>`)
+            .join('');
         // Restore from URL after dropdowns are populated
         const p = new URLSearchParams(window.location.search);
         if (p.get('poster')) posterSelect.value = p.get('poster')!;
         if (p.get('output_index'))
           outputIndexSelect.value = p.get('output_index')!;
+        if (p.get('app')) jobAppSelect.value = p.get('app')!;
         if (p.get('channel')) {
           const chs = p.get('channel')!.split(',');
           Array.from(channelSelect.options).forEach((o) => {
             o.selected = chs.includes(o.value);
           });
         }
+        updateCrossFilterState();
       } catch {}
     }
 
@@ -1679,14 +1809,24 @@ import Admin from '../../../layouts/Admin.astro';
       const sb = document.getElementById('sort-by') as HTMLSelectElement;
       if (initParams.get('sort') && sb) sb.value = initParams.get('sort')!;
 
-      // Color group checkboxes
+      // Color group dropdown (single-select). Multi values from URL are
+      // kept in preservedMultiColors until the user changes the dropdown.
+      const cgSel = document.getElementById(
+        'filter-color-group',
+      ) as HTMLSelectElement;
       if (initParams.get('colorgroup')) {
-        const groups = initParams.get('colorgroup')!.split(',');
-        document.querySelectorAll('input[name="color-group"]').forEach((cb) => {
-          (cb as HTMLInputElement).checked = groups.includes(
-            (cb as HTMLInputElement).value,
-          );
-        });
+        const groups = initParams
+          .get('colorgroup')!
+          .split(',')
+          .map((g) => g.trim())
+          .filter(Boolean);
+        if (groups.length === 1) {
+          cgSel.value = groups[0];
+        } else if (groups.length > 1) {
+          preservedMultiColors = groups;
+          cgSel.value = '';
+        }
+        updateColorMultiHint();
       }
       // Date range
       if (initParams.get('from'))
@@ -1708,12 +1848,32 @@ import Admin from '../../../layouts/Admin.astro';
           });
       }
 
+      // Has transcript / has text
+      if (initParams.get('transcript'))
+        (
+          document.getElementById('filter-has-transcript') as HTMLSelectElement
+        ).value = initParams.get('transcript')!;
+      if (initParams.get('ocr'))
+        (
+          document.getElementById('filter-has-text') as HTMLSelectElement
+        ).value = initParams.get('ocr')!;
+
       if (initParams.get('page'))
         currentPage = parseInt(initParams.get('page')!) || 1;
 
       // Legacy ?color= param: convert to colorgroup if possible
       if (initParams.get('color') && !initParams.get('colorgroup')) {
         // Old hex color URLs no longer supported; redirect to search
+      }
+    }
+
+    function updateColorMultiHint() {
+      const hint = document.getElementById('color-multi-hint')!;
+      if (preservedMultiColors.length > 1) {
+        hint.textContent = `Active: ${preservedMultiColors.join(', ')} (API/URL multi-select)`;
+        hint.style.display = 'block';
+      } else {
+        hint.style.display = 'none';
       }
     }
 
@@ -1734,11 +1894,28 @@ import Admin from '../../../layouts/Admin.astro';
             '';
           break;
         case 'colorgroup':
-          document
-            .querySelectorAll('input[name="color-group"]')
-            .forEach((cb) => {
-              (cb as HTMLInputElement).checked = false;
-            });
+          (
+            document.getElementById('filter-color-group') as HTMLSelectElement
+          ).value = '';
+          preservedMultiColors = [];
+          updateColorMultiHint();
+          break;
+        case 'app':
+          (
+            document.getElementById('filter-job-app') as HTMLSelectElement
+          ).value = '';
+          break;
+        case 'transcript':
+          (
+            document.getElementById(
+              'filter-has-transcript',
+            ) as HTMLSelectElement
+          ).value = '';
+          break;
+        case 'ocr':
+          (
+            document.getElementById('filter-has-text') as HTMLSelectElement
+          ).value = '';
           break;
         case 'channel':
           Array.from(
@@ -1836,6 +2013,25 @@ import Admin from '../../../layouts/Admin.astro';
       if (filters.types.length < 3 && filters.types.length > 0) {
         chips.push(
           `<span class="active-filter">Types: ${filters.types.join(', ')} <button class="active-filter__remove" onclick="__clearFilter('types')">&times;</button></span>`,
+        );
+      }
+      if (filters.jobApp) {
+        chips.push(
+          `<span class="active-filter">App: ${filters.jobApp} <button class="active-filter__remove" onclick="__clearFilter('app')">&times;</button></span>`,
+        );
+      }
+      if (filters.hasTranscript) {
+        const label =
+          filters.hasTranscript === 'yes' ? 'has transcript' : 'no transcript';
+        chips.push(
+          `<span class="active-filter">${label} <button class="active-filter__remove" onclick="__clearFilter('transcript')">&times;</button></span>`,
+        );
+      }
+      if (filters.hasText) {
+        const label =
+          filters.hasText === 'yes' ? 'has OCR text' : 'no OCR text';
+        chips.push(
+          `<span class="active-filter">${label} <button class="active-filter__remove" onclick="__clearFilter('ocr')">&times;</button></span>`,
         );
       }
 
@@ -2105,12 +2301,11 @@ import Admin from '../../../layouts/Admin.astro';
       el.querySelectorAll('[data-color-filter]').forEach((row) => {
         row.addEventListener('click', () => {
           const color = (row as HTMLElement).dataset.colorFilter!;
-          document
-            .querySelectorAll('input[name="color-group"]')
-            .forEach((cb) => {
-              (cb as HTMLInputElement).checked =
-                (cb as HTMLInputElement).value === color;
-            });
+          (
+            document.getElementById('filter-color-group') as HTMLSelectElement
+          ).value = color;
+          preservedMultiColors = [];
+          updateColorMultiHint();
           currentPage = 1;
           doSearch();
         });
@@ -2119,6 +2314,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     // Restore form state from URL, load facets, then run first search
     restoreFromUrl();
+    updateCrossFilterState();
     await loadFacets();
     doSearch();
   });
