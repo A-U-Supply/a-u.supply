@@ -26,13 +26,31 @@ const { title, current } = Astro.props;
           <a href="/">A-U.SUPPLY</a>
         </div>
 
-        <div class="sidebar__section">Navigation</div>
+        <div class="sidebar__section">Overture</div>
+        <ul class="sidebar__nav">
+          <li>
+            <a
+              href="/admin/dashboard"
+              aria-current={current === 'dashboard' ? 'page' : undefined}
+              >Auspices</a
+            >
+          </li>
+          <li>
+            <a
+              href="/admin/bookmarks"
+              aria-current={current === 'bookmarks' ? 'page' : undefined}
+              >Marginalia</a
+            >
+          </li>
+        </ul>
+
+        <div class="sidebar__section">The Canon</div>
         <ul class="sidebar__nav">
           <li>
             <a
               href="/admin/catalog"
               aria-current={current === 'catalog' ? 'page' : undefined}
-              >Catalog</a
+              >Releases</a
             >
           </li>
           <li>
@@ -42,40 +60,9 @@ const { title, current } = Astro.props;
               >New Release</a
             >
           </li>
-          <li>
-            <a
-              href="/admin/dashboard"
-              aria-current={current === 'dashboard' ? 'page' : undefined}
-              >Dashboard</a
-            >
-          </li>
-          <li>
-            <a
-              href="/admin/files"
-              aria-current={current === 'files' ? 'page' : undefined}>Files</a
-            >
-          </li>
-          <li>
-            <a
-              href="/admin/settings"
-              aria-current={current === 'settings' ? 'page' : undefined}
-              >Settings</a
-            >
-          </li>
         </ul>
 
-        <div class="sidebar__section">Library</div>
-        <ul class="sidebar__nav">
-          <li>
-            <a
-              href="/admin/bookmarks"
-              aria-current={current === 'bookmarks' ? 'page' : undefined}
-              >Bookmarks</a
-            >
-          </li>
-        </ul>
-
-        <div class="sidebar__section">Search Engine</div>
+        <div class="sidebar__section">The Larder</div>
         <ul class="sidebar__nav">
           <li>
             <a
@@ -85,23 +72,27 @@ const { title, current } = Astro.props;
           </li>
           <li>
             <a
-              href="/admin/search/nomenclator"
-              aria-current={current === 'nomenclator'
-                ? 'page'
-                : undefined}>Nomenclator</
+              href="/admin/search/upload"
+              aria-current={current === 'upload' ? 'page' : undefined}
+              >Tribute</a
             >
           </li>
           <li>
             <a
-              href="/admin/search/upload"
-              aria-current={current === 'upload' ? 'page' : undefined}>Upload</a
+              href="/admin/search/nomenclator"
+              aria-current={current === 'nomenclator' ? 'page' : undefined}
+              >Nomenclator</a
             >
           </li>
+        </ul>
+
+        <div class="sidebar__section">The Winnowing</div>
+        <ul class="sidebar__nav">
           <li>
             <a
               href="/admin/search/failures"
               aria-current={current === 'failures' ? 'page' : undefined}
-              >Failures</a
+              >The Fallen</a
             >
           </li>
           <li>
@@ -118,16 +109,9 @@ const { title, current } = Astro.props;
               >The Midden</a
             >
           </li>
-          <li>
-            <a
-              href="/admin/api-keys"
-              aria-current={current === 'api-keys' ? 'page' : undefined}
-              >API Keys</a
-            >
-          </li>
         </ul>
 
-        <div class="sidebar__section">App Runner</div>
+        <div class="sidebar__section">The Altar</div>
         <ul class="sidebar__nav">
           <li>
             <a
@@ -146,7 +130,32 @@ const { title, current } = Astro.props;
           <li>
             <a
               href="/admin/jobs"
-              aria-current={current === 'jobs' ? 'page' : undefined}>Jobs</a
+              aria-current={current === 'jobs' ? 'page' : undefined}
+              >The Queue</a
+            >
+          </li>
+        </ul>
+
+        <div class="sidebar__section">The Sacristy</div>
+        <ul class="sidebar__nav">
+          <li>
+            <a
+              href="/admin/files"
+              aria-current={current === 'files' ? 'page' : undefined}
+              >Holdings</a
+            >
+          </li>
+          <li>
+            <a
+              href="/admin/api-keys"
+              aria-current={current === 'api-keys' ? 'page' : undefined}>Keys</a
+            >
+          </li>
+          <li>
+            <a
+              href="/admin/settings"
+              aria-current={current === 'settings' ? 'page' : undefined}
+              >Settings</a
             >
           </li>
         </ul>

@@ -29,6 +29,7 @@ from auth import (
     require_admin,
     verify_password,
 )
+from admin_api import router as admin_router
 from bookmarks_api import router as bookmarks_router
 from catalog import router as catalog_router
 from jobs_api import router as jobs_router
@@ -468,6 +469,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(admin_router)
 app.include_router(bookmarks_router)
 app.include_router(catalog_router)
 app.include_router(jobs_router)

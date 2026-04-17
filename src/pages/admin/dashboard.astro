@@ -2,17 +2,660 @@
 import Admin from '../../layouts/Admin.astro';
 ---
 
-<Admin title="Dashboard" current="dashboard">
-  <h1>Dashboard</h1>
-  <p id="welcome"><span class="loading-dots">Loading</span></p>
+<Admin title="Auspices" current="dashboard">
+  <div class="page-header">
+    <h1>Auspices</h1>
+    <p class="auspices__subtitle" id="auspices-greeting">
+      <span class="loading-dots">Reading the omens</span>
+    </p>
+  </div>
+
+  <section class="stat-row" id="stat-row">
+    <div class="stat-card">
+      <div class="stat-card__num" data-stat="releases">—</div>
+      <div class="stat-card__label">Canon</div>
+      <div class="stat-card__hint">published releases</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__num" data-stat="tracks">—</div>
+      <div class="stat-card__label">Hymnals</div>
+      <div class="stat-card__hint">tracks catalogued</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__num" data-stat="media_items">—</div>
+      <div class="stat-card__label">Stores</div>
+      <div class="stat-card__hint">items in the depot</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__num" data-stat="jobs">—</div>
+      <div class="stat-card__label">Offerings</div>
+      <div class="stat-card__hint">jobs ever submitted</div>
+    </div>
+  </section>
+
+  <section
+    class="action-queue"
+    id="action-queue"
+    style="display:none;"
+    aria-label="What needs attention"
+  >
+    <h2 class="section-heading">The Docket</h2>
+    <div class="action-queue__row" id="action-queue-row"></div>
+  </section>
+
+  <section class="auspices-grid">
+    <div class="auspices-panel">
+      <h2 class="section-heading">Altar of the Day</h2>
+      <p class="section-hint">
+        One offering, drawn by lot from the depot. Refresh for another.
+      </p>
+      <div class="altar" id="altar">
+        <div class="altar__loading">
+          <span class="loading-dots">Drawing lots</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="auspices-panel">
+      <h2 class="section-heading">The Ledger</h2>
+      <p class="section-hint">Recent happenings across the site.</p>
+      <ol class="feed" id="feed">
+        <li class="feed__loading">
+          <span class="loading-dots">Fetching the chronicle</span>
+        </li>
+      </ol>
+    </div>
+  </section>
 </Admin>
 
+<style>
+  .auspices__subtitle {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    font-style: italic;
+    margin: 0;
+  }
+
+  .section-heading {
+    font-size: var(--text-lg);
+    margin-top: var(--space-md);
+    margin-bottom: var(--space-xs);
+    border-bottom: 1px dotted var(--color-border);
+    padding-bottom: var(--space-xs);
+    letter-spacing: 0.04em;
+  }
+  .section-hint {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    font-style: italic;
+    margin-bottom: var(--space-sm);
+  }
+
+  /* ── Stat cards ── */
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+  }
+  .stat-card {
+    border: 1px solid var(--color-border);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--color-bg);
+    position: relative;
+  }
+  .stat-card__num {
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+  .stat-card__label {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: var(--text-sm);
+    color: var(--color-accent);
+    margin-top: var(--space-xs);
+  }
+  .stat-card__hint {
+    color: var(--color-muted);
+    font-size: calc(var(--text-sm) * 0.9);
+    margin-top: 2px;
+  }
+
+  /* ── Action queue ── */
+  .action-queue {
+    margin-top: var(--space-lg);
+  }
+  .action-queue__row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--space-sm);
+  }
+  .action-card {
+    display: block;
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--color-accent);
+    padding: var(--space-sm) var(--space-md);
+    text-decoration: none;
+    color: var(--color-text);
+    background: var(--color-bg);
+    transition: border-color 0.15s;
+  }
+  .action-card:hover {
+    border-left-color: var(--color-text);
+  }
+  .action-card__num {
+    font-size: var(--text-xl);
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+  }
+  .action-card__verb {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    margin-top: 2px;
+  }
+  .action-card__meta {
+    margin-top: var(--space-xs);
+    font-size: calc(var(--text-sm) * 0.9);
+    color: var(--color-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .action-card--urgent {
+    border-left-color: #c4453a;
+  }
+  .action-card--urgent .action-card__meta {
+    color: #c4453a;
+  }
+
+  /* ── Two-column lower grid ── */
+  .auspices-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--space-md);
+    margin-top: var(--space-lg);
+  }
+  @media (max-width: 900px) {
+    .auspices-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .auspices-panel {
+    min-width: 0;
+  }
+
+  /* ── Altar ── */
+  .altar {
+    border: 1px solid var(--color-border);
+    padding: var(--space-md);
+    display: flex;
+    gap: var(--space-md);
+    align-items: flex-start;
+    min-height: 160px;
+  }
+  .altar__loading,
+  .altar__empty {
+    color: var(--color-muted);
+    font-style: italic;
+    align-self: center;
+    margin: 0 auto;
+  }
+  .altar__cover {
+    flex: 0 0 auto;
+    width: 120px;
+    height: 120px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg) center/cover no-repeat;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .altar__body {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .altar__title {
+    font-size: var(--text-lg);
+    font-weight: 700;
+    word-break: break-word;
+    line-height: 1.2;
+  }
+  .altar__meta {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    margin-top: var(--space-xs);
+  }
+  .altar__meta a {
+    color: var(--color-muted);
+    border-bottom: 1px dotted var(--color-muted);
+    text-decoration: none;
+  }
+  .altar__actions {
+    margin-top: var(--space-sm);
+    display: flex;
+    gap: var(--space-xs);
+    flex-wrap: wrap;
+  }
+  .altar__btn {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    padding: var(--space-xs) var(--space-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    color: var(--color-text);
+    cursor: pointer;
+  }
+  .altar__btn:hover {
+    border-color: var(--color-text);
+  }
+  .altar__btn--primary {
+    border-color: var(--color-text);
+    background: var(--color-text);
+    color: var(--color-bg);
+  }
+  .altar__btn--primary:hover {
+    background: var(--color-bg);
+    color: var(--color-text);
+  }
+
+  /* ── Feed ── */
+  .feed {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    border: 1px solid var(--color-border);
+    max-height: 480px;
+    overflow-y: auto;
+  }
+  .feed__item {
+    display: grid;
+    grid-template-columns: 20px 1fr auto;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    border-bottom: 1px dotted var(--color-border);
+    font-size: var(--text-sm);
+    align-items: baseline;
+  }
+  .feed__item:last-child {
+    border-bottom: none;
+  }
+  .feed__icon {
+    font-family: var(--font-mono);
+    color: var(--color-accent);
+    text-align: center;
+    font-weight: 700;
+  }
+  .feed__text {
+    color: var(--color-text);
+    word-break: break-word;
+  }
+  .feed__text a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dotted currentColor;
+  }
+  .feed__time {
+    color: var(--color-muted);
+    font-size: calc(var(--text-sm) * 0.9);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .feed__loading,
+  .feed__empty {
+    padding: var(--space-md);
+    color: var(--color-muted);
+    text-align: center;
+    font-style: italic;
+  }
+
+  .feed__icon--fail {
+    color: #c4453a;
+  }
+</style>
+
 <script>
-  document.addEventListener('astro:page-load', async () => {
-    const el = document.getElementById('welcome');
-    if (!el) return;
-    el.innerHTML = '<span class="loading-dots">Loading</span>';
-    const user = await (window as any).__authReady;
-    if (user) el.textContent = `Welcome back, ${user.name}.`;
+  type Stats = {
+    releases: number;
+    tracks: number;
+    media_items: number;
+    jobs: number;
+  };
+  type ActionQueue = {
+    awaiting_nomenclature: number;
+    fallen: number;
+    midden_rotting: number;
+    next_purge_at: string | null;
+  };
+  type FeedEvent = {
+    type: string;
+    timestamp: string;
+    actor_name: string | null;
+    description: string;
+    link: string | null;
+  };
+  type AltarItem = {
+    id: string;
+    filename: string;
+    media_type: 'audio' | 'video';
+    duration_seconds: number;
+    uploader_name: string | null;
+    source_channel: string | null;
+    stream_url: string;
+    cover_url: string;
+  };
+
+  document.addEventListener('astro:page-load', () => {
+    const greeting = document.getElementById('auspices-greeting');
+    if (!greeting) return;
+
+    (async () => {
+      const user = await (window as any).__authReady;
+      if (user && greeting) {
+        greeting.textContent = `Welcome back, ${user.name}. The omens are below.`;
+      }
+    })();
+
+    fetchStats();
+    fetchActionQueue();
+    fetchAltar();
+    fetchFeed();
+
+    const countdownTimer = window.setInterval(updateMiddenCountdown, 30000);
+    const feedTimer = window.setInterval(refreshFeedTimestamps, 60000);
+
+    document.addEventListener(
+      'astro:before-swap',
+      () => {
+        window.clearInterval(countdownTimer);
+        window.clearInterval(feedTimer);
+      },
+      { once: true },
+    );
   });
+
+  async function apiGet<T>(path: string): Promise<T | null> {
+    try {
+      const res = await fetch(path, { credentials: 'include' });
+      if (!res.ok) return null;
+      return (await res.json()) as T;
+    } catch {
+      return null;
+    }
+  }
+
+  function setText(selector: string, value: string) {
+    const el = document.querySelector(selector);
+    if (el) el.textContent = value;
+  }
+
+  function fmtNum(n: number): string {
+    return n.toLocaleString();
+  }
+
+  // ───────── Stats ─────────
+  async function fetchStats() {
+    const data = await apiGet<Stats>('/api/admin/stats');
+    if (!data) return;
+    setText('[data-stat="releases"]', fmtNum(data.releases));
+    setText('[data-stat="tracks"]', fmtNum(data.tracks));
+    setText('[data-stat="media_items"]', fmtNum(data.media_items));
+    setText('[data-stat="jobs"]', fmtNum(data.jobs));
+  }
+
+  // ───────── Action queue ─────────
+  let nextPurgeAt: string | null = null;
+
+  async function fetchActionQueue() {
+    const data = await apiGet<ActionQueue>('/api/admin/action-queue');
+    if (!data) return;
+    const row = document.getElementById('action-queue-row');
+    const section = document.getElementById('action-queue');
+    if (!row || !section) return;
+
+    const cards: string[] = [];
+    if (data.awaiting_nomenclature > 0) {
+      cards.push(
+        `<a class="action-card" href="/admin/search/nomenclator">
+          <div class="action-card__num">${fmtNum(data.awaiting_nomenclature)}</div>
+          <div class="action-card__verb">awaiting nomenclature</div>
+          <div class="action-card__meta">untagged offerings</div>
+        </a>`,
+      );
+    }
+    if (data.fallen > 0) {
+      cards.push(
+        `<a class="action-card" href="/admin/search/failures">
+          <div class="action-card__num">${fmtNum(data.fallen)}</div>
+          <div class="action-card__verb">fallen</div>
+          <div class="action-card__meta">unresolved failures</div>
+        </a>`,
+      );
+    }
+    if (data.midden_rotting > 0) {
+      nextPurgeAt = data.next_purge_at;
+      cards.push(
+        `<a class="action-card" id="midden-card" href="/admin/search/midden">
+          <div class="action-card__num">${fmtNum(data.midden_rotting)}</div>
+          <div class="action-card__verb">rotting in The Midden</div>
+          <div class="action-card__meta" id="midden-countdown">next purge —</div>
+        </a>`,
+      );
+    }
+
+    if (cards.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+    row.innerHTML = cards.join('');
+    section.style.display = '';
+    updateMiddenCountdown();
+  }
+
+  function updateMiddenCountdown() {
+    if (!nextPurgeAt) return;
+    const el = document.getElementById('midden-countdown');
+    const card = document.getElementById('midden-card');
+    if (!el || !card) return;
+    const ms = new Date(nextPurgeAt).getTime() - Date.now();
+    const { label, urgent } = formatRemaining(ms);
+    el.textContent = `next purge in ${label}`;
+    card.classList.toggle('action-card--urgent', urgent);
+  }
+
+  function formatRemaining(ms: number): { label: string; urgent: boolean } {
+    if (ms <= 0) return { label: 'moments', urgent: true };
+    const totalMins = Math.floor(ms / 60000);
+    const hours = Math.floor(totalMins / 60);
+    const mins = totalMins % 60;
+    const urgent = totalMins < 60;
+    if (hours > 0) return { label: `${hours}h ${mins}m`, urgent };
+    if (mins > 0) return { label: `${mins}m`, urgent };
+    const secs = Math.max(0, Math.floor(ms / 1000));
+    return { label: `${secs}s`, urgent: true };
+  }
+
+  // ───────── Altar ─────────
+  async function fetchAltar() {
+    const el = document.getElementById('altar');
+    if (!el) return;
+    el.innerHTML = `<div class="altar__loading"><span class="loading-dots">Drawing lots</span></div>`;
+    const data = await apiGet<{ item: AltarItem | null }>('/api/admin/altar');
+    if (!data || !data.item) {
+      el.innerHTML = `<div class="altar__empty">No playable offerings in the depot yet.</div>`;
+      return;
+    }
+    renderAltar(data.item);
+  }
+
+  function renderAltar(item: AltarItem) {
+    const el = document.getElementById('altar');
+    if (!el) return;
+
+    const bits: string[] = [];
+    if (item.uploader_name) {
+      bits.push(`offered by ${escapeHtml(item.uploader_name)}`);
+    }
+    if (item.source_channel) {
+      bits.push(`from #${escapeHtml(item.source_channel)}`);
+    }
+    if (item.duration_seconds > 0) {
+      bits.push(formatDuration(item.duration_seconds));
+    }
+    const meta =
+      bits.length > 0 ? bits.join(' · ') : escapeHtml(item.media_type);
+    const coverStyle = `background-image: url('${escapeAttr(item.cover_url)}');`;
+    const detailLink = `/admin/search/detail?id=${encodeURIComponent(item.id)}`;
+
+    el.innerHTML = `
+      <div class="altar__cover" style="${coverStyle}" aria-hidden="true"></div>
+      <div class="altar__body">
+        <div class="altar__title">${escapeHtml(item.filename)}</div>
+        <div class="altar__meta">
+          ${meta}
+          · <a href="${detailLink}">details</a>
+        </div>
+        <div class="altar__actions">
+          <button class="altar__btn altar__btn--primary" data-altar-play>
+            ▶ Consecrate
+          </button>
+          <button class="altar__btn" data-altar-refresh>↻ Re-draw</button>
+        </div>
+      </div>
+    `;
+
+    const playBtn = el.querySelector('[data-altar-play]');
+    playBtn?.addEventListener('click', () => queueAltar(item));
+    const refreshBtn = el.querySelector('[data-altar-refresh]');
+    refreshBtn?.addEventListener('click', () => fetchAltar());
+  }
+
+  function queueAltar(item: AltarItem) {
+    document.dispatchEvent(
+      new CustomEvent('player:queue', {
+        detail: {
+          tracks: [
+            {
+              track_id: item.id,
+              title: item.filename,
+              release_title: '',
+              release_code: '',
+              media_type: item.media_type,
+              stream_url: item.stream_url,
+              cover_url: item.cover_url,
+              duration: item.duration_seconds,
+              entity_name: item.uploader_name || '',
+            },
+          ],
+          startIndex: 0,
+        },
+      }),
+    );
+  }
+
+  // ───────── Feed ─────────
+  async function fetchFeed() {
+    const el = document.getElementById('feed');
+    if (!el) return;
+    const data = await apiGet<{ events: FeedEvent[] }>(
+      '/api/admin/activity-feed?limit=20',
+    );
+    if (!data) {
+      el.innerHTML = `<li class="feed__empty">Could not read the chronicle.</li>`;
+      return;
+    }
+    if (data.events.length === 0) {
+      el.innerHTML = `<li class="feed__empty">Nothing has happened yet.</li>`;
+      return;
+    }
+    el.innerHTML = data.events.map(renderFeedItem).join('');
+  }
+
+  function renderFeedItem(ev: FeedEvent): string {
+    const { icon, iconClass } = iconFor(ev.type);
+    const body = ev.link
+      ? `<a href="${escapeAttr(ev.link)}">${escapeHtml(ev.description)}</a>`
+      : escapeHtml(ev.description);
+    return `
+      <li class="feed__item">
+        <span class="feed__icon ${iconClass}" aria-hidden="true">${icon}</span>
+        <span class="feed__text">${body}</span>
+        <span class="feed__time" data-ts="${escapeAttr(ev.timestamp)}">${relTime(ev.timestamp)}</span>
+      </li>
+    `;
+  }
+
+  function iconFor(type: string): { icon: string; iconClass: string } {
+    switch (type) {
+      case 'upload':
+        return { icon: '↑', iconClass: '' };
+      case 'job_completed':
+        return { icon: '✓', iconClass: '' };
+      case 'job_failed':
+        return { icon: '✗', iconClass: 'feed__icon--fail' };
+      case 'release_published':
+        return { icon: '§', iconClass: '' };
+      case 'extraction_failed':
+        return { icon: '!', iconClass: 'feed__icon--fail' };
+      default:
+        return { icon: '·', iconClass: '' };
+    }
+  }
+
+  function refreshFeedTimestamps() {
+    document
+      .querySelectorAll<HTMLElement>('.feed__time[data-ts]')
+      .forEach((el) => {
+        const ts = el.getAttribute('data-ts');
+        if (ts) el.textContent = relTime(ts);
+      });
+  }
+
+  // ───────── Helpers ─────────
+  function relTime(iso: string): string {
+    const t = new Date(iso).getTime();
+    if (Number.isNaN(t)) return '';
+    const diff = Math.max(0, Date.now() - t);
+    const s = Math.floor(diff / 1000);
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    if (d < 30) return `${d}d ago`;
+    const mo = Math.floor(d / 30);
+    if (mo < 12) return `${mo}mo ago`;
+    const y = Math.floor(d / 365);
+    return `${y}y ago`;
+  }
+
+  function formatDuration(seconds: number): string {
+    const s = Math.max(0, Math.floor(seconds));
+    const mm = Math.floor(s / 60);
+    const ss = s % 60;
+    return `${mm}:${ss.toString().padStart(2, '0')}`;
+  }
+
+  function escapeHtml(raw: string): string {
+    return raw.replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;',
+        })[c]!,
+    );
+  }
+
+  function escapeAttr(raw: string): string {
+    return escapeHtml(raw);
+  }
 </script>
