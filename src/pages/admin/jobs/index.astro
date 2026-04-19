@@ -43,21 +43,31 @@ import Admin from '../../../layouts/Admin.astro';
     No jobs found.
   </div>
 
-  <div class="queue-batch-bar" id="queue-batch-bar" style="display:none;">
-    <span id="queue-selected-count">0 selected</span>
-    <button class="action-btn action-btn--danger" id="bulk-discard-btn">
+  <div class="queue-toolbar" id="queue-toolbar" style="display:none;">
+    <label class="queue-select-all">
+      <input type="checkbox" id="select-all-page" />
+      <span>Select page</span>
+    </label>
+    <button class="action-btn" id="select-all-matching" style="display:none;"
+    ></button>
+    <span class="queue-selected" id="queue-selected-count"></span>
+    <button
+      class="action-btn action-btn--danger"
+      id="bulk-discard-btn"
+      style="display:none;"
+    >
       Discard outputs to midden
     </button>
-    <button class="action-btn" id="bulk-clear-btn">Clear selection</button>
+    <button class="action-btn" id="bulk-clear-btn" style="display:none;"
+      >Clear selection</button
+    >
   </div>
 
   <div class="table-wrap" id="jobs-table" style="display:none;">
     <table class="release-table">
       <thead>
         <tr>
-          <th class="col-check">
-            <input type="checkbox" id="select-all" aria-label="Select all" />
-          </th>
+          <th class="col-check" aria-label="Select"></th>
           <th class="col-thumb" aria-label="Preview"></th>
           <th>Status</th>
           <th>App</th>
@@ -123,22 +133,41 @@ import Admin from '../../../layouts/Admin.astro';
   .col-thumb {
     width: 48px;
   }
-  .queue-batch-bar {
+  .queue-toolbar {
     display: flex;
     align-items: center;
     gap: var(--space-sm);
     padding: var(--space-xs) var(--space-sm);
     margin-bottom: var(--space-sm);
-    border: 1px solid var(--color-accent);
-    background: rgba(184, 134, 11, 0.06);
+    border: 1px solid var(--color-border);
+    background: #fafafa;
     font-family: var(--font-mono);
     font-size: var(--text-sm);
     flex-wrap: wrap;
   }
-  .queue-batch-bar #queue-selected-count {
-    margin-right: auto;
+  .queue-toolbar.has-selection {
+    border-color: var(--color-accent);
+    background: rgba(184, 134, 11, 0.06);
+  }
+  .queue-select-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .queue-select-all input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--color-text);
+  }
+  .queue-selected {
+    margin-left: auto;
     color: var(--color-text);
     font-weight: bold;
+  }
+  .queue-selected:empty {
+    display: none;
   }
   .job-thumb {
     width: 40px;
@@ -261,9 +290,12 @@ import Admin from '../../../layouts/Admin.astro';
       'filter-status',
     ) as HTMLSelectElement;
     const selectAllEl = document.getElementById(
-      'select-all',
+      'select-all-page',
     ) as HTMLInputElement;
-    const batchBarEl = document.getElementById('queue-batch-bar')!;
+    const selectAllMatchingBtn = document.getElementById(
+      'select-all-matching',
+    ) as HTMLButtonElement;
+    const toolbarEl = document.getElementById('queue-toolbar')!;
     const batchCountEl = document.getElementById('queue-selected-count')!;
     const bulkDiscardBtn = document.getElementById(
       'bulk-discard-btn',
@@ -334,20 +366,33 @@ import Admin from '../../../layouts/Admin.astro';
       banner.style.display = '';
     }
 
-    function updateBatchBar() {
+    function updateToolbar() {
       const n = selectedIds.size;
-      if (n === 0) {
-        batchBarEl.style.display = 'none';
-      } else {
-        batchBarEl.style.display = '';
-        batchCountEl.textContent = `${n} selected`;
-      }
-      // Keep select-all in sync
       const rowChecks =
         tbodyEl.querySelectorAll<HTMLInputElement>('.job-select');
-      const allChecked =
+      const allPageChecked =
         rowChecks.length > 0 && Array.from(rowChecks).every((c) => c.checked);
-      selectAllEl.checked = allChecked;
+      selectAllEl.checked = allPageChecked;
+
+      if (n > 0) {
+        toolbarEl.classList.add('has-selection');
+        batchCountEl.textContent = `${n} selected`;
+        bulkDiscardBtn.style.display = '';
+        bulkClearBtn.style.display = '';
+      } else {
+        toolbarEl.classList.remove('has-selection');
+        batchCountEl.textContent = '';
+        bulkDiscardBtn.style.display = 'none';
+        bulkClearBtn.style.display = 'none';
+      }
+
+      const totalPages = Math.ceil(totalJobs / pageSize);
+      if (totalPages > 1 && rowChecks.length > 0) {
+        selectAllMatchingBtn.style.display = '';
+        selectAllMatchingBtn.textContent = `Select all ${totalJobs} matching`;
+      } else {
+        selectAllMatchingBtn.style.display = 'none';
+      }
     }
 
     function formatDuration(job: any): string {
@@ -406,12 +451,14 @@ import Admin from '../../../layouts/Admin.astro';
       if (totalJobs === 0) {
         emptyEl.style.display = '';
         tableEl.style.display = 'none';
-        updateBatchBar();
+        toolbarEl.style.display = 'none';
+        updateToolbar();
         return;
       }
 
       emptyEl.style.display = 'none';
       tableEl.style.display = '';
+      toolbarEl.style.display = '';
 
       tbodyEl.innerHTML = data.jobs
         .map(
@@ -451,7 +498,7 @@ import Admin from '../../../layouts/Admin.astro';
             const id = chk.dataset.jobId!;
             if (chk.checked) selectedIds.add(id);
             else selectedIds.delete(id);
-            updateBatchBar();
+            updateToolbar();
           });
         });
 
@@ -484,7 +531,7 @@ import Admin from '../../../layouts/Admin.astro';
       paginationEl.style.display = totalPages > 1 ? 'flex' : 'none';
       pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
 
-      updateBatchBar();
+      updateToolbar();
     }
 
     selectAllEl.addEventListener('change', () => {
@@ -497,7 +544,46 @@ import Admin from '../../../layouts/Admin.astro';
           if (checked) selectedIds.add(id);
           else selectedIds.delete(id);
         });
-      updateBatchBar();
+      updateToolbar();
+    });
+
+    selectAllMatchingBtn.addEventListener('click', async () => {
+      selectAllMatchingBtn.disabled = true;
+      const prev = selectAllMatchingBtn.textContent;
+      selectAllMatchingBtn.textContent = 'Loading…';
+      try {
+        // Pull every job ID matching the current filter, paginating until done.
+        const perPage = 200;
+        let page = 1;
+        const ids: string[] = [];
+        while (true) {
+          const params = new URLSearchParams({
+            page: String(page),
+            per_page: String(perPage),
+          });
+          if (currentStatus) params.set('status', currentStatus);
+          if (batchId) params.set('batch_id', batchId);
+          const res = await fetch(`/api/jobs?${params}`, {
+            credentials: 'include',
+          });
+          if (!res.ok) break;
+          const data = await res.json();
+          for (const j of data.jobs || []) ids.push(j.id);
+          if (page * perPage >= data.total) break;
+          page++;
+        }
+        for (const id of ids) selectedIds.add(id);
+        // Tick every row on the current page that we just included.
+        tbodyEl
+          .querySelectorAll<HTMLInputElement>('.job-select')
+          .forEach((chk) => {
+            if (selectedIds.has(chk.dataset.jobId!)) chk.checked = true;
+          });
+      } finally {
+        selectAllMatchingBtn.disabled = false;
+        selectAllMatchingBtn.textContent = prev;
+        updateToolbar();
+      }
     });
 
     bulkClearBtn.addEventListener('click', () => {
@@ -506,7 +592,7 @@ import Admin from '../../../layouts/Admin.astro';
         .querySelectorAll<HTMLInputElement>('.job-select')
         .forEach((chk) => (chk.checked = false));
       selectAllEl.checked = false;
-      updateBatchBar();
+      updateToolbar();
     });
 
     bulkDiscardBtn.addEventListener('click', async () => {
@@ -556,7 +642,7 @@ import Admin from '../../../layouts/Admin.astro';
         );
       }
 
-      updateBatchBar();
+      updateToolbar();
       // If we emptied the current page, reload so pagination/totals are honest.
       if (tbodyEl.children.length === 0) loadJobs();
     });
