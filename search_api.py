@@ -10,6 +10,7 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
@@ -36,6 +37,23 @@ router = APIRouter(prefix="/api")
 
 def _get_search_media_dir() -> Path:
     return Path(os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data"))
+
+
+def content_disposition(disposition: str, filename: str) -> str:
+    """Build an RFC 6266 Content-Disposition value that survives unicode.
+
+    HTTP header values must encode as latin-1, so filenames containing
+    characters like `\\u202f` (narrow no-break space — common in Slack
+    uploads from French locales) crash starlette if inserted raw. Emit
+    an ASCII-safe `filename="..."` for legacy clients plus a
+    `filename*=UTF-8''...` form (RFC 5987) with the real name.
+    """
+    clean = (filename or "").replace('"', "").replace("\r", "").replace("\n", "")
+    ascii_name = clean.encode("ascii", "replace").decode("ascii").replace("?", "_")
+    if not ascii_name:
+        ascii_name = "download"
+    utf8_name = quote(clean, safe="")
+    return f"{disposition}; filename=\"{ascii_name}\"; filename*=UTF-8''{utf8_name}"
 
 
 # ---------------------------------------------------------------------------
@@ -1046,11 +1064,10 @@ def get_media_file(
         raise HTTPException(status_code=404, detail="File not found on disk")
     # Serve inline so clicking a media URL opens full-size in the browser
     # instead of forcing a download. Explicit Download UI uses <a download>.
-    safe_filename = filename.replace('"', "")
     return FileResponse(
         file_path,
         media_type=mime,
-        headers={"Content-Disposition": f'inline; filename="{safe_filename}"'},
+        headers={"Content-Disposition": content_disposition("inline", filename)},
     )
 
 

@@ -2314,10 +2314,11 @@ def download_output(
     # Serve inline (not as attachment) so browsers can render images/video/audio
     # previews and "open in new tab" shows full-size instead of downloading.
     # Explicit download UI uses HTML <a download> which forces save client-side.
-    safe_filename = filename.replace('"', "")
+    from search_api import content_disposition
+
     return FileResponse(
         file_path,
-        headers={"Content-Disposition": f'inline; filename="{safe_filename}"'},
+        headers={"Content-Disposition": content_disposition("inline", filename)},
     )
 
 
