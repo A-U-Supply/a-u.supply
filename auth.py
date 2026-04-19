@@ -110,16 +110,20 @@ def get_current_user_or_apikey(
         except JWTError:
             pass
 
-    # Then, try Authorization: Bearer header
+    # Then, try Authorization: Bearer header.
+    # Look up by key_prefix (indexable) so we do exactly one bcrypt verify
+    # instead of one per active key — the previous N×bcrypt scan added
+    # ~150ms × N to every authenticated request.
     auth_header = request.headers.get("authorization")
     if auth_header and auth_header.lower().startswith("bearer "):
         bearer_token = auth_header[7:]
-        active_keys = (
+        prefix = bearer_token[:11] if len(bearer_token) >= 11 else bearer_token
+        candidates = (
             db.query(ApiKey)
-            .filter(ApiKey.revoked_at.is_(None))
+            .filter(ApiKey.revoked_at.is_(None), ApiKey.key_prefix == prefix)
             .all()
         )
-        for api_key in active_keys:
+        for api_key in candidates:
             if verify_api_key(bearer_token, api_key.key_hash):
                 user = db.query(User).filter(User.id == api_key.user_id).first()
                 if user is None:
