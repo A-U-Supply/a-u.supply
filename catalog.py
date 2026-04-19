@@ -883,6 +883,7 @@ def stream_track(code: str, track_id: int, request: Request, db: Session = Depen
                     remaining -= len(chunk)
                     yield chunk
 
+        from search_api import content_disposition
         return StreamingResponse(
             iter_chunk(),
             status_code=206,
@@ -891,12 +892,21 @@ def stream_track(code: str, track_id: int, request: Request, db: Session = Depen
                 "Content-Range": f"bytes {start}-{end}/{file_size}",
                 "Accept-Ranges": "bytes",
                 "Content-Length": str(length),
-                "Content-Disposition": f'inline; filename="{filename}"',
+                "Content-Disposition": content_disposition("inline", filename),
             },
         )
 
     from fastapi.responses import FileResponse
-    return FileResponse(fpath, media_type=mime_type, filename=filename, headers={"Accept-Ranges": "bytes", "Content-Length": str(file_size)})
+    from search_api import content_disposition
+    return FileResponse(
+        fpath,
+        media_type=mime_type,
+        headers={
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(file_size),
+            "Content-Disposition": content_disposition("inline", filename),
+        },
+    )
 
 
 @router.get("/releases/{code}/download", tags=["Tracks"], summary="Download all tracks as ZIP")
