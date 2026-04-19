@@ -23,6 +23,9 @@ import Admin from '../../../layouts/Admin.astro';
     <select id="filter-app">
       <option value="">All Apps</option>
     </select>
+    <select id="filter-discarder">
+      <option value="">All Discarders</option>
+    </select>
     <button class="action-btn" id="btn-refresh">Refresh</button>
     <div class="slop-bulk-actions">
       <label
@@ -323,6 +326,34 @@ import Admin from '../../../layouts/Admin.astro';
   document.addEventListener('astro:page-load', async () => {
     await (window as any).__authReady;
 
+    // Preload the discarder filter with every admin user so it's useful on
+    // first render, not just after you've paginated through every page.
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/users', {
+          credentials: 'include',
+        });
+        if (!res.ok) return;
+        const users = (await res.json()) as Array<{
+          id: string;
+          name: string;
+        }>;
+        const select = document.getElementById(
+          'filter-discarder',
+        ) as HTMLSelectElement | null;
+        if (!select) return;
+        const sorted = users
+          .slice()
+          .sort((a, b) => a.name.localeCompare(b.name));
+        for (const u of sorted) {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = u.name;
+          select.appendChild(opt);
+        }
+      } catch {}
+    })();
+
     let allOutputs: any[] = [];
     let pendingIndexIds: string[] = [];
     let pendingIndexJobId: string | null = null;
@@ -399,9 +430,13 @@ import Admin from '../../../layouts/Admin.astro';
       const appName = (
         document.getElementById('filter-app') as HTMLSelectElement
       ).value;
+      const discardedBy = (
+        document.getElementById('filter-discarder') as HTMLSelectElement
+      ).value;
       const params = new URLSearchParams();
       if (mediaType) params.set('media_type', mediaType);
       if (appName) params.set('app_name', appName);
+      if (discardedBy) params.set('discarded_by', discardedBy);
       const res = await fetch(`/api/jobs/outputs/midden/ids?${params}`, {
         credentials: 'include',
       });
@@ -434,10 +469,14 @@ import Admin from '../../../layouts/Admin.astro';
       const appName = (
         document.getElementById('filter-app') as HTMLSelectElement
       ).value;
+      const discardedBy = (
+        document.getElementById('filter-discarder') as HTMLSelectElement
+      ).value;
 
       const params = new URLSearchParams();
       if (mediaType) params.set('media_type', mediaType);
       if (appName) params.set('app_name', appName);
+      if (discardedBy) params.set('discarded_by', discardedBy);
       params.set('page', String(currentPage));
       params.set('per_page', String(pageSize));
 
@@ -468,6 +507,33 @@ import Admin from '../../../layouts/Admin.astro';
         opt.textContent = name;
         if (name === currentApp) opt.selected = true;
         appSelect.appendChild(opt);
+      }
+
+      // Merge discarders from this page into the dropdown (preserve selection
+      // and anything already there — the list grows as the user paginates).
+      const discarderSelect = document.getElementById(
+        'filter-discarder',
+      ) as HTMLSelectElement;
+      const currentDiscarder = discarderSelect.value;
+      const seen = new Map<string, string>();
+      for (const opt of Array.from(discarderSelect.options)) {
+        if (opt.value) seen.set(opt.value, opt.textContent || opt.value);
+      }
+      for (const o of allOutputs as any[]) {
+        if (o.discarded_by_id) {
+          seen.set(o.discarded_by_id, o.discarded_by_name || 'someone');
+        }
+      }
+      discarderSelect.innerHTML = '<option value="">All Discarders</option>';
+      const sorted = Array.from(seen.entries()).sort((a, b) =>
+        a[1].localeCompare(b[1]),
+      );
+      for (const [id, name] of sorted) {
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = name;
+        if (id === currentDiscarder) opt.selected = true;
+        discarderSelect.appendChild(opt);
       }
 
       renderPagination();
@@ -768,6 +834,9 @@ import Admin from '../../../layouts/Admin.astro';
       ?.addEventListener('change', resetAndLoad);
     document
       .getElementById('filter-app')
+      ?.addEventListener('change', resetAndLoad);
+    document
+      .getElementById('filter-discarder')
       ?.addEventListener('change', resetAndLoad);
     document
       .getElementById('btn-refresh')
