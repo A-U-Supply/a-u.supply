@@ -78,7 +78,7 @@ class SearchRequest(BaseModel):
     filters: SearchFilters | None = Field(None, description="Additional filters (tags, channels, dates, etc.).")
     sort: str | None = Field(None, description="Sort field and direction, e.g. `created_at:desc`, `total_reaction_count:desc`, `file_size_bytes:asc`. Null for relevance sorting.")
     page: int = Field(1, ge=1, description="Page number (1-indexed).")
-    per_page: int = Field(20, ge=1, le=100, description="Results per page (max 100).")
+    per_page: int = Field(20, ge=1, le=500, description="Results per page (max 500).")
 
 
 class MediaUpdateRequest(BaseModel):
