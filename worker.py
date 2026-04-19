@@ -17,6 +17,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 import tomllib
 from datetime import datetime, timezone
@@ -338,52 +339,88 @@ def _run_job(job: Job, db: Session):
         logger.info("Job %s was cancelled before execution", job.id)
         return
 
-    # Run container
+    # Run container — Popen + reader thread so log_tail updates while the
+    # container is still running. Polling is what the jobs page already does;
+    # this is what makes that polling useful for long jobs.
     cmd = _build_docker_command(job, manifest, job_dir)
     logger.info("Running: %s", " ".join(cmd))
 
     timeout = manifest.get("timeout_seconds", 600)
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout + 30,  # Grace period beyond container stop-timeout
-        )
-    except subprocess.TimeoutExpired:
+    deadline = time.monotonic() + timeout + 30
+    log_lines: list[str] = []
+
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,  # merge stderr into stdout for ordered tail
+        text=True,
+        bufsize=1,
+    )
+
+    def _reader():
+        for line in proc.stdout:
+            log_lines.append(line.rstrip("\n"))
+
+    reader_thread = threading.Thread(target=_reader, daemon=True)
+    reader_thread.start()
+
+    last_db_update = 0.0
+    LOG_FLUSH_INTERVAL = 3.0  # seconds between log_tail commits while running
+    timed_out = False
+    while True:
+        rc = proc.poll()
+        if rc is not None:
+            break
+        if time.monotonic() > deadline:
+            timed_out = True
+            subprocess.run(
+                ["docker", "kill", f"job-{job.id[:12]}"],
+                capture_output=True, timeout=10,
+            )
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            break
+        now = time.monotonic()
+        if now - last_db_update >= LOG_FLUSH_INTERVAL and log_lines:
+            job.log_tail = "\n".join(log_lines[-LOG_TAIL_LINES:])
+            db.commit()
+            last_db_update = now
+        time.sleep(0.5)
+
+    reader_thread.join(timeout=2)
+
+    if timed_out:
         logger.error("Job %s timed out after %ds", job.id, timeout)
-        # Kill the container
-        subprocess.run(
-            ["docker", "kill", f"job-{job.id[:12]}"],
-            capture_output=True, timeout=10,
-        )
         job.status = "failed"
         job.error_message = f"Timed out after {timeout} seconds"
+        job.log_tail = "\n".join(log_lines[-LOG_TAIL_LINES:])
         job.completed_at = _utcnow()
         db.commit()
         return
 
-    # Capture logs
-    combined_output = result.stdout + result.stderr
-    log_lines = combined_output.strip().split("\n")
+    return_code = proc.returncode
+    combined_output = "\n".join(log_lines)
+
     job.log_tail = "\n".join(log_lines[-LOG_TAIL_LINES:])
 
-    # Write full log
     log_path = job_dir / "log.txt"
     log_path.write_text(combined_output)
 
-    if result.returncode == 0:
+    if return_code == 0:
         logger.info("Job %s completed successfully", job.id)
         _collect_outputs(job, job_dir, db)
         job.status = "completed"
     else:
-        error_msg = result.stderr.strip() or result.stdout.strip() or f"Exit code {result.returncode}"
-        if result.returncode == 1:
+        # `combined_output` is interleaved stdout+stderr now — use that for the error message.
+        error_msg = combined_output.strip() or f"Exit code {return_code}"
+        if return_code == 1:
             logger.warning("Job %s failed (expected): %s", job.id, error_msg[:200])
-        elif result.returncode == 2:
+        elif return_code == 2:
             logger.warning("Job %s config error: %s", job.id, error_msg[:200])
         else:
-            logger.error("Job %s crashed (exit %d): %s", job.id, result.returncode, error_msg[:200])
+            logger.error("Job %s crashed (exit %d): %s", job.id, return_code, error_msg[:200])
         job.status = "failed"
         job.error_message = error_msg[:2000]
         job.retry_count += 1
