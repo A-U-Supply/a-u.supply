@@ -450,7 +450,8 @@ class JobResponse(BaseModel):
     preview_media_id: str | None = None
     preview_media_type: str | None = None
     # Submitter so the queue can show who ran a job without a second call.
-    created_by_id: str | None = None
+    # NOTE: User.id is Integer in the DB — pydantic will reject a str here.
+    created_by_id: int | None = None
     created_by_name: str | None = None
 
 
@@ -1615,7 +1616,7 @@ def list_jobs(
     batch_id: Optional[str] = Query(
         None, description="Filter to a single batch (shared ID for jobs submitted together)."
     ),
-    submitter: Optional[str] = Query(
+    submitter: Optional[int] = Query(
         None, description="Filter to jobs submitted by this user ID."
     ),
     page: int = Query(1, ge=1),
@@ -1957,7 +1958,7 @@ def _midden_cutoff() -> datetime:
 def list_midden_outputs(
     media_type: Optional[str] = Query(None),
     app_name: Optional[str] = Query(None),
-    discarded_by: Optional[str] = Query(
+    discarded_by: Optional[int] = Query(
         None, description="Filter to outputs discarded by this user ID."
     ),
     page: int = Query(1, ge=1),
