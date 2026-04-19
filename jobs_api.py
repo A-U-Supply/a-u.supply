@@ -444,6 +444,11 @@ class JobResponse(BaseModel):
     log_tail: str | None
     output_count: int = 0
     batch_id: str | None = None
+    # Preview media for the queue UI. Points at the first input's thumbnail
+    # so callers can render a small <img> next to the row without an extra
+    # round-trip per job.
+    preview_media_id: str | None = None
+    preview_media_type: str | None = None
 
 
 class BatchShuffleSpec(BaseModel):
@@ -1630,26 +1635,52 @@ def list_jobs(
         .all()
     )
 
+    # Batch-resolve first input's media_type for every job on this page so the
+    # queue UI can render a thumbnail without N+1 lookups.
+    job_inputs: dict[str, list[str]] = {}
+    first_input_ids: set[str] = set()
+    for j in jobs:
+        items = json.loads(j.input_items)
+        job_inputs[j.id] = items
+        if items:
+            first_input_ids.add(items[0])
+    media_type_by_id: dict[str, str] = {}
+    if first_input_ids:
+        rows = db.query(MediaItem.id, MediaItem.media_type).filter(
+            MediaItem.id.in_(first_input_ids)
+        ).all()
+        media_type_by_id = {r[0]: r[1] for r in rows}
+
+    def _preview_for(j: Job) -> tuple[str | None, str | None]:
+        items = job_inputs.get(j.id, [])
+        if not items:
+            return None, None
+        mid = items[0]
+        return mid, media_type_by_id.get(mid)
+
+    def _response(j: Job) -> JobResponse:
+        mid, mtype = _preview_for(j)
+        return JobResponse(
+            id=j.id,
+            app_name=j.app_name,
+            status=j.status,
+            params=json.loads(j.params),
+            input_item_count=len(job_inputs.get(j.id, [])),
+            priority=j.priority,
+            created_at=j.created_at.isoformat(),
+            started_at=j.started_at.isoformat() if j.started_at else None,
+            completed_at=j.completed_at.isoformat() if j.completed_at else None,
+            error_message=j.error_message,
+            retry_count=j.retry_count,
+            log_tail=j.log_tail,
+            output_count=len(j.outputs),
+            batch_id=j.batch_id,
+            preview_media_id=mid,
+            preview_media_type=mtype,
+        )
+
     return {
-        "jobs": [
-            JobResponse(
-                id=j.id,
-                app_name=j.app_name,
-                status=j.status,
-                params=json.loads(j.params),
-                input_item_count=len(json.loads(j.input_items)),
-                priority=j.priority,
-                created_at=j.created_at.isoformat(),
-                started_at=j.started_at.isoformat() if j.started_at else None,
-                completed_at=j.completed_at.isoformat() if j.completed_at else None,
-                error_message=j.error_message,
-                retry_count=j.retry_count,
-                log_tail=j.log_tail,
-                output_count=len(j.outputs),
-                batch_id=j.batch_id,
-            )
-            for j in jobs
-        ],
+        "jobs": [_response(j) for j in jobs],
         "total": total,
         "page": page,
         "per_page": per_page,
