@@ -14,6 +14,9 @@ import Admin from '../../../layouts/Admin.astro';
         <option value="failed">Failed</option>
         <option value="cancelled">Cancelled</option>
       </select>
+      <select id="filter-app" class="filter-select">
+        <option value="">All apps</option>
+      </select>
     </div>
   </div>
 
@@ -289,6 +292,9 @@ import Admin from '../../../layouts/Admin.astro';
     const filterStatus = document.getElementById(
       'filter-status',
     ) as HTMLSelectElement;
+    const filterApp = document.getElementById(
+      'filter-app',
+    ) as HTMLSelectElement;
     const selectAllEl = document.getElementById(
       'select-all-page',
     ) as HTMLInputElement;
@@ -316,9 +322,10 @@ import Admin from '../../../layouts/Admin.astro';
     // so auto-refresh doesn't resurrect a just-cleared row.
     const dismissedIds = new Set<string>();
 
-    // Read query params (filter status + pagination survives back-nav)
+    // Read query params (filters + pagination survive back-nav)
     function readParams(): {
       status: string;
+      app: string;
       page: number;
       highlight: string | null;
       batchId: string | null;
@@ -326,6 +333,7 @@ import Admin from '../../../layouts/Admin.astro';
       const u = new URLSearchParams(window.location.search);
       return {
         status: u.get('status') ?? '',
+        app: u.get('app') ?? '',
         page: Math.max(1, parseInt(u.get('page') ?? '1')),
         highlight: u.get('highlight'),
         batchId: u.get('batch_id'),
@@ -333,13 +341,17 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     function writeParams(
-      patch: Partial<{ status: string; page: number }>,
+      patch: Partial<{ status: string; app: string; page: number }>,
       replace = false,
     ) {
       const u = new URLSearchParams(window.location.search);
       if ('status' in patch) {
         if (patch.status) u.set('status', patch.status);
         else u.delete('status');
+      }
+      if ('app' in patch) {
+        if (patch.app) u.set('app', patch.app);
+        else u.delete('app');
       }
       if ('page' in patch) {
         if (patch.page && patch.page > 1) u.set('page', String(patch.page));
@@ -355,11 +367,29 @@ import Admin from '../../../layouts/Admin.astro';
 
     let {
       status: currentStatus,
+      app: currentApp,
       page: currentPage,
       highlight: highlightId,
       batchId,
     } = readParams();
     filterStatus.value = currentStatus;
+
+    // Populate app filter from /api/apps once; set current value after options
+    // load (chicken-and-egg with URL-driven state).
+    (async () => {
+      try {
+        const res = await fetch('/api/apps', { credentials: 'include' });
+        if (!res.ok) return;
+        const apps = await res.json();
+        for (const a of apps) {
+          const opt = document.createElement('option');
+          opt.value = a.name;
+          opt.textContent = a.display_name || a.name;
+          filterApp.appendChild(opt);
+        }
+        filterApp.value = currentApp;
+      } catch {}
+    })();
 
     if (batchId) {
       const banner = document.getElementById('batch-banner')!;
@@ -429,12 +459,12 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     async function loadJobs() {
-      const status = currentStatus;
       const params = new URLSearchParams({
         page: String(currentPage),
         per_page: String(pageSize),
       });
-      if (status) params.set('status', status);
+      if (currentStatus) params.set('status', currentStatus);
+      if (currentApp) params.set('app_name', currentApp);
       if (batchId) params.set('batch_id', batchId);
 
       const res = await fetch(`/api/jobs?${params}`, {
@@ -591,6 +621,7 @@ import Admin from '../../../layouts/Admin.astro';
             per_page: String(perPage),
           });
           if (currentStatus) params.set('status', currentStatus);
+          if (currentApp) params.set('app_name', currentApp);
           if (batchId) params.set('batch_id', batchId);
           const res = await fetch(`/api/jobs?${params}`, {
             credentials: 'include',
@@ -678,55 +709,93 @@ import Admin from '../../../layouts/Admin.astro';
       if (!ok) return;
 
       bulkDiscardBtn.disabled = true;
-      const midResults = await Promise.allSettled(
-        toMidden.map((id) =>
-          fetch(`/api/jobs/${id}/outputs`, {
-            method: 'DELETE',
-            credentials: 'include',
-          }),
-        ),
-      );
-      const delResults = await Promise.allSettled(
-        toDelete.map((id) =>
-          fetch(`/api/jobs/${id}`, {
-            method: 'DELETE',
-            credentials: 'include',
-          }),
-        ),
-      );
-      bulkDiscardBtn.disabled = false;
+      const originalLabel = bulkDiscardBtn.textContent;
+
+      // Chunk requests so we don't overwhelm SQLite's single-writer lock or
+      // the browser's per-origin connection pool when discarding hundreds
+      // of jobs at once. Previously this was one big Promise.all of 500+
+      // DELETEs and a handful would fail with timeouts/lock errors.
+      const CHUNK_SIZE = 6;
+      const runChunked = async (
+        idList: string[],
+        urlFor: (id: string) => string,
+        onSuccess: (id: string) => void,
+        onFailure: (id: string, detail: string) => void,
+      ) => {
+        for (let i = 0; i < idList.length; i += CHUNK_SIZE) {
+          const chunk = idList.slice(i, i + CHUNK_SIZE);
+          const results = await Promise.allSettled(
+            chunk.map((id) =>
+              fetch(urlFor(id), {
+                method: 'DELETE',
+                credentials: 'include',
+              }),
+            ),
+          );
+          for (let k = 0; k < results.length; k++) {
+            const r = results[k];
+            const id = chunk[k];
+            if (r.status === 'fulfilled' && r.value.ok) {
+              onSuccess(id);
+            } else {
+              let detail = 'network error';
+              if (r.status === 'fulfilled') {
+                detail = `HTTP ${r.value.status}`;
+                try {
+                  const j = await r.value.clone().json();
+                  if (j?.detail) detail = `${detail}: ${j.detail}`;
+                } catch {}
+              }
+              onFailure(id, detail);
+            }
+          }
+          const done = Math.min(i + CHUNK_SIZE, idList.length);
+          bulkDiscardBtn.textContent = `Discarding ${done}/${idList.length}…`;
+        }
+      };
 
       let discardedMidden = 0;
       let deletedRows = 0;
       let failedCalls = 0;
+      const failureSamples: string[] = [];
 
-      const applyResult = (
-        resList: PromiseSettledResult<Response>[],
-        idList: string[],
-        counter: (ok: boolean) => void,
-      ) => {
-        for (let i = 0; i < resList.length; i++) {
-          const r = resList[i];
-          const okRes = r.status === 'fulfilled' && r.value.ok;
-          counter(okRes);
-          if (!okRes) {
-            failedCalls++;
-            continue;
-          }
-          const jid = idList[i];
-          dismissedIds.add(jid);
-          selectedIds.delete(jid);
-          jobMeta.delete(jid);
-          tbodyEl.querySelector(`tr[data-job-id="${jid}"]`)?.remove();
-        }
+      const onSuccess = (jid: string) => {
+        dismissedIds.add(jid);
+        selectedIds.delete(jid);
+        jobMeta.delete(jid);
+        tbodyEl.querySelector(`tr[data-job-id="${jid}"]`)?.remove();
+      };
+      const onFailure = (jid: string, detail: string) => {
+        failedCalls++;
+        if (failureSamples.length < 3) failureSamples.push(detail);
+        console.warn('Discard failed for', jid, detail);
       };
 
-      applyResult(midResults, toMidden, (ok) => {
-        if (ok) discardedMidden++;
-      });
-      applyResult(delResults, toDelete, (ok) => {
-        if (ok) deletedRows++;
-      });
+      if (toMidden.length) {
+        await runChunked(
+          toMidden,
+          (id) => `/api/jobs/${id}/outputs`,
+          (id) => {
+            discardedMidden++;
+            onSuccess(id);
+          },
+          onFailure,
+        );
+      }
+      if (toDelete.length) {
+        await runChunked(
+          toDelete,
+          (id) => `/api/jobs/${id}`,
+          (id) => {
+            deletedRows++;
+            onSuccess(id);
+          },
+          onFailure,
+        );
+      }
+
+      bulkDiscardBtn.disabled = false;
+      bulkDiscardBtn.textContent = originalLabel;
 
       const successSegments: string[] = [];
       if (discardedMidden) successSegments.push(`${discardedMidden} to midden`);
@@ -737,8 +806,9 @@ import Admin from '../../../layouts/Admin.astro';
         );
       }
       if (failedCalls > 0) {
+        const sample = failureSamples.length ? ` (${failureSamples[0]})` : '';
         (window as any).toast.error(
-          `Failed on ${failedCalls} job${failedCalls !== 1 ? 's' : ''}`,
+          `Failed on ${failedCalls} job${failedCalls !== 1 ? 's' : ''}${sample}`,
         );
       }
       if (runningSkipped.length) {
@@ -757,6 +827,12 @@ import Admin from '../../../layouts/Admin.astro';
       currentStatus = filterStatus.value;
       currentPage = 1;
       writeParams({ status: currentStatus, page: currentPage });
+      loadJobs();
+    });
+    filterApp.addEventListener('change', () => {
+      currentApp = filterApp.value;
+      currentPage = 1;
+      writeParams({ app: currentApp, page: currentPage });
       loadJobs();
     });
     document.getElementById('prev-page')?.addEventListener('click', () => {
@@ -778,8 +854,10 @@ import Admin from '../../../layouts/Admin.astro';
     const onPopState = () => {
       const p = readParams();
       currentStatus = p.status;
+      currentApp = p.app;
       currentPage = p.page;
       filterStatus.value = currentStatus;
+      filterApp.value = currentApp;
       loadJobs();
     };
     window.addEventListener('popstate', onPopState);
