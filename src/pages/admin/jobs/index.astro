@@ -17,6 +17,9 @@ import Admin from '../../../layouts/Admin.astro';
       <select id="filter-app" class="filter-select">
         <option value="">All apps</option>
       </select>
+      <select id="filter-submitter" class="filter-select">
+        <option value="">All submitters</option>
+      </select>
     </div>
   </div>
 
@@ -74,6 +77,7 @@ import Admin from '../../../layouts/Admin.astro';
           <th class="col-thumb" aria-label="Preview"></th>
           <th>Status</th>
           <th>App</th>
+          <th>Submitter</th>
           <th>Items</th>
           <th>Created</th>
           <th>Duration</th>
@@ -122,6 +126,10 @@ import Admin from '../../../layouts/Admin.astro';
   .job-app {
     font-family: var(--font-mono);
     word-break: break-word;
+  }
+  .job-submitter {
+    color: var(--color-muted);
+    white-space: nowrap;
   }
   .job-actions {
     white-space: nowrap;
@@ -236,7 +244,8 @@ import Admin from '../../../layouts/Admin.astro';
     #jobs-table .release-table td.job-app {
       font-weight: bold;
     }
-    /* Meta rows (Items, Created, Duration, Outputs): label + value */
+    /* Meta rows (Submitter, Items, Created, Duration, Outputs): label + value */
+    #jobs-table .release-table td[data-label='Submitter']::before,
     #jobs-table .release-table td[data-label='Items']::before,
     #jobs-table .release-table td[data-label='Created']::before,
     #jobs-table .release-table td[data-label='Duration']::before,
@@ -248,7 +257,11 @@ import Admin from '../../../layouts/Admin.astro';
       letter-spacing: 0.5pt;
       margin-right: var(--space-xs);
     }
-    /* Hide zero-value meta rows so cards stay tight */
+    #jobs-table .release-table td[data-label='Submitter'] {
+      display: block;
+      color: var(--color-muted);
+    }
+    /* Inline-block meta rows so they sit side by side */
     #jobs-table .release-table td[data-label='Items'],
     #jobs-table .release-table td[data-label='Duration'],
     #jobs-table .release-table td[data-label='Outputs'] {
@@ -295,6 +308,9 @@ import Admin from '../../../layouts/Admin.astro';
     const filterApp = document.getElementById(
       'filter-app',
     ) as HTMLSelectElement;
+    const filterSubmitter = document.getElementById(
+      'filter-submitter',
+    ) as HTMLSelectElement;
     const selectAllEl = document.getElementById(
       'select-all-page',
     ) as HTMLInputElement;
@@ -326,6 +342,7 @@ import Admin from '../../../layouts/Admin.astro';
     function readParams(): {
       status: string;
       app: string;
+      submitter: string;
       page: number;
       highlight: string | null;
       batchId: string | null;
@@ -334,6 +351,7 @@ import Admin from '../../../layouts/Admin.astro';
       return {
         status: u.get('status') ?? '',
         app: u.get('app') ?? '',
+        submitter: u.get('submitter') ?? '',
         page: Math.max(1, parseInt(u.get('page') ?? '1')),
         highlight: u.get('highlight'),
         batchId: u.get('batch_id'),
@@ -341,7 +359,12 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     function writeParams(
-      patch: Partial<{ status: string; app: string; page: number }>,
+      patch: Partial<{
+        status: string;
+        app: string;
+        submitter: string;
+        page: number;
+      }>,
       replace = false,
     ) {
       const u = new URLSearchParams(window.location.search);
@@ -352,6 +375,10 @@ import Admin from '../../../layouts/Admin.astro';
       if ('app' in patch) {
         if (patch.app) u.set('app', patch.app);
         else u.delete('app');
+      }
+      if ('submitter' in patch) {
+        if (patch.submitter) u.set('submitter', patch.submitter);
+        else u.delete('submitter');
       }
       if ('page' in patch) {
         if (patch.page && patch.page > 1) u.set('page', String(patch.page));
@@ -368,6 +395,7 @@ import Admin from '../../../layouts/Admin.astro';
     let {
       status: currentStatus,
       app: currentApp,
+      submitter: currentSubmitter,
       page: currentPage,
       highlight: highlightId,
       batchId,
@@ -388,6 +416,31 @@ import Admin from '../../../layouts/Admin.astro';
           filterApp.appendChild(opt);
         }
         filterApp.value = currentApp;
+      } catch {}
+    })();
+
+    // Populate submitter filter from /api/admin/users (admin-scoped, fine for
+    // this page since /admin/* already requires admin auth).
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/users', {
+          credentials: 'include',
+        });
+        if (!res.ok) return;
+        const users = (await res.json()) as Array<{
+          id: string;
+          name: string;
+        }>;
+        const sorted = users
+          .slice()
+          .sort((a, b) => a.name.localeCompare(b.name));
+        for (const u of sorted) {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = u.name;
+          filterSubmitter.appendChild(opt);
+        }
+        filterSubmitter.value = currentSubmitter;
       } catch {}
     })();
 
@@ -465,6 +518,7 @@ import Admin from '../../../layouts/Admin.astro';
       });
       if (currentStatus) params.set('status', currentStatus);
       if (currentApp) params.set('app_name', currentApp);
+      if (currentSubmitter) params.set('submitter', currentSubmitter);
       if (batchId) params.set('batch_id', batchId);
 
       const res = await fetch(`/api/jobs?${params}`, {
@@ -527,6 +581,7 @@ import Admin from '../../../layouts/Admin.astro';
           <td class="col-thumb">${renderThumbCell(j)}</td>
           <td data-label="Status"><span class="status-badge status-${j.status}">${j.status}</span></td>
           <td data-label="App" class="job-app">${j.app_name}</td>
+          <td data-label="Submitter" class="job-submitter">${j.created_by_name ?? '—'}</td>
           <td data-label="Items">${j.input_item_count}</td>
           <td data-label="Created">${formatDate(j.created_at)}</td>
           <td data-label="Duration">${formatDuration(j)}</td>
@@ -622,6 +677,7 @@ import Admin from '../../../layouts/Admin.astro';
           });
           if (currentStatus) params.set('status', currentStatus);
           if (currentApp) params.set('app_name', currentApp);
+          if (currentSubmitter) params.set('submitter', currentSubmitter);
           if (batchId) params.set('batch_id', batchId);
           const res = await fetch(`/api/jobs?${params}`, {
             credentials: 'include',
@@ -835,6 +891,12 @@ import Admin from '../../../layouts/Admin.astro';
       writeParams({ app: currentApp, page: currentPage });
       loadJobs();
     });
+    filterSubmitter.addEventListener('change', () => {
+      currentSubmitter = filterSubmitter.value;
+      currentPage = 1;
+      writeParams({ submitter: currentSubmitter, page: currentPage });
+      loadJobs();
+    });
     document.getElementById('prev-page')?.addEventListener('click', () => {
       if (currentPage > 1) {
         currentPage--;
@@ -855,9 +917,11 @@ import Admin from '../../../layouts/Admin.astro';
       const p = readParams();
       currentStatus = p.status;
       currentApp = p.app;
+      currentSubmitter = p.submitter;
       currentPage = p.page;
       filterStatus.value = currentStatus;
       filterApp.value = currentApp;
+      filterSubmitter.value = currentSubmitter;
       loadJobs();
     };
     window.addEventListener('popstate', onPopState);

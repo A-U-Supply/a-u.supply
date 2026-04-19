@@ -449,6 +449,9 @@ class JobResponse(BaseModel):
     # round-trip per job.
     preview_media_id: str | None = None
     preview_media_type: str | None = None
+    # Submitter so the queue can show who ran a job without a second call.
+    created_by_id: str | None = None
+    created_by_name: str | None = None
 
 
 class BatchShuffleSpec(BaseModel):
@@ -1612,13 +1615,16 @@ def list_jobs(
     batch_id: Optional[str] = Query(
         None, description="Filter to a single batch (shared ID for jobs submitted together)."
     ),
+    submitter: Optional[str] = Query(
+        None, description="Filter to jobs submitted by this user ID."
+    ),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
     auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
     user = auth[0]
-    """List jobs, newest first. Filterable by status, app name, and batch_id."""
+    """List jobs, newest first. Filterable by status, app, batch, and submitter."""
     q = db.query(Job).options(joinedload(Job.outputs))
     if status:
         q = q.filter(Job.status == status)
@@ -1626,6 +1632,8 @@ def list_jobs(
         q = q.filter(Job.app_name == app_name)
     if batch_id:
         q = q.filter(Job.batch_id == batch_id)
+    if submitter:
+        q = q.filter(Job.created_by == submitter)
 
     total = q.count()
     jobs = (
@@ -1650,6 +1658,14 @@ def list_jobs(
             MediaItem.id.in_(first_input_ids)
         ).all()
         media_type_by_id = {r[0]: r[1] for r in rows}
+
+    # Batch-load submitter names so every row can show who ran the job
+    # without an extra round-trip.
+    submitter_ids = {j.created_by for j in jobs if j.created_by}
+    submitter_by_id: dict[str, str] = {}
+    if submitter_ids:
+        user_rows = db.query(User.id, User.name).filter(User.id.in_(submitter_ids)).all()
+        submitter_by_id = {u[0]: u[1] for u in user_rows}
 
     def _preview_for(j: Job) -> tuple[str | None, str | None]:
         items = job_inputs.get(j.id, [])
@@ -1677,6 +1693,8 @@ def list_jobs(
             batch_id=j.batch_id,
             preview_media_id=mid,
             preview_media_type=mtype,
+            created_by_id=j.created_by,
+            created_by_name=submitter_by_id.get(j.created_by),
         )
 
     return {
@@ -1939,6 +1957,9 @@ def _midden_cutoff() -> datetime:
 def list_midden_outputs(
     media_type: Optional[str] = Query(None),
     app_name: Optional[str] = Query(None),
+    discarded_by: Optional[str] = Query(
+        None, description="Filter to outputs discarded by this user ID."
+    ),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
     auth: tuple[User, str] = Depends(require_scope("write")),
@@ -1962,6 +1983,8 @@ def list_midden_outputs(
         base_filters.append(JobOutput.media_type == media_type)
     if app_name:
         base_filters.append(Job.app_name == app_name)
+    if discarded_by:
+        base_filters.append(JobOutput.discarded_by == discarded_by)
 
     q = (
         db.query(JobOutput, Job)
