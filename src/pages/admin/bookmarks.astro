@@ -199,6 +199,23 @@ import Admin from '../../layouts/Admin.astro';
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* Touch devices: always show bookmark card actions */
+  @media (hover: none) {
+    .bm-card__play,
+    .bm-card__add,
+    .bm-card__ws {
+      opacity: 1;
+    }
+    .bm-card__play {
+      background: rgba(0, 0, 0, 0.15);
+    }
+  }
+  @media (max-width: 640px) {
+    .bm-grid {
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 4px;
+    }
+  }
 </style>
 
 <style>

@@ -18,7 +18,14 @@ const { title, current } = Astro.props;
     <ViewTransitions />
   </head>
   <body>
-    <button class="sidebar__toggle" id="sidebar-toggle">|||</button>
+    <button
+      class="sidebar__toggle"
+      id="sidebar-toggle"
+      aria-label="Toggle menu"
+      aria-controls="sidebar"
+      aria-expanded="false">|||</button
+    >
+    <div class="sidebar__backdrop" id="sidebar-backdrop"></div>
 
     <div class="admin-shell">
       <aside class="sidebar" id="sidebar">
@@ -299,22 +306,31 @@ const { title, current } = Astro.props;
       });
 
     // Mobile sidebar toggle
+    const setSidebarOpen = (open: boolean) => {
+      const sidebar = document.getElementById('sidebar');
+      const backdrop = document.getElementById('sidebar-backdrop');
+      const toggle = document.getElementById('sidebar-toggle');
+      sidebar?.classList.toggle('open', open);
+      backdrop?.classList.toggle('open', open);
+      toggle?.setAttribute('aria-expanded', String(open));
+    };
     document.getElementById('sidebar-toggle')?.addEventListener('click', () => {
-      document.getElementById('sidebar')?.classList.toggle('open');
+      const sidebar = document.getElementById('sidebar');
+      setSidebarOpen(!sidebar?.classList.contains('open'));
     });
 
-    // Close sidebar when clicking outside on mobile
-    document.addEventListener('click', (e) => {
-      const sidebar = document.getElementById('sidebar');
-      const toggle = document.getElementById('sidebar-toggle');
-      if (
-        sidebar?.classList.contains('open') &&
-        !sidebar.contains(e.target as Node) &&
-        !toggle?.contains(e.target as Node)
-      ) {
-        sidebar.classList.remove('open');
-      }
-    });
+    // Close sidebar when tapping the backdrop
+    document
+      .getElementById('sidebar-backdrop')
+      ?.addEventListener('click', () => setSidebarOpen(false));
+
+    // Close sidebar after tapping a nav link (mobile)
+    document
+      .getElementById('sidebar')
+      ?.querySelectorAll('.sidebar__nav a')
+      .forEach((a) => {
+        a.addEventListener('click', () => setSidebarOpen(false));
+      });
 
     // Dialog dismiss: Escape key and click-outside
     document.addEventListener('keydown', (e) => {

@@ -384,10 +384,32 @@ import Admin from '../../../layouts/Admin.astro';
   @media (max-width: 640px) {
     .triage-header {
       flex-direction: column;
+      align-items: stretch;
+    }
+    .triage-controls {
+      justify-content: flex-start;
+    }
+    .triage-controls select,
+    .triage-controls input[type='number'] {
+      flex: 1 1 calc(50% - var(--space-xs));
+      min-width: 0;
+    }
+    .triage-controls .filter-label {
+      display: flex !important;
+      align-items: center;
+      gap: var(--space-xs);
+      margin-left: 0 !important;
+    }
+    .triage-card {
+      padding: var(--space-sm);
     }
     .triage-preview {
       min-height: 200px;
-      max-height: 300px;
+      max-height: 320px;
+    }
+    .triage-preview img,
+    .triage-preview video {
+      max-height: 320px;
     }
     .triage-shortcuts {
       display: none;

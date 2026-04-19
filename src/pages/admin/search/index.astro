@@ -605,17 +605,7 @@ import Admin from '../../../layouts/Admin.astro';
     justify-content: center;
   }
 
-  @media (max-width: 640px) {
-    .page-header {
-      flex-direction: column;
-      align-items: stretch;
-    }
-    .header-actions {
-      flex-wrap: wrap;
-    }
-    .search-bar input {
-      font-size: 16px;
-    } /* prevent iOS zoom */
+  @media (max-width: 900px) {
     .search-layout {
       grid-template-columns: 1fr;
     }
@@ -628,6 +618,22 @@ import Admin from '../../../layouts/Admin.astro';
     .filter-body.open {
       display: block;
       margin-top: var(--space-sm);
+    }
+  }
+  @media (max-width: 640px) {
+    .page-header {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .header-actions {
+      flex-wrap: wrap;
+    }
+    .search-bar input {
+      font-size: 16px;
+    } /* prevent iOS zoom */
+    .stats-bar {
+      font-size: 0.6rem;
+      gap: var(--space-xs);
     }
   }
 </style>
@@ -809,6 +815,19 @@ import Admin from '../../../layouts/Admin.astro';
     justify-content: space-between;
   }
 
+  /* Touch devices: reveal grid action buttons without hover */
+  @media (hover: none) {
+    .results-grid .grid-item__play,
+    .results-grid .grid-item__add,
+    .results-grid .grid-item__dl,
+    .results-grid .grid-item__ws {
+      opacity: 1;
+    }
+    .results-grid .grid-item__play {
+      background: rgba(0, 0, 0, 0.15);
+    }
+  }
+
   @media (max-width: 640px) {
     .results-grid {
       grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
@@ -818,12 +837,15 @@ import Admin from '../../../layouts/Admin.astro';
       font-size: 0.55rem;
     }
     .batch-bar {
-      font-size: 0.6rem;
+      font-size: 0.65rem;
       gap: 4px;
     }
+    .batch-bar span {
+      flex: 1 1 100%;
+    }
     .batch-bar .action-btn {
-      font-size: 0.55rem;
-      padding: 2px 4px;
+      font-size: 0.6rem;
+      padding: 3px 6px;
     }
     /* Hide less important columns on mobile */
     .release-table th:nth-child(4),

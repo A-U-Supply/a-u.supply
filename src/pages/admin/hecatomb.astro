@@ -190,6 +190,26 @@ import Admin from '../../layouts/Admin.astro';
     opacity: 0.4;
     cursor: not-allowed;
   }
+  @media (max-width: 640px) {
+    .hec-row {
+      gap: var(--space-sm);
+    }
+    .hec-field {
+      min-width: 0;
+      width: 100%;
+    }
+    .hec-field input[type='number'] {
+      width: 100%;
+    }
+    .hec-actions {
+      justify-content: stretch;
+    }
+    .hec-actions .action-btn {
+      flex: 1;
+      padding: var(--space-sm);
+      font-size: var(--text-base);
+    }
+  }
   .hec-status {
     font-family: var(--font-mono);
     font-size: var(--text-sm);

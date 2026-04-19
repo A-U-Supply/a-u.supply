@@ -154,6 +154,20 @@ import Admin from '../../../layouts/Admin.astro';
     align-items: center;
     gap: var(--space-sm);
     margin-left: auto;
+    flex-wrap: wrap;
+  }
+  @media (max-width: 640px) {
+    .slop-batch-banner {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: var(--space-xs);
+    }
+    .slop-bulk-actions {
+      margin-left: 0;
+    }
+    .slop-grid {
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
   }
   .slop-all-pages {
     display: flex;
