@@ -43,10 +43,22 @@ import Admin from '../../../layouts/Admin.astro';
     No jobs found.
   </div>
 
+  <div class="queue-batch-bar" id="queue-batch-bar" style="display:none;">
+    <span id="queue-selected-count">0 selected</span>
+    <button class="action-btn action-btn--danger" id="bulk-discard-btn">
+      Discard outputs to midden
+    </button>
+    <button class="action-btn" id="bulk-clear-btn">Clear selection</button>
+  </div>
+
   <div class="table-wrap" id="jobs-table" style="display:none;">
     <table class="release-table">
       <thead>
         <tr>
+          <th class="col-check">
+            <input type="checkbox" id="select-all" aria-label="Select all" />
+          </th>
+          <th class="col-thumb" aria-label="Preview"></th>
           <th>Status</th>
           <th>App</th>
           <th>Items</th>
@@ -105,6 +117,47 @@ import Admin from '../../../layouts/Admin.astro';
     margin-right: 2px;
   }
 
+  .col-check {
+    width: 28px;
+  }
+  .col-thumb {
+    width: 48px;
+  }
+  .queue-batch-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    margin-bottom: var(--space-sm);
+    border: 1px solid var(--color-accent);
+    background: rgba(184, 134, 11, 0.06);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    flex-wrap: wrap;
+  }
+  .queue-batch-bar #queue-selected-count {
+    margin-right: auto;
+    color: var(--color-text);
+    font-weight: bold;
+  }
+  .job-thumb {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    display: block;
+    background: #111;
+    border: 1px solid var(--color-border);
+  }
+  .job-thumb--placeholder {
+    background: #eee;
+    color: var(--color-muted);
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   @media (max-width: 760px) {
     .batch-banner {
       flex-direction: column;
@@ -135,15 +188,21 @@ import Admin from '../../../layouts/Admin.astro';
       border: none;
       font-size: var(--text-sm);
     }
-    /* First td: status badge — sits alongside app name */
-    #jobs-table .release-table td:first-child {
-      display: inline-block;
-      margin-right: var(--space-xs);
-    }
+    /* Checkbox + thumbnail + status badge + app name share the top line */
+    #jobs-table .release-table td.col-check,
+    #jobs-table .release-table td.col-thumb,
+    #jobs-table .release-table td[data-label='Status'],
     #jobs-table .release-table td.job-app {
       display: inline-block;
+      vertical-align: middle;
+      margin-right: var(--space-xs);
+    }
+    #jobs-table .release-table td.col-thumb .job-thumb {
+      width: 32px;
+      height: 32px;
+    }
+    #jobs-table .release-table td.job-app {
       font-weight: bold;
-      margin-bottom: var(--space-xs);
     }
     /* Meta rows (Items, Created, Duration, Outputs): label + value */
     #jobs-table .release-table td[data-label='Items']::before,
@@ -201,15 +260,68 @@ import Admin from '../../../layouts/Admin.astro';
     const filterStatus = document.getElementById(
       'filter-status',
     ) as HTMLSelectElement;
+    const selectAllEl = document.getElementById(
+      'select-all',
+    ) as HTMLInputElement;
+    const batchBarEl = document.getElementById('queue-batch-bar')!;
+    const batchCountEl = document.getElementById('queue-selected-count')!;
+    const bulkDiscardBtn = document.getElementById(
+      'bulk-discard-btn',
+    ) as HTMLButtonElement;
+    const bulkClearBtn = document.getElementById(
+      'bulk-clear-btn',
+    ) as HTMLButtonElement;
 
-    let currentPage = 1;
     const pageSize = 50;
     let totalJobs = 0;
+    // Selection survives pagination in memory; only cleared on explicit
+    // user action (Clear selection or after a successful bulk discard).
+    const selectedIds = new Set<string>();
 
-    // Highlight param from workspace redirect
-    const urlParams = new URLSearchParams(window.location.search);
-    const highlightId = urlParams.get('highlight');
-    const batchId = urlParams.get('batch_id');
+    // Read query params (filter status + pagination survives back-nav)
+    function readParams(): {
+      status: string;
+      page: number;
+      highlight: string | null;
+      batchId: string | null;
+    } {
+      const u = new URLSearchParams(window.location.search);
+      return {
+        status: u.get('status') ?? '',
+        page: Math.max(1, parseInt(u.get('page') ?? '1')),
+        highlight: u.get('highlight'),
+        batchId: u.get('batch_id'),
+      };
+    }
+
+    function writeParams(
+      patch: Partial<{ status: string; page: number }>,
+      replace = false,
+    ) {
+      const u = new URLSearchParams(window.location.search);
+      if ('status' in patch) {
+        if (patch.status) u.set('status', patch.status);
+        else u.delete('status');
+      }
+      if ('page' in patch) {
+        if (patch.page && patch.page > 1) u.set('page', String(patch.page));
+        else u.delete('page');
+      }
+      const q = u.toString();
+      const url = q
+        ? `${window.location.pathname}?${q}`
+        : window.location.pathname;
+      if (replace) history.replaceState(null, '', url);
+      else history.pushState(null, '', url);
+    }
+
+    let {
+      status: currentStatus,
+      page: currentPage,
+      highlight: highlightId,
+      batchId,
+    } = readParams();
+    filterStatus.value = currentStatus;
 
     if (batchId) {
       const banner = document.getElementById('batch-banner')!;
@@ -220,6 +332,22 @@ import Admin from '../../../layouts/Admin.astro';
       idEl.textContent = batchId.slice(0, 8);
       slopLink.href = `/admin/search/slop?batch_id=${encodeURIComponent(batchId)}`;
       banner.style.display = '';
+    }
+
+    function updateBatchBar() {
+      const n = selectedIds.size;
+      if (n === 0) {
+        batchBarEl.style.display = 'none';
+      } else {
+        batchBarEl.style.display = '';
+        batchCountEl.textContent = `${n} selected`;
+      }
+      // Keep select-all in sync
+      const rowChecks =
+        tbodyEl.querySelectorAll<HTMLInputElement>('.job-select');
+      const allChecked =
+        rowChecks.length > 0 && Array.from(rowChecks).every((c) => c.checked);
+      selectAllEl.checked = allChecked;
     }
 
     function formatDuration(job: any): string {
@@ -241,8 +369,16 @@ import Admin from '../../../layouts/Admin.astro';
       });
     }
 
+    function renderThumbCell(j: any): string {
+      if (j.preview_media_id) {
+        const title = (j.preview_media_type || 'media').replace(/["<>&]/g, '');
+        return `<img class="job-thumb" src="/api/media/${j.preview_media_id}/thumbnail" alt="" loading="lazy" title="${title}">`;
+      }
+      return `<div class="job-thumb job-thumb--placeholder">—</div>`;
+    }
+
     async function loadJobs() {
-      const status = filterStatus.value;
+      const status = currentStatus;
       const params = new URLSearchParams({
         page: String(currentPage),
         per_page: String(pageSize),
@@ -270,6 +406,7 @@ import Admin from '../../../layouts/Admin.astro';
       if (totalJobs === 0) {
         emptyEl.style.display = '';
         tableEl.style.display = 'none';
+        updateBatchBar();
         return;
       }
 
@@ -279,7 +416,9 @@ import Admin from '../../../layouts/Admin.astro';
       tbodyEl.innerHTML = data.jobs
         .map(
           (j: any) => `
-        <tr${j.id === highlightId ? ' class="job-row--highlight"' : ' class="job-row"'}>
+        <tr data-job-id="${j.id}"${j.id === highlightId ? ' class="job-row--highlight"' : ' class="job-row"'}>
+          <td class="col-check"><input type="checkbox" class="job-select" data-job-id="${j.id}" aria-label="Select job" ${selectedIds.has(j.id) ? 'checked' : ''} /></td>
+          <td class="col-thumb">${renderThumbCell(j)}</td>
           <td data-label="Status"><span class="status-badge status-${j.status}">${j.status}</span></td>
           <td data-label="App" class="job-app">${j.app_name}</td>
           <td data-label="Items">${j.input_item_count}</td>
@@ -303,6 +442,18 @@ import Admin from '../../../layouts/Admin.astro';
       `,
         )
         .join('');
+
+      // Row checkbox → selection set
+      tbodyEl
+        .querySelectorAll<HTMLInputElement>('.job-select')
+        .forEach((chk) => {
+          chk.addEventListener('change', () => {
+            const id = chk.dataset.jobId!;
+            if (chk.checked) selectedIds.add(id);
+            else selectedIds.delete(id);
+            updateBatchBar();
+          });
+        });
 
       // Cancel buttons
       tbodyEl.querySelectorAll('[data-cancel]').forEach((btn) => {
@@ -332,29 +483,119 @@ import Admin from '../../../layouts/Admin.astro';
       const totalPages = Math.ceil(totalJobs / pageSize);
       paginationEl.style.display = totalPages > 1 ? 'flex' : 'none';
       pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+
+      updateBatchBar();
     }
 
+    selectAllEl.addEventListener('change', () => {
+      const checked = selectAllEl.checked;
+      tbodyEl
+        .querySelectorAll<HTMLInputElement>('.job-select')
+        .forEach((chk) => {
+          chk.checked = checked;
+          const id = chk.dataset.jobId!;
+          if (checked) selectedIds.add(id);
+          else selectedIds.delete(id);
+        });
+      updateBatchBar();
+    });
+
+    bulkClearBtn.addEventListener('click', () => {
+      selectedIds.clear();
+      tbodyEl
+        .querySelectorAll<HTMLInputElement>('.job-select')
+        .forEach((chk) => (chk.checked = false));
+      selectAllEl.checked = false;
+      updateBatchBar();
+    });
+
+    bulkDiscardBtn.addEventListener('click', async () => {
+      const ids = Array.from(selectedIds);
+      if (ids.length === 0) return;
+      const ok = await (window as any).confirmDialog(
+        `Discard outputs from ${ids.length} job${ids.length !== 1 ? 's' : ''} to the midden? Files will be deleted in 24h unless rescued.`,
+        'Discard to midden',
+      );
+      if (!ok) return;
+
+      bulkDiscardBtn.disabled = true;
+      // DELETE /api/jobs/{id}/outputs per job, in parallel.
+      const results = await Promise.allSettled(
+        ids.map((id) =>
+          fetch(`/api/jobs/${id}/outputs`, {
+            method: 'DELETE',
+            credentials: 'include',
+          }),
+        ),
+      );
+      bulkDiscardBtn.disabled = false;
+
+      let discarded = 0;
+      let failed = 0;
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i];
+        if (r.status === 'fulfilled' && r.value.ok) {
+          discarded++;
+          // Remove the row from the DOM so the user sees immediate feedback.
+          const row = tbodyEl.querySelector(`tr[data-job-id="${ids[i]}"]`);
+          row?.remove();
+          selectedIds.delete(ids[i]);
+        } else {
+          failed++;
+        }
+      }
+
+      if (discarded > 0) {
+        (window as any).toast.success(
+          `Discarded outputs from ${discarded} job${discarded !== 1 ? 's' : ''}`,
+        );
+      }
+      if (failed > 0) {
+        (window as any).toast.error(
+          `Failed on ${failed} job${failed !== 1 ? 's' : ''}`,
+        );
+      }
+
+      updateBatchBar();
+      // If we emptied the current page, reload so pagination/totals are honest.
+      if (tbodyEl.children.length === 0) loadJobs();
+    });
+
     filterStatus.addEventListener('change', () => {
+      currentStatus = filterStatus.value;
       currentPage = 1;
+      writeParams({ status: currentStatus, page: currentPage });
       loadJobs();
     });
     document.getElementById('prev-page')?.addEventListener('click', () => {
       if (currentPage > 1) {
         currentPage--;
+        writeParams({ page: currentPage });
         loadJobs();
       }
     });
     document.getElementById('next-page')?.addEventListener('click', () => {
       if (currentPage * pageSize < totalJobs) {
         currentPage++;
+        writeParams({ page: currentPage });
         loadJobs();
       }
     });
 
+    // Browser back/forward: re-read params and reload
+    const onPopState = () => {
+      const p = readParams();
+      currentStatus = p.status;
+      currentPage = p.page;
+      filterStatus.value = currentStatus;
+      loadJobs();
+    };
+    window.addEventListener('popstate', onPopState);
+
     loadJobs();
 
     // Auto-refresh if there are running jobs
-    setInterval(() => {
+    const refreshTimer = window.setInterval(() => {
       if (
         tbodyEl.querySelector('.status-running') ||
         tbodyEl.querySelector('.status-pending')
@@ -362,5 +603,15 @@ import Admin from '../../../layouts/Admin.astro';
         loadJobs();
       }
     }, 5000);
+
+    // Clean up on navigation away (astro ViewTransitions)
+    document.addEventListener(
+      'astro:before-swap',
+      () => {
+        window.clearInterval(refreshTimer);
+        window.removeEventListener('popstate', onPopState);
+      },
+      { once: true },
+    );
   });
 </script>
