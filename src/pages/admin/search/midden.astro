@@ -328,6 +328,8 @@ import Admin from '../../../layouts/Admin.astro';
 
     // Preload the discarder filter with every admin user so it's useful on
     // first render, not just after you've paginated through every page.
+    // Re-renders instead of appending so re-mounts via ViewTransitions and
+    // races with loadOutputs() can't leave duplicate options.
     (async () => {
       try {
         const res = await fetch('/api/admin/users', {
@@ -338,19 +340,8 @@ import Admin from '../../../layouts/Admin.astro';
           id: string;
           name: string;
         }>;
-        const select = document.getElementById(
-          'filter-discarder',
-        ) as HTMLSelectElement | null;
-        if (!select) return;
-        const sorted = users
-          .slice()
-          .sort((a, b) => a.name.localeCompare(b.name));
-        for (const u of sorted) {
-          const opt = document.createElement('option');
-          opt.value = u.id;
-          opt.textContent = u.name;
-          select.appendChild(opt);
-        }
+        knownDiscarders = new Map(users.map((u) => [u.id, u.name]));
+        renderDiscarderOptions();
       } catch {}
     })();
 
@@ -362,6 +353,28 @@ import Admin from '../../../layouts/Admin.astro';
     const pageSize = 50;
     let totalOutputs = 0;
     let countdownTimer: number | null = null;
+
+    // Single source of truth for the discarder dropdown: union of every
+    // admin user plus any discarder ID we've seen in midden rows so far.
+    let knownDiscarders = new Map<string, string>();
+
+    function renderDiscarderOptions() {
+      const select = document.getElementById(
+        'filter-discarder',
+      ) as HTMLSelectElement | null;
+      if (!select) return;
+      const prev = select.value;
+      const sorted = Array.from(knownDiscarders.entries()).sort((a, b) =>
+        a[1].localeCompare(b[1]),
+      );
+      const opts = ['<option value="">All Discarders</option>'];
+      for (const [id, name] of sorted) {
+        opts.push(
+          `<option value="${id}"${prev === id ? ' selected' : ''}>${name}</option>`,
+        );
+      }
+      select.innerHTML = opts.join('');
+    }
 
     function formatSize(bytes: number): string {
       if (bytes < 1024) return bytes + ' B';
@@ -509,32 +522,20 @@ import Admin from '../../../layouts/Admin.astro';
         appSelect.appendChild(opt);
       }
 
-      // Merge discarders from this page into the dropdown (preserve selection
-      // and anything already there — the list grows as the user paginates).
-      const discarderSelect = document.getElementById(
-        'filter-discarder',
-      ) as HTMLSelectElement;
-      const currentDiscarder = discarderSelect.value;
-      const seen = new Map<string, string>();
-      for (const opt of Array.from(discarderSelect.options)) {
-        if (opt.value) seen.set(opt.value, opt.textContent || opt.value);
-      }
+      // Fold any newly seen discarders into the shared map, then re-render
+      // the dropdown (dedup is handled by the Map keyed on user id).
+      let changed = false;
       for (const o of allOutputs as any[]) {
-        if (o.discarded_by_id) {
-          seen.set(o.discarded_by_id, o.discarded_by_name || 'someone');
+        if (!o.discarded_by_id) continue;
+        if (!knownDiscarders.has(o.discarded_by_id)) {
+          knownDiscarders.set(
+            o.discarded_by_id,
+            o.discarded_by_name || 'someone',
+          );
+          changed = true;
         }
       }
-      discarderSelect.innerHTML = '<option value="">All Discarders</option>';
-      const sorted = Array.from(seen.entries()).sort((a, b) =>
-        a[1].localeCompare(b[1]),
-      );
-      for (const [id, name] of sorted) {
-        const opt = document.createElement('option');
-        opt.value = id;
-        opt.textContent = name;
-        if (id === currentDiscarder) opt.selected = true;
-        discarderSelect.appendChild(opt);
-      }
+      if (changed) renderDiscarderOptions();
 
       renderPagination();
 
