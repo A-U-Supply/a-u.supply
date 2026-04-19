@@ -56,7 +56,7 @@ import Admin from '../../../layouts/Admin.astro';
       id="bulk-discard-btn"
       style="display:none;"
     >
-      Discard outputs to midden
+      Discard
     </button>
     <button class="action-btn" id="bulk-clear-btn" style="display:none;"
       >Clear selection</button
@@ -309,6 +309,12 @@ import Admin from '../../../layouts/Admin.astro';
     // Selection survives pagination in memory; only cleared on explicit
     // user action (Clear selection or after a successful bulk discard).
     const selectedIds = new Set<string>();
+    // Job meta keyed by id so bulk actions can tell whether outputs exist
+    // (send to midden) vs no outputs (delete the record outright).
+    const jobMeta = new Map<string, { output_count: number; status: string }>();
+    // Rows the user dismissed this session — kept out of subsequent renders
+    // so auto-refresh doesn't resurrect a just-cleared row.
+    const dismissedIds = new Set<string>();
 
     // Read query params (filter status + pagination survives back-nav)
     function readParams(): {
@@ -460,7 +466,30 @@ import Admin from '../../../layouts/Admin.astro';
       tableEl.style.display = '';
       toolbarEl.style.display = '';
 
-      tbodyEl.innerHTML = data.jobs
+      const visibleJobs = (data.jobs as any[]).filter(
+        (j) => !dismissedIds.has(j.id),
+      );
+      // Refresh the meta cache for everything on the current page so bulk
+      // actions know output counts even if the user paginates around.
+      for (const j of data.jobs as any[]) {
+        jobMeta.set(j.id, { output_count: j.output_count, status: j.status });
+      }
+
+      if (visibleJobs.length === 0) {
+        // Every row was locally dismissed; fall through to the empty-state
+        // handling without making the user wait for a re-fetch.
+        tbodyEl.innerHTML = '';
+        emptyEl.style.display = '';
+        tableEl.style.display = 'none';
+        toolbarEl.style.display = 'none';
+        updateToolbar();
+        const totalPages = Math.ceil(totalJobs / pageSize);
+        paginationEl.style.display = totalPages > 1 ? 'flex' : 'none';
+        pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+        return;
+      }
+
+      tbodyEl.innerHTML = visibleJobs
         .map(
           (j: any) => `
         <tr data-job-id="${j.id}"${j.id === highlightId ? ' class="job-row--highlight"' : ' class="job-row"'}>
@@ -598,17 +627,68 @@ import Admin from '../../../layouts/Admin.astro';
     bulkDiscardBtn.addEventListener('click', async () => {
       const ids = Array.from(selectedIds);
       if (ids.length === 0) return;
-      const ok = await (window as any).confirmDialog(
-        `Discard outputs from ${ids.length} job${ids.length !== 1 ? 's' : ''} to the midden? Files will be deleted in 24h unless rescued.`,
-        'Discard to midden',
-      );
+
+      // Split the selection into two buckets based on whether there are
+      // outputs worth sending to the midden. Anything without outputs
+      // (failed, cancelled, completed-with-nothing) skips the midden and
+      // gets the job record deleted outright.
+      const toMidden: string[] = [];
+      const toDelete: string[] = [];
+      const runningSkipped: string[] = [];
+      for (const id of ids) {
+        const m = jobMeta.get(id);
+        if (!m) {
+          // Unknown state — be safe and try the midden route; backend
+          // no-ops gracefully if there's nothing to discard.
+          toMidden.push(id);
+          continue;
+        }
+        if (m.status === 'running') {
+          runningSkipped.push(id);
+          continue;
+        }
+        if (m.output_count > 0) toMidden.push(id);
+        else toDelete.push(id);
+      }
+
+      const actionable = toMidden.length + toDelete.length;
+      if (actionable === 0) {
+        (window as any).toast.error(
+          'Nothing to discard — cancel running jobs first.',
+        );
+        return;
+      }
+
+      const parts: string[] = [];
+      if (toMidden.length)
+        parts.push(
+          `send outputs from ${toMidden.length} job${toMidden.length !== 1 ? 's' : ''} to the midden`,
+        );
+      if (toDelete.length)
+        parts.push(
+          `delete ${toDelete.length} job record${toDelete.length !== 1 ? 's' : ''} with no outputs`,
+        );
+      const msg =
+        `This will ${parts.join(' and ')}.` +
+        (toMidden.length
+          ? ' Midden files are purged after 24h unless rescued.'
+          : '');
+
+      const ok = await (window as any).confirmDialog(msg, 'Discard');
       if (!ok) return;
 
       bulkDiscardBtn.disabled = true;
-      // DELETE /api/jobs/{id}/outputs per job, in parallel.
-      const results = await Promise.allSettled(
-        ids.map((id) =>
+      const midResults = await Promise.allSettled(
+        toMidden.map((id) =>
           fetch(`/api/jobs/${id}/outputs`, {
+            method: 'DELETE',
+            credentials: 'include',
+          }),
+        ),
+      );
+      const delResults = await Promise.allSettled(
+        toDelete.map((id) =>
+          fetch(`/api/jobs/${id}`, {
             method: 'DELETE',
             credentials: 'include',
           }),
@@ -616,34 +696,60 @@ import Admin from '../../../layouts/Admin.astro';
       );
       bulkDiscardBtn.disabled = false;
 
-      let discarded = 0;
-      let failed = 0;
-      for (let i = 0; i < results.length; i++) {
-        const r = results[i];
-        if (r.status === 'fulfilled' && r.value.ok) {
-          discarded++;
-          // Remove the row from the DOM so the user sees immediate feedback.
-          const row = tbodyEl.querySelector(`tr[data-job-id="${ids[i]}"]`);
-          row?.remove();
-          selectedIds.delete(ids[i]);
-        } else {
-          failed++;
-        }
-      }
+      let discardedMidden = 0;
+      let deletedRows = 0;
+      let failedCalls = 0;
 
-      if (discarded > 0) {
+      const applyResult = (
+        resList: PromiseSettledResult<Response>[],
+        idList: string[],
+        counter: (ok: boolean) => void,
+      ) => {
+        for (let i = 0; i < resList.length; i++) {
+          const r = resList[i];
+          const okRes = r.status === 'fulfilled' && r.value.ok;
+          counter(okRes);
+          if (!okRes) {
+            failedCalls++;
+            continue;
+          }
+          const jid = idList[i];
+          dismissedIds.add(jid);
+          selectedIds.delete(jid);
+          jobMeta.delete(jid);
+          tbodyEl.querySelector(`tr[data-job-id="${jid}"]`)?.remove();
+        }
+      };
+
+      applyResult(midResults, toMidden, (ok) => {
+        if (ok) discardedMidden++;
+      });
+      applyResult(delResults, toDelete, (ok) => {
+        if (ok) deletedRows++;
+      });
+
+      const successSegments: string[] = [];
+      if (discardedMidden) successSegments.push(`${discardedMidden} to midden`);
+      if (deletedRows) successSegments.push(`${deletedRows} deleted`);
+      if (successSegments.length) {
         (window as any).toast.success(
-          `Discarded outputs from ${discarded} job${discarded !== 1 ? 's' : ''}`,
+          `Discarded: ${successSegments.join(', ')}`,
         );
       }
-      if (failed > 0) {
+      if (failedCalls > 0) {
         (window as any).toast.error(
-          `Failed on ${failed} job${failed !== 1 ? 's' : ''}`,
+          `Failed on ${failedCalls} job${failedCalls !== 1 ? 's' : ''}`,
+        );
+      }
+      if (runningSkipped.length) {
+        (window as any).toast.error(
+          `Skipped ${runningSkipped.length} running job${runningSkipped.length !== 1 ? 's' : ''}`,
         );
       }
 
       updateToolbar();
-      // If we emptied the current page, reload so pagination/totals are honest.
+      // If the current page emptied out, reload so pagination/totals stay
+      // honest; the locally-dismissed rows are still filtered out.
       if (tbodyEl.children.length === 0) loadJobs();
     });
 
