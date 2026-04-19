@@ -91,6 +91,22 @@ import Admin from '../../../layouts/Admin.astro';
     display: flex;
     gap: var(--space-xs);
   }
+  @media (max-width: 640px) {
+    .batch-banner {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: var(--space-xs);
+    }
+    /* Drop Items, Duration, Outputs on small screens — keep Status/App/Created/Actions */
+    .release-table th:nth-child(3),
+    .release-table td:nth-child(3),
+    .release-table th:nth-child(5),
+    .release-table td:nth-child(5),
+    .release-table th:nth-child(6),
+    .release-table td:nth-child(6) {
+      display: none;
+    }
+  }
 </style>
 
 <script>

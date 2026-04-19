@@ -673,6 +673,46 @@ import Admin from '../../../layouts/Admin.astro';
     color: var(--color-text-dim, var(--color-text));
     opacity: 0.75;
   }
+
+  /* Touch devices: always-visible action buttons on workspace/shuffle grids */
+  @media (hover: none) {
+    .workspace-grid .ws-remove,
+    .workspace-grid .ws-play,
+    .workspace-grid .ws-add {
+      opacity: 1;
+    }
+    .workspace-grid .ws-play {
+      background: rgba(0, 0, 0, 0.15);
+    }
+    .shuffle-grid .shuffle-lock {
+      opacity: 0.9;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .workspace-grid,
+    .shuffle-grid {
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 4px;
+    }
+    .config-section {
+      padding: var(--space-sm);
+    }
+    .config-header h2 {
+      font-size: 1rem;
+    }
+    .config-actions {
+      justify-content: stretch;
+    }
+    .config-actions #config-submit {
+      flex: 1;
+      padding: var(--space-sm);
+      font-size: var(--text-base);
+    }
+    .sf-field {
+      min-width: 100px;
+    }
+  }
 </style>
 
 <style>
@@ -685,6 +725,7 @@ import Admin from '../../../layouts/Admin.astro';
     border: 1px solid var(--color-border);
     font-family: var(--font-mono);
     font-size: var(--text-sm);
+    flex-wrap: wrap;
   }
   .process-bar select {
     font-family: var(--font-mono);
@@ -693,6 +734,21 @@ import Admin from '../../../layouts/Admin.astro';
     background: var(--color-bg);
     color: var(--color-text);
     border: 1px solid var(--color-border);
+    flex: 1 1 180px;
+    min-width: 0;
+  }
+  .process-bar label {
+    flex-shrink: 0;
+  }
+  @media (max-width: 480px) {
+    .process-bar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .process-bar select,
+    .process-bar #configure-btn {
+      width: 100%;
+    }
   }
 </style>
 

@@ -63,11 +63,21 @@ import Admin from '../../../layouts/Admin.astro';
 </Admin>
 
 <style>
-  @media (max-width: 640px) {
+  @media (max-width: 900px) {
+    /* Entity, Tracks, Created By are secondary — drop them before the table scrolls */
+    .release-table th:nth-child(3),
+    .release-table td:nth-child(3),
     .release-table th:nth-child(6),
     .release-table td:nth-child(6),
     .release-table th:nth-child(7),
     .release-table td:nth-child(7) {
+      display: none;
+    }
+  }
+  @media (max-width: 540px) {
+    /* Release date also drops on very small screens */
+    .release-table th:nth-child(5),
+    .release-table td:nth-child(5) {
       display: none;
     }
   }
