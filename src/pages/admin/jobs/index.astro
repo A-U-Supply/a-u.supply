@@ -91,20 +91,99 @@ import Admin from '../../../layouts/Admin.astro';
     display: flex;
     gap: var(--space-xs);
   }
-  @media (max-width: 640px) {
+  .job-row--highlight {
+    background: rgba(184, 134, 11, 0.08);
+  }
+  .job-app {
+    font-family: var(--font-mono);
+    word-break: break-word;
+  }
+  .job-actions {
+    white-space: nowrap;
+  }
+  .job-actions .action-btn {
+    margin-right: 2px;
+  }
+
+  @media (max-width: 760px) {
     .batch-banner {
       flex-direction: column;
       align-items: flex-start;
       gap: var(--space-xs);
     }
-    /* Drop Items, Duration, Outputs on small screens — keep Status/App/Created/Actions */
-    .release-table th:nth-child(3),
-    .release-table td:nth-child(3),
-    .release-table th:nth-child(5),
-    .release-table td:nth-child(5),
-    .release-table th:nth-child(6),
-    .release-table td:nth-child(6) {
+    /* Card layout: drop the table grid, stack each row as a card */
+    #jobs-table .release-table,
+    #jobs-table .release-table tbody,
+    #jobs-table .release-table tr,
+    #jobs-table .release-table td {
+      display: block;
+    }
+    #jobs-table .release-table thead {
       display: none;
+    }
+    #jobs-table .release-table tr {
+      border: 1px solid var(--color-border);
+      border-left: 3px solid var(--color-border);
+      padding: var(--space-xs) var(--space-sm);
+      margin-bottom: var(--space-xs);
+    }
+    #jobs-table .release-table tr.job-row--highlight {
+      border-left-color: var(--color-accent);
+    }
+    #jobs-table .release-table td {
+      padding: 2px 0;
+      border: none;
+      font-size: var(--text-sm);
+    }
+    /* First td: status badge — sits alongside app name */
+    #jobs-table .release-table td:first-child {
+      display: inline-block;
+      margin-right: var(--space-xs);
+    }
+    #jobs-table .release-table td.job-app {
+      display: inline-block;
+      font-weight: bold;
+      margin-bottom: var(--space-xs);
+    }
+    /* Meta rows (Items, Created, Duration, Outputs): label + value */
+    #jobs-table .release-table td[data-label='Items']::before,
+    #jobs-table .release-table td[data-label='Created']::before,
+    #jobs-table .release-table td[data-label='Duration']::before,
+    #jobs-table .release-table td[data-label='Outputs']::before {
+      content: attr(data-label) ': ';
+      color: var(--color-muted);
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5pt;
+      margin-right: var(--space-xs);
+    }
+    /* Hide zero-value meta rows so cards stay tight */
+    #jobs-table .release-table td[data-label='Items'],
+    #jobs-table .release-table td[data-label='Duration'],
+    #jobs-table .release-table td[data-label='Outputs'] {
+      display: inline-block;
+      margin-right: var(--space-sm);
+      color: var(--color-muted);
+    }
+    #jobs-table .release-table td[data-label='Created'] {
+      display: block;
+      color: var(--color-muted);
+    }
+    #jobs-table .release-table td.job-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-xs);
+      margin-top: var(--space-xs);
+      padding-top: var(--space-xs);
+      border-top: 1px dotted var(--color-border);
+    }
+    #jobs-table .release-table td.job-actions .action-btn {
+      flex: 1;
+      min-width: 70px;
+      margin-right: 0;
+      text-align: center;
+      padding: var(--space-xs);
+      font-size: var(--text-sm);
     }
   }
 </style>
@@ -200,14 +279,14 @@ import Admin from '../../../layouts/Admin.astro';
       tbodyEl.innerHTML = data.jobs
         .map(
           (j: any) => `
-        <tr${j.id === highlightId ? ' style="background: rgba(255,255,255,0.05);"' : ''}>
-          <td><span class="status-badge status-${j.status}">${j.status}</span></td>
-          <td>${j.app_name}</td>
-          <td>${j.input_item_count}</td>
-          <td>${formatDate(j.created_at)}</td>
-          <td>${formatDuration(j)}</td>
-          <td>${j.output_count > 0 ? j.output_count + ' files' : '-'}</td>
-          <td>
+        <tr${j.id === highlightId ? ' class="job-row--highlight"' : ' class="job-row"'}>
+          <td data-label="Status"><span class="status-badge status-${j.status}">${j.status}</span></td>
+          <td data-label="App" class="job-app">${j.app_name}</td>
+          <td data-label="Items">${j.input_item_count}</td>
+          <td data-label="Created">${formatDate(j.created_at)}</td>
+          <td data-label="Duration">${formatDuration(j)}</td>
+          <td data-label="Outputs">${j.output_count > 0 ? j.output_count + ' files' : '-'}</td>
+          <td class="job-actions">
             <a href="/admin/jobs/detail?id=${j.id}" class="action-btn" style="text-decoration:none;">View</a>
             ${
               j.status === 'pending' || j.status === 'running'
