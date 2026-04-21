@@ -66,6 +66,18 @@ import Base from '../layouts/Base.astro';
     letter-spacing: 2pt;
     text-transform: uppercase;
     margin-bottom: var(--space-xs);
+    display: inline-block;
+    transform: rotateX(180deg);
+    transition: transform 0.5s ease;
+    cursor: default;
+  }
+
+  .back-cover__brand {
+    perspective: 400px;
+  }
+
+  .back-cover__title:hover {
+    transform: rotateX(0deg);
   }
 
   .back-cover__subtitle {
