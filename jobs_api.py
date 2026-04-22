@@ -2097,6 +2097,97 @@ def list_midden_output_ids(
     return {"ids": [r[0] for r in rows], "total": len(rows)}
 
 
+@router.get(
+    "/jobs/outputs/midden/images",
+    tags=["Midden"],
+    summary="Public: list image outputs currently in the midden",
+)
+def list_midden_images_public(
+    limit: int = Query(40, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    """Return a list of image outputs currently in the midden, no auth required.
+
+    Used by the public homepage image stream. Only returns items whose
+    ``media_type`` starts with ``image/`` and whose files are still on disk.
+    """
+    cutoff = _midden_cutoff()
+    rows = (
+        db.query(JobOutput, Job)
+        .join(Job, JobOutput.job_id == Job.id)
+        .filter(
+            JobOutput.indexed == False,  # noqa: E712
+            JobOutput.discarded_at.isnot(None),
+            JobOutput.discarded_at >= cutoff,
+            JobOutput.media_type.like("image/%"),
+        )
+        .order_by(JobOutput.discarded_at.desc())
+        .limit(limit)
+        .all()
+    )
+    results = []
+    for output, job in rows:
+        file_path = JOB_DATA_DIR / job.id / "output" / output.file_path
+        if not file_path.is_file():
+            continue
+        results.append(
+            {
+                "id": output.id,
+                "job_id": job.id,
+                "filename": output.filename,
+                "media_type": output.media_type,
+                "url": f"/api/jobs/outputs/midden/images/{job.id}/{output.id}",
+            }
+        )
+    return {"images": results}
+
+
+@router.get(
+    "/jobs/outputs/midden/images/{job_id}/{output_id}",
+    tags=["Midden"],
+    summary="Public: serve a midden image file",
+)
+def serve_midden_image_public(
+    job_id: str,
+    output_id: str,
+    db: Session = Depends(get_db),
+):
+    """Serve a midden image file without authentication.
+
+    Only serves files that are currently in the midden (discarded, not yet purged).
+    Returns 404 if the item has been purged or was never in the midden.
+    """
+    from fastapi.responses import FileResponse
+
+    cutoff = _midden_cutoff()
+    output = (
+        db.query(JobOutput)
+        .filter(
+            JobOutput.id == output_id,
+            JobOutput.job_id == job_id,
+            JobOutput.indexed == False,  # noqa: E712
+            JobOutput.discarded_at.isnot(None),
+            JobOutput.discarded_at >= cutoff,
+            JobOutput.media_type.like("image/%"),
+        )
+        .first()
+    )
+    if not output:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    file_path = JOB_DATA_DIR / job_id / "output" / output.file_path
+    db.close()
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File missing")
+
+    from search_api import content_disposition
+
+    return FileResponse(
+        file_path,
+        headers={"Content-Disposition": content_disposition("inline", output.filename)},
+    )
+
+
 @router.get("/jobs/{job_id}", tags=["Jobs"], summary="Get job details")
 def get_job(
     job_id: str,

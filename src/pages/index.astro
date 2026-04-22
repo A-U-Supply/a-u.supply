@@ -3,6 +3,9 @@ import Base from '../layouts/Base.astro';
 ---
 
 <Base title="A-U.SUPPLY — Audio Units Division">
+  <div class="midden-stream" id="midden-stream" aria-hidden="true">
+    <div class="midden-stream__track" id="midden-track"></div>
+  </div>
   <main class="back-cover">
     <div class="back-cover__content">
       <div class="back-cover__image">
@@ -66,6 +69,18 @@ import Base from '../layouts/Base.astro';
     letter-spacing: 2pt;
     text-transform: uppercase;
     margin-bottom: var(--space-xs);
+    display: inline-block;
+    transform: rotateX(180deg);
+    transition: transform 0.5s ease;
+    cursor: default;
+  }
+
+  .back-cover__brand {
+    perspective: 400px;
+  }
+
+  .back-cover__title:hover {
+    transform: rotateX(0deg);
   }
 
   .back-cover__subtitle {
@@ -90,4 +105,109 @@ import Base from '../layouts/Base.astro';
     font-size: 0.5rem;
     color: var(--color-border);
   }
+
+  .midden-stream {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 72px;
+    height: 100vh;
+    overflow: hidden;
+    z-index: 0;
+    pointer-events: none;
+    border-right: 1px solid var(--color-border);
+    opacity: 0;
+    transition: opacity 0.6s ease;
+  }
+
+  .midden-stream.loaded {
+    opacity: 1;
+  }
+
+  .midden-stream__track {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px;
+    animation: midden-scroll linear infinite;
+    animation-duration: var(--scroll-duration, 60s);
+  }
+
+  .midden-stream__track img {
+    width: 100%;
+    height: auto;
+    display: block;
+    filter: grayscale(100%) contrast(0.85);
+    opacity: 0.6;
+  }
+
+  @keyframes midden-scroll {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(var(--scroll-dist, -50%));
+    }
+  }
+
+  @media (max-width: 640px) {
+    .midden-stream {
+      display: none;
+    }
+  }
 </style>
+
+<script>
+  async function initMiddenStream() {
+    const stream = document.getElementById('midden-stream');
+    const track = document.getElementById('midden-track');
+    if (!stream || !track) return;
+
+    let res;
+    try {
+      res = await fetch('/api/jobs/outputs/midden/images?limit=40');
+    } catch {
+      return;
+    }
+    if (!res.ok) return;
+
+    const data = await res.json();
+    const images = data.images ?? [];
+    if (images.length === 0) return;
+
+    // Build image elements
+    function makeImg(src: string) {
+      const img = document.createElement('img');
+      img.src = src;
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      return img;
+    }
+
+    // Fill once, then duplicate for seamless loop
+    const frag = document.createDocumentFragment();
+    for (const item of images) {
+      frag.appendChild(makeImg(item.url));
+    }
+    track.appendChild(frag);
+
+    // Duplicate so the scroll loops seamlessly
+    const clone = track.cloneNode(true) as HTMLElement;
+    track.parentElement!.appendChild(clone);
+
+    // Measure total height of one copy to drive the animation
+    await new Promise((r) => requestAnimationFrame(r));
+    const h = track.scrollHeight;
+    stream.style.setProperty('--scroll-dist', `-${h}px`);
+
+    // Pace: ~80px/s
+    const dur = Math.round(h / 80);
+    stream.style.setProperty('--scroll-duration', `${dur}s`);
+
+    stream.classList.add('loaded');
+  }
+
+  document.addEventListener('astro:page-load', () => {
+    if (window.location.pathname === '/') initMiddenStream();
+  });
+</script>
