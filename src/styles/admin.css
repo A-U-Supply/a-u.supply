@@ -38,7 +38,7 @@
 
 .sidebar__nav li a {
   display: block;
-  padding: var(--space-xs) var(--space-md);
+  padding: 5px var(--space-md);
   color: #aaa;
   text-decoration: none;
   font-size: var(--text-sm);
@@ -61,8 +61,8 @@
   color: #666;
   text-transform: uppercase;
   letter-spacing: 1pt;
-  padding: var(--space-sm) var(--space-md) var(--space-xs);
-  margin-top: var(--space-xs);
+  padding: var(--space-xs) var(--space-md) 2px;
+  margin-top: 2px;
 }
 
 .sidebar__footer {
