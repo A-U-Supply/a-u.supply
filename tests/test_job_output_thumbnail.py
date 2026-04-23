@@ -65,7 +65,9 @@ def job_with_image_output(db_session, test_user, fakeapp, tmp_path, monkeypatch)
         job_id=job.id,
         filename="img.png",
         file_path="img.png",
-        media_type="image/png",
+        # Prod stores coarse "image" for most rows (see existing midden
+        # tests); exercise the common path explicitly.
+        media_type="image",
         file_size_bytes=src_path.stat().st_size,
     )
     db_session.add(output)
@@ -172,6 +174,71 @@ class TestUnindexedImageOutput:
         )
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("image/svg+xml")
+
+
+class TestMediaTypeFormat:
+    """Both `media_type="image"` and `media_type="image/png"` exist in prod."""
+
+    def _make_image_output(self, db_session, test_user, monkeypatch, tmp_path, mtype):
+        job_data_dir = tmp_path / "job-data"
+        monkeypatch.setenv("JOB_DATA_DIR", str(job_data_dir))
+        import jobs_api
+        monkeypatch.setattr(jobs_api, "JOB_DATA_DIR", job_data_dir)
+
+        job = Job(
+            id=str(uuid.uuid4()),
+            app_name="fakeapp",
+            status="completed",
+            input_items="[]",
+            params="{}",
+            created_by=test_user.id,
+        )
+        db_session.add(job)
+        db_session.flush()
+
+        out_dir = job_data_dir / job.id / "output"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        src = out_dir / f"x-{mtype.replace('/', '_')}.png"
+        _write_png(str(src))
+
+        output = JobOutput(
+            id=str(uuid.uuid4()),
+            job_id=job.id,
+            filename=src.name,
+            file_path=src.name,
+            media_type=mtype,
+            file_size_bytes=src.stat().st_size,
+        )
+        db_session.add(output)
+        db_session.commit()
+        db_session.refresh(output)
+        return job, output
+
+    def test_coarse_image_string_generates_thumb(
+        self, client, auth_headers, db_session, test_user, fakeapp, tmp_path, monkeypatch
+    ):
+        job, output = self._make_image_output(
+            db_session, test_user, monkeypatch, tmp_path, "image"
+        )
+        resp = client.get(
+            f"/api/jobs/{job.id}/outputs/{output.id}/thumbnail",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "image/webp"
+
+    def test_mime_image_png_also_generates_thumb(
+        self, client, auth_headers, db_session, test_user, fakeapp, tmp_path, monkeypatch
+    ):
+        job, output = self._make_image_output(
+            db_session, test_user, monkeypatch, tmp_path, "image/png"
+        )
+        resp = client.get(
+            f"/api/jobs/{job.id}/outputs/{output.id}/thumbnail",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "image/webp"
 
 
 class TestUnindexedAudioVideoOutput:

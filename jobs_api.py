@@ -2354,6 +2354,16 @@ def job_output_thumbnail(
         _thumbnail_response,
     )
 
+    def _coarse_type(val: str) -> str | None:
+        """JobOutput.media_type is inconsistent in the DB — some rows store a
+        full MIME ("image/png"), some store just "image". Accept both."""
+        if not val:
+            return None
+        v = val.lower().strip()
+        if v in ("image", "audio", "video"):
+            return v
+        return _media_type_from_mime(v)
+
     output = (
         db.query(JobOutput)
         .filter(JobOutput.id == output_id, JobOutput.job_id == job_id)
@@ -2376,7 +2386,7 @@ def job_output_thumbnail(
 
     src = JOB_DATA_DIR / job_id / "output" / output.file_path
     mime = output.media_type or ""
-    coarse = _media_type_from_mime(mime)
+    coarse = _coarse_type(mime)
 
     if not src.is_file():
         # File already purged (midden) or bot cleanup — show placeholder
@@ -2394,10 +2404,13 @@ def job_output_thumbnail(
             if not gen(str(src), str(thumb_path)):
                 # Couldn't generate — fall back to the original so the user
                 # still sees something (likely large, but it's a one-off).
+                # If media_type is the coarse "image" (no MIME), let Starlette
+                # guess from the extension rather than sending a bogus header.
+                fallback_mime = mime if "/" in mime else None
                 db.close()
                 return FileResponse(
                     src,
-                    media_type=mime or "application/octet-stream",
+                    media_type=fallback_mime,
                     headers={"Cache-Control": cache_control},
                 )
         db.close()
