@@ -127,6 +127,7 @@ class TestPublicOutputsList:
         assert data["file_url"] == f"/api/public/outputs/{item.id}/file"
         assert data["thumbnail_url"] == f"/api/public/outputs/{item.id}/thumbnail"
         assert data["thumbnail_sm_url"] == f"/api/public/outputs/{item.id}/thumbnail?size=sm"
+        assert data["thumbnail_lg_url"] == f"/api/public/outputs/{item.id}/thumbnail?size=lg"
 
 
 class TestPublicOutputFile:

@@ -70,11 +70,14 @@ def extract_image_metadata(file_path: str) -> dict:
     return {"width": width, "height": height, "format": fmt}
 
 
-# Two sizes get generated per image so <img srcset> can pick the right one:
-#   medium (_thumb.webp)     — 400px max, default / desktop grid tiles
-#   small  (_thumb_sm.webp)  — 128px max, mobile grids / narrow strips / OG unfurl
+# Three sizes per image so <img srcset> picks the right one and the
+# image viewer has a high-quality source without hitting the full original:
+#   small  (_thumb_sm.webp) — 128px,  mobile grids / narrow strips / OG unfurl
+#   medium (_thumb.webp)    — 400px,  default / desktop grid tiles
+#   large  (_thumb_lg.webp) — 1600px, image viewer scaled render
 IMAGE_THUMBNAIL_MAX = (400, 400)
 IMAGE_THUMBNAIL_SM_MAX = (128, 128)
+IMAGE_THUMBNAIL_LG_MAX = (1600, 1600)
 IMAGE_THUMBNAIL_QUALITY = 85
 
 
@@ -88,6 +91,12 @@ def _image_thumbnail_sm_path(file_path: str) -> str:
     """Return the ``<stem>_thumb_sm.webp`` sibling path for an image."""
     p = Path(file_path)
     return str(p.with_name(p.stem + "_thumb_sm.webp"))
+
+
+def _image_thumbnail_lg_path(file_path: str) -> str:
+    """Return the ``<stem>_thumb_lg.webp`` sibling path for an image."""
+    p = Path(file_path)
+    return str(p.with_name(p.stem + "_thumb_lg.webp"))
 
 
 def _generate_webp(file_path: str, output_path: str, max_size: tuple[int, int]) -> bool:
@@ -112,6 +121,11 @@ def generate_image_thumbnail(file_path: str, output_path: str) -> bool:
 def generate_image_thumbnail_sm(file_path: str, output_path: str) -> bool:
     """Generate the 128px-max small thumbnail (for srcset / mobile / OG unfurl)."""
     return _generate_webp(file_path, output_path, IMAGE_THUMBNAIL_SM_MAX)
+
+
+def generate_image_thumbnail_lg(file_path: str, output_path: str) -> bool:
+    """Generate the 1600px-max large thumbnail (for the image viewer)."""
+    return _generate_webp(file_path, output_path, IMAGE_THUMBNAIL_LG_MAX)
 
 
 def extract_dominant_colors(file_path: str, num_colors: int = 5) -> list[str]:
@@ -546,14 +560,16 @@ def _run_image_extraction(db, media_item_id: str, file_path: str, MediaImageMeta
         logger.error("Dominant color extraction failed for %s: %s", media_item_id, exc)
         _log_failure(db, media_item_id, "dominant_colors", exc)
 
-    # Step 3: Thumbnails — medium (_thumb.webp, 400px) + small (_thumb_sm.webp, 128px)
-    # Both failures share extraction_type="thumbnail" so one retry covers both.
+    # Step 3: Thumbnails — sm (128px) + md (400px) + lg (1600px, for the viewer)
+    # All three failures share extraction_type="thumbnail" so one retry covers them.
     thumb_path = _image_thumbnail_path(file_path)
     thumb_sm_path = _image_thumbnail_sm_path(file_path)
+    thumb_lg_path = _image_thumbnail_lg_path(file_path)
     try:
         ok_md = generate_image_thumbnail(file_path, thumb_path)
         ok_sm = generate_image_thumbnail_sm(file_path, thumb_sm_path)
-        if not (ok_md and ok_sm):
+        ok_lg = generate_image_thumbnail_lg(file_path, thumb_lg_path)
+        if not (ok_md and ok_sm and ok_lg):
             raise RuntimeError("thumbnail generation returned False")
     except Exception as exc:
         logger.error("Image thumbnail failed for %s: %s", media_item_id, exc)

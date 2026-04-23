@@ -194,10 +194,11 @@ _IMAGE_PLACEHOLDER_SVG = (
 def _resolve_thumbnail_path(item: "MediaItem", size: str = "md") -> tuple[Path, str] | None:
     """Return (path, mime) for the best on-disk thumbnail for an item, or None.
 
-    ``size`` picks the preferred variant:
+    ``size`` picks the preferred variant (with progressive fallback):
 
-    - ``"sm"`` — 128px (``_thumb_sm.webp``); falls back to md if unavailable.
-    - ``"md"`` — 400px (``_thumb.webp``); the default.
+    - ``"sm"`` — 128px (``_thumb_sm.webp``); falls back to md → lg → original
+    - ``"md"`` — 400px (``_thumb.webp``); falls back to lg → sm → original
+    - ``"lg"`` — 1600px (``_thumb_lg.webp``); falls back to md → sm → original
 
     Callers should fall back to :func:`_placeholder_response` when None.
     """
@@ -209,17 +210,25 @@ def _resolve_thumbnail_path(item: "MediaItem", size: str = "md") -> tuple[Path, 
         if p.exists():
             return (p, "image/webp")
 
-    # Any type: prefer the small sibling when size="sm", else medium.
+    # Try the requested size first, then progressively fall back.
     if item.file_path:
         original = media_dir / item.file_path
+
+        def sibling(suffix: str) -> Path:
+            return original.with_name(original.stem + suffix)
+
+        # Preference order per requested size.
         if size == "sm":
-            sm = original.with_name(original.stem + "_thumb_sm.webp")
-            if sm.exists():
-                return (sm, "image/webp")
-            # fall through to medium on miss so small clients still get something
-        md = original.with_name(original.stem + "_thumb.webp")
-        if md.exists():
-            return (md, "image/webp")
+            order = ["_thumb_sm.webp", "_thumb.webp", "_thumb_lg.webp"]
+        elif size == "lg":
+            order = ["_thumb_lg.webp", "_thumb.webp", "_thumb_sm.webp"]
+        else:  # "md" (default) or anything else
+            order = ["_thumb.webp", "_thumb_lg.webp", "_thumb_sm.webp"]
+
+        for suffix in order:
+            candidate = sibling(suffix)
+            if candidate.exists():
+                return (candidate, "image/webp")
 
     # Image: original as last-resort (race window before extraction runs)
     if item.media_type == "image" and item.file_path:
@@ -846,6 +855,7 @@ def _public_output_dict(item: MediaItem) -> dict:
         "file_url": f"/api/public/outputs/{item.id}/file",
         "thumbnail_url": f"/api/public/outputs/{item.id}/thumbnail",
         "thumbnail_sm_url": f"/api/public/outputs/{item.id}/thumbnail?size=sm",
+        "thumbnail_lg_url": f"/api/public/outputs/{item.id}/thumbnail?size=lg",
     }
 
 
@@ -892,7 +902,7 @@ def get_public_output_file(media_id: str, db: Session = Depends(get_db)):
 )
 def get_public_output_thumbnail(
     media_id: str,
-    size: str = Query("md", pattern="^(sm|md)$", description="`md` (400px, default) or `sm` (128px)."),
+    size: str = Query("md", pattern="^(sm|md|lg)$", description="`sm` 128px, `md` 400px (default), or `lg` 1600px."),
     db: Session = Depends(get_db),
 ):
     """Serve the thumbnail for an indexed output, no auth required.
@@ -1330,7 +1340,7 @@ def get_media_file(
 @router.get("/media/{media_id}/thumbnail", tags=["Media Items"], summary="Get media thumbnail")
 def get_media_thumbnail(
     media_id: str,
-    size: str = Query("md", pattern="^(sm|md)$", description="`md` (400px, default) or `sm` (128px)."),
+    size: str = Query("md", pattern="^(sm|md|lg)$", description="`sm` 128px, `md` 400px (default), or `lg` 1600px."),
     _auth=Depends(require_scope("read")),
     db: Session = Depends(get_db),
 ):

@@ -2331,7 +2331,7 @@ def download_output(
 def job_output_thumbnail(
     job_id: str,
     output_id: str,
-    size: str = Query("md", pattern="^(sm|md)$", description="`md` (400px, default) or `sm` (128px)."),
+    size: str = Query("md", pattern="^(sm|md|lg)$", description="`sm` 128px, `md` 400px (default), or `lg` 1600px."),
     auth: tuple[User, str] = Depends(require_scope("read")),
     db: Session = Depends(get_db),
 ):
@@ -2395,12 +2395,26 @@ def job_output_thumbnail(
         return _placeholder_response(coarse or "image", cache_control)
 
     if coarse == "image":
-        suffix = "_thumb_sm.webp" if size == "sm" else "_thumb.webp"
+        if size == "sm":
+            suffix = "_thumb_sm.webp"
+        elif size == "lg":
+            suffix = "_thumb_lg.webp"
+        else:
+            suffix = "_thumb.webp"
         thumb_path = src.with_name(src.stem + suffix)
         if not thumb_path.exists():
-            from extraction import generate_image_thumbnail, generate_image_thumbnail_sm
+            from extraction import (
+                generate_image_thumbnail,
+                generate_image_thumbnail_sm,
+                generate_image_thumbnail_lg,
+            )
 
-            gen = generate_image_thumbnail_sm if size == "sm" else generate_image_thumbnail
+            if size == "sm":
+                gen = generate_image_thumbnail_sm
+            elif size == "lg":
+                gen = generate_image_thumbnail_lg
+            else:
+                gen = generate_image_thumbnail
             if not gen(str(src), str(thumb_path)):
                 # Couldn't generate — fall back to the original so the user
                 # still sees something (likely large, but it's a one-off).
