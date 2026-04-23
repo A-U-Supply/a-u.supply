@@ -1,0 +1,769 @@
+---
+import Admin from '../../../layouts/Admin.astro';
+---
+
+<Admin title="Bullet Hole" current="bullethole-live">
+  <div class="page-header">
+    <h1>Bullet Hole</h1>
+    <p class="page-subtitle">Live image editor</p>
+  </div>
+
+  <div class="bh-shell">
+    <!-- Canvas stage -->
+    <div class="bh-stage">
+      <div class="bh-drop-zone" id="drop-zone">
+        <canvas id="bh-canvas"></canvas>
+        <div class="bh-empty" id="bh-empty">
+          <div class="bh-empty__icon">⬡</div>
+          <div>Drop an image here or click to upload</div>
+          <div class="bh-empty__sub">or use Pick from Library below</div>
+        </div>
+        <input type="file" id="file-input" accept="image/*" style="display:none" />
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="bh-controls">
+      <button class="btn btn--secondary bh-library-btn" id="library-btn">Pick from Library</button>
+
+      <div class="bh-divider"></div>
+
+      <div class="bh-field">
+        <label class="bh-label" for="chaos">
+          Chaos
+          <span class="bh-val" id="chaos-val">0.50</span>
+        </label>
+        <input class="bh-range" type="range" id="chaos" min="0" max="1" step="0.01" value="0.5" />
+        <div class="bh-range-hints"><span>few large</span><span>many small</span></div>
+      </div>
+
+      <div class="bh-field">
+        <label class="bh-label" for="placement">Placement</label>
+        <select class="bh-select" id="placement">
+          <option value="random">Random</option>
+          <option value="grid">Grid</option>
+          <option value="hex">Hex</option>
+          <option value="radial">Radial</option>
+        </select>
+      </div>
+
+      <div class="bh-field">
+        <label class="bh-label" for="effect">Effect</label>
+        <select class="bh-select" id="effect">
+          <option value="rotate">Rotate</option>
+          <option value="invert">Invert</option>
+          <option value="blur">Blur</option>
+          <option value="grayscale">Grayscale</option>
+          <option value="pixelate">Pixelate</option>
+          <option value="fill_black">Fill Black</option>
+          <option value="fill_white">Fill White</option>
+        </select>
+      </div>
+
+      <div class="bh-field" id="jitter-field">
+        <label class="bh-label" for="jitter">
+          Jitter
+          <span class="bh-val" id="jitter-val">0.00</span>
+        </label>
+        <input class="bh-range" type="range" id="jitter" min="0" max="1" step="0.01" value="0" />
+      </div>
+
+      <div class="bh-field bh-check-field">
+        <label class="bh-check-label">
+          <input type="checkbox" id="no-overlap" />
+          No Overlap
+        </label>
+      </div>
+
+      <div class="bh-divider"></div>
+
+      <div class="bh-actions">
+        <button class="btn btn--secondary" id="reroll-btn" disabled>⟳ Re-roll</button>
+        <button class="btn btn--secondary" id="download-btn" disabled>↓ Download</button>
+        <button class="btn btn--primary" id="save-btn" disabled>☁ Save to Library</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Library picker modal -->
+  <div class="bh-modal-overlay" id="library-overlay" style="display:none">
+    <div class="bh-modal">
+      <div class="bh-modal__header">
+        <h2>Pick an Image</h2>
+        <button class="bh-modal__close" id="library-close">✕</button>
+      </div>
+      <input class="bh-modal__search" type="text" id="library-search" placeholder="Search…" />
+      <div class="bh-modal__grid" id="library-grid">
+        <div class="bh-modal__loading loading-dots">Loading</div>
+      </div>
+    </div>
+  </div>
+</Admin>
+
+<style>
+  .bh-shell {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    gap: var(--space-lg);
+    align-items: start;
+  }
+
+  .bh-stage {
+    background: var(--color-surface, #111);
+    border: 1px solid var(--color-border, #333);
+    border-radius: 4px;
+    min-height: 420px;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .bh-drop-zone {
+    width: 100%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: var(--space-md);
+  }
+
+  .bh-drop-zone.drag-over {
+    outline: 2px dashed var(--color-accent, #fff);
+    outline-offset: -4px;
+  }
+
+  #bh-canvas {
+    max-width: 100%;
+    max-height: 70vh;
+    display: none;
+    cursor: default;
+  }
+
+  .bh-empty {
+    text-align: center;
+    color: var(--color-muted, #666);
+    pointer-events: none;
+    line-height: 1.6;
+  }
+
+  .bh-empty__icon {
+    font-size: 2.5rem;
+    margin-bottom: var(--space-sm);
+    opacity: 0.4;
+  }
+
+  .bh-empty__sub {
+    font-size: var(--text-sm, 0.8rem);
+    margin-top: var(--space-xs);
+    opacity: 0.6;
+  }
+
+  .bh-controls {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .bh-library-btn {
+    width: 100%;
+  }
+
+  .bh-divider {
+    height: 1px;
+    background: var(--color-border, #333);
+    margin: var(--space-xs) 0;
+  }
+
+  .bh-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .bh-label {
+    font-size: var(--text-sm, 0.8rem);
+    color: var(--color-muted, #888);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .bh-val {
+    font-family: var(--font-mono, monospace);
+    color: var(--color-text, #ccc);
+  }
+
+  .bh-range {
+    width: 100%;
+    accent-color: var(--color-accent, #fff);
+  }
+
+  .bh-range-hints {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: var(--color-muted, #555);
+  }
+
+  .bh-select {
+    width: 100%;
+    background: var(--color-surface, #111);
+    color: var(--color-text, #ccc);
+    border: 1px solid var(--color-border, #333);
+    border-radius: 3px;
+    padding: 5px 8px;
+    font-size: var(--text-sm, 0.85rem);
+  }
+
+  .bh-check-field {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .bh-check-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-size: var(--text-sm, 0.85rem);
+    color: var(--color-text, #ccc);
+    cursor: pointer;
+  }
+
+  .bh-field.disabled .bh-label,
+  .bh-field.disabled .bh-range,
+  .bh-field.disabled .bh-val {
+    opacity: 0.35;
+    pointer-events: none;
+  }
+
+  .bh-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+
+  .bh-actions .btn {
+    width: 100%;
+  }
+
+  /* Library modal */
+  .bh-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .bh-modal {
+    background: var(--color-bg, #0a0a0a);
+    border: 1px solid var(--color-border, #333);
+    border-radius: 6px;
+    width: min(90vw, 700px);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .bh-modal__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-md);
+    border-bottom: 1px solid var(--color-border, #333);
+  }
+
+  .bh-modal__header h2 {
+    margin: 0;
+    font-size: var(--text-lg, 1rem);
+  }
+
+  .bh-modal__close {
+    background: none;
+    border: none;
+    color: var(--color-muted, #888);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 4px 8px;
+  }
+
+  .bh-modal__close:hover {
+    color: var(--color-text, #ccc);
+  }
+
+  .bh-modal__search {
+    margin: var(--space-sm) var(--space-md);
+    background: var(--color-surface, #111);
+    border: 1px solid var(--color-border, #333);
+    color: var(--color-text, #ccc);
+    border-radius: 3px;
+    padding: 6px 10px;
+    font-size: var(--text-sm, 0.85rem);
+  }
+
+  .bh-modal__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 6px;
+    padding: var(--space-sm) var(--space-md) var(--space-md);
+    overflow-y: auto;
+  }
+
+  .bh-modal__loading {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: var(--color-muted, #666);
+    padding: var(--space-lg);
+  }
+
+  .bh-thumb {
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: 3px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.1s;
+  }
+
+  .bh-thumb:hover {
+    border-color: var(--color-accent, #fff);
+  }
+</style>
+
+<script>
+  document.addEventListener('astro:page-load', () => {
+    // ─── Elements ──────────────────────────────────────────────────────────
+    const canvas    = document.getElementById('bh-canvas') as HTMLCanvasElement;
+    const dropZone  = document.getElementById('drop-zone') as HTMLDivElement;
+    const emptyEl   = document.getElementById('bh-empty') as HTMLDivElement;
+    const fileInput = document.getElementById('file-input') as HTMLInputElement;
+
+    const chaosEl       = document.getElementById('chaos') as HTMLInputElement;
+    const chaosVal      = document.getElementById('chaos-val') as HTMLSpanElement;
+    const placementEl   = document.getElementById('placement') as HTMLSelectElement;
+    const effectEl      = document.getElementById('effect') as HTMLSelectElement;
+    const jitterEl      = document.getElementById('jitter') as HTMLInputElement;
+    const jitterVal     = document.getElementById('jitter-val') as HTMLSpanElement;
+    const jitterField   = document.getElementById('jitter-field') as HTMLDivElement;
+    const noOverlapEl   = document.getElementById('no-overlap') as HTMLInputElement;
+
+    const rerollBtn   = document.getElementById('reroll-btn') as HTMLButtonElement;
+    const downloadBtn = document.getElementById('download-btn') as HTMLButtonElement;
+    const saveBtn     = document.getElementById('save-btn') as HTMLButtonElement;
+    const libraryBtn  = document.getElementById('library-btn') as HTMLButtonElement;
+
+    const libraryOverlay = document.getElementById('library-overlay') as HTMLDivElement;
+    const libraryClose   = document.getElementById('library-close') as HTMLButtonElement;
+    const librarySearch  = document.getElementById('library-search') as HTMLInputElement;
+    const libraryGrid    = document.getElementById('library-grid') as HTMLDivElement;
+
+    // ─── State ─────────────────────────────────────────────────────────────
+    let sourceImg: HTMLImageElement | null = null;
+    let state: { holes: {cx:number, cy:number, angle:number}[], radius: number } | null = null;
+
+    // ─── Placement helpers (mirrors bullethole_bot.py) ─────────────────────
+
+    function removeOverlap(centers: [number,number][], radius: number): [number,number][] {
+      const kept: [number,number][] = [];
+      const diam2 = (radius * 2) ** 2;
+      for (const [cx, cy] of centers) {
+        if (!kept.some(([ox,oy]) => (cx-ox)**2 + (cy-oy)**2 < diam2)) {
+          kept.push([cx, cy]);
+        }
+      }
+      return kept;
+    }
+
+    function placeRandom(n: number, w: number, h: number, radius: number, noOverlap: boolean): [number,number][] {
+      const centers: [number,number][] = [];
+      const diam2 = (radius * 2) ** 2;
+      for (let i = 0; i < n; i++) {
+        if (noOverlap) {
+          for (let attempt = 0; attempt < 100; attempt++) {
+            const cx = radius + Math.random() * (w - radius * 2);
+            const cy = radius + Math.random() * (h - radius * 2);
+            if (!centers.some(([ox,oy]) => (cx-ox)**2 + (cy-oy)**2 < diam2)) {
+              centers.push([cx, cy]);
+              break;
+            }
+          }
+        } else {
+          centers.push([
+            radius + Math.random() * (w - radius * 2),
+            radius + Math.random() * (h - radius * 2),
+          ]);
+        }
+      }
+      return centers;
+    }
+
+    function placeGrid(n: number, w: number, h: number, radius: number, jitter: number, hex: boolean): [number,number][] {
+      const cols = Math.max(1, Math.round(Math.sqrt(n * w / h)));
+      const rows = Math.max(1, Math.ceil(n / cols));
+      const cellW = w / cols;
+      const cellH = h / rows;
+      const centers: [number,number][] = [];
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (centers.length >= n) break;
+          let cx = cellW * (c + 0.5);
+          let cy = cellH * (r + 0.5);
+          if (hex && r % 2 === 1) cx += cellW * 0.5;
+          if (jitter > 0) {
+            cx += (Math.random() * 2 - 1) * cellW * jitter * 0.5;
+            cy += (Math.random() * 2 - 1) * cellH * jitter * 0.5;
+          }
+          cx = Math.max(radius, Math.min(w - radius, cx));
+          cy = Math.max(radius, Math.min(h - radius, cy));
+          centers.push([cx, cy]);
+        }
+      }
+      return centers;
+    }
+
+    function placeRadial(n: number, w: number, h: number, radius: number, jitter: number): [number,number][] {
+      const cx0 = w / 2, cy0 = h / 2;
+      const maxDist = Math.min(cx0, cy0) - radius;
+      if (maxDist <= 0 || n <= 1) return Array(n).fill([cx0, cy0]);
+
+      const numRings = Math.max(1, Math.round(Math.sqrt(n)));
+      const ringRadii = Array.from({length: numRings}, (_, i) => maxDist * (i + 1) / numRings);
+      const totalR = ringRadii.reduce((a,b) => a+b, 0);
+
+      const counts: number[] = [];
+      let remaining = n;
+      for (let i = 0; i < numRings; i++) {
+        if (i === numRings - 1) { counts.push(remaining); break; }
+        const c = Math.max(1, Math.round(n * ringRadii[i] / totalR));
+        counts.push(c);
+        remaining -= c;
+      }
+
+      const centers: [number,number][] = [];
+      for (let i = 0; i < numRings; i++) {
+        for (let k = 0; k < counts[i]; k++) {
+          let angle = 2 * Math.PI * k / counts[i];
+          let dist = ringRadii[i];
+          if (jitter > 0) {
+            angle += (Math.random() * 2 - 1) * Math.PI / counts[i] * jitter;
+            dist += (Math.random() * 2 - 1) * (maxDist / numRings) * jitter * 0.5;
+            dist = Math.max(radius, Math.min(maxDist, dist));
+          }
+          const px = Math.max(radius, Math.min(w - radius, cx0 + dist * Math.cos(angle)));
+          const py = Math.max(radius, Math.min(h - radius, cy0 + dist * Math.sin(angle)));
+          centers.push([px, py]);
+        }
+      }
+      return centers.slice(0, n);
+    }
+
+    function genHoles(w: number, h: number): typeof state {
+      const chaos     = parseFloat(chaosEl.value);
+      const placement = placementEl.value;
+      const jitter    = parseFloat(jitterEl.value);
+      const noOverlap = noOverlapEl.checked;
+
+      const n = Math.max(2, Math.round(2 + chaos * 84 + (Math.random() * 2 - 1)));
+      const frac = 0.33 + (0.05 - 0.33) * chaos;
+      const maxR = Math.max(4, Math.round(w * frac));
+      const minR = Math.max(2, Math.round(maxR * 0.6));
+      const radius = minR + Math.floor(Math.random() * (maxR - minR + 1));
+
+      let rawCenters: [number,number][];
+      if (placement === 'grid')        rawCenters = placeGrid(n, w, h, radius, jitter, false);
+      else if (placement === 'hex')    rawCenters = placeGrid(n, w, h, radius, jitter, true);
+      else if (placement === 'radial') rawCenters = placeRadial(n, w, h, radius, jitter);
+      else                             rawCenters = placeRandom(n, w, h, radius, noOverlap);
+
+      if (noOverlap && placement !== 'random') rawCenters = removeOverlap(rawCenters, radius);
+
+      const holes = rawCenters.map(([cx, cy]) => ({
+        cx, cy,
+        angle: Math.random() * 300 + 30,
+      }));
+
+      return { holes, radius };
+    }
+
+    // ─── Render ────────────────────────────────────────────────────────────
+
+    function render() {
+      if (!sourceImg || !state) return;
+      const ctx = canvas.getContext('2d')!;
+      const { holes, radius } = state;
+      const effect = effectEl.value;
+      const W = canvas.width, H = canvas.height;
+
+      // Base image
+      ctx.drawImage(sourceImg, 0, 0, W, H);
+
+      for (const { cx, cy, angle } of holes) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.clip();
+
+        switch (effect) {
+          case 'rotate':
+            ctx.translate(cx, cy);
+            ctx.rotate(angle * Math.PI / 180);
+            ctx.translate(-cx, -cy);
+            ctx.drawImage(sourceImg, 0, 0, W, H);
+            break;
+          case 'invert':
+            ctx.filter = 'invert(1)';
+            ctx.drawImage(sourceImg, 0, 0, W, H);
+            ctx.filter = 'none';
+            break;
+          case 'blur':
+            ctx.filter = `blur(${Math.max(2, Math.floor(radius / 6))}px)`;
+            ctx.drawImage(sourceImg, 0, 0, W, H);
+            ctx.filter = 'none';
+            break;
+          case 'grayscale':
+            ctx.filter = 'grayscale(1)';
+            ctx.drawImage(sourceImg, 0, 0, W, H);
+            ctx.filter = 'none';
+            break;
+          case 'pixelate': {
+            const block = Math.max(4, Math.floor(radius / 8));
+            const tw = Math.max(1, Math.floor(W / block));
+            const th = Math.max(1, Math.floor(H / block));
+            const tmp = document.createElement('canvas');
+            tmp.width = tw; tmp.height = th;
+            tmp.getContext('2d')!.drawImage(sourceImg, 0, 0, tw, th);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(tmp, 0, 0, tw, th, 0, 0, W, H);
+            ctx.imageSmoothingEnabled = true;
+            break;
+          }
+          case 'fill_black':
+            ctx.fillStyle = '#000';
+            ctx.fill();
+            break;
+          case 'fill_white':
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+            break;
+        }
+
+        ctx.restore();
+      }
+    }
+
+    function reroll() {
+      if (!sourceImg) return;
+      state = genHoles(canvas.width, canvas.height);
+      render();
+    }
+
+    // ─── Load image ────────────────────────────────────────────────────────
+
+    function loadFromBlob(blob: Blob) {
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        sourceImg = img;
+        canvas.width  = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.style.display = 'block';
+        emptyEl.style.display = 'none';
+        rerollBtn.disabled   = false;
+        downloadBtn.disabled = false;
+        saveBtn.disabled     = false;
+        reroll();
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    }
+
+    function loadFromUrl(url: string) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        sourceImg = img;
+        canvas.width  = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.style.display = 'block';
+        emptyEl.style.display = 'none';
+        rerollBtn.disabled   = false;
+        downloadBtn.disabled = false;
+        saveBtn.disabled     = false;
+        reroll();
+      };
+      img.onerror = () => {
+        (window as any).toast?.error('Failed to load image');
+      };
+      img.src = url;
+    }
+
+    // ─── Controls ──────────────────────────────────────────────────────────
+
+    function updateJitterState() {
+      const disabled = placementEl.value === 'random';
+      jitterField.classList.toggle('disabled', disabled);
+      jitterEl.disabled = disabled;
+    }
+
+    chaosEl.addEventListener('input', () => {
+      chaosVal.textContent = parseFloat(chaosEl.value).toFixed(2);
+    });
+    jitterEl.addEventListener('input', () => {
+      jitterVal.textContent = parseFloat(jitterEl.value).toFixed(2);
+    });
+
+    // Changes that need re-roll
+    let rerollTimer: ReturnType<typeof setTimeout>;
+    function scheduleReroll() {
+      clearTimeout(rerollTimer);
+      rerollTimer = setTimeout(() => reroll(), 150);
+    }
+
+    chaosEl.addEventListener('input', scheduleReroll);
+    placementEl.addEventListener('change', () => { updateJitterState(); reroll(); });
+    jitterEl.addEventListener('input', scheduleReroll);
+    noOverlapEl.addEventListener('change', () => reroll());
+
+    // Effect only needs re-render (holes stay)
+    effectEl.addEventListener('change', () => render());
+
+    updateJitterState();
+
+    // ─── File drop & click ─────────────────────────────────────────────────
+
+    dropZone.addEventListener('click', (e) => {
+      if ((e.target as Element).closest('#file-input')) return;
+      fileInput.click();
+    });
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files?.[0];
+      if (file) loadFromBlob(file);
+    });
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      const file = e.dataTransfer?.files[0];
+      if (file && file.type.startsWith('image/')) loadFromBlob(file);
+    });
+
+    // ─── Action buttons ────────────────────────────────────────────────────
+
+    rerollBtn.addEventListener('click', () => reroll());
+
+    downloadBtn.addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.download = 'bullethole.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    });
+
+    saveBtn.addEventListener('click', async () => {
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving…';
+      canvas.toBlob(async (blob) => {
+        if (!blob) { (window as any).toast?.error('Failed to export canvas'); return; }
+        try {
+          const fd = new FormData();
+          fd.append('file', blob, 'bullethole.png');
+          fd.append('tags', 'bullethole,atelier');
+          const res = await fetch('/api/media/upload', {
+            method: 'POST',
+            body: fd,
+            credentials: 'include',
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          (window as any).toast?.success('Saved to library');
+        } catch (err: any) {
+          (window as any).toast?.error(`Save failed: ${err.message}`);
+        } finally {
+          saveBtn.disabled = false;
+          saveBtn.textContent = '☁ Save to Library';
+        }
+      }, 'image/png');
+    });
+
+    // ─── Library modal ─────────────────────────────────────────────────────
+
+    let librarySearchTimer: ReturnType<typeof setTimeout>;
+
+    async function loadLibrary(q = '') {
+      libraryGrid.innerHTML = '<div class="bh-modal__loading loading-dots">Loading</div>';
+      try {
+        const res = await fetch('/api/search', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: q,
+            media_types: ['image'],
+            sort: 'created_at:desc',
+            page: 1,
+            per_page: 36,
+            filters: {},
+          }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const results: any[] = data.results || data.hits || [];
+
+        if (results.length === 0) {
+          libraryGrid.innerHTML = '<div class="bh-modal__loading">No images found</div>';
+          return;
+        }
+
+        libraryGrid.innerHTML = '';
+        for (const item of results) {
+          const img = document.createElement('img');
+          img.className = 'bh-thumb';
+          img.src = `/api/media/${item.id}/thumbnail`;
+          img.alt = item.filename || '';
+          img.title = item.filename || '';
+          img.loading = 'lazy';
+          img.addEventListener('click', () => {
+            libraryOverlay.style.display = 'none';
+            loadFromUrl(`/api/media/${item.id}/file`);
+          });
+          libraryGrid.appendChild(img);
+        }
+      } catch (err: any) {
+        libraryGrid.innerHTML = `<div class="bh-modal__loading">Error: ${err.message}</div>`;
+      }
+    }
+
+    libraryBtn.addEventListener('click', () => {
+      libraryOverlay.style.display = 'flex';
+      loadLibrary();
+    });
+
+    libraryClose.addEventListener('click', () => {
+      libraryOverlay.style.display = 'none';
+    });
+
+    libraryOverlay.addEventListener('click', (e) => {
+      if (e.target === libraryOverlay) libraryOverlay.style.display = 'none';
+    });
+
+    librarySearch.addEventListener('input', () => {
+      clearTimeout(librarySearchTimer);
+      librarySearchTimer = setTimeout(() => loadLibrary(librarySearch.value), 300);
+    });
+
+    // Cleanup on page swap (Astro View Transitions)
+    document.addEventListener('astro:before-swap', () => {
+      clearTimeout(rerollTimer);
+      clearTimeout(librarySearchTimer);
+    }, { once: true });
+  });
+</script>
