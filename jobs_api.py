@@ -2323,6 +2323,95 @@ def download_output(
     )
 
 
+@router.get(
+    "/jobs/{job_id}/outputs/{output_id}/thumbnail",
+    tags=["Job Outputs"],
+    summary="Get a thumbnail for a job output",
+)
+def job_output_thumbnail(
+    job_id: str,
+    output_id: str,
+    size: str = Query("md", pattern="^(sm|md)$", description="`md` (400px, default) or `sm` (128px)."),
+    auth: tuple[User, str] = Depends(require_scope("read")),
+    db: Session = Depends(get_db),
+):
+    """Serve a thumbnail for a JobOutput — indexed or not.
+
+    For **indexed** outputs this reuses the MediaItem resolver chain (frame
+    grabs, ``_thumb.webp`` siblings, placeholder SVGs).
+
+    For **unindexed** outputs (midden, slop, pre-index previews) the endpoint
+    looks for a ``<stem>_thumb.webp`` sibling next to the raw output file and
+    generates one on first hit for images. Audio/video fall back to a
+    placeholder SVG rather than triggering ffmpeg in the request path —
+    midden pages with many tiles would otherwise serialize a pile of
+    frame-grab calls on first load.
+    """
+    from fastapi.responses import FileResponse
+    from search_api import (
+        _media_type_from_mime,
+        _placeholder_response,
+        _thumbnail_response,
+    )
+
+    output = (
+        db.query(JobOutput)
+        .filter(JobOutput.id == output_id, JobOutput.job_id == job_id)
+        .first()
+    )
+    if not output:
+        raise HTTPException(status_code=404, detail="Output not found")
+
+    cache_control = "private, max-age=86400"
+
+    # Indexed: delegate to the MediaItem resolver — same fallback as
+    # /api/media/{id}/thumbnail, so URLs that share a media_id behave
+    # identically regardless of which surface renders them.
+    if output.indexed and output.media_item_id:
+        item = db.query(MediaItem).filter(MediaItem.id == output.media_item_id).first()
+        if item is not None:
+            response = _thumbnail_response(item, cache_control, size=size)
+            db.close()
+            return response
+
+    src = JOB_DATA_DIR / job_id / "output" / output.file_path
+    mime = output.media_type or ""
+    coarse = _media_type_from_mime(mime)
+
+    if not src.is_file():
+        # File already purged (midden) or bot cleanup — show placeholder
+        # rather than 404 so grid UIs don't flash broken icons.
+        db.close()
+        return _placeholder_response(coarse or "image", cache_control)
+
+    if coarse == "image":
+        suffix = "_thumb_sm.webp" if size == "sm" else "_thumb.webp"
+        thumb_path = src.with_name(src.stem + suffix)
+        if not thumb_path.exists():
+            from extraction import generate_image_thumbnail, generate_image_thumbnail_sm
+
+            gen = generate_image_thumbnail_sm if size == "sm" else generate_image_thumbnail
+            if not gen(str(src), str(thumb_path)):
+                # Couldn't generate — fall back to the original so the user
+                # still sees something (likely large, but it's a one-off).
+                db.close()
+                return FileResponse(
+                    src,
+                    media_type=mime or "application/octet-stream",
+                    headers={"Cache-Control": cache_control},
+                )
+        db.close()
+        return FileResponse(
+            thumb_path,
+            media_type="image/webp",
+            headers={"Cache-Control": cache_control},
+        )
+
+    # Audio/video/unknown unindexed: placeholder SVG (no ffmpeg in hot path).
+    db.close()
+    return _placeholder_response(coarse or "image", cache_control)
+
+
 def _do_index_output(
     output_id: str,
     job_id: str,

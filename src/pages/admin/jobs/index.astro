@@ -506,7 +506,10 @@ import Admin from '../../../layouts/Admin.astro';
     function renderThumbCell(j: any): string {
       if (j.preview_media_id) {
         const title = (j.preview_media_type || 'media').replace(/["<>&]/g, '');
-        return `<img class="job-thumb" src="/api/media/${j.preview_media_id}/thumbnail" alt="" loading="lazy" title="${title}">`;
+        // Jobs list thumbs render small (~48px) — prefer the sm variant.
+        const sm = `/api/media/${j.preview_media_id}/thumbnail?size=sm`;
+        const md = `/api/media/${j.preview_media_id}/thumbnail`;
+        return `<img class="job-thumb" src="${sm}" srcset="${sm} 1x, ${md} 2x" alt="" loading="lazy" decoding="async" title="${title}">`;
       }
       return `<div class="job-thumb job-thumb--placeholder">—</div>`;
     }

@@ -322,14 +322,13 @@ import Admin from '../../layouts/Admin.astro';
           });
           if (res.ok) {
             const item = await res.json();
+            const hasThumb = item.media_type === 'image' || item.media_type === 'video';
             metaMap.set(`media_item:${id}`, {
               name: item.filename || 'Untitled',
               sub: item.media_type,
               media_type: item.media_type,
-              thumb:
-                item.media_type === 'image' || item.media_type === 'video'
-                  ? `/api/media/${id}/thumbnail`
-                  : '/assets/default-cover.jpg',
+              thumb: hasThumb ? `/api/media/${id}/thumbnail` : '/assets/default-cover.jpg',
+              thumb_sm: hasThumb ? `/api/media/${id}/thumbnail?size=sm` : undefined,
               href: `/admin/search/detail?id=${id}`,
               playable:
                 item.media_type === 'audio' || item.media_type === 'video',
@@ -414,7 +413,7 @@ import Admin from '../../layouts/Admin.astro';
           <input type="checkbox" class="bm-card__check" data-select="${item.target_id}" ${checked} />
           <div class="bm-card__thumb">
             <span class="bm-card__type-badge">${item.target_type.replace('_', ' ')}</span>
-            <img src="${m.thumb}" alt="" loading="lazy"${thumbStyle} />
+            <img src="${m.thumb}" ${m.thumb_sm ? `srcset="${m.thumb_sm} 128w, ${m.thumb} 400w" sizes="(max-width: 480px) 128px, 220px"` : ''} alt="" loading="lazy" decoding="async"${thumbStyle} />
             ${playBtn}
             ${item.target_type === 'media_item' ? `<button class="bm-card__ws" data-ws-id="${item.target_id}" title="Add to workspace">${briefcaseSvg}</button>` : ''}
           </div>

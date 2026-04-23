@@ -564,9 +564,11 @@ import Admin from '../../../layouts/Admin.astro';
       gridEl.innerHTML = allOutputs
         .map((o: any) => {
           const dlUrl = downloadUrl(o);
+          const thumbUrl = `/api/jobs/${o.job_id}/outputs/${o.id}/thumbnail`;
+          const thumbUrlSm = `${thumbUrl}?size=sm`;
           let preview = '';
           if (o.media_type === 'image') {
-            preview = `<a href="${dlUrl}" target="_blank"><img class="slop-preview" src="${dlUrl}" alt="${o.filename}" loading="lazy"></a>`;
+            preview = `<a href="${dlUrl}" target="_blank"><img class="slop-preview" src="${thumbUrl}" srcset="${thumbUrlSm} 128w, ${thumbUrl} 400w" sizes="(max-width: 480px) 128px, 220px" alt="${o.filename}" loading="lazy" decoding="async"></a>`;
           } else if (o.media_type === 'video') {
             preview = `<video class="slop-preview" controls preload="none" src="${dlUrl}"></video>`;
           } else if (o.media_type === 'audio') {
