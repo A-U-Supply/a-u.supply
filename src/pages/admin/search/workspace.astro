@@ -753,6 +753,12 @@ import Admin from '../../../layouts/Admin.astro';
 </style>
 
 <script>
+  import {
+    openImageViewer,
+    mediaItemToViewerItem,
+    mediaItemDefaultActions,
+  } from '../../../lib/admin-viewer';
+
   document.addEventListener('astro:page-load', async () => {
     await (window as any).__authReady;
 
@@ -1144,9 +1150,16 @@ import Admin from '../../../layouts/Admin.astro';
             : `<img src="/assets/default-cover.jpg" alt="${item.media_type}" loading="lazy" style="image-rendering: pixelated;" />`;
           const canPlay =
             item.media_type === 'audio' || item.media_type === 'video';
-          const playBtn = canPlay
-            ? `<button class="ws-play" data-play-id="${item.media_item_id}" data-play-type="${item.media_type}" title="Play">${playSvg}</button><button class="ws-add" data-play-id="${item.media_item_id}" data-play-type="${item.media_type}" title="Add to queue">+</button>`
-            : '';
+          // Audio → Player queue (play + add-to-queue). Video → viewer (play only).
+          let playBtn = '';
+          if (canPlay) {
+            const play = `<button class="ws-play" data-play-id="${item.media_item_id}" data-play-type="${item.media_type}" title="Play">${playSvg}</button>`;
+            const add =
+              item.media_type === 'audio'
+                ? `<button class="ws-add" data-play-id="${item.media_item_id}" data-play-type="${item.media_type}" title="Add to queue">+</button>`
+                : '';
+            playBtn = `${play}${add}`;
+          }
           const dur = item.duration_seconds
             ? `<span class="ws-duration">${fmtDur(item.duration_seconds)}</span>`
             : '';
@@ -1180,14 +1193,21 @@ import Admin from '../../../layouts/Admin.astro';
         });
       });
 
-      // Play buttons — dispatch to the persistent player
+      // Play buttons.
+      // Audio → persistent Player queue.
+      // Video → inline viewer (same reel as image tile clicks).
       gridEl.querySelectorAll('.ws-play').forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           const el = btn as HTMLElement;
           const mediaId = el.dataset.playId!;
+          const mediaType = el.dataset.playType!;
           const item = data.items.find((i: any) => i.media_item_id === mediaId);
           if (!item) return;
+          if (mediaType === 'video') {
+            openViewerForMedia(mediaId);
+            return;
+          }
           document.dispatchEvent(
             new CustomEvent('player:queue', {
               detail: {
@@ -1213,6 +1233,45 @@ import Admin from '../../../layouts/Admin.astro';
           );
         });
       });
+
+      // Thumb body click — image/video open viewer. Audio tiles don't
+      // open the viewer; the user is expected to use the play button.
+      gridEl.querySelectorAll('.ws-thumb').forEach((thumb, idx) => {
+        thumb.addEventListener('click', (e) => {
+          const t = e.target as HTMLElement;
+          if (
+            t.closest('.ws-play') ||
+            t.closest('.ws-add') ||
+            t.closest('.ws-remove')
+          )
+            return;
+          const item = data.items[idx];
+          if (!item) return;
+          if (item.media_type === 'image' || item.media_type === 'video') {
+            openViewerForMedia(item.media_item_id);
+          }
+        });
+      });
+
+      function openViewerForMedia(startId: string) {
+        const viewable = (data.items as any[])
+          .filter(
+            (i: any) => i.media_type === 'image' || i.media_type === 'video',
+          )
+          .map((i: any) => ({
+            id: i.media_item_id,
+            filename: i.filename,
+            media_type: i.media_type,
+          }));
+        if (viewable.length === 0) return;
+        const startIndex = Math.max(
+          0,
+          viewable.findIndex((i: any) => i.id === startId),
+        );
+        const items = viewable.map(mediaItemToViewerItem);
+        const allIds = viewable.map((i: any) => i.id);
+        openImageViewer(items, startIndex, mediaItemDefaultActions(allIds));
+      }
 
       // Add to queue buttons
       gridEl.querySelectorAll('.ws-add').forEach((btn) => {

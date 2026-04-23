@@ -189,6 +189,16 @@ import Admin from '../../../layouts/Admin.astro';
     margin-bottom: var(--space-xs);
     border-radius: 2px;
   }
+  .slop-preview-btn {
+    all: unset;
+    display: block;
+    width: 100%;
+    cursor: zoom-in;
+  }
+  .slop-preview-btn:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
   video.slop-preview {
     max-height: 240px;
     background: #000;
@@ -323,6 +333,11 @@ import Admin from '../../../layouts/Admin.astro';
 </style>
 
 <script>
+  import {
+    openImageViewer,
+    jobOutputToViewerItem,
+  } from '../../../lib/admin-viewer';
+
   document.addEventListener('astro:page-load', async () => {
     await (window as any).__authReady;
 
@@ -568,7 +583,8 @@ import Admin from '../../../layouts/Admin.astro';
           const thumbUrlSm = `${thumbUrl}?size=sm`;
           let preview = '';
           if (o.media_type === 'image') {
-            preview = `<a href="${dlUrl}" target="_blank"><img class="slop-preview" src="${thumbUrl}" srcset="${thumbUrlSm} 128w, ${thumbUrl} 400w" sizes="(max-width: 480px) 128px, 220px" alt="${o.filename}" loading="lazy" decoding="async"></a>`;
+            // Image tiles open the viewer (prev/next through midden siblings).
+            preview = `<button class="slop-preview-btn" data-viewer-id="${o.id}" title="View" type="button"><img class="slop-preview" src="${thumbUrl}" srcset="${thumbUrlSm} 128w, ${thumbUrl} 400w" sizes="(max-width: 480px) 128px, 220px" alt="${o.filename}" loading="lazy" decoding="async"></button>`;
           } else if (o.media_type === 'video') {
             preview = `<video class="slop-preview" controls preload="none" src="${dlUrl}"></video>`;
           } else if (o.media_type === 'audio') {
@@ -611,6 +627,28 @@ import Admin from '../../../layouts/Admin.astro';
         .join('');
       gridEl.style.display = '';
       updateCountdowns();
+
+      // Image preview click → viewer (siblings = all image outputs in midden)
+      gridEl.querySelectorAll('.slop-preview-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const startId = (btn as HTMLElement).dataset.viewerId;
+          if (!startId) return;
+          const viewable = (allOutputs as any[]).filter(
+            (x) => x.media_type === 'image',
+          );
+          const startIndex = Math.max(
+            0,
+            viewable.findIndex((x: any) => x.id === startId),
+          );
+          const items = viewable.map(jobOutputToViewerItem);
+          openImageViewer(items, startIndex, {
+            onDetails: (item) => {
+              window.location.href = `/admin/jobs/detail?id=${item.job_id}`;
+            },
+          });
+        });
+      });
 
       // Wire up play buttons
       gridEl.querySelectorAll('[data-play]').forEach((btn) => {
