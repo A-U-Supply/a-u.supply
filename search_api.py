@@ -142,6 +142,112 @@ class ApiKeyCreateRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Thumbnail resolution + placeholders
+#
+# Every thumbnail endpoint (authed, public-outputs, og-thumb) uses the same
+# resolution chain so behavior is consistent:
+#
+#   video: video_meta.thumbnail_path → <stem>_thumb.webp → video placeholder
+#   image: <stem>_thumb.webp → original file → image placeholder (rare)
+#   audio: <stem>_thumb.webp → audio placeholder SVG
+#
+# Placeholders are tiny inline SVGs so callers never see a broken image.
+# ---------------------------------------------------------------------------
+
+_AUDIO_PLACEHOLDER_SVG = (
+    b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" '
+    b'width="400" height="400" role="img" aria-label="Audio">'
+    b'<rect width="400" height="400" fill="#1a1a1a"/>'
+    b'<g fill="none" stroke="#888" stroke-width="6" stroke-linecap="round">'
+    b'<line x1="70" y1="200" x2="70" y2="180"/>'
+    b'<line x1="110" y1="160" x2="110" y2="240"/>'
+    b'<line x1="150" y1="120" x2="150" y2="280"/>'
+    b'<line x1="190" y1="150" x2="190" y2="250"/>'
+    b'<line x1="230" y1="100" x2="230" y2="300"/>'
+    b'<line x1="270" y1="170" x2="270" y2="230"/>'
+    b'<line x1="310" y1="130" x2="310" y2="270"/>'
+    b'<line x1="350" y1="190" x2="350" y2="210"/>'
+    b"</g></svg>"
+)
+
+_VIDEO_PLACEHOLDER_SVG = (
+    b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" '
+    b'width="400" height="400" role="img" aria-label="Video">'
+    b'<rect width="400" height="400" fill="#1a1a1a"/>'
+    b'<polygon points="170,140 170,260 270,200" fill="#888"/>'
+    b"</svg>"
+)
+
+_IMAGE_PLACEHOLDER_SVG = (
+    b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" '
+    b'width="400" height="400" role="img" aria-label="Image">'
+    b'<rect width="400" height="400" fill="#1a1a1a"/>'
+    b'<rect x="100" y="120" width="200" height="160" rx="6" '
+    b'fill="none" stroke="#888" stroke-width="6"/>'
+    b'<circle cx="160" cy="170" r="15" fill="#888"/>'
+    b'<polyline points="110,260 180,210 220,240 290,180 290,275 110,275" fill="#888"/>'
+    b"</svg>"
+)
+
+
+def _resolve_thumbnail_path(item: "MediaItem") -> tuple[Path, str] | None:
+    """Return (path, mime) for the best on-disk thumbnail for an item, or None.
+
+    Callers should fall back to :func:`_placeholder_response` when None.
+    """
+    media_dir = _get_search_media_dir()
+
+    # Video: dedicated frame grab wins
+    if item.media_type == "video" and item.video_meta and item.video_meta.thumbnail_path:
+        p = media_dir / item.video_meta.thumbnail_path
+        if p.exists():
+            return (p, "image/webp")
+
+    # Any type: <stem>_thumb.webp sibling
+    if item.file_path:
+        original = media_dir / item.file_path
+        sibling = original.with_name(original.stem + "_thumb.webp")
+        if sibling.exists():
+            return (sibling, "image/webp")
+
+    # Image: original as last-resort (race window before extraction runs)
+    if item.media_type == "image" and item.file_path:
+        p = media_dir / item.file_path
+        if p.exists():
+            return (p, item.mime_type or "application/octet-stream")
+
+    return None
+
+
+def _placeholder_response(media_type: str, cache_control: str) -> Response:
+    """Return a tiny inline SVG placeholder for a media type."""
+    if media_type == "audio":
+        svg = _AUDIO_PLACEHOLDER_SVG
+    elif media_type == "video":
+        svg = _VIDEO_PLACEHOLDER_SVG
+    else:
+        svg = _IMAGE_PLACEHOLDER_SVG
+    return Response(
+        content=svg,
+        media_type="image/svg+xml",
+        headers={"Cache-Control": cache_control},
+    )
+
+
+def _thumbnail_response(item: "MediaItem", cache_control: str) -> Response:
+    """Return a FileResponse for the best thumbnail, or a placeholder SVG."""
+    resolved = _resolve_thumbnail_path(item)
+    if resolved is None:
+        return _placeholder_response(item.media_type, cache_control)
+    path, mime = resolved
+    return FileResponse(
+        path,
+        media_type=mime,
+        headers={"Cache-Control": cache_control},
+    )
+
+
 def _media_type_from_mime(mime: str) -> str | None:
     """Derive media_type (image/audio/video) from a MIME type string."""
     if mime.startswith("image/"):
@@ -641,38 +747,9 @@ def get_media_og_thumb(media_id: str, db: Session = Depends(get_db)):
     item = db.query(MediaItem).filter(MediaItem.id == media_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Not found")
-
-    media_dir = _get_search_media_dir()
-    resolved: tuple[Path, str] | None = None
-
-    if item.media_type == "video" and item.video_meta and item.video_meta.thumbnail_path:
-        thumb_path = media_dir / item.video_meta.thumbnail_path
-        if thumb_path.exists():
-            resolved = (thumb_path, "image/webp")
-
-    if resolved is None and item.file_path:
-        original = media_dir / item.file_path
-        thumb = original.with_name(original.stem + "_thumb.webp")
-        if thumb.exists():
-            resolved = (thumb, "image/webp")
-
-    if resolved is None and item.media_type == "image" and item.file_path:
-        file_path = media_dir / item.file_path
-        if file_path.exists():
-            resolved = (file_path, item.mime_type or "application/octet-stream")
-
+    response = _thumbnail_response(item, "public, max-age=86400")
     db.close()
-    if resolved is None:
-        raise HTTPException(status_code=404, detail="Thumbnail not found")
-    path, mime = resolved
-    # OG thumbs are keyed on a stable media_id — safe to cache aggressively.
-    # Slack/Twitter/iMessage unfurlers and any browser that sees the link
-    # can reuse the same bytes.
-    return FileResponse(
-        path,
-        media_type=mime,
-        headers={"Cache-Control": "public, max-age=86400"},
-    )
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -805,9 +882,9 @@ def get_public_output_file(media_id: str, db: Session = Depends(get_db)):
 def get_public_output_thumbnail(media_id: str, db: Session = Depends(get_db)):
     """Serve the thumbnail for an indexed output, no auth required.
 
-    Same resolution rules as :func:`get_media_thumbnail`: video frame-grab,
-    ``_thumb.webp`` sibling, or the original image as a last resort. 404s
-    for items that are not in the outputs index.
+    Falls back to an inline SVG placeholder (never 404s) so waterfall
+    clients don't have to handle missing tiles. 404s only if the item
+    itself is not in the outputs index.
     """
     item = (
         db.query(MediaItem)
@@ -816,35 +893,9 @@ def get_public_output_thumbnail(media_id: str, db: Session = Depends(get_db)):
     )
     if not item:
         raise HTTPException(status_code=404, detail="Not found")
-
-    media_dir = _get_search_media_dir()
-    resolved: tuple[Path, str] | None = None
-
-    if item.media_type == "video" and item.video_meta and item.video_meta.thumbnail_path:
-        thumb_path = media_dir / item.video_meta.thumbnail_path
-        if thumb_path.exists():
-            resolved = (thumb_path, "image/webp")
-
-    if resolved is None and item.file_path:
-        original = media_dir / item.file_path
-        thumb = original.with_name(original.stem + "_thumb.webp")
-        if thumb.exists():
-            resolved = (thumb, "image/webp")
-
-    if resolved is None and item.media_type == "image" and item.file_path:
-        file_path = media_dir / item.file_path
-        if file_path.exists():
-            resolved = (file_path, item.mime_type or "application/octet-stream")
-
+    response = _thumbnail_response(item, "public, max-age=86400, immutable")
     db.close()
-    if resolved is None:
-        raise HTTPException(status_code=404, detail="Thumbnail not found")
-    path, mime = resolved
-    return FileResponse(
-        path,
-        media_type=mime,
-        headers={"Cache-Control": "public, max-age=86400, immutable"},
-    )
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -1269,47 +1320,16 @@ def get_media_thumbnail(
     """Serve the thumbnail for a media item.
 
     **Thumbnail sources by type:**
-    - **Videos**: Uses the auto-generated frame grab (captured at ~10% into the video)
-    - **Images**: Uses the `_thumb.webp` file generated alongside the original
-    - **Images (fallback)**: If no thumbnail exists, serves the original image
-    - **Audio**: No thumbnail available (returns 404)
-
-    All thumbnails are in WebP format.
+    - **Videos**: auto-generated frame grab, then `_thumb.webp` sibling, else video placeholder SVG
+    - **Images**: `_thumb.webp` sibling, else original image, else image placeholder SVG (rare)
+    - **Audio**: inline audio-waveform placeholder SVG (always 200, never 404)
 
     **Scope required:** `read`
     """
     item = _get_media_item_or_404(db, media_id)
-
-    # Resolve the path to serve while the session is still live, then close
-    # so the connection isn't held for the entire file stream.
-    media_dir = _get_search_media_dir()
-    resolved: tuple[Path, str] | None = None
-
-    if item.media_type == "video" and item.video_meta and item.video_meta.thumbnail_path:
-        thumb_path = media_dir / item.video_meta.thumbnail_path
-        if thumb_path.exists():
-            resolved = (thumb_path, "image/webp")
-
-    if resolved is None and item.file_path:
-        original = media_dir / item.file_path
-        thumb = original.with_name(original.stem + "_thumb.webp")
-        if thumb.exists():
-            resolved = (thumb, "image/webp")
-
-    if resolved is None and item.media_type == "image" and item.file_path:
-        file_path = media_dir / item.file_path
-        if file_path.exists():
-            resolved = (file_path, item.mime_type or "application/octet-stream")
-
+    response = _thumbnail_response(item, "private, max-age=86400")
     db.close()
-    if resolved is None:
-        raise HTTPException(status_code=404, detail="Thumbnail not found")
-    path, mime = resolved
-    return FileResponse(
-        path,
-        media_type=mime,
-        headers={"Cache-Control": "private, max-age=86400"},
-    )
+    return response
 
 
 @router.put("/media/{media_id}", tags=["Media Items"], summary="Update media description")
