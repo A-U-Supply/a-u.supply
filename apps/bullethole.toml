@@ -1,0 +1,58 @@
+name = "bullethole"
+display_name = "Bullet Hole"
+description = "Punch circular holes into an image. Each hole gets an effect applied inside — rotate, invert, blur, and more."
+image = "ghcr.io/a-u-supply/bullethole:latest"
+command = "python /app/bullethole_run.py"
+timeout_seconds = 120
+input_mode = "positional"
+output_flag = "--output /work/output/output.png"
+
+[output]
+index = "outputs"
+
+[input]
+min_items = 1
+max_items = 1
+media_types = ["image"]
+allow_random_fill = true
+
+[params.chaos]
+type = "float"
+label = "Chaos"
+description = "Controls hole count and size inversely. 0 = 2-3 large holes (~33% width). 1 = 85-87 small holes (~5% width)."
+min = 0.0
+max = 1.0
+default = 0.5
+flag = "--chaos"
+
+[params.placement]
+type = "select"
+label = "Placement"
+description = "How hole centers are positioned across the image."
+options = ["random", "grid", "hex", "radial"]
+default = "random"
+flag = "--placement"
+
+[params.effect]
+type = "select"
+label = "Effect"
+description = "Visual effect applied inside each circular hole."
+options = ["rotate", "invert", "blur", "grayscale", "pixelate", "fill_black", "fill_white"]
+default = "rotate"
+flag = "--effect"
+
+[params.jitter]
+type = "float"
+label = "Jitter"
+description = "Random offset applied to structured placements (grid/hex/radial). 0 = precise, 1 = fully randomised."
+min = 0.0
+max = 1.0
+default = 0.0
+flag = "--jitter"
+
+[params.no_overlap]
+type = "bool"
+label = "No Overlap"
+description = "Prevent circles from overlapping each other."
+default = false
+flag = "--no-overlap"
