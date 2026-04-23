@@ -1,25 +1,29 @@
 /**
- * Image viewer — a lightbox-style overlay for images.
+ * Media viewer — a lightbox-style overlay for images, video, and audio.
  *
- * Opens via `openImageViewer(items, startIndex, actions?)`. One viewer
- * instance at a time; opening a new one closes any existing. The module
- * owns its DOM and cleans up on close.
- *
- * v1: images only. Video / audio land in a follow-up.
+ * Opens via `openImageViewer(items, startIndex, actions?)` (name kept from
+ * v1 for compatibility — it handles all three kinds now). One viewer
+ * instance at a time; opening a new one closes any existing.
  *
  * Mobile support:
- * - Pinch-to-zoom via two-finger gestures
+ * - Pinch-to-zoom via two-finger gestures (images only)
  * - Swipe-left/right to navigate (when not zoomed in)
- * - Drag-to-pan when zoomed
+ * - Drag-to-pan when zoomed (images)
  * - Touch targets are ≥ 44px, safe-area insets respected
  */
+
+export type MediaKind = 'image' | 'video' | 'audio';
 
 export interface ViewerItem {
   id: string;
   kind: 'media_item' | 'job_output';
-  large_url: string;
-  thumbnail_url?: string;
-  download_url: string;
+  media_kind?: MediaKind; // defaults to 'image'
+  // URLs:
+  large_url: string; // display URL (lg thumbnail for images; stream for av without a thumb)
+  thumbnail_url?: string; // low-quality placeholder (also poster for video)
+  download_url: string; // the full original
+  stream_url?: string; // for video/audio; falls back to download_url
+  // metadata:
   job_id?: string;
   indexed?: boolean;
   filename?: string;
@@ -100,6 +104,24 @@ const ICONS = {
   details:
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 17h2v-6h-2v6zm1-15C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8 8zm-1-11h2V7h-2v2z"/></svg>',
 };
+
+// Decorative waveform behind the audio controls — big, muted.
+const AUDIO_BIG_SVG = `<svg class="iv-audio-wave" viewBox="0 0 400 200" aria-hidden="true" preserveAspectRatio="xMidYMid meet">
+  <g fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="4" stroke-linecap="round">
+    <line x1="30" y1="100" x2="30" y2="80"/>
+    <line x1="60" y1="70" x2="60" y2="130"/>
+    <line x1="90" y1="40" x2="90" y2="160"/>
+    <line x1="120" y1="60" x2="120" y2="140"/>
+    <line x1="150" y1="30" x2="150" y2="170"/>
+    <line x1="180" y1="65" x2="180" y2="135"/>
+    <line x1="210" y1="20" x2="210" y2="180"/>
+    <line x1="240" y1="55" x2="240" y2="145"/>
+    <line x1="270" y1="80" x2="270" y2="120"/>
+    <line x1="300" y1="40" x2="300" y2="160"/>
+    <line x1="330" y1="70" x2="330" y2="130"/>
+    <line x1="360" y1="90" x2="360" y2="110"/>
+  </g>
+</svg>`;
 
 // ---------------------------------------------------------------------------
 // Styles (injected once)
@@ -200,6 +222,39 @@ const STYLES = `
 .iv-img-wrap.iv-zoomed .iv-img {
   max-width: none;
   max-height: none;
+}
+/* Video/audio mode: no zoom, no pan. Let native controls handle input. */
+.iv-img-wrap.iv-av {
+  transition: none;
+  transform: none !important;
+  cursor: default;
+}
+.iv-video {
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+  background: #000;
+}
+.iv-audio-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 32px 20px;
+  width: 100%;
+  max-width: 520px;
+}
+.iv-audio-wave {
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+  opacity: 0.9;
+}
+.iv-audio {
+  width: 100%;
+  max-width: 400px;
 }
 .iv-loading-dot {
   position: absolute;
@@ -390,7 +445,6 @@ class ViewerInstance {
   private root!: HTMLElement;
   private stage!: HTMLElement;
   private imgWrap!: HTMLElement;
-  private img!: HTMLImageElement;
   private loadingEl!: HTMLElement;
   private counterEl!: HTMLElement;
   private titleEl!: HTMLElement;
@@ -398,6 +452,11 @@ class ViewerInstance {
   private nextBtn!: HTMLButtonElement;
   private bookmarkBtn: HTMLButtonElement | null = null;
   private cheatsheetEl: HTMLElement | null = null;
+
+  // The currently-rendered media element (img for image items, video/audio
+  // for the others). Rebuilt on every render so we never have two media
+  // elements competing for keyboard focus.
+  private mediaEl: HTMLImageElement | HTMLMediaElement | null = null;
 
   // Zoom state
   private scale = 1;
@@ -441,6 +500,13 @@ class ViewerInstance {
 
   close() {
     if (!this.root) return;
+    // Stop any playing video/audio before tearing down the DOM — otherwise
+    // Safari keeps audio playing after the element is removed.
+    if (this.mediaEl instanceof HTMLMediaElement) {
+      this.mediaEl.pause();
+      this.mediaEl.removeAttribute('src');
+      this.mediaEl.load();
+    }
     document.removeEventListener('keydown', this.keyHandler);
     document.removeEventListener(
       'astro:before-preparation',
@@ -491,17 +557,12 @@ class ViewerInstance {
 
     this.imgWrap = document.createElement('div');
     this.imgWrap.className = 'iv-img-wrap';
-
-    this.img = document.createElement('img');
-    this.img.className = 'iv-img';
-    this.img.alt = '';
-    this.img.decoding = 'async';
+    // Media element created per-render by renderMedia()
 
     this.loadingEl = document.createElement('div');
     this.loadingEl.className = 'iv-loading-dot';
     this.loadingEl.textContent = 'Loading…';
 
-    this.imgWrap.append(this.img);
     this.stage.append(this.imgWrap, this.loadingEl);
 
     this.prevBtn = this.makeBtn(ICONS.prev, 'Previous (←)', () =>
@@ -622,28 +683,58 @@ class ViewerInstance {
 
     this.resetZoom();
     this.loadingEl.style.display = 'flex';
-    this.img.style.background = this.backdropColor(item);
 
-    // Preload the large; fall back to thumbnail on error.
-    this.img.onload = () => {
+    // Tear down the previous media element (pauses av, drops event handlers).
+    if (this.mediaEl) {
+      if (this.mediaEl instanceof HTMLMediaElement) {
+        this.mediaEl.pause();
+        this.mediaEl.removeAttribute('src');
+        this.mediaEl.load();
+      }
+      this.mediaEl.remove();
+      this.mediaEl = null;
+    }
+    this.imgWrap.innerHTML = '';
+    this.imgWrap.classList.remove('iv-av');
+    this.imgWrap.style.background = '';
+
+    const kind: MediaKind = item.media_kind || 'image';
+    if (kind === 'image') {
+      this.renderImage(item);
+    } else if (kind === 'video') {
+      this.renderVideo(item);
+    } else {
+      this.renderAudio(item);
+    }
+
+    this.refreshBookmarkState();
+    this.preloadNeighbors();
+  }
+
+  private renderImage(item: ViewerItem) {
+    const img = document.createElement('img');
+    img.className = 'iv-img';
+    img.alt = '';
+    img.decoding = 'async';
+    img.style.background = this.backdropColor(item);
+
+    img.onload = () => {
       this.loadingEl.style.display = 'none';
     };
-    this.img.onerror = () => {
-      if (item.thumbnail_url && this.img.src !== item.thumbnail_url) {
-        this.img.src = item.thumbnail_url;
+    img.onerror = () => {
+      if (item.thumbnail_url && img.src !== item.thumbnail_url) {
+        img.src = item.thumbnail_url;
       } else {
         this.loadingEl.textContent = 'Failed to load';
       }
     };
 
-    // Low-quality placeholder first (if we have one), then upgrade to large.
-    if (item.thumbnail_url) {
-      this.img.src = item.thumbnail_url;
-    }
-    // Start lg load (browser will race; last write wins when it arrives)
+    if (item.thumbnail_url) img.src = item.thumbnail_url;
+
+    // Upgrade to lg in the background; last-load wins when it arrives.
     const preload = new Image();
     preload.onload = () => {
-      this.img.src = item.large_url;
+      img.src = item.large_url;
       this.loadingEl.style.display = 'none';
     };
     preload.onerror = () => {
@@ -651,8 +742,60 @@ class ViewerInstance {
     };
     preload.src = item.large_url;
 
-    this.refreshBookmarkState();
-    this.preloadNeighbors();
+    this.imgWrap.append(img);
+    this.mediaEl = img;
+  }
+
+  private renderVideo(item: ViewerItem) {
+    this.imgWrap.classList.add('iv-av');
+    this.imgWrap.style.background = this.backdropColor(item);
+
+    const video = document.createElement('video');
+    video.className = 'iv-video';
+    video.controls = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+    if (item.thumbnail_url) video.poster = item.thumbnail_url;
+    video.src = item.stream_url || item.download_url;
+
+    video.addEventListener('loadedmetadata', () => {
+      this.loadingEl.style.display = 'none';
+    });
+    video.addEventListener('error', () => {
+      this.loadingEl.textContent = 'Failed to load';
+    });
+    // Stop pointer events from reaching the pan/zoom handler on the stage
+    video.addEventListener('pointerdown', (e) => e.stopPropagation());
+
+    this.imgWrap.append(video);
+    this.mediaEl = video;
+  }
+
+  private renderAudio(item: ViewerItem) {
+    this.imgWrap.classList.add('iv-av');
+    this.imgWrap.style.background = this.backdropColor(item);
+
+    const panel = document.createElement('div');
+    panel.className = 'iv-audio-panel';
+    panel.innerHTML = AUDIO_BIG_SVG;
+
+    const audio = document.createElement('audio');
+    audio.className = 'iv-audio';
+    audio.controls = true;
+    audio.preload = 'metadata';
+    audio.src = item.stream_url || item.download_url;
+
+    audio.addEventListener('loadedmetadata', () => {
+      this.loadingEl.style.display = 'none';
+    });
+    audio.addEventListener('error', () => {
+      this.loadingEl.textContent = 'Failed to load';
+    });
+    audio.addEventListener('pointerdown', (e) => e.stopPropagation());
+
+    panel.appendChild(audio);
+    this.imgWrap.append(panel);
+    this.mediaEl = audio;
   }
 
   private preloadNeighbors() {
@@ -660,8 +803,10 @@ class ViewerInstance {
       const i = this.index + offset;
       if (i < 0 || i >= this.items.length) continue;
       const it = this.items[i];
-      if (!it.large_url) continue;
-      new Image().src = it.large_url;
+      const kind: MediaKind = it.media_kind || 'image';
+      // Only prefetch images — video/audio bytes are expensive and the user
+      // may never navigate to them.
+      if (kind === 'image' && it.large_url) new Image().src = it.large_url;
     }
   }
 
@@ -735,11 +880,48 @@ class ViewerInstance {
   // Pointer handlers (mouse + touch via Pointer Events)
   // -------------------------------------------------------------------------
 
+  private isAvMode(): boolean {
+    const kind = this.currentItem.media_kind || 'image';
+    return kind === 'video' || kind === 'audio';
+  }
+
+  private togglePlayPause() {
+    const m = this.mediaEl;
+    if (m instanceof HTMLMediaElement) {
+      if (m.paused) m.play().catch(() => {});
+      else m.pause();
+    }
+  }
+
+  private seekBy(seconds: number) {
+    const m = this.mediaEl;
+    if (m instanceof HTMLMediaElement) {
+      const dur = isFinite(m.duration) ? m.duration : 0;
+      m.currentTime = Math.max(0, Math.min(dur, m.currentTime + seconds));
+    }
+  }
+
+  private toggleMute() {
+    const m = this.mediaEl;
+    if (m instanceof HTMLMediaElement) {
+      m.muted = !m.muted;
+    }
+  }
+
   private onPointerDown(e: PointerEvent) {
+    // In av-mode, native video/audio controls own pointer input — we only
+    // still want backdrop clicks (handled separately) and swipe-to-navigate
+    // on the stage background itself.
+    if (this.isAvMode()) {
+      if (e.target !== this.stage) return;
+      this.swipeStart = { x: e.clientX, y: e.clientY, time: Date.now() };
+      this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      return;
+    }
     if (
       e.target !== this.stage &&
       e.target !== this.imgWrap &&
-      e.target !== this.img
+      !(e.target instanceof HTMLImageElement)
     ) {
       return;
     }
@@ -824,6 +1006,7 @@ class ViewerInstance {
   }
 
   private onDoubleClick(e: MouseEvent) {
+    if (this.isAvMode()) return;
     if (this.scale > 1.001) {
       this.resetZoom();
     } else {
@@ -833,6 +1016,7 @@ class ViewerInstance {
 
   private handleWheel(e: WheelEvent) {
     if (!this.root.contains(e.target as Node)) return;
+    if (this.isAvMode()) return;
     e.preventDefault();
     const factor = e.deltaY < 0 ? 1.15 : 0.87;
     this.setZoom(this.scale * factor, e.clientX, e.clientY);
@@ -872,23 +1056,53 @@ class ViewerInstance {
         break;
       case ' ':
       case 'Spacebar':
+      case 'k':
+      case 'K':
         e.preventDefault();
-        if (this.scale > 1.001) this.resetZoom();
+        if (this.isAvMode()) this.togglePlayPause();
+        else if (this.scale > 1.001) this.resetZoom();
         else this.setZoom(2.5);
+        break;
+      case 'j':
+      case 'J':
+        if (this.isAvMode()) {
+          e.preventDefault();
+          this.seekBy(-5);
+        }
+        break;
+      case 'l':
+      case 'L':
+        if (this.isAvMode()) {
+          e.preventDefault();
+          this.seekBy(5);
+        }
+        break;
+      case 'm':
+      case 'M':
+        if (this.isAvMode()) {
+          e.preventDefault();
+          this.toggleMute();
+        }
         break;
       case '+':
       case '=':
-        e.preventDefault();
-        this.zoomBy(1.25);
+        if (!this.isAvMode()) {
+          e.preventDefault();
+          this.zoomBy(1.25);
+        }
         break;
       case '-':
       case '_':
-        e.preventDefault();
-        this.zoomBy(0.8);
+        if (!this.isAvMode()) {
+          e.preventDefault();
+          this.zoomBy(0.8);
+        }
         break;
       case '0':
-        e.preventDefault();
-        this.resetZoom();
+        if (!this.isAvMode()) {
+          e.preventDefault();
+          this.resetZoom();
+        }
         break;
       case 'f':
       case 'F':
@@ -983,7 +1197,9 @@ class ViewerInstance {
       <ul>
         <li><kbd>←</kbd><kbd>→</kbd> prev / next</li>
         <li><kbd>Esc</kbd> close</li>
-        <li><kbd>␣</kbd> toggle zoom</li>
+        <li><kbd>␣</kbd> / <kbd>k</kbd> zoom · or play/pause (av)</li>
+        <li><kbd>j</kbd> <kbd>l</kbd> seek −5s / +5s (av)</li>
+        <li><kbd>m</kbd> mute toggle (av)</li>
         <li><kbd>+</kbd> <kbd>-</kbd> <kbd>0</kbd> zoom in / out / reset</li>
         <li><kbd>f</kbd> fullscreen</li>
         <li><kbd>?</kbd> this help</li>

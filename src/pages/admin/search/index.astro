@@ -1503,9 +1503,17 @@ import Admin from '../../../layouts/Admin.astro';
               item.media_type === 'audio' || item.media_type === 'video';
             const dlBtn = `<a class="grid-item__dl" href="/api/media/${item.id}/file" download title="Download">&#8615;</a>`;
             const wsBtn = `<button class="grid-item__ws" data-ws-id="${item.id}" title="Add to workspace">${briefcaseSvg}</button>`;
-            const playBtn = canPlay
-              ? `<button class="grid-item__play" data-play-id="${item.id}" data-play-type="${item.media_type}" title="Play">${playSvg}</button><button class="grid-item__add" data-play-id="${item.id}" data-play-type="${item.media_type}" title="Add to queue">+</button>${dlBtn}`
-              : dlBtn;
+            // Audio: play queues it in the persistent Player; "+" adds to queue.
+            // Video: play opens the viewer for inline playback; no queue button.
+            let playBtn = dlBtn;
+            if (canPlay) {
+              const playTag = `<button class="grid-item__play" data-play-id="${item.id}" data-play-type="${item.media_type}" title="Play">${playSvg}</button>`;
+              const addTag =
+                item.media_type === 'audio'
+                  ? `<button class="grid-item__add" data-play-id="${item.id}" data-play-type="${item.media_type}" title="Add to queue">+</button>`
+                  : '';
+              playBtn = `${playTag}${addTag}${dlBtn}`;
+            }
             const poster =
               (item.sources || [])
                 .map((s: any) => s.uploader)
@@ -1605,6 +1613,8 @@ import Admin from '../../../layouts/Admin.astro';
       }
 
       // Play button click
+      // Video → open viewer for inline playback (handles the full reel).
+      // Audio → queue in the persistent Player.
       const playBtn = target.closest('.grid-item__play') as HTMLElement | null;
       if (playBtn) {
         e.stopPropagation();
@@ -1613,6 +1623,10 @@ import Admin from '../../../layouts/Admin.astro';
         const mediaType = playBtn.dataset.playType!;
         const item = allResults.find((i: any) => i.id === mediaId);
         if (!item) return;
+        if (mediaType === 'video') {
+          openViewerForMedia(mediaId);
+          return;
+        }
         document.dispatchEvent(
           new CustomEvent('player:queue', {
             detail: {
@@ -1704,8 +1718,9 @@ import Admin from '../../../layouts/Admin.astro';
         return;
       }
 
-      // Grid item click — image tiles open the viewer; other types still
-      // navigate to the detail page (v1: images only in the viewer).
+      // Grid item click — image or video tiles open the viewer; audio still
+      // navigates to detail (audio is better consumed in the persistent
+      // Player via its play button).
       const gridItem = target.closest('.grid-item') as HTMLElement | null;
       if (
         gridItem &&
@@ -1719,29 +1734,37 @@ import Admin from '../../../layouts/Admin.astro';
         const id = gridItem.dataset.id;
         if (!id) return;
         const clicked = allResults.find((r: any) => r.id === id);
-        if (clicked && clicked.media_type === 'image') {
-          openViewerForImage(id);
+        if (
+          clicked &&
+          (clicked.media_type === 'image' || clicked.media_type === 'video')
+        ) {
+          openViewerForMedia(id);
         } else if (id) {
           window.location.href = `/admin/search/detail?id=${id}`;
         }
       }
     });
 
-    function openViewerForImage(startId: string) {
-      const images = (allResults as any[]).filter(
-        (r) => r.media_type === 'image',
+    function openViewerForMedia(startId: string) {
+      // Build a list of all image/video items on the current page —
+      // they become the reel for prev/next navigation inside the viewer.
+      const viewable = (allResults as any[]).filter(
+        (r) => r.media_type === 'image' || r.media_type === 'video',
       );
-      if (images.length === 0) return;
+      if (viewable.length === 0) return;
       const startIndex = Math.max(
         0,
-        images.findIndex((r) => r.id === startId),
+        viewable.findIndex((r) => r.id === startId),
       );
-      const items: ViewerItem[] = images.map((r: any) => ({
+      const items: ViewerItem[] = viewable.map((r: any) => ({
         id: r.id,
         kind: 'media_item' as const,
+        media_kind:
+          r.media_type === 'video' ? ('video' as const) : ('image' as const),
         large_url: `/api/media/${r.id}/thumbnail?size=lg`,
         thumbnail_url: `/api/media/${r.id}/thumbnail?size=sm`,
         download_url: `/api/media/${r.id}/file`,
+        stream_url: `/api/media/${r.id}/file`,
         filename: r.filename,
         width: r.image_meta?.width,
         height: r.image_meta?.height,
@@ -1760,7 +1783,7 @@ import Admin from '../../../layouts/Admin.astro';
           if (!bm) return false;
           const set = await bm.check(
             'media_item',
-            images.map((r: any) => r.id),
+            viewable.map((r: any) => r.id),
           );
           return set.has(item.id);
         },
