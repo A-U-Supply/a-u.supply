@@ -1,0 +1,115 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="A-U.SUPPLY — Waterfall">
+  <div class="waterfall">
+    <div class="waterfall__col" id="col-a">
+      <div class="waterfall__inner" id="col-a-inner"></div>
+    </div>
+    <div class="waterfall__col" id="col-b">
+      <div class="waterfall__inner" id="col-b-inner"></div>
+    </div>
+  </div>
+</Base>
+
+<style>
+  .waterfall {
+    display: flex;
+    height: calc(100vh - 7rem);
+    overflow: hidden;
+    gap: 1px;
+    background: var(--color-border);
+  }
+
+  .waterfall__col {
+    flex: 1;
+    overflow: hidden;
+    background: var(--color-bg, #0a0a0a);
+  }
+
+  .waterfall__inner {
+    display: flex;
+    flex-direction: column;
+    will-change: transform;
+  }
+
+  .waterfall__inner img {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  @keyframes scroll-down {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(-50%);
+    }
+  }
+
+  @keyframes scroll-up {
+    from {
+      transform: translateY(-50%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+</style>
+
+<script>
+  function shuffle<T>(arr: T[]): T[] {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function buildCol(
+    inner: HTMLElement,
+    items: { thumbnail_url: string }[],
+    direction: 'down' | 'up',
+  ) {
+    inner.innerHTML = '';
+    const makeImg = (item: { thumbnail_url: string }) => {
+      const img = document.createElement('img');
+      img.src = item.thumbnail_url;
+      img.alt = '';
+      img.loading = 'lazy';
+      return img;
+    };
+    items.forEach((item) => inner.appendChild(makeImg(item)));
+    items.forEach((item) => inner.appendChild(makeImg(item)));
+    const duration = items.length * 4;
+    const anim = direction === 'down' ? 'scroll-down' : 'scroll-up';
+    inner.style.animation = `${anim} ${duration}s linear infinite`;
+  }
+
+  async function initWaterfall() {
+    const colAInner = document.getElementById('col-a-inner');
+    const colBInner = document.getElementById('col-b-inner');
+    if (!colAInner || !colBInner) return;
+
+    let data;
+    try {
+      const res = await fetch(
+        '/api/public/outputs?media_type=image&output_index=outputs&limit=50',
+      );
+      if (!res.ok) return;
+      data = await res.json();
+    } catch {
+      return;
+    }
+
+    const items = data.items;
+    if (!items || items.length === 0) return;
+
+    buildCol(colAInner, shuffle([...items]), 'down');
+    buildCol(colBInner, shuffle([...items]), 'up');
+  }
+
+  document.addEventListener('astro:page-load', initWaterfall);
+</script>
