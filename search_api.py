@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session, joinedload
@@ -678,6 +678,7 @@ def get_media_og_thumb(media_id: str, db: Session = Depends(get_db)):
     summary="Public: list indexed outputs",
 )
 def list_public_outputs(
+    response: Response,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     output_index: Optional[str] = Query(None, description="Filter to a specific output index name"),
@@ -698,6 +699,7 @@ def list_public_outputs(
     total = q.count()
     rows = q.order_by(MediaItem.created_at.desc()).limit(limit).offset(offset).all()
 
+    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
     return {
         "total": total,
         "limit": limit,
@@ -749,7 +751,10 @@ def get_public_output_file(media_id: str, db: Session = Depends(get_db)):
     return FileResponse(
         file_path,
         media_type=mime,
-        headers={"Content-Disposition": f'inline; filename="{safe_filename}"'},
+        headers={
+            "Content-Disposition": f'inline; filename="{safe_filename}"',
+            "Cache-Control": "public, max-age=86400, immutable",
+        },
     )
 
 
@@ -796,7 +801,11 @@ def get_public_output_thumbnail(media_id: str, db: Session = Depends(get_db)):
     if resolved is None:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
     path, mime = resolved
-    return FileResponse(path, media_type=mime)
+    return FileResponse(
+        path,
+        media_type=mime,
+        headers={"Cache-Control": "public, max-age=86400, immutable"},
+    )
 
 
 # ---------------------------------------------------------------------------
