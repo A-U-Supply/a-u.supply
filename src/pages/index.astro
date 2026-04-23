@@ -179,6 +179,12 @@ import Base from '../layouts/Base.astro';
     const items = data.items;
     if (!items || items.length === 0) return;
 
+    // Fisher-Yates shuffle
+    for (let i = items.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [items[i], items[j]] = [items[j], items[i]];
+    }
+
     const makeImg = (item: { thumbnail_url: string }) => {
       const img = document.createElement('img');
       img.src = item.thumbnail_url;
