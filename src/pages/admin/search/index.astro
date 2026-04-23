@@ -881,6 +881,7 @@ import Admin from '../../../layouts/Admin.astro';
 
 <script>
   import { addItemsToWorkspace } from '../../../lib/workspace';
+  import { openImageViewer, type ViewerItem } from '../../../lib/image-viewer';
 
   document.addEventListener('astro:page-load', async () => {
     const searchForm = document.getElementById(
@@ -1703,7 +1704,8 @@ import Admin from '../../../layouts/Admin.astro';
         return;
       }
 
-      // Grid item click (navigate)
+      // Grid item click — image tiles open the viewer; other types still
+      // navigate to the detail page (v1: images only in the viewer).
       const gridItem = target.closest('.grid-item') as HTMLElement | null;
       if (
         gridItem &&
@@ -1711,12 +1713,74 @@ import Admin from '../../../layouts/Admin.astro';
         !target.closest('.grid-item__play') &&
         !target.closest('.grid-item__add') &&
         !target.closest('.grid-item__dl') &&
-        !target.closest('.grid-item__ws')
+        !target.closest('.grid-item__ws') &&
+        !target.closest('.bm-star')
       ) {
         const id = gridItem.dataset.id;
-        if (id) window.location.href = `/admin/search/detail?id=${id}`;
+        if (!id) return;
+        const clicked = allResults.find((r: any) => r.id === id);
+        if (clicked && clicked.media_type === 'image') {
+          openViewerForImage(id);
+        } else if (id) {
+          window.location.href = `/admin/search/detail?id=${id}`;
+        }
       }
     });
+
+    function openViewerForImage(startId: string) {
+      const images = (allResults as any[]).filter(
+        (r) => r.media_type === 'image',
+      );
+      if (images.length === 0) return;
+      const startIndex = Math.max(
+        0,
+        images.findIndex((r) => r.id === startId),
+      );
+      const items: ViewerItem[] = images.map((r: any) => ({
+        id: r.id,
+        kind: 'media_item' as const,
+        large_url: `/api/media/${r.id}/thumbnail?size=lg`,
+        thumbnail_url: `/api/media/${r.id}/thumbnail?size=sm`,
+        download_url: `/api/media/${r.id}/file`,
+        filename: r.filename,
+        width: r.image_meta?.width,
+        height: r.image_meta?.height,
+        dominant_colors: r.dominant_colors,
+        media_type: r.media_type,
+      }));
+      openImageViewer(items, startIndex, {
+        onBookmark: async (item) => {
+          const bm = (window as any).__bookmarks;
+          if (!bm) return false;
+          const on = await bm.toggle('media_item', item.id);
+          return !!on;
+        },
+        isBookmarked: async (item) => {
+          const bm = (window as any).__bookmarks;
+          if (!bm) return false;
+          const set = await bm.check(
+            'media_item',
+            images.map((r: any) => r.id),
+          );
+          return set.has(item.id);
+        },
+        onAddToWorkspace: async (item) => {
+          const data = await addItemsToWorkspace([item.id]);
+          if (data) {
+            (window as any).toast?.success(
+              data.already_present > 0
+                ? 'Already in workspace'
+                : 'Added to workspace',
+            );
+          } else {
+            (window as any).toast?.error('Failed to add to workspace');
+          }
+        },
+        onDetails: (item) => {
+          window.location.href = `/admin/search/detail?id=${item.id}`;
+        },
+      });
+    }
 
     async function loadFacets() {
       try {

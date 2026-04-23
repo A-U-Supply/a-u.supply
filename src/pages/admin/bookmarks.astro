@@ -239,6 +239,7 @@ import Admin from '../../layouts/Admin.astro';
 
 <script>
   import { addItemsToWorkspace } from '../../lib/workspace';
+  import { openImageViewer, type ViewerItem } from '../../lib/image-viewer';
 
   document.addEventListener('astro:page-load', async () => {
     const gridEl = document.getElementById('bookmarks-grid');
@@ -581,17 +582,82 @@ import Admin from '../../layouts/Admin.astro';
         return;
       }
 
-      // Card click — navigate
+      // Card click — images open viewer, others navigate to detail
       const card = target.closest('.bm-card') as HTMLElement | null;
       if (
         card &&
         !target.closest('.bm-card__check') &&
-        !target.closest('.bm-card__ws')
+        !target.closest('.bm-card__ws') &&
+        !target.closest('.bm-card__play') &&
+        !target.closest('.bm-card__add') &&
+        !target.closest('.bm-star')
       ) {
+        const targetType = card.dataset.targetType;
+        const targetId = card.dataset.targetId;
+        const item = allItems.find(
+          (i: any) => i.target_type === targetType && i.target_id === targetId,
+        );
+        const meta = item ? metaMap.get(`${targetType}:${targetId}`) : null;
+        if (
+          meta &&
+          targetType === 'media_item' &&
+          meta.media_type === 'image'
+        ) {
+          openViewerForBookmarkedImage(targetId!);
+          return;
+        }
         const href = card.dataset.href;
         if (href && href !== '#') window.location.href = href;
       }
     });
+
+    function openViewerForBookmarkedImage(startId: string) {
+      // Every bookmarked media_item whose meta says it's an image.
+      const imageBookmarks = (allItems as any[]).filter((i) => {
+        if (i.target_type !== 'media_item') return false;
+        const m = metaMap.get(`media_item:${i.target_id}`);
+        return m && m.media_type === 'image';
+      });
+      if (imageBookmarks.length === 0) return;
+      const startIndex = Math.max(
+        0,
+        imageBookmarks.findIndex((i: any) => i.target_id === startId),
+      );
+      const items: ViewerItem[] = imageBookmarks.map((i: any) => {
+        const id = i.target_id;
+        return {
+          id,
+          kind: 'media_item' as const,
+          large_url: `/api/media/${id}/thumbnail?size=lg`,
+          thumbnail_url: `/api/media/${id}/thumbnail?size=sm`,
+          download_url: `/api/media/${id}/file`,
+          filename: metaMap.get(`media_item:${id}`)?.name,
+          media_type: 'image',
+        };
+      });
+      openImageViewer(items, startIndex, {
+        onBookmark: async (item) => {
+          const bm = (window as any).__bookmarks;
+          if (!bm) return true;
+          const on = await bm.toggle('media_item', item.id);
+          return !!on;
+        },
+        isBookmarked: async () => true,
+        onAddToWorkspace: async (item) => {
+          const data = await addItemsToWorkspace([item.id]);
+          if (data)
+            (window as any).toast?.success(
+              data.already_present > 0
+                ? 'Already in workspace'
+                : 'Added to workspace',
+            );
+          else (window as any).toast?.error('Failed to add to workspace');
+        },
+        onDetails: (item) => {
+          window.location.href = `/admin/search/detail?id=${item.id}`;
+        },
+      });
+    }
 
     // Batch actions
     document.querySelectorAll('[data-batch]').forEach((btn) => {
