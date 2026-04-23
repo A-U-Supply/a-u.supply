@@ -273,6 +273,8 @@ import Admin from '../../../layouts/Admin.astro';
   import {
     openImageViewer,
     jobOutputToViewerItem,
+    triggerIndexDialogFor,
+    indexedJobOutputActions,
   } from '../../../lib/admin-viewer';
 
   document.addEventListener('astro:page-load', async () => {
@@ -570,18 +572,23 @@ import Admin from '../../../layouts/Admin.astro';
             const items = viewable.map((o: any) =>
               jobOutputToViewerItem({ ...o, job_id: jobId! }),
             );
+            const actions = indexedJobOutputActions();
             openImageViewer(items, startIndex, {
+              // Defer to the page's existing metadata dialog.
               onIndex: async (item) => {
-                if (item.indexed) {
-                  (window as any).toast?.success('Already indexed');
-                  return;
-                }
-                await fetch(
-                  `/api/jobs/${item.job_id}/outputs/${item.id}/index`,
-                  { method: 'POST', credentials: 'include' },
-                );
-                (window as any).toast?.success('Indexed');
+                triggerIndexDialogFor(item.id);
               },
+              canIndex: (item) => !item.indexed,
+              // Bookmark + workspace for indexed outputs (have a media_item_id).
+              ...actions,
+              onDetails: (item) => {
+                // Indexed → media detail page; unindexed → stay here.
+                if (item.indexed && (item as any).media_item_id) {
+                  window.location.href = `/admin/search/detail?id=${(item as any).media_item_id}`;
+                }
+              },
+              canDetails: (item) =>
+                !!(item.indexed && (item as any).media_item_id),
             });
           });
         });

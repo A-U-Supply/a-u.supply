@@ -336,6 +336,7 @@ import Admin from '../../../layouts/Admin.astro';
   import {
     openImageViewer,
     jobOutputToViewerItem,
+    triggerIndexDialogFor,
   } from '../../../lib/admin-viewer';
 
   document.addEventListener('astro:page-load', async () => {
@@ -643,6 +644,14 @@ import Admin from '../../../layouts/Admin.astro';
           );
           const items = viewable.map(jobOutputToViewerItem);
           openImageViewer(items, startIndex, {
+            onIndex: async (item) => {
+              triggerIndexDialogFor(item.id);
+            },
+            // Disable index when the user can't act (they discarded it).
+            canIndex: (item) => {
+              const o = allOutputs.find((x: any) => x.id === item.id);
+              return !!o && !o.is_own_discard;
+            },
             onDetails: (item) => {
               window.location.href = `/admin/jobs/detail?id=${item.job_id}`;
             },

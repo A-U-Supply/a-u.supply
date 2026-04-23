@@ -330,6 +330,7 @@ import Admin from '../../../layouts/Admin.astro';
   import {
     openImageViewer,
     jobOutputToViewerItem,
+    triggerIndexDialogFor,
   } from '../../../lib/admin-viewer';
 
   document.addEventListener('astro:page-load', async () => {
@@ -544,12 +545,10 @@ import Admin from '../../../layouts/Admin.astro';
           );
           const items = viewable.map(jobOutputToViewerItem);
           openImageViewer(items, startIndex, {
+            // Defer to the page's existing metadata dialog (title/notes/
+            // auto-tags) — consistent with clicking the tile's Index button.
             onIndex: async (item) => {
-              await fetch(`/api/jobs/${item.job_id}/outputs/${item.id}/index`, {
-                method: 'POST',
-                credentials: 'include',
-              });
-              (window as any).toast?.success('Indexed');
+              triggerIndexDialogFor(item.id);
             },
             onDiscard: async (item) => {
               await fetch('/api/jobs/outputs/bulk-discard', {

@@ -9,12 +9,17 @@
 
 import { addItemsToWorkspace } from './workspace';
 import {
+  closeImageViewer,
   openImageViewer,
   type ViewerActions,
   type ViewerItem,
 } from './image-viewer';
 
-export { openImageViewer, type ViewerItem } from './image-viewer';
+export {
+  openImageViewer,
+  closeImageViewer,
+  type ViewerItem,
+} from './image-viewer';
 
 function bmToggle(id: string): Promise<boolean> {
   const bm = (window as any).__bookmarks;
@@ -93,6 +98,16 @@ export function mediaItemDefaultActions(allIds: string[]): ViewerActions {
 }
 
 /**
+ * Extended ViewerItem for job outputs — tracks the MediaItem id when
+ * indexed so bookmark/workspace callbacks can target it.
+ */
+export interface JobOutputViewerItem extends ViewerItem {
+  job_id: string;
+  indexed: boolean;
+  media_item_id?: string;
+}
+
+/**
  * Build viewer items for JobOutput-backed rows (midden, slop,
  * jobs/detail). JobOutputs have a job_id and a `/download` URL; video
  * and audio stream from the same URL.
@@ -104,7 +119,7 @@ export function jobOutputToViewerItem(row: {
   media_type?: string;
   indexed?: boolean;
   media_item_id?: string;
-}): ViewerItem {
+}): JobOutputViewerItem {
   const rawType = (row.media_type || '').toLowerCase();
   const kind =
     rawType === 'video' || rawType.startsWith('video/')
@@ -133,7 +148,63 @@ export function jobOutputToViewerItem(row: {
     stream_url: downloadUrl,
     job_id: row.job_id,
     indexed: !!row.indexed,
+    media_item_id: row.media_item_id,
     filename: row.filename,
     media_type: row.media_type,
   };
+}
+
+/**
+ * Bookmark/workspace helpers for JobOutput items. Only enabled when the
+ * output is indexed (has a media_item_id). `canBookmark` /
+ * `canAddToWorkspace` predicates hide the buttons on unindexed siblings.
+ */
+export function indexedJobOutputActions(): ViewerActions {
+  return {
+    onBookmark: async (item) => {
+      const mid = (item as JobOutputViewerItem).media_item_id;
+      if (!mid) return false;
+      return bmToggle(mid);
+    },
+    isBookmarked: async (item) => {
+      const mid = (item as JobOutputViewerItem).media_item_id;
+      if (!mid) return false;
+      const bm = (window as any).__bookmarks;
+      if (!bm) return false;
+      const set = await bm.check('media_item', [mid]);
+      return set.has(mid);
+    },
+    onAddToWorkspace: async (item) => {
+      const mid = (item as JobOutputViewerItem).media_item_id;
+      if (!mid) return;
+      await addToWorkspaceWithToast(mid);
+    },
+    canBookmark: (item) =>
+      !!(item as JobOutputViewerItem).indexed &&
+      !!(item as JobOutputViewerItem).media_item_id,
+    canAddToWorkspace: (item) =>
+      !!(item as JobOutputViewerItem).indexed &&
+      !!(item as JobOutputViewerItem).media_item_id,
+  };
+}
+
+/**
+ * Dispatch to the page's existing per-item "Index" button — closes the
+ * viewer first so the page's existing metadata dialog (title / notes /
+ * auto-tags) has the page to itself. Use this as the viewer's `onIndex`
+ * callback on midden / slop / jobs-detail so the UX is consistent with
+ * clicking the tile's own Index button.
+ */
+export function triggerIndexDialogFor(outputId: string): void {
+  closeImageViewer();
+  // The viewer's close animation is synchronous, but dialogs stack above
+  // modal roots gracefully — no setTimeout needed.
+  const btn = document.querySelector(
+    `[data-index="${outputId}"]`,
+  ) as HTMLElement | null;
+  if (btn) {
+    btn.click();
+  } else {
+    (window as any).toast?.error('Could not open index dialog');
+  }
 }

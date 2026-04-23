@@ -42,6 +42,15 @@ export interface ViewerActions {
   onIndex?: (item: ViewerItem) => Promise<void>;
   onDiscard?: (item: ViewerItem) => Promise<void>;
   onDetails?: (item: ViewerItem) => void;
+  // Optional per-item visibility predicates. When omitted the button is
+  // shown for every item (matching v1 behaviour). When provided, the
+  // button is hidden for items where the predicate returns false — useful
+  // for reels that mix indexed + unindexed job outputs.
+  canBookmark?: (item: ViewerItem) => boolean;
+  canAddToWorkspace?: (item: ViewerItem) => boolean;
+  canIndex?: (item: ViewerItem) => boolean;
+  canDiscard?: (item: ViewerItem) => boolean;
+  canDetails?: (item: ViewerItem) => boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -607,33 +616,36 @@ class ViewerInstance {
       this.bookmarkBtn = this.makeBtn(ICONS.bookmarkOff, 'Bookmark (B)', () =>
         this.doAction('bookmark'),
       );
+      this.bookmarkBtn.dataset.action = 'bookmark';
       toolbar.append(this.bookmarkBtn);
     }
     if (this.actions.onAddToWorkspace) {
-      toolbar.append(
-        this.makeBtn(ICONS.workspace, 'Add to workspace (W)', () =>
-          this.doAction('workspace'),
-        ),
+      const btn = this.makeBtn(ICONS.workspace, 'Add to workspace (W)', () =>
+        this.doAction('workspace'),
       );
+      btn.dataset.action = 'workspace';
+      toolbar.append(btn);
     }
     if (this.actions.onIndex) {
-      toolbar.append(
-        this.makeBtn(ICONS.index, 'Index (I)', () => this.doAction('index')),
+      const btn = this.makeBtn(ICONS.index, 'Index (I)', () =>
+        this.doAction('index'),
       );
+      btn.dataset.action = 'index';
+      toolbar.append(btn);
     }
     if (this.actions.onDiscard) {
-      toolbar.append(
-        this.makeBtn(ICONS.discard, 'Discard (X)', () =>
-          this.doAction('discard'),
-        ),
+      const btn = this.makeBtn(ICONS.discard, 'Discard (X)', () =>
+        this.doAction('discard'),
       );
+      btn.dataset.action = 'discard';
+      toolbar.append(btn);
     }
     if (this.actions.onDetails) {
-      toolbar.append(
-        this.makeBtn(ICONS.details, 'Details (Enter)', () =>
-          this.doAction('details'),
-        ),
+      const btn = this.makeBtn(ICONS.details, 'Details (Enter)', () =>
+        this.doAction('details'),
       );
+      btn.dataset.action = 'details';
+      toolbar.append(btn);
     }
     toolbar.append(this.divider());
     toolbar.append(
@@ -708,7 +720,26 @@ class ViewerInstance {
     }
 
     this.refreshBookmarkState();
+    this.refreshActionVisibility();
     this.preloadNeighbors();
+  }
+
+  private refreshActionVisibility() {
+    const item = this.currentItem;
+    const preds: Record<string, ((i: ViewerItem) => boolean) | undefined> = {
+      bookmark: this.actions.canBookmark,
+      workspace: this.actions.canAddToWorkspace,
+      index: this.actions.canIndex,
+      discard: this.actions.canDiscard,
+      details: this.actions.canDetails,
+    };
+    this.root.querySelectorAll<HTMLElement>('[data-action]').forEach((btn) => {
+      const action = btn.dataset.action;
+      if (!action) return;
+      const pred = preds[action];
+      const visible = pred ? pred(item) : true;
+      btn.style.display = visible ? '' : 'none';
+    });
   }
 
   private renderImage(item: ViewerItem) {
