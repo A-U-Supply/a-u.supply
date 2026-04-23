@@ -56,8 +56,12 @@ const { title } = Astro.props;
           data-full="AU-EXPENDITURE"></a>
         <span class="site-footer__dot">&middot;</span>
         <a href="/admin/dashboard" data-short="AUP-1" data-full="AUP-ADMIN"></a>
-        <span class="site-footer__dot">&middot;</span>
-        <a href="/waterfall" data-short="AU-WTFL" data-full="AU-WATERFALL"></a>
+        <span class="site-footer__dot site-footer__mobile-only">&middot;</span>
+        <a
+          href="/waterfall"
+          data-short="AU-WTFL"
+          data-full="AU-WATERFALL"
+          class="site-footer__mobile-only"></a>
       </nav>
     </footer>
     <div class="player-slot" transition:persist="audio-player">
@@ -170,7 +174,15 @@ const { title } = Astro.props;
     }
   }
 
+  .site-footer__mobile-only {
+    display: none;
+  }
+
   @media (max-width: 640px) {
+    .site-footer__mobile-only {
+      display: inline;
+    }
+
     .header__logo img {
       height: 36px;
     }
