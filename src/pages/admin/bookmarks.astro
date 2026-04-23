@@ -414,9 +414,17 @@ import Admin from '../../layouts/Admin.astro';
             m.thumb === '/assets/default-cover.jpg'
               ? ' style="image-rendering: pixelated;"'
               : '';
-          const playBtn = m.playable
-            ? `<button class="bm-card__play" data-play-id="${item.target_id}" data-play-type="${m.media_type}" data-target-type="${item.target_type}" title="Play">${playSvg}</button><button class="bm-card__add" data-play-id="${item.target_id}" data-play-type="${m.media_type}" data-target-type="${item.target_type}" title="Add to queue">+</button>`
-            : '';
+          // Audio gets play + queue buttons (routes to persistent Player).
+          // Video gets play only (routes to the inline viewer).
+          let playBtn = '';
+          if (m.playable) {
+            const play = `<button class="bm-card__play" data-play-id="${item.target_id}" data-play-type="${m.media_type}" data-target-type="${item.target_type}" title="Play">${playSvg}</button>`;
+            const add =
+              m.media_type === 'audio'
+                ? `<button class="bm-card__add" data-play-id="${item.target_id}" data-play-type="${m.media_type}" data-target-type="${item.target_type}" title="Add to queue">+</button>`
+                : '';
+            playBtn = `${play}${add}`;
+          }
           return `<div class="bm-card${selectedClass}" data-target-type="${item.target_type}" data-target-id="${item.target_id}" data-href="${m.href}">
           <input type="checkbox" class="bm-card__check" data-select="${item.target_id}" ${checked} />
           <div class="bm-card__thumb">
@@ -482,18 +490,25 @@ import Admin from '../../layouts/Admin.astro';
         return;
       }
 
-      // Play button
+      // Play button.
+      // Video → open viewer for inline playback.
+      // Audio → queue in the persistent Player.
       const playBtn = target.closest('.bm-card__play') as HTMLElement | null;
       if (playBtn) {
         e.stopPropagation();
         const id = playBtn.dataset.playId!;
         const mediaType = playBtn.dataset.playType!;
         const targetType = playBtn.dataset.targetType!;
+        if (targetType === 'media_item' && mediaType === 'video') {
+          openViewerForBookmarkedMedia(id);
+          return;
+        }
         const item = allItems.find(
           (i: any) => i.target_id === id && i.target_type === targetType,
         );
         if (!item) return;
         const m = item.meta;
+        if (!m) return;
         document.dispatchEvent(
           new CustomEvent('player:queue', {
             detail: {
@@ -597,13 +612,13 @@ import Admin from '../../layouts/Admin.astro';
         const item = allItems.find(
           (i: any) => i.target_type === targetType && i.target_id === targetId,
         );
-        const meta = item ? metaMap.get(`${targetType}:${targetId}`) : null;
+        const meta = item ? item.meta : null;
         if (
           meta &&
           targetType === 'media_item' &&
-          meta.media_type === 'image'
+          (meta.media_type === 'image' || meta.media_type === 'video')
         ) {
-          openViewerForBookmarkedImage(targetId!);
+          openViewerForBookmarkedMedia(targetId!);
           return;
         }
         const href = card.dataset.href;
@@ -611,28 +626,32 @@ import Admin from '../../layouts/Admin.astro';
       }
     });
 
-    function openViewerForBookmarkedImage(startId: string) {
-      // Every bookmarked media_item whose meta says it's an image.
-      const imageBookmarks = (allItems as any[]).filter((i) => {
+    function openViewerForBookmarkedMedia(startId: string) {
+      // Every bookmarked media_item whose meta says it's image or video.
+      const viewableBookmarks = (allItems as any[]).filter((i) => {
         if (i.target_type !== 'media_item') return false;
-        const m = metaMap.get(`media_item:${i.target_id}`);
-        return m && m.media_type === 'image';
+        const m = i.meta;
+        return m && (m.media_type === 'image' || m.media_type === 'video');
       });
-      if (imageBookmarks.length === 0) return;
+      if (viewableBookmarks.length === 0) return;
       const startIndex = Math.max(
         0,
-        imageBookmarks.findIndex((i: any) => i.target_id === startId),
+        viewableBookmarks.findIndex((i: any) => i.target_id === startId),
       );
-      const items: ViewerItem[] = imageBookmarks.map((i: any) => {
+      const items: ViewerItem[] = viewableBookmarks.map((i: any) => {
         const id = i.target_id;
+        const m = i.meta;
+        const kind = m?.media_type === 'video' ? 'video' : 'image';
         return {
           id,
           kind: 'media_item' as const,
+          media_kind: kind as 'image' | 'video',
           large_url: `/api/media/${id}/thumbnail?size=lg`,
           thumbnail_url: `/api/media/${id}/thumbnail?size=sm`,
           download_url: `/api/media/${id}/file`,
-          filename: metaMap.get(`media_item:${id}`)?.name,
-          media_type: 'image',
+          stream_url: `/api/media/${id}/file`,
+          filename: m?.name,
+          media_type: m?.media_type,
         };
       });
       openImageViewer(items, startIndex, {
