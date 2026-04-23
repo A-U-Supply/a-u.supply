@@ -209,6 +209,31 @@ class TestResolveThumbnailPath:
         path, _ = _resolve_thumbnail_path(item, size="sm")
         assert str(path).endswith("_thumb.webp")
 
+    def test_size_lg_prefers_large_sibling(self, client, db_session, tmp_media_dir):
+        from search_api import _resolve_thumbnail_path
+
+        rel = "image/2026-04/r_lg.png"
+        _write_image(tmp_media_dir, rel)
+        _write_webp_thumb(tmp_media_dir, "image/2026-04/r_lg_thumb.webp")
+        _write_webp_thumb(tmp_media_dir, "image/2026-04/r_lg_thumb_lg.webp")
+        item = make_media_item(db_session, file_path=rel)
+
+        path, _ = _resolve_thumbnail_path(item, size="lg")
+        assert str(path).endswith("_thumb_lg.webp")
+
+    def test_size_lg_falls_back_to_md_when_lg_missing(
+        self, client, db_session, tmp_media_dir
+    ):
+        from search_api import _resolve_thumbnail_path
+
+        rel = "image/2026-04/r_lg_fb.png"
+        _write_image(tmp_media_dir, rel)
+        _write_webp_thumb(tmp_media_dir, "image/2026-04/r_lg_fb_thumb.webp")
+        item = make_media_item(db_session, file_path=rel)
+
+        path, _ = _resolve_thumbnail_path(item, size="lg")
+        assert str(path).endswith("_thumb.webp")
+
 
 class TestThumbnailSizeParam:
     """?size=sm end-to-end through the endpoints."""
@@ -238,6 +263,28 @@ class TestThumbnailSizeParam:
         item = make_media_item(db_session, file_path=rel, output_index="x")
 
         resp = client.get(f"/api/public/outputs/{item.id}/thumbnail?size=sm")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "image/webp"
+
+    def test_authed_thumbnail_size_lg(self, client, auth_headers, db_session, tmp_media_dir):
+        rel = "image/2026-04/e_c.png"
+        _write_image(tmp_media_dir, rel)
+        _write_webp_thumb(tmp_media_dir, "image/2026-04/e_c_thumb.webp")
+        _write_webp_thumb(tmp_media_dir, "image/2026-04/e_c_thumb_lg.webp")
+        item = make_media_item(db_session, file_path=rel)
+
+        resp = client.get(f"/api/media/{item.id}/thumbnail?size=lg", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "image/webp"
+
+    def test_public_output_thumbnail_size_lg(self, client, db_session, tmp_media_dir):
+        rel = "image/2026-04/e_d.png"
+        _write_image(tmp_media_dir, rel)
+        _write_webp_thumb(tmp_media_dir, "image/2026-04/e_d_thumb.webp")
+        _write_webp_thumb(tmp_media_dir, "image/2026-04/e_d_thumb_lg.webp")
+        item = make_media_item(db_session, file_path=rel, output_index="x")
+
+        resp = client.get(f"/api/public/outputs/{item.id}/thumbnail?size=lg")
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "image/webp"
 

@@ -118,6 +118,27 @@ class TestUnindexedImageOutput:
         with Image.open(sm_path) as img:
             assert max(img.size) == 128
 
+    def test_generates_lg_thumbnail_on_first_hit(
+        self, client, auth_headers, job_with_image_output
+    ):
+        job = job_with_image_output["job"]
+        output = job_with_image_output["output"]
+        out_dir = job_with_image_output["out_dir"]
+
+        lg_path = out_dir / "img_thumb_lg.webp"
+        assert not lg_path.exists()
+
+        resp = client.get(
+            f"/api/jobs/{job.id}/outputs/{output.id}/thumbnail?size=lg",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert lg_path.exists()
+        # Source is 400x300 so lg falls back to source dims (no upscale)
+        with Image.open(lg_path) as img:
+            assert img.format == "WEBP"
+            assert max(img.size) == 400
+
     def test_second_hit_reuses_cached_file(
         self, client, auth_headers, job_with_image_output
     ):
