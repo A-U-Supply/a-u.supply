@@ -850,6 +850,7 @@ async def upload_media(
     file: UploadFile = File(..., description="The media file to upload. Supported types: images, audio, video."),
     tags: str = Form("", description="Comma-separated tags to apply (e.g. `drums,percussive,loop`). Optional."),
     description: str = Form("", description="Freeform notes or description. Optional."),
+    output_index: str = Form("", description="Index name to file this item under (e.g. `outputs`). Optional."),
     _auth=Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
@@ -892,6 +893,8 @@ async def upload_media(
             source_type="manual_upload",
         )
         db.add(source)
+        if output_index and not existing.output_index:
+            existing.output_index = output_index
         db.commit()
         meili_sync(db, existing)
         item = _get_media_item_or_404(db, existing.id)
@@ -917,6 +920,7 @@ async def upload_media(
         file_size_bytes=len(content),
         mime_type=mime,
         description=description or None,
+        output_index=output_index or None,
     )
     db.add(media_item)
 

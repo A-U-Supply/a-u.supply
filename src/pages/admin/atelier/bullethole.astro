@@ -80,7 +80,7 @@ import Admin from '../../../layouts/Admin.astro';
       <div class="bh-actions">
         <button class="btn btn--secondary" id="reroll-btn" disabled>⟳ Re-roll</button>
         <button class="btn btn--secondary" id="download-btn" disabled>↓ Download</button>
-        <button class="btn btn--primary" id="save-btn" disabled>☁ Save to Library</button>
+        <button class="btn btn--primary" id="save-btn" disabled>☁ Save to Outputs</button>
       </div>
     </div>
   </div>
@@ -678,18 +678,19 @@ import Admin from '../../../layouts/Admin.astro';
           const fd = new FormData();
           fd.append('file', blob, 'bullethole.png');
           fd.append('tags', 'bullethole,atelier');
+          fd.append('output_index', 'outputs');
           const res = await fetch('/api/media/upload', {
             method: 'POST',
             body: fd,
             credentials: 'include',
           });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          (window as any).toast?.success('Saved to library');
+          (window as any).toast?.success('Saved to outputs');
         } catch (err: any) {
           (window as any).toast?.error(`Save failed: ${err.message}`);
         } finally {
           saveBtn.disabled = false;
-          saveBtn.textContent = '☁ Save to Library';
+          saveBtn.textContent = '☁ Save to Outputs';
         }
       }, 'image/png');
     });
