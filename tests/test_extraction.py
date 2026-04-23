@@ -238,6 +238,57 @@ class TestExtractVideoMetadata:
         assert abs(meta["fps"] - 23.976) < 0.01
 
 
+class TestGenerateImageThumbnail:
+    """Tests for generate_image_thumbnail using real Pillow."""
+
+    def test_thumbnail_capped_at_400px_longest_side(self, tmp_media_dir):
+        from PIL import Image
+        from extraction import generate_image_thumbnail, _image_thumbnail_path
+
+        src = os.path.join(tmp_media_dir, "big.png")
+        Image.new("RGB", (1200, 800), color=(40, 40, 200)).save(src, format="PNG")
+
+        out = _image_thumbnail_path(src)
+        assert generate_image_thumbnail(src, out) is True
+        assert os.path.exists(out)
+        assert out.endswith("_thumb.webp")
+
+        with Image.open(out) as thumb:
+            assert thumb.format == "WEBP"
+            w, h = thumb.size
+            assert max(w, h) == 400
+            # Aspect ratio preserved
+            assert abs((w / h) - (1200 / 800)) < 0.01
+
+    def test_thumbnail_does_not_upscale_small_images(self, tmp_media_dir):
+        from PIL import Image
+        from extraction import generate_image_thumbnail, _image_thumbnail_path
+
+        src = os.path.join(tmp_media_dir, "small.png")
+        Image.new("RGB", (50, 50), color=(255, 0, 0)).save(src, format="PNG")
+
+        out = _image_thumbnail_path(src)
+        assert generate_image_thumbnail(src, out) is True
+        with Image.open(out) as thumb:
+            assert thumb.size == (50, 50)
+
+    def test_returns_false_on_bad_input(self, tmp_media_dir):
+        from extraction import generate_image_thumbnail
+
+        src = os.path.join(tmp_media_dir, "not-an-image.txt")
+        with open(src, "w") as f:
+            f.write("hello")
+        out = os.path.join(tmp_media_dir, "out_thumb.webp")
+        assert generate_image_thumbnail(src, out) is False
+        assert not os.path.exists(out)
+
+    def test_image_thumbnail_path_helper(self):
+        from extraction import _image_thumbnail_path
+
+        assert _image_thumbnail_path("/foo/bar/baz.png").endswith("baz_thumb.webp")
+        assert _image_thumbnail_path("/foo/bar/baz.JPEG").endswith("baz_thumb.webp")
+
+
 class TestGenerateVideoThumbnail:
     """Tests for generate_video_thumbnail (mocked ffmpeg)."""
 
@@ -295,6 +346,28 @@ class TestRunExtraction:
         assert meta is not None
         assert meta.width == 20
         assert meta.height == 20
+
+    def test_run_extraction_creates_image_thumbnail(self, db_session, tmp_media_dir):
+        from PIL import Image
+        from extraction import _image_thumbnail_path
+
+        item = make_media_item(db_session, media_type="image")
+
+        img = Image.new("RGB", (800, 600), color=(10, 200, 90))
+        file_path = os.path.join(tmp_media_dir, "thumb-test.png")
+        img.save(file_path, format="PNG")
+
+        with patch("models.SessionLocal", return_value=db_session):
+            with patch.object(db_session, "close"):
+                from extraction import run_extraction
+
+                run_extraction(item.id, file_path, "image")
+
+        thumb_path = _image_thumbnail_path(file_path)
+        assert os.path.exists(thumb_path), f"Expected thumbnail at {thumb_path}"
+        with Image.open(thumb_path) as thumb:
+            assert thumb.format == "WEBP"
+            assert max(thumb.size) == 400
 
     def test_run_extraction_nonexistent_item(self, db_session):
         """Extraction for a nonexistent item should not raise."""
