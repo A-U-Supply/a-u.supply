@@ -185,6 +185,16 @@ import Admin from '../../../layouts/Admin.astro';
     margin-bottom: var(--space-xs);
     border-radius: 2px;
   }
+  .output-preview-btn {
+    all: unset;
+    display: block;
+    width: 100%;
+    cursor: zoom-in;
+  }
+  .output-preview-btn:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
   /* Videos dominate space more than images; cap them tighter */
   video.output-preview {
     max-height: 240px;
@@ -260,6 +270,11 @@ import Admin from '../../../layouts/Admin.astro';
 </style>
 
 <script>
+  import {
+    openImageViewer,
+    jobOutputToViewerItem,
+  } from '../../../lib/admin-viewer';
+
   document.addEventListener('astro:page-load', async () => {
     await (window as any).__authReady;
 
@@ -514,7 +529,7 @@ import Admin from '../../../layouts/Admin.astro';
             const thumbUrlSm = `${thumbUrl}?size=sm`;
             let preview = '';
             if (o.media_type === 'image') {
-              preview = `<a href="${dlUrl}" target="_blank"><img class="output-preview" src="${thumbUrl}" srcset="${thumbUrlSm} 128w, ${thumbUrl} 400w" sizes="(max-width: 480px) 128px, 220px" alt="${o.filename}" loading="lazy" decoding="async"></a>`;
+              preview = `<button class="output-preview-btn" data-viewer-id="${o.id}" title="View" type="button"><img class="output-preview" src="${thumbUrl}" srcset="${thumbUrlSm} 128w, ${thumbUrl} 400w" sizes="(max-width: 480px) 128px, 220px" alt="${o.filename}" loading="lazy" decoding="async"></button>`;
             } else if (o.media_type === 'video') {
               preview = `<video class="output-preview" controls src="${dlUrl}"></video>`;
             } else if (o.media_type === 'audio') {
@@ -539,6 +554,38 @@ import Admin from '../../../layouts/Admin.astro';
           .join('');
 
         // Play buttons
+        // Image preview click → viewer (siblings = all image outputs)
+        listEl.querySelectorAll('.output-preview-btn').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const startId = (btn as HTMLElement).dataset.viewerId;
+            if (!startId) return;
+            const viewable = (outputs as any[]).filter(
+              (x) => x.media_type === 'image',
+            );
+            const startIndex = Math.max(
+              0,
+              viewable.findIndex((x: any) => x.id === startId),
+            );
+            const items = viewable.map((o: any) =>
+              jobOutputToViewerItem({ ...o, job_id: jobId! }),
+            );
+            openImageViewer(items, startIndex, {
+              onIndex: async (item) => {
+                if (item.indexed) {
+                  (window as any).toast?.success('Already indexed');
+                  return;
+                }
+                await fetch(
+                  `/api/jobs/${item.job_id}/outputs/${item.id}/index`,
+                  { method: 'POST', credentials: 'include' },
+                );
+                (window as any).toast?.success('Indexed');
+              },
+            });
+          });
+        });
+
         listEl.querySelectorAll('[data-play]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const oid = (btn as HTMLElement).dataset.play;
