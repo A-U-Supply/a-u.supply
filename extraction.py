@@ -70,6 +70,33 @@ def extract_image_metadata(file_path: str) -> dict:
     return {"width": width, "height": height, "format": fmt}
 
 
+IMAGE_THUMBNAIL_MAX = (400, 400)
+IMAGE_THUMBNAIL_QUALITY = 85
+
+
+def _image_thumbnail_path(file_path: str) -> str:
+    """Return the conventional ``<stem>_thumb.webp`` sibling path for an image."""
+    p = Path(file_path)
+    return str(p.with_name(p.stem + "_thumb.webp"))
+
+
+def generate_image_thumbnail(file_path: str, output_path: str) -> bool:
+    """Generate a WEBP thumbnail of an image, preserving aspect ratio.
+
+    Longest side is capped at 400px. Does not upscale smaller images.
+    """
+    from PIL import Image
+
+    try:
+        with Image.open(file_path) as img:
+            img.thumbnail(IMAGE_THUMBNAIL_MAX, Image.LANCZOS)
+            img.save(output_path, "WEBP", quality=IMAGE_THUMBNAIL_QUALITY, method=6)
+        return True
+    except Exception as exc:
+        logger.error("Image thumbnail generation failed for %s: %s", file_path, exc)
+        return False
+
+
 def extract_dominant_colors(file_path: str, num_colors: int = 5) -> list[str]:
     """Extract dominant colors from an image via k-means clustering.
 
@@ -502,7 +529,16 @@ def _run_image_extraction(db, media_item_id: str, file_path: str, MediaImageMeta
         logger.error("Dominant color extraction failed for %s: %s", media_item_id, exc)
         _log_failure(db, media_item_id, "dominant_colors", exc)
 
-    # Step 3: OCR text extraction
+    # Step 3: Thumbnail (WebP sibling at <original>_thumb.webp)
+    thumb_path = _image_thumbnail_path(file_path)
+    try:
+        if not generate_image_thumbnail(file_path, thumb_path):
+            raise RuntimeError("thumbnail generation returned False")
+    except Exception as exc:
+        logger.error("Image thumbnail failed for %s: %s", media_item_id, exc)
+        _log_failure(db, media_item_id, "thumbnail", exc)
+
+    # Step 4: OCR text extraction
     try:
         ocr_text = extract_text_ocr(file_path)
         meta_kwargs["caption"] = ocr_text or ""

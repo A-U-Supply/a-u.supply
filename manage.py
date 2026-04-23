@@ -515,6 +515,47 @@ def list_users():
     db.close()
 
 
+def backfill_image_thumbnails():
+    """Generate <stem>_thumb.webp for every image that doesn't already have one."""
+    import os
+    from models import MediaItem
+    from extraction import (
+        SEARCH_MEDIA_DIR,
+        _image_thumbnail_path,
+        generate_image_thumbnail,
+    )
+
+    db = SessionLocal()
+    images = db.query(MediaItem).filter(MediaItem.media_type == "image").all()
+
+    total = len(images)
+    log(f"Scanning {total} image items for missing thumbnails")
+
+    done = 0
+    skipped = 0
+    errors = 0
+    for i, item in enumerate(images):
+        full_path = os.path.join(SEARCH_MEDIA_DIR, item.file_path)
+        if not os.path.exists(full_path):
+            log(f"  SKIP {item.id} — source missing: {full_path}")
+            errors += 1
+            continue
+
+        thumb_path = _image_thumbnail_path(full_path)
+        if os.path.exists(thumb_path):
+            skipped += 1
+            continue
+
+        log(f"  [{i + 1}/{total}] {item.filename}")
+        if generate_image_thumbnail(full_path, thumb_path):
+            done += 1
+        else:
+            errors += 1
+
+    log(f"Done! Generated: {done}, Already had thumb: {skipped}, Errors: {errors}")
+    db.close()
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(__doc__)
@@ -614,6 +655,9 @@ if __name__ == "__main__":
 
     elif cmd == "backfill-ocr":
         backfill_ocr()
+
+    elif cmd == "backfill-thumbnails":
+        backfill_image_thumbnails()
 
     elif cmd == "migrate-index":
         if len(sys.argv) < 4:
