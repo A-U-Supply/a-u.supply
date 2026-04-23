@@ -2,6 +2,7 @@
 
 import hashlib
 import io
+import json
 import logging
 import mimetypes
 import os
@@ -690,7 +691,11 @@ def list_public_outputs(
     Returns every ``MediaItem`` whose ``output_index`` is set (i.e. items that
     have been indexed as outputs). Ordered newest-first.
     """
-    q = db.query(MediaItem).filter(MediaItem.output_index.isnot(None))
+    q = (
+        db.query(MediaItem)
+        .options(joinedload(MediaItem.image_meta), joinedload(MediaItem.video_meta))
+        .filter(MediaItem.output_index.isnot(None))
+    )
     if output_index is not None:
         q = q.filter(MediaItem.output_index == output_index)
     if media_type is not None:
@@ -704,21 +709,48 @@ def list_public_outputs(
         "total": total,
         "limit": limit,
         "offset": offset,
-        "items": [
-            {
-                "id": item.id,
-                "filename": item.filename,
-                "media_type": item.media_type,
-                "mime_type": item.mime_type,
-                "file_size_bytes": item.file_size_bytes,
-                "output_index": item.output_index,
-                "description": item.description,
-                "created_at": item.created_at.isoformat() if item.created_at else None,
-                "file_url": f"/api/public/outputs/{item.id}/file",
-                "thumbnail_url": f"/api/public/outputs/{item.id}/thumbnail",
-            }
-            for item in rows
-        ],
+        "items": [_public_output_dict(item) for item in rows],
+    }
+
+
+def _public_output_dict(item: MediaItem) -> dict:
+    """Serialize a MediaItem for the public outputs list.
+
+    Includes width/height/dominant_colors so clients can reserve layout
+    space and paint a placeholder before image bytes arrive.
+    """
+    width: int | None = None
+    height: int | None = None
+    dominant_colors: list[str] | None = None
+
+    if item.media_type == "image" and item.image_meta is not None:
+        width = item.image_meta.width
+        height = item.image_meta.height
+        if item.image_meta.dominant_colors:
+            try:
+                parsed = json.loads(item.image_meta.dominant_colors)
+                if isinstance(parsed, list):
+                    dominant_colors = [str(c) for c in parsed]
+            except (ValueError, TypeError):
+                dominant_colors = None
+    elif item.media_type == "video" and item.video_meta is not None:
+        width = item.video_meta.width
+        height = item.video_meta.height
+
+    return {
+        "id": item.id,
+        "filename": item.filename,
+        "media_type": item.media_type,
+        "mime_type": item.mime_type,
+        "file_size_bytes": item.file_size_bytes,
+        "output_index": item.output_index,
+        "description": item.description,
+        "created_at": item.created_at.isoformat() if item.created_at else None,
+        "width": width,
+        "height": height,
+        "dominant_colors": dominant_colors,
+        "file_url": f"/api/public/outputs/{item.id}/file",
+        "thumbnail_url": f"/api/public/outputs/{item.id}/thumbnail",
     }
 
 
