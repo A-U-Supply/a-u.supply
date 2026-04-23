@@ -516,13 +516,15 @@ def list_users():
 
 
 def backfill_image_thumbnails():
-    """Generate <stem>_thumb.webp for every image that doesn't already have one."""
+    """Generate medium + small WebP thumbnails for any image missing one."""
     import os
     from models import MediaItem
     from extraction import (
         SEARCH_MEDIA_DIR,
         _image_thumbnail_path,
+        _image_thumbnail_sm_path,
         generate_image_thumbnail,
+        generate_image_thumbnail_sm,
     )
 
     db = SessionLocal()
@@ -531,9 +533,7 @@ def backfill_image_thumbnails():
     total = len(images)
     log(f"Scanning {total} image items for missing thumbnails")
 
-    done = 0
-    skipped = 0
-    errors = 0
+    md_done = sm_done = fully_skipped = errors = 0
     for i, item in enumerate(images):
         full_path = os.path.join(SEARCH_MEDIA_DIR, item.file_path)
         if not os.path.exists(full_path):
@@ -541,18 +541,31 @@ def backfill_image_thumbnails():
             errors += 1
             continue
 
-        thumb_path = _image_thumbnail_path(full_path)
-        if os.path.exists(thumb_path):
-            skipped += 1
+        md_path = _image_thumbnail_path(full_path)
+        sm_path = _image_thumbnail_sm_path(full_path)
+        md_exists = os.path.exists(md_path)
+        sm_exists = os.path.exists(sm_path)
+
+        if md_exists and sm_exists:
+            fully_skipped += 1
             continue
 
         log(f"  [{i + 1}/{total}] {item.filename}")
-        if generate_image_thumbnail(full_path, thumb_path):
-            done += 1
-        else:
-            errors += 1
+        if not md_exists:
+            if generate_image_thumbnail(full_path, md_path):
+                md_done += 1
+            else:
+                errors += 1
+        if not sm_exists:
+            if generate_image_thumbnail_sm(full_path, sm_path):
+                sm_done += 1
+            else:
+                errors += 1
 
-    log(f"Done! Generated: {done}, Already had thumb: {skipped}, Errors: {errors}")
+    log(
+        f"Done! md generated: {md_done}, sm generated: {sm_done}, "
+        f"already had both: {fully_skipped}, errors: {errors}"
+    )
     db.close()
 
 

@@ -191,21 +191,20 @@ import Base from '../layouts/Base.astro';
       [items[i], items[j]] = [items[j], items[i]];
     }
 
-    const makeImg = (item: { thumbnail_url: string }) => {
+    // The strip is ~92px wide — small thumbnail is more than enough.
+    type ImgItem = { thumbnail_url: string; thumbnail_sm_url?: string };
+    const makeImg = (item: ImgItem) => {
       const img = document.createElement('img');
-      img.src = item.thumbnail_url;
+      img.src = item.thumbnail_sm_url ?? item.thumbnail_url;
       img.alt = '';
       img.loading = 'lazy';
+      img.decoding = 'async';
       return img;
     };
 
     // Two copies for seamless loop
-    items.forEach((item: { thumbnail_url: string }) =>
-      inner.appendChild(makeImg(item)),
-    );
-    items.forEach((item: { thumbnail_url: string }) =>
-      inner.appendChild(makeImg(item)),
-    );
+    items.forEach((item: ImgItem) => inner.appendChild(makeImg(item)));
+    items.forEach((item: ImgItem) => inner.appendChild(makeImg(item)));
 
     // Duration scales with number of images so speed stays consistent (~3s per image)
     const duration = items.length * 3;

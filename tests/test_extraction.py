@@ -283,10 +283,27 @@ class TestGenerateImageThumbnail:
         assert not os.path.exists(out)
 
     def test_image_thumbnail_path_helper(self):
-        from extraction import _image_thumbnail_path
+        from extraction import _image_thumbnail_path, _image_thumbnail_sm_path
 
         assert _image_thumbnail_path("/foo/bar/baz.png").endswith("baz_thumb.webp")
         assert _image_thumbnail_path("/foo/bar/baz.JPEG").endswith("baz_thumb.webp")
+        assert _image_thumbnail_sm_path("/foo/bar/baz.png").endswith("baz_thumb_sm.webp")
+
+    def test_small_thumbnail_capped_at_128px(self, tmp_media_dir):
+        from PIL import Image
+        from extraction import generate_image_thumbnail_sm, _image_thumbnail_sm_path
+
+        src = os.path.join(tmp_media_dir, "big.png")
+        Image.new("RGB", (1200, 800), color=(10, 40, 200)).save(src, format="PNG")
+        out = _image_thumbnail_sm_path(src)
+        assert generate_image_thumbnail_sm(src, out) is True
+
+        with Image.open(out) as thumb:
+            assert thumb.format == "WEBP"
+            assert max(thumb.size) == 128
+            # aspect preserved
+            w, h = thumb.size
+            assert abs((w / h) - (1200 / 800)) < 0.05
 
 
 class TestGenerateVideoThumbnail:
@@ -349,7 +366,7 @@ class TestRunExtraction:
 
     def test_run_extraction_creates_image_thumbnail(self, db_session, tmp_media_dir):
         from PIL import Image
-        from extraction import _image_thumbnail_path
+        from extraction import _image_thumbnail_path, _image_thumbnail_sm_path
 
         item = make_media_item(db_session, media_type="image")
 
@@ -363,11 +380,16 @@ class TestRunExtraction:
 
                 run_extraction(item.id, file_path, "image")
 
-        thumb_path = _image_thumbnail_path(file_path)
-        assert os.path.exists(thumb_path), f"Expected thumbnail at {thumb_path}"
-        with Image.open(thumb_path) as thumb:
+        md_path = _image_thumbnail_path(file_path)
+        sm_path = _image_thumbnail_sm_path(file_path)
+        assert os.path.exists(md_path), f"Expected md thumbnail at {md_path}"
+        assert os.path.exists(sm_path), f"Expected sm thumbnail at {sm_path}"
+        with Image.open(md_path) as thumb:
             assert thumb.format == "WEBP"
             assert max(thumb.size) == 400
+        with Image.open(sm_path) as thumb:
+            assert thumb.format == "WEBP"
+            assert max(thumb.size) == 128
 
     def test_run_extraction_nonexistent_item(self, db_session):
         """Extraction for a nonexistent item should not raise."""
