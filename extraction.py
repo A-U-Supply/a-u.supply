@@ -70,7 +70,11 @@ def extract_image_metadata(file_path: str) -> dict:
     return {"width": width, "height": height, "format": fmt}
 
 
+# Two sizes get generated per image so <img srcset> can pick the right one:
+#   medium (_thumb.webp)     — 400px max, default / desktop grid tiles
+#   small  (_thumb_sm.webp)  — 128px max, mobile grids / narrow strips / OG unfurl
 IMAGE_THUMBNAIL_MAX = (400, 400)
+IMAGE_THUMBNAIL_SM_MAX = (128, 128)
 IMAGE_THUMBNAIL_QUALITY = 85
 
 
@@ -80,21 +84,34 @@ def _image_thumbnail_path(file_path: str) -> str:
     return str(p.with_name(p.stem + "_thumb.webp"))
 
 
-def generate_image_thumbnail(file_path: str, output_path: str) -> bool:
-    """Generate a WEBP thumbnail of an image, preserving aspect ratio.
+def _image_thumbnail_sm_path(file_path: str) -> str:
+    """Return the ``<stem>_thumb_sm.webp`` sibling path for an image."""
+    p = Path(file_path)
+    return str(p.with_name(p.stem + "_thumb_sm.webp"))
 
-    Longest side is capped at 400px. Does not upscale smaller images.
-    """
+
+def _generate_webp(file_path: str, output_path: str, max_size: tuple[int, int]) -> bool:
+    """Generate a WEBP at the given max size, preserving aspect, never upscaling."""
     from PIL import Image
 
     try:
         with Image.open(file_path) as img:
-            img.thumbnail(IMAGE_THUMBNAIL_MAX, Image.LANCZOS)
+            img.thumbnail(max_size, Image.LANCZOS)
             img.save(output_path, "WEBP", quality=IMAGE_THUMBNAIL_QUALITY, method=6)
         return True
     except Exception as exc:
         logger.error("Image thumbnail generation failed for %s: %s", file_path, exc)
         return False
+
+
+def generate_image_thumbnail(file_path: str, output_path: str) -> bool:
+    """Generate the 400px-max medium thumbnail."""
+    return _generate_webp(file_path, output_path, IMAGE_THUMBNAIL_MAX)
+
+
+def generate_image_thumbnail_sm(file_path: str, output_path: str) -> bool:
+    """Generate the 128px-max small thumbnail (for srcset / mobile / OG unfurl)."""
+    return _generate_webp(file_path, output_path, IMAGE_THUMBNAIL_SM_MAX)
 
 
 def extract_dominant_colors(file_path: str, num_colors: int = 5) -> list[str]:
@@ -529,10 +546,14 @@ def _run_image_extraction(db, media_item_id: str, file_path: str, MediaImageMeta
         logger.error("Dominant color extraction failed for %s: %s", media_item_id, exc)
         _log_failure(db, media_item_id, "dominant_colors", exc)
 
-    # Step 3: Thumbnail (WebP sibling at <original>_thumb.webp)
+    # Step 3: Thumbnails — medium (_thumb.webp, 400px) + small (_thumb_sm.webp, 128px)
+    # Both failures share extraction_type="thumbnail" so one retry covers both.
     thumb_path = _image_thumbnail_path(file_path)
+    thumb_sm_path = _image_thumbnail_sm_path(file_path)
     try:
-        if not generate_image_thumbnail(file_path, thumb_path):
+        ok_md = generate_image_thumbnail(file_path, thumb_path)
+        ok_sm = generate_image_thumbnail_sm(file_path, thumb_sm_path)
+        if not (ok_md and ok_sm):
             raise RuntimeError("thumbnail generation returned False")
     except Exception as exc:
         logger.error("Image thumbnail failed for %s: %s", media_item_id, exc)

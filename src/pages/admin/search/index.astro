@@ -1510,9 +1510,14 @@ import Admin from '../../../layouts/Admin.astro';
           .map((item) => {
             const checked = selectedIds.has(item.id) ? 'checked' : '';
             const selectedClass = selectedIds.has(item.id) ? ' selected' : '';
+            const thumbSrc = `/api/media/${item.id}/thumbnail`;
+            const thumbSrcSm = `/api/media/${item.id}/thumbnail?size=sm`;
+            // srcset lets the browser pick the 128px variant on small grids
+            // and the 400px one on wider / retina grids. sizes reflects the
+            // actual displayed width of a tile (~160-220px, 128px on mobile).
             const thumb =
               item.media_type === 'image' || item.media_type === 'video'
-                ? `<img src="/api/media/${item.id}/thumbnail" alt="" loading="lazy" />`
+                ? `<img src="${thumbSrc}" srcset="${thumbSrcSm} 128w, ${thumbSrc} 400w" sizes="(max-width: 480px) 128px, 220px" alt="" loading="lazy" decoding="async" width="400" height="400" />`
                 : `<img src="/assets/default-cover.jpg" alt="${item.media_type || '?'}" loading="lazy" style="image-rendering: pixelated;" />`;
             const canPlay =
               item.media_type === 'audio' || item.media_type === 'video';

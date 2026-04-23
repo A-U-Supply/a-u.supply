@@ -191,25 +191,35 @@ _IMAGE_PLACEHOLDER_SVG = (
 )
 
 
-def _resolve_thumbnail_path(item: "MediaItem") -> tuple[Path, str] | None:
+def _resolve_thumbnail_path(item: "MediaItem", size: str = "md") -> tuple[Path, str] | None:
     """Return (path, mime) for the best on-disk thumbnail for an item, or None.
+
+    ``size`` picks the preferred variant:
+
+    - ``"sm"`` — 128px (``_thumb_sm.webp``); falls back to md if unavailable.
+    - ``"md"`` — 400px (``_thumb.webp``); the default.
 
     Callers should fall back to :func:`_placeholder_response` when None.
     """
     media_dir = _get_search_media_dir()
 
-    # Video: dedicated frame grab wins
+    # Video: dedicated frame grab wins (single size; same file regardless of `size`)
     if item.media_type == "video" and item.video_meta and item.video_meta.thumbnail_path:
         p = media_dir / item.video_meta.thumbnail_path
         if p.exists():
             return (p, "image/webp")
 
-    # Any type: <stem>_thumb.webp sibling
+    # Any type: prefer the small sibling when size="sm", else medium.
     if item.file_path:
         original = media_dir / item.file_path
-        sibling = original.with_name(original.stem + "_thumb.webp")
-        if sibling.exists():
-            return (sibling, "image/webp")
+        if size == "sm":
+            sm = original.with_name(original.stem + "_thumb_sm.webp")
+            if sm.exists():
+                return (sm, "image/webp")
+            # fall through to medium on miss so small clients still get something
+        md = original.with_name(original.stem + "_thumb.webp")
+        if md.exists():
+            return (md, "image/webp")
 
     # Image: original as last-resort (race window before extraction runs)
     if item.media_type == "image" and item.file_path:
@@ -235,9 +245,9 @@ def _placeholder_response(media_type: str, cache_control: str) -> Response:
     )
 
 
-def _thumbnail_response(item: "MediaItem", cache_control: str) -> Response:
+def _thumbnail_response(item: "MediaItem", cache_control: str, size: str = "md") -> Response:
     """Return a FileResponse for the best thumbnail, or a placeholder SVG."""
-    resolved = _resolve_thumbnail_path(item)
+    resolved = _resolve_thumbnail_path(item, size=size)
     if resolved is None:
         return _placeholder_response(item.media_type, cache_control)
     path, mime = resolved
@@ -835,6 +845,7 @@ def _public_output_dict(item: MediaItem) -> dict:
         "dominant_colors": dominant_colors,
         "file_url": f"/api/public/outputs/{item.id}/file",
         "thumbnail_url": f"/api/public/outputs/{item.id}/thumbnail",
+        "thumbnail_sm_url": f"/api/public/outputs/{item.id}/thumbnail?size=sm",
     }
 
 
@@ -879,12 +890,17 @@ def get_public_output_file(media_id: str, db: Session = Depends(get_db)):
     tags=["Public Outputs"],
     summary="Public: serve an indexed output's thumbnail",
 )
-def get_public_output_thumbnail(media_id: str, db: Session = Depends(get_db)):
+def get_public_output_thumbnail(
+    media_id: str,
+    size: str = Query("md", pattern="^(sm|md)$", description="`md` (400px, default) or `sm` (128px)."),
+    db: Session = Depends(get_db),
+):
     """Serve the thumbnail for an indexed output, no auth required.
 
-    Falls back to an inline SVG placeholder (never 404s) so waterfall
-    clients don't have to handle missing tiles. 404s only if the item
-    itself is not in the outputs index.
+    Pass ``?size=sm`` for the 128px variant (great for mobile grids and
+    narrow ambient strips). Falls back to an inline SVG placeholder
+    (never 404s) so waterfall clients don't have to handle missing tiles.
+    404s only if the item itself is not in the outputs index.
     """
     item = (
         db.query(MediaItem)
@@ -893,7 +909,7 @@ def get_public_output_thumbnail(media_id: str, db: Session = Depends(get_db)):
     )
     if not item:
         raise HTTPException(status_code=404, detail="Not found")
-    response = _thumbnail_response(item, "public, max-age=86400, immutable")
+    response = _thumbnail_response(item, "public, max-age=86400, immutable", size=size)
     db.close()
     return response
 
@@ -1314,6 +1330,7 @@ def get_media_file(
 @router.get("/media/{media_id}/thumbnail", tags=["Media Items"], summary="Get media thumbnail")
 def get_media_thumbnail(
     media_id: str,
+    size: str = Query("md", pattern="^(sm|md)$", description="`md` (400px, default) or `sm` (128px)."),
     _auth=Depends(require_scope("read")),
     db: Session = Depends(get_db),
 ):
@@ -1321,13 +1338,13 @@ def get_media_thumbnail(
 
     **Thumbnail sources by type:**
     - **Videos**: auto-generated frame grab, then `_thumb.webp` sibling, else video placeholder SVG
-    - **Images**: `_thumb.webp` sibling, else original image, else image placeholder SVG (rare)
+    - **Images**: for `size=sm` tries `_thumb_sm.webp` first, then `_thumb.webp`, then original, else placeholder
     - **Audio**: inline audio-waveform placeholder SVG (always 200, never 404)
 
     **Scope required:** `read`
     """
     item = _get_media_item_or_404(db, media_id)
-    response = _thumbnail_response(item, "private, max-age=86400")
+    response = _thumbnail_response(item, "private, max-age=86400", size=size)
     db.close()
     return response
 

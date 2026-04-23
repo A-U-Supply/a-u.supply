@@ -126,6 +126,7 @@ class TestPublicOutputsList:
         data = resp.json()["items"][0]
         assert data["file_url"] == f"/api/public/outputs/{item.id}/file"
         assert data["thumbnail_url"] == f"/api/public/outputs/{item.id}/thumbnail"
+        assert data["thumbnail_sm_url"] == f"/api/public/outputs/{item.id}/thumbnail?size=sm"
 
 
 class TestPublicOutputFile:
