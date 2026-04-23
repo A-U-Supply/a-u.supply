@@ -665,7 +665,14 @@ def get_media_og_thumb(media_id: str, db: Session = Depends(get_db)):
     if resolved is None:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
     path, mime = resolved
-    return FileResponse(path, media_type=mime)
+    # OG thumbs are keyed on a stable media_id — safe to cache aggressively.
+    # Slack/Twitter/iMessage unfurlers and any browser that sees the link
+    # can reuse the same bytes.
+    return FileResponse(
+        path,
+        media_type=mime,
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1237,10 +1244,15 @@ def get_media_file(
         raise HTTPException(status_code=404, detail="File not found on disk")
     # Serve inline so clicking a media URL opens full-size in the browser
     # instead of forcing a download. Explicit Download UI uses <a download>.
+    # `private` because the endpoint is authed; the browser can cache per-user
+    # but no shared cache should store the response.
     return FileResponse(
         file_path,
         media_type=mime,
-        headers={"Content-Disposition": content_disposition("inline", filename)},
+        headers={
+            "Content-Disposition": content_disposition("inline", filename),
+            "Cache-Control": "private, max-age=86400",
+        },
     )
 
 
@@ -1289,7 +1301,11 @@ def get_media_thumbnail(
     if resolved is None:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
     path, mime = resolved
-    return FileResponse(path, media_type=mime)
+    return FileResponse(
+        path,
+        media_type=mime,
+        headers={"Cache-Control": "private, max-age=86400"},
+    )
 
 
 @router.put("/media/{media_id}", tags=["Media Items"], summary="Update media description")

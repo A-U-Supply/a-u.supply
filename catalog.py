@@ -1022,15 +1022,21 @@ def serve_cover(
     if not release.cover_art_path:
         raise HTTPException(status_code=404, detail="No cover art")
 
+    # Cover art URLs aren't content-addressed (re-upload replaces the same
+    # file at the same /api/releases/{code}/cover URL), so don't use
+    # `immutable` — a 1h TTL is enough to help repeat loads without
+    # pinning stale images when a cover is swapped.
+    cache_headers = {"Cache-Control": "public, max-age=3600"}
+
     if size == "thumb":
         thumb = _release_dir(code) / "cover_thumb.webp"
         if thumb.exists():
             from fastapi.responses import FileResponse
-            return FileResponse(thumb, media_type="image/webp")
+            return FileResponse(thumb, media_type="image/webp", headers=cache_headers)
 
     fpath = MEDIA_DIR / release.cover_art_path
     if not fpath.exists():
         raise HTTPException(status_code=404, detail="Cover art file not found")
 
     from fastapi.responses import FileResponse
-    return FileResponse(fpath)
+    return FileResponse(fpath, headers=cache_headers)
