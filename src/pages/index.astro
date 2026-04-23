@@ -3,9 +3,14 @@ import Base from '../layouts/Base.astro';
 ---
 
 <Base title="A-U.SUPPLY — Audio Units Division">
-  <aside class="image-strip" id="image-strip" aria-hidden="true">
+  <a
+    href="/waterfall"
+    class="image-strip"
+    id="image-strip"
+    aria-label="View waterfall"
+  >
     <div class="image-strip__inner" id="image-strip-inner"></div>
-  </aside>
+  </a>
   <main class="back-cover">
     <div class="back-cover__content">
       <div class="back-cover__image">
@@ -48,10 +53,10 @@ import Base from '../layouts/Base.astro';
     width: 92px;
     height: 100vh;
     overflow: hidden;
-    pointer-events: none;
     opacity: 0;
     transition: opacity 1.5s ease;
     z-index: 0;
+    cursor: pointer;
   }
 
   .image-strip.visible {
@@ -69,6 +74,7 @@ import Base from '../layouts/Base.astro';
     height: auto;
     display: block;
     filter: grayscale(100%) brightness(0.45);
+    pointer-events: none;
   }
 
   @keyframes strip-scroll {
