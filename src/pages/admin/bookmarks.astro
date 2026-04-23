@@ -238,6 +238,8 @@ import Admin from '../../layouts/Admin.astro';
 </style>
 
 <script>
+  import { addItemsToWorkspace } from '../../lib/workspace';
+
   document.addEventListener('astro:page-load', async () => {
     const gridEl = document.getElementById('bookmarks-grid');
     if (!gridEl) return;
@@ -322,13 +324,18 @@ import Admin from '../../layouts/Admin.astro';
           });
           if (res.ok) {
             const item = await res.json();
-            const hasThumb = item.media_type === 'image' || item.media_type === 'video';
+            const hasThumb =
+              item.media_type === 'image' || item.media_type === 'video';
             metaMap.set(`media_item:${id}`, {
               name: item.filename || 'Untitled',
               sub: item.media_type,
               media_type: item.media_type,
-              thumb: hasThumb ? `/api/media/${id}/thumbnail` : '/assets/default-cover.jpg',
-              thumb_sm: hasThumb ? `/api/media/${id}/thumbnail?size=sm` : undefined,
+              thumb: hasThumb
+                ? `/api/media/${id}/thumbnail`
+                : '/assets/default-cover.jpg',
+              thumb_sm: hasThumb
+                ? `/api/media/${id}/thumbnail?size=sm`
+                : undefined,
               href: `/admin/search/detail?id=${id}`,
               playable:
                 item.media_type === 'audio' || item.media_type === 'video',
@@ -548,31 +555,14 @@ import Admin from '../../layouts/Admin.astro';
       if (wsBtn) {
         e.stopPropagation();
         const mediaId = wsBtn.dataset.wsId!;
-        const wsId = localStorage.getItem('active_workspace_id');
-        if (!wsId) {
-          (window as any).toast.error(
-            'No active workspace. Create one from the workspace page first.',
+        const data = await addItemsToWorkspace([mediaId]);
+        if (data) {
+          (window as any).toast.success(
+            data.already_present > 0
+              ? 'Already in workspace'
+              : 'Added to workspace',
           );
-          return;
-        }
-        try {
-          const res = await fetch(`/api/workspaces/${wsId}/items`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ media_item_ids: [mediaId] }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            (window as any).toast.success(
-              data.already_present > 0
-                ? 'Already in workspace'
-                : 'Added to workspace',
-            );
-          } else {
-            (window as any).toast.error('Failed to add to workspace');
-          }
-        } catch {
+        } else {
           (window as any).toast.error('Failed to add to workspace');
         }
         return;

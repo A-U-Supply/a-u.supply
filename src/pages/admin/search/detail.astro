@@ -368,6 +368,8 @@ import Admin from '../../../layouts/Admin.astro';
 </style>
 
 <script>
+  import { addItemsToWorkspace } from '../../../lib/workspace';
+
   document.addEventListener('astro:page-load', async () => {
     const contentEl = document.getElementById('detail-content');
     if (!contentEl) return;
@@ -791,31 +793,14 @@ import Admin from '../../../layouts/Admin.astro';
     document
       .getElementById('add-to-workspace-btn')
       ?.addEventListener('click', async () => {
-        const wsId = localStorage.getItem('active_workspace_id');
-        if (!wsId) {
-          (window as any).toast.error(
-            'No active workspace. Create one from the workspace page first.',
+        const data = await addItemsToWorkspace([mediaId]);
+        if (data) {
+          (window as any).toast.success(
+            data.already_present > 0
+              ? 'Already in workspace'
+              : 'Added to workspace',
           );
-          return;
-        }
-        try {
-          const res = await fetch(`/api/workspaces/${wsId}/items`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ media_item_ids: [mediaId] }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            (window as any).toast.success(
-              data.already_present > 0
-                ? 'Already in workspace'
-                : 'Added to workspace',
-            );
-          } else {
-            (window as any).toast.error('Failed to add to workspace');
-          }
-        } catch {
+        } else {
           (window as any).toast.error('Failed to add to workspace');
         }
       });
