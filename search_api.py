@@ -2,6 +2,7 @@
 
 import hashlib
 import io
+import json
 import logging
 import mimetypes
 import os
@@ -12,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session, joinedload
@@ -678,6 +679,7 @@ def get_media_og_thumb(media_id: str, db: Session = Depends(get_db)):
     summary="Public: list indexed outputs",
 )
 def list_public_outputs(
+    response: Response,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     output_index: Optional[str] = Query(None, description="Filter to a specific output index name"),
@@ -689,7 +691,11 @@ def list_public_outputs(
     Returns every ``MediaItem`` whose ``output_index`` is set (i.e. items that
     have been indexed as outputs). Ordered newest-first.
     """
-    q = db.query(MediaItem).filter(MediaItem.output_index.isnot(None))
+    q = (
+        db.query(MediaItem)
+        .options(joinedload(MediaItem.image_meta), joinedload(MediaItem.video_meta))
+        .filter(MediaItem.output_index.isnot(None))
+    )
     if output_index is not None:
         q = q.filter(MediaItem.output_index == output_index)
     if media_type is not None:
@@ -698,25 +704,53 @@ def list_public_outputs(
     total = q.count()
     rows = q.order_by(MediaItem.created_at.desc()).limit(limit).offset(offset).all()
 
+    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
     return {
         "total": total,
         "limit": limit,
         "offset": offset,
-        "items": [
-            {
-                "id": item.id,
-                "filename": item.filename,
-                "media_type": item.media_type,
-                "mime_type": item.mime_type,
-                "file_size_bytes": item.file_size_bytes,
-                "output_index": item.output_index,
-                "description": item.description,
-                "created_at": item.created_at.isoformat() if item.created_at else None,
-                "file_url": f"/api/public/outputs/{item.id}/file",
-                "thumbnail_url": f"/api/public/outputs/{item.id}/thumbnail",
-            }
-            for item in rows
-        ],
+        "items": [_public_output_dict(item) for item in rows],
+    }
+
+
+def _public_output_dict(item: MediaItem) -> dict:
+    """Serialize a MediaItem for the public outputs list.
+
+    Includes width/height/dominant_colors so clients can reserve layout
+    space and paint a placeholder before image bytes arrive.
+    """
+    width: int | None = None
+    height: int | None = None
+    dominant_colors: list[str] | None = None
+
+    if item.media_type == "image" and item.image_meta is not None:
+        width = item.image_meta.width
+        height = item.image_meta.height
+        if item.image_meta.dominant_colors:
+            try:
+                parsed = json.loads(item.image_meta.dominant_colors)
+                if isinstance(parsed, list):
+                    dominant_colors = [str(c) for c in parsed]
+            except (ValueError, TypeError):
+                dominant_colors = None
+    elif item.media_type == "video" and item.video_meta is not None:
+        width = item.video_meta.width
+        height = item.video_meta.height
+
+    return {
+        "id": item.id,
+        "filename": item.filename,
+        "media_type": item.media_type,
+        "mime_type": item.mime_type,
+        "file_size_bytes": item.file_size_bytes,
+        "output_index": item.output_index,
+        "description": item.description,
+        "created_at": item.created_at.isoformat() if item.created_at else None,
+        "width": width,
+        "height": height,
+        "dominant_colors": dominant_colors,
+        "file_url": f"/api/public/outputs/{item.id}/file",
+        "thumbnail_url": f"/api/public/outputs/{item.id}/thumbnail",
     }
 
 
@@ -749,7 +783,10 @@ def get_public_output_file(media_id: str, db: Session = Depends(get_db)):
     return FileResponse(
         file_path,
         media_type=mime,
-        headers={"Content-Disposition": f'inline; filename="{safe_filename}"'},
+        headers={
+            "Content-Disposition": f'inline; filename="{safe_filename}"',
+            "Cache-Control": "public, max-age=86400, immutable",
+        },
     )
 
 
@@ -796,7 +833,11 @@ def get_public_output_thumbnail(media_id: str, db: Session = Depends(get_db)):
     if resolved is None:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
     path, mime = resolved
-    return FileResponse(path, media_type=mime)
+    return FileResponse(
+        path,
+        media_type=mime,
+        headers={"Cache-Control": "public, max-age=86400, immutable"},
+    )
 
 
 # ---------------------------------------------------------------------------
