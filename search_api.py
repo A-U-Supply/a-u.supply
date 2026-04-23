@@ -668,6 +668,138 @@ def get_media_og_thumb(media_id: str, db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
+# Public outputs index (no auth — the entire indexed-outputs catalog)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/public/outputs",
+    tags=["Public Outputs"],
+    summary="Public: list indexed outputs",
+)
+def list_public_outputs(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    output_index: Optional[str] = Query(None, description="Filter to a specific output index name"),
+    media_type: Optional[str] = Query(None, description="Filter by media_type: image, audio, or video"),
+    db: Session = Depends(get_db),
+):
+    """List items from the public outputs index, no auth required.
+
+    Returns every ``MediaItem`` whose ``output_index`` is set (i.e. items that
+    have been indexed as outputs). Ordered newest-first.
+    """
+    q = db.query(MediaItem).filter(MediaItem.output_index.isnot(None))
+    if output_index is not None:
+        q = q.filter(MediaItem.output_index == output_index)
+    if media_type is not None:
+        q = q.filter(MediaItem.media_type == media_type)
+
+    total = q.count()
+    rows = q.order_by(MediaItem.created_at.desc()).limit(limit).offset(offset).all()
+
+    return {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "items": [
+            {
+                "id": item.id,
+                "filename": item.filename,
+                "media_type": item.media_type,
+                "mime_type": item.mime_type,
+                "file_size_bytes": item.file_size_bytes,
+                "output_index": item.output_index,
+                "description": item.description,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+                "file_url": f"/api/public/outputs/{item.id}/file",
+                "thumbnail_url": f"/api/public/outputs/{item.id}/thumbnail",
+            }
+            for item in rows
+        ],
+    }
+
+
+@router.get(
+    "/public/outputs/{media_id}/file",
+    tags=["Public Outputs"],
+    summary="Public: serve an indexed output's media file",
+)
+def get_public_output_file(media_id: str, db: Session = Depends(get_db)):
+    """Serve the media file for an indexed output, no auth required.
+
+    404s for items that are not in the outputs index (``output_index IS NULL``),
+    so this route cannot be used to fetch unindexed inputs.
+    """
+    item = (
+        db.query(MediaItem)
+        .filter(MediaItem.id == media_id, MediaItem.output_index.isnot(None))
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    file_path = _get_search_media_dir() / item.file_path
+    mime = item.mime_type or "application/octet-stream"
+    filename = item.filename
+    db.close()
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found on disk")
+    safe_filename = filename.replace('"', "")
+    return FileResponse(
+        file_path,
+        media_type=mime,
+        headers={"Content-Disposition": f'inline; filename="{safe_filename}"'},
+    )
+
+
+@router.get(
+    "/public/outputs/{media_id}/thumbnail",
+    tags=["Public Outputs"],
+    summary="Public: serve an indexed output's thumbnail",
+)
+def get_public_output_thumbnail(media_id: str, db: Session = Depends(get_db)):
+    """Serve the thumbnail for an indexed output, no auth required.
+
+    Same resolution rules as :func:`get_media_thumbnail`: video frame-grab,
+    ``_thumb.webp`` sibling, or the original image as a last resort. 404s
+    for items that are not in the outputs index.
+    """
+    item = (
+        db.query(MediaItem)
+        .filter(MediaItem.id == media_id, MediaItem.output_index.isnot(None))
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    media_dir = _get_search_media_dir()
+    resolved: tuple[Path, str] | None = None
+
+    if item.media_type == "video" and item.video_meta and item.video_meta.thumbnail_path:
+        thumb_path = media_dir / item.video_meta.thumbnail_path
+        if thumb_path.exists():
+            resolved = (thumb_path, "image/webp")
+
+    if resolved is None and item.file_path:
+        original = media_dir / item.file_path
+        thumb = original.with_name(original.stem + "_thumb.webp")
+        if thumb.exists():
+            resolved = (thumb, "image/webp")
+
+    if resolved is None and item.media_type == "image" and item.file_path:
+        file_path = media_dir / item.file_path
+        if file_path.exists():
+            resolved = (file_path, item.mime_type or "application/octet-stream")
+
+    db.close()
+    if resolved is None:
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+    path, mime = resolved
+    return FileResponse(path, media_type=mime)
+
+
+# ---------------------------------------------------------------------------
 # Media static routes (must be defined before /media/{media_id} to avoid capture)
 # ---------------------------------------------------------------------------
 
