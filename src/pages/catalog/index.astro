@@ -295,22 +295,7 @@ import Base from '../../layouts/Base.astro';
       })
       .join('');
 
-    // Measure the actual container width and set columns explicitly so
-    // the layout is correct regardless of ViewTransitions timing.
-    const applyGridLayout = () => {
-      const containerWidth =
-        grid.parentElement!.getBoundingClientRect().width ||
-        document.documentElement.clientWidth;
-      const isMobile = window.innerWidth <= 640;
-      const cols = isMobile ? 1 : Math.max(1, Math.floor(containerWidth / 260));
-      grid.style.display = 'grid';
-      grid.style.width = '100%';
-      grid.style.gap = 'var(--space-md)';
-      grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-    };
-
-    applyGridLayout();
-    requestAnimationFrame(applyGridLayout);
+    grid.style.display = 'grid';
   }
 
   // Run on initial load and on View Transition navigations.
@@ -324,6 +309,21 @@ import Base from '../../layouts/Base.astro';
 <style is:global>
   .catalog__grid {
     display: none;
+    width: 100%;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-md);
+  }
+
+  @media (max-width: 1024px) {
+    .catalog__grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .catalog__grid {
+      grid-template-columns: 1fr;
+    }
   }
 
   .card {
