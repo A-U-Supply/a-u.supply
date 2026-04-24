@@ -1840,12 +1840,26 @@ import Admin from '../../../layouts/Admin.astro';
           (data.job_apps || [])
             .map((a: string) => `<option value="${a}">${a}</option>`)
             .join('');
-        // Restore from URL after dropdowns are populated
+        // Restore from URL after dropdowns are populated. Append unknown
+        // values as options so a link like ?output_index=rgz9-outputs or
+        // ?app=bullethole actually filters instead of silently falling
+        // back to the default when the value isn't in the hardcoded list.
         const p = new URLSearchParams(window.location.search);
-        if (p.get('poster')) posterSelect.value = p.get('poster')!;
+        const ensureOption = (sel: HTMLSelectElement, val: string) => {
+          if (!val) return;
+          const exists = Array.from(sel.options).some((o) => o.value === val);
+          if (!exists) {
+            const opt = document.createElement('option');
+            opt.value = val;
+            opt.textContent = val;
+            sel.appendChild(opt);
+          }
+          sel.value = val;
+        };
+        if (p.get('poster')) ensureOption(posterSelect, p.get('poster')!);
         if (p.get('output_index'))
-          outputIndexSelect.value = p.get('output_index')!;
-        if (p.get('app')) jobAppSelect.value = p.get('app')!;
+          ensureOption(outputIndexSelect, p.get('output_index')!);
+        if (p.get('app')) ensureOption(jobAppSelect, p.get('app')!);
         if (p.get('channel')) {
           const chs = p.get('channel')!.split(',');
           Array.from(channelSelect.options).forEach((o) => {
