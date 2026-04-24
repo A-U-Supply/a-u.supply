@@ -1949,6 +1949,7 @@ def cross_job_bulk_discard(
     discarded = 0
     skipped = 0
     now = datetime.now(timezone.utc)
+    discarded_apps: list[str] = []
     for output_id in body.output_ids:
         output = (
             db.query(JobOutput).join(Job).filter(JobOutput.id == output_id).first()
@@ -1965,14 +1966,21 @@ def cross_job_bulk_discard(
         output.discarded_at = now
         output.discarded_by = user.id
         discarded += 1
+        discarded_apps.append(output.job.app_name)
     db.commit()
     if discarded:
-        queue_batched(
-            "midden.discarded",
-            user,
-            count=discarded,
-            output_ids=body.output_ids[:10],
-        )
+        # For a cross-job bulk discard, the set of apps can be mixed. Emit one
+        # batched event per app so the rollup shows "from app_a, app_b" rather
+        # than swallowing attribution.
+        from collections import Counter as _Counter
+        per_app = _Counter(discarded_apps)
+        for app_name, n in per_app.items():
+            queue_batched(
+                "midden.discarded",
+                user,
+                count=n,
+                app_name=app_name,
+            )
     return {"ok": True, "discarded": discarded, "skipped": skipped}
 
 
