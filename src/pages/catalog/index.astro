@@ -46,7 +46,7 @@ import Base from '../../layouts/Base.astro';
       No releases found.
     </div>
 
-    <div id="grid" class="catalog__grid" style="display:none;"></div>
+    <div id="grid" class="catalog__grid"></div>
   </main>
 </Base>
 
@@ -134,9 +134,14 @@ import Base from '../../layouts/Base.astro';
   }
 
   .catalog__grid {
+    display: none;
+    width: 100%;
+    gap: var(--space-md);
+  }
+
+  .catalog__grid.is-ready {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: var(--space-md);
   }
 
   @media (max-width: 640px) {
@@ -265,13 +270,13 @@ import Base from '../../layouts/Base.astro';
     const emptyEl = document.getElementById('empty')!;
 
     if (allReleases.length === 0) {
-      grid.style.display = 'none';
+      grid.classList.remove('is-ready');
       emptyEl.style.display = 'block';
       return;
     }
 
     emptyEl.style.display = 'none';
-    grid.style.display = 'grid';
+    grid.classList.remove('is-ready');
 
     grid.innerHTML = allReleases
       .map((r: any) => {
@@ -304,6 +309,12 @@ import Base from '../../layouts/Base.astro';
       </a>`;
       })
       .join('');
+
+    // Wait for the browser to commit layout before revealing the grid,
+    // so auto-fill column calculation uses the correct container width.
+    requestAnimationFrame(() => {
+      grid.classList.add('is-ready');
+    });
   }
 
   // Run on initial load and on View Transition navigations.
