@@ -504,7 +504,9 @@ def _format_rollup_lines(rows: list[ActivityLog], users_by_id: dict[int, str]) -
 
         elif event_type == "midden.discarded":
             apps = Counter(p.get("app_name") for p in payloads if p.get("app_name"))
-            app_bits = ", ".join(f"*{a}*" for a, _ in apps.most_common(3))
+            app_bits = ", ".join(
+                f"<{_search_by_app_link(a)}|*{a}*>" for a, _ in apps.most_common(3)
+            )
             suffix = f" from {app_bits}" if app_bits else ""
             lines.append(
                 f"• *{user_name}* sent {count} output{plural}{suffix} to the midden"
@@ -513,7 +515,9 @@ def _format_rollup_lines(rows: list[ActivityLog], users_by_id: dict[int, str]) -
 
         elif event_type == "output.indexed":
             apps = Counter(p.get("app_name") for p in payloads if p.get("app_name"))
-            app_bits = ", ".join(f"*{a}*" for a, _ in apps.most_common(3))
+            app_bits = ", ".join(
+                f"<{_search_by_app_link(a)}|*{a}*>" for a, _ in apps.most_common(3)
+            )
             from_phrase = f" from {app_bits}" if app_bits else ""
             indices = Counter(p.get("output_index") for p in payloads if p.get("output_index"))
             if indices:
@@ -521,6 +525,10 @@ def _format_rollup_lines(rows: list[ActivityLog], users_by_id: dict[int, str]) -
                     f"<{_search_by_index_link(i)}|{i}>" for i, _ in indices.most_common(3)
                 )
                 into_phrase = f" into {idx_links}"
+            elif apps:
+                # Old events (pre-#224) don't carry output_index. Fall back to
+                # the app-scoped search so the line always has somewhere to go.
+                into_phrase = " into search"
             else:
                 into_phrase = " into search"
             lines.append(
