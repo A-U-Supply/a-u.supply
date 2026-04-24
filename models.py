@@ -394,3 +394,17 @@ class Bookmark(Base):
     target_type = Column(String, nullable=False)  # media_item, release, track
     target_id = Column(String, nullable=False)  # str to handle both int IDs and uuid strings
     created_at = Column(DateTime, nullable=False, default=_utcnow)
+
+
+class ActivityLog(Base):
+    __tablename__ = "activity_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_type = Column(String, nullable=False, index=True)
+    tier = Column(String, nullable=False)  # "immediate" or "batched"
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    payload = Column(String, nullable=True)  # JSON event details
+    created_at = Column(DateTime, nullable=False, default=_utcnow, index=True)
+    posted_at = Column(DateTime, nullable=True, index=True)  # null until posted to Slack
+
+    user = relationship("User")

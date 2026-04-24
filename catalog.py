@@ -26,6 +26,7 @@ from models import (
     User,
     release_entities,
 )
+from slack_notifier import notify_immediate
 
 router = APIRouter(prefix="/api")
 
@@ -437,6 +438,14 @@ def create_release(body: ReleaseCreate, user: User = Depends(get_current_user), 
     db.commit()
 
     release = _get_release_or_404(db, product_code, user)
+    notify_immediate(
+        "release.created",
+        user,
+        product_code=release.product_code,
+        title=release.title,
+        status=release.status,
+        track_count=len(release.tracks),
+    )
     return _release_detail(release)
 
 
@@ -539,19 +548,26 @@ def update_release(code: str, body: ReleaseUpdate, admin: User = Depends(require
     if not release:
         raise HTTPException(status_code=404, detail="Release not found")
 
+    changed_fields: list[str] = []
+
     if body.title is not None:
         release.title = body.title
+        changed_fields.append("title")
     if body.description is not None:
         release.description = body.description
+        changed_fields.append("description")
     if body.format_specs is not None:
         release.format_specs = body.format_specs
+        changed_fields.append("format_specs")
     if body.category is not None:
         release.category = body.category or None
+        changed_fields.append("category")
     if body.release_date is not None:
         try:
             release.release_date = date.fromisoformat(body.release_date)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid release_date format")
+        changed_fields.append("release_date")
 
     # Product code rename
     new_code = body.product_code
@@ -563,6 +579,7 @@ def update_release(code: str, body: ReleaseUpdate, admin: User = Depends(require
             new_dir = _release_dir(new_code)
             old_dir.rename(new_dir)
         release.product_code = new_code
+        changed_fields.append("product_code")
 
     # Replace entity links
     if body.entity_ids is not None:
@@ -571,6 +588,7 @@ def update_release(code: str, body: ReleaseUpdate, admin: User = Depends(require
             if not db.query(Entity).filter(Entity.id == eid).first():
                 raise HTTPException(status_code=400, detail=f"Entity {eid} not found")
             db.execute(insert(release_entities).values(release_id=release.id, entity_id=eid, position=i))
+        changed_fields.append("entities")
 
     # Replace distribution links
     if body.distribution_links is not None:
@@ -578,6 +596,7 @@ def update_release(code: str, body: ReleaseUpdate, admin: User = Depends(require
             db.delete(dl)
         for dl in body.distribution_links:
             db.add(DistributionLink(release_id=release.id, platform=dl.platform, url=dl.url, label=dl.label))
+        changed_fields.append("distribution_links")
 
     # Replace metadata
     if body.metadata is not None:
@@ -585,6 +604,7 @@ def update_release(code: str, body: ReleaseUpdate, admin: User = Depends(require
             db.delete(m)
         for m in body.metadata:
             db.add(ReleaseMetadata(release_id=release.id, key=m.key, value=m.value, sort_order=m.sort_order))
+        changed_fields.append("metadata")
 
     # Track edits: delete removed tracks, rename + renumber the rest
     if body.tracks is not None:
@@ -617,10 +637,19 @@ def update_release(code: str, body: ReleaseUpdate, admin: User = Depends(require
         for t in body.tracks:
             current_tracks[t.id].track_number = t.position
             current_tracks[t.id].title = t.title
+        changed_fields.append("tracks")
 
     db.commit()
     final_code = new_code if new_code else code
     release = _get_release_or_404(db, final_code, admin)
+    if changed_fields:
+        notify_immediate(
+            "release.updated",
+            admin,
+            product_code=release.product_code,
+            title=release.title,
+            changed_fields=changed_fields,
+        )
     return _release_detail(release)
 
 
@@ -636,6 +665,16 @@ def publish_release(code: str, admin: User = Depends(require_admin), db: Session
         raise HTTPException(status_code=404, detail="Release not found")
     release.status = "published"
     db.commit()
+    tracks = db.query(Track).filter(Track.release_id == release.id).all()
+    total_duration = sum(t.duration_seconds or 0 for t in tracks) or None
+    notify_immediate(
+        "release.published",
+        admin,
+        product_code=release.product_code,
+        title=release.title,
+        track_count=len(tracks),
+        total_duration_seconds=total_duration,
+    )
     return {"ok": True}
 
 
@@ -652,6 +691,12 @@ def unpublish_release(code: str, admin: User = Depends(require_admin), db: Sessi
         raise HTTPException(status_code=404, detail="Release not found")
     release.status = "draft"
     db.commit()
+    notify_immediate(
+        "release.unpublished",
+        admin,
+        product_code=release.product_code,
+        title=release.title,
+    )
     return {"ok": True}
 
 
@@ -668,12 +713,20 @@ def delete_release(code: str, admin: User = Depends(require_admin), db: Session 
     release = db.query(Release).filter(Release.product_code == code).first()
     if not release:
         raise HTTPException(status_code=404, detail="Release not found")
+    deleted_title = release.title
+    deleted_code = release.product_code
     # Remove media files
     rdir = _release_dir(code)
     if rdir.exists():
         shutil.rmtree(rdir)
     db.delete(release)
     db.commit()
+    notify_immediate(
+        "release.deleted",
+        admin,
+        product_code=deleted_code,
+        title=deleted_title,
+    )
     return {"ok": True}
 
 

@@ -41,6 +41,7 @@ from models import (
     Workspace,
     WorkspaceItem,
 )
+from slack_notifier import notify_immediate, queue_batched
 
 logger = logging.getLogger(__name__)
 
@@ -1019,6 +1020,13 @@ def register_app(
     db.add(app)
     db.commit()
     db.refresh(app)
+    notify_immediate(
+        "app.registered",
+        user,
+        name=app.name,
+        display_name=app.display_name,
+        image=app.image,
+    )
     return AppResponse(
         name=app.name,
         display_name=app.display_name,
@@ -1053,6 +1061,13 @@ def update_app(
     app.image = manifest.get("image", app.image)
     app.manifest = body.manifest_toml
     db.commit()
+    notify_immediate(
+        "app.updated",
+        user,
+        name=app.name,
+        display_name=app.display_name,
+        image=app.image,
+    )
     return {"ok": True}
 
 
@@ -1339,6 +1354,16 @@ def create_job(
     db.commit()
     db.refresh(job)
 
+    notify_immediate(
+        "job.submitted",
+        user,
+        job_id=job.id,
+        app_name=job.app_name,
+        app_display_name=app.display_name,
+        input_count=len(all_item_ids),
+        params=body.params,
+    )
+
     result = {
         "id": job.id,
         "app_name": job.app_name,
@@ -1580,6 +1605,16 @@ def create_job_batch(
     db.commit()
     for j in created_jobs:
         db.refresh(j)
+
+    notify_immediate(
+        "job.batch_submitted",
+        user,
+        batch_id=batch_id,
+        app_name=body.app_name,
+        app_display_name=app.display_name,
+        job_count=len(created_jobs),
+        random_recipe=bool(body.random_recipe),
+    )
 
     return {
         "batch_id": batch_id,
@@ -1930,6 +1965,13 @@ def cross_job_bulk_discard(
         output.discarded_by = user.id
         discarded += 1
     db.commit()
+    if discarded:
+        queue_batched(
+            "midden.discarded",
+            user,
+            count=discarded,
+            output_ids=body.output_ids[:10],
+        )
     return {"ok": True, "discarded": discarded, "skipped": skipped}
 
 
@@ -2627,6 +2669,15 @@ def _do_index_output(
     output.media_item_id = media_item.id
     db.commit()
 
+    queue_batched(
+        "output.indexed",
+        user,
+        count=1,
+        app_name=job.app_name,
+        job_id=job.id,
+        media_item_id=media_item.id,
+    )
+
     # Sync to search immediately so the item is visible even if extraction is slow
     try:
         from search_client import sync_media_item
@@ -2742,6 +2793,14 @@ def discard_outputs(
         output.discarded_at = now
         output.discarded_by = user.id
     db.commit()
+    if rows:
+        queue_batched(
+            "midden.discarded",
+            user,
+            count=len(rows),
+            app_name=job.app_name,
+            job_id=job_id,
+        )
     return {"ok": True, "discarded": len(rows)}
 
 
@@ -2776,4 +2835,11 @@ def discard_single_output(
     output.discarded_at = datetime.now(timezone.utc)
     output.discarded_by = user.id
     db.commit()
+    queue_batched(
+        "midden.discarded",
+        user,
+        count=1,
+        app_name=output.job.app_name,
+        job_id=job_id,
+    )
     return {"ok": True}
