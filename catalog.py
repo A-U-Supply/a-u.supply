@@ -445,6 +445,8 @@ def create_release(body: ReleaseCreate, user: User = Depends(get_current_user), 
         title=release.title,
         status=release.status,
         track_count=len(release.tracks),
+        entities=[e.name for e in release.entities],
+        release_date=release.release_date.isoformat() if release.release_date else None,
     )
     return _release_detail(release)
 
@@ -650,6 +652,7 @@ def update_release(code: str, body: ReleaseUpdate, admin: User = Depends(require
             title=release.title,
             status=release.status,
             changed_fields=changed_fields,
+            entities=[e.name for e in release.entities],
         )
     return _release_detail(release)
 
@@ -666,7 +669,8 @@ def publish_release(code: str, admin: User = Depends(require_admin), db: Session
         raise HTTPException(status_code=404, detail="Release not found")
     release.status = "published"
     db.commit()
-    tracks = db.query(Track).filter(Track.release_id == release.id).all()
+    release = _get_release_or_404(db, code, admin)
+    tracks = release.tracks
     total_duration = sum(t.duration_seconds or 0 for t in tracks) or None
     notify_immediate(
         "release.published",
@@ -675,6 +679,8 @@ def publish_release(code: str, admin: User = Depends(require_admin), db: Session
         title=release.title,
         track_count=len(tracks),
         total_duration_seconds=total_duration,
+        entities=[e.name for e in release.entities],
+        release_date=release.release_date.isoformat() if release.release_date else None,
     )
     return {"ok": True}
 
@@ -692,11 +698,13 @@ def unpublish_release(code: str, admin: User = Depends(require_admin), db: Sessi
         raise HTTPException(status_code=404, detail="Release not found")
     release.status = "draft"
     db.commit()
+    release = _get_release_or_404(db, code, admin)
     notify_immediate(
         "release.unpublished",
         admin,
         product_code=release.product_code,
         title=release.title,
+        entities=[e.name for e in release.entities],
     )
     return {"ok": True}
 
@@ -711,11 +719,10 @@ def delete_release(code: str, admin: User = Depends(require_admin), db: Session 
 
     **This action is irreversible.** The media directory for this release is removed entirely.
     """
-    release = db.query(Release).filter(Release.product_code == code).first()
-    if not release:
-        raise HTTPException(status_code=404, detail="Release not found")
+    release = _get_release_or_404(db, code, admin)
     deleted_title = release.title
     deleted_code = release.product_code
+    deleted_entities = [e.name for e in release.entities]
     # Remove media files
     rdir = _release_dir(code)
     if rdir.exists():
@@ -727,6 +734,7 @@ def delete_release(code: str, admin: User = Depends(require_admin), db: Session 
         admin,
         product_code=deleted_code,
         title=deleted_title,
+        entities=deleted_entities,
     )
     return {"ok": True}
 
