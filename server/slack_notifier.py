@@ -174,8 +174,8 @@ def _jobs_by_app_link(app_name: str) -> str:
     return f"{SITE_URL}/admin/jobs?app={quote(app_name, safe='')}"
 
 
-def _slop_for_batch_link(batch_id: str) -> str:
-    return f"{SITE_URL}/admin/search/slop?batch_id={quote(batch_id, safe='')}"
+def _jobs_for_batch_link(batch_id: str) -> str:
+    return f"{SITE_URL}/admin/jobs?batch_id={quote(batch_id, safe='')}"
 
 
 def _midden_link() -> str:
@@ -380,7 +380,7 @@ def _format_job_batch_submitted(u: str, d: dict) -> dict:
     )
     links = [f"<{_jobs_queue_link()}|watch queue>"]
     if batch_id:
-        links.append(f"<{_slop_for_batch_link(batch_id)}|review outputs as they land>")
+        links.append(f"<{_jobs_for_batch_link(batch_id)}|watch this batch>")
     text += "\n" + " · ".join(links)
     return {"text": text, "unfurl_links": False}
 
