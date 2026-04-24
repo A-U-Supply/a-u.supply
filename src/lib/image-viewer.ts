@@ -40,7 +40,11 @@ export interface ViewerActions {
   isBookmarked?: (item: ViewerItem) => Promise<boolean> | boolean;
   onAddToWorkspace?: (item: ViewerItem) => Promise<void>;
   onIndex?: (item: ViewerItem) => Promise<void>;
-  onDiscard?: (item: ViewerItem) => Promise<void>;
+  // Return true on success — viewer removes the item and advances. Return
+  // false (or throw) and the viewer stays on the current image. Callbacks
+  // are responsible for showing their own success/error toast (which now
+  // renders above the viewer).
+  onDiscard?: (item: ViewerItem) => Promise<boolean>;
   onDetails?: (item: ViewerItem) => void;
   // Optional per-item visibility predicates. When omitted the button is
   // shown for every item (matching v1 behaviour). When provided, the
@@ -864,6 +868,21 @@ class ViewerInstance {
     this.render();
   }
 
+  // Drop the current item from the reel and show the next one. If we just
+  // removed the last item, fall back to the new last (i.e. the previous).
+  // If nothing remains, close the viewer.
+  private removeCurrentAndAdvance() {
+    this.items.splice(this.index, 1);
+    if (this.items.length === 0) {
+      this.close();
+      return;
+    }
+    if (this.index >= this.items.length) {
+      this.index = this.items.length - 1;
+    }
+    this.render();
+  }
+
   // -------------------------------------------------------------------------
   // Zoom / pan
   // -------------------------------------------------------------------------
@@ -1285,7 +1304,16 @@ class ViewerInstance {
           if (this.actions.onIndex) await this.actions.onIndex(item);
           break;
         case 'discard':
-          if (this.actions.onDiscard) await this.actions.onDiscard(item);
+          if (this.actions.onDiscard) {
+            let ok = false;
+            try {
+              ok = await this.actions.onDiscard(item);
+            } catch {
+              (window as any).toast?.error('Failed to discard');
+              return;
+            }
+            if (ok) this.removeCurrentAndAdvance();
+          }
           break;
         case 'details':
           if (this.actions.onDetails) this.actions.onDetails(item);

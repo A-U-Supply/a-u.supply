@@ -551,13 +551,19 @@ import Admin from '../../../layouts/Admin.astro';
               triggerIndexDialogFor(item.id);
             },
             onDiscard: async (item) => {
-              await fetch('/api/jobs/outputs/bulk-discard', {
+              const res = await fetch('/api/jobs/outputs/bulk-discard', {
                 method: 'POST',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ output_ids: [item.id] }),
               });
+              if (!res.ok) {
+                (window as any).toast?.error('Failed to discard output');
+                return false;
+              }
               (window as any).toast?.success('Discarded to midden');
+              loadOutputs();
+              return true;
             },
             onDetails: (item) => {
               window.location.href = `/admin/jobs/detail?id=${item.job_id}`;
