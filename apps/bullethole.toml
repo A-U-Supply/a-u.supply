@@ -2,7 +2,6 @@ name = "bullethole"
 display_name = "Bullet Hole"
 description = "Punch circular holes into an image. Each hole gets an effect applied inside — rotate, invert, blur, and more."
 image = "ghcr.io/a-u-supply/bullethole:latest"
-command = "python /app/bullethole_run.py"
 timeout_seconds = 120
 input_mode = "positional"
 output_flag = "--output /work/output/output.png"
