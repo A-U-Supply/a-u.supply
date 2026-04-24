@@ -100,6 +100,7 @@ auth.py                       — JWT auth helpers
 
 apps/*.toml                   — bot manifests (pointers to Docker images, not bot code)
 data/                         — SQLite DB + media (not committed, lives on server)
+docs/                         — deeper guides (dev, deploy, architecture, bots, player)
 ```
 
 ## Player Integration
@@ -134,3 +135,7 @@ Bots are Docker images that process media. They live in **their own repos** — 
 ## API Docs
 
 Interactive API docs at [a-u.supply/docs](https://a-u.supply/docs).
+
+## More
+
+Deeper guides for topics not covered here live in [`docs/`](docs/): dev setup, architecture, deployment, API, bots, player.
