@@ -648,6 +648,7 @@ def update_release(code: str, body: ReleaseUpdate, admin: User = Depends(require
             admin,
             product_code=release.product_code,
             title=release.title,
+            status=release.status,
             changed_fields=changed_fields,
         )
     return _release_detail(release)

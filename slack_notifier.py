@@ -146,20 +146,28 @@ def _persist(
 # ---------------------------------------------------------------------------
 
 
-def _release_link(code: str) -> str:
-    return f"{SITE_URL}/catalog/{quote(code, safe='')}"
+def _release_link(code: str, *, published: bool) -> str:
+    """Public catalog page if published, admin edit page if still draft.
+
+    Published releases: /catalog/release?code=X (user-facing).
+    Drafts: /admin/catalog/edit?code=X (public page 404s for unauthenticated).
+    """
+    encoded = quote(code, safe="")
+    if published:
+        return f"{SITE_URL}/catalog/release?code={encoded}"
+    return f"{SITE_URL}/admin/catalog/edit?code={encoded}"
 
 
 def _job_link(job_id: str) -> str:
-    return f"{SITE_URL}/dashboard/jobs/{job_id}"
+    return f"{SITE_URL}/admin/jobs/detail?id={quote(job_id, safe='')}"
 
 
 def _batch_link(batch_id: str) -> str:
-    return f"{SITE_URL}/dashboard/jobs?batch_id={batch_id}"
+    return f"{SITE_URL}/admin/jobs?batch_id={quote(batch_id, safe='')}"
 
 
 def _midden_link() -> str:
-    return f"{SITE_URL}/dashboard/the-midden"
+    return f"{SITE_URL}/admin/search/midden"
 
 
 def _cover_url_if_public(code: str, published: bool) -> str | None:
@@ -201,25 +209,30 @@ def _format_release_created(u: str, d: dict) -> dict:
     code = d.get("product_code", "")
     title = d.get("title", "(untitled)")
     status = d.get("status", "draft")
+    published = status == "published"
     tracks = d.get("track_count") or 0
     bits = [f"📀 *{u}* filed a new release: *{title}* `{code}`"]
     if tracks:
         bits.append(f"{tracks} track{'s' if tracks != 1 else ''}")
-    if status == "draft":
+    if not published:
         bits.append("_(draft)_")
     text = " · ".join(bits)
-    text += f"\n<{_release_link(code)}|open release>"
-    return _maybe_with_cover(text, code, status == "published", title)
+    link_label = "open release" if published else "keep editing"
+    text += f"\n<{_release_link(code, published=published)}|{link_label}>"
+    return _maybe_with_cover(text, code, published, title)
 
 
 def _format_release_updated(u: str, d: dict) -> dict:
     code = d.get("product_code", "")
     title = d.get("title", "(untitled)")
+    status = d.get("status", "draft")
+    published = status == "published"
     changed = d.get("changed_fields") or []
     changed_txt = ", ".join(changed) if changed else "details"
+    link_label = "see changes" if published else "keep editing"
     text = (
         f"✏️ *{u}* edited *{title}* `{code}` — changed: {changed_txt}"
-        f"\n<{_release_link(code)}|see changes>"
+        f"\n<{_release_link(code, published=published)}|{link_label}>"
     )
     return {"text": text, "unfurl_links": False}
 
@@ -234,7 +247,7 @@ def _format_release_published(u: str, d: dict) -> dict:
     tail = f" · {extras_txt}" if extras_txt else ""
     text = (
         f"🚀 *{u}* published *{title}* `{code}`{tail}"
-        f"\n<{_release_link(code)}|listen>"
+        f"\n<{_release_link(code, published=True)}|listen>"
     )
     return _maybe_with_cover(text, code, True, title)
 
