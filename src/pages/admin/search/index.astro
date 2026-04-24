@@ -1859,7 +1859,15 @@ import Admin from '../../../layouts/Admin.astro';
         if (p.get('poster')) ensureOption(posterSelect, p.get('poster')!);
         if (p.get('output_index'))
           ensureOption(outputIndexSelect, p.get('output_index')!);
-        if (p.get('app')) ensureOption(jobAppSelect, p.get('app')!);
+        // App filter only applies to outputs (inputs have no job_app field).
+        // If URL has ?app=X but no explicit output_index, force Outputs so
+        // updateCrossFilterState() doesn't auto-clear the app selection.
+        if (p.get('app')) {
+          if (!p.get('output_index')) {
+            outputIndexSelect.value = 'outputs';
+          }
+          ensureOption(jobAppSelect, p.get('app')!);
+        }
         if (p.get('channel')) {
           const chs = p.get('channel')!.split(',');
           Array.from(channelSelect.options).forEach((o) => {
