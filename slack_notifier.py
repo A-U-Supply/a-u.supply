@@ -346,14 +346,17 @@ def _format_job_submitted(u: str, d: dict) -> dict:
 
 
 def _format_job_batch_submitted(u: str, d: dict) -> dict:
+    # /api/jobs/batch is what the Hecatomb UI fires — frame the message accordingly.
     app_name = d.get("app_name") or ""
     app_label = d.get("app_display_name") or app_name or "an app"
     batch_id = d.get("batch_id", "")
     count = d.get("job_count") or 0
     random_recipe = d.get("random_recipe")
-    text = f"🎰 *{u}* queued a batch of {count} *{app_label}* job{'s' if count != 1 else ''}"
-    if random_recipe:
-        text += " _(random recipes)_"
+    recipe_note = " with random recipes" if random_recipe else ""
+    text = (
+        f"🎰 *{u}* ran Hecatomb on *{app_label}* — {count} job{'s' if count != 1 else ''}"
+        f"{recipe_note}"
+    )
     links = [f"<{_jobs_queue_link()}|watch queue>"]
     if batch_id:
         links.append(f"<{_slop_for_batch_link(batch_id)}|review outputs as they land>")
