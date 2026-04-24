@@ -191,7 +191,13 @@ def _search_by_index_link(output_index: str) -> str:
 
 
 def _search_by_app_link(app_name: str) -> str:
-    return f"{SITE_URL}/admin/search?app={quote(app_name, safe='')}"
+    # Pair ?app=X with ?output_index=outputs because app filtering only
+    # applies to outputs — the search UI auto-clears the app dropdown when
+    # the index is Inputs. Explicit beats relying on auto-switch.
+    return (
+        f"{SITE_URL}/admin/search?app={quote(app_name, safe='')}"
+        f"&output_index=outputs"
+    )
 
 
 def _cover_url_if_public(code: str, published: bool) -> str | None:
@@ -240,6 +246,15 @@ def _fmt_by(entities: list[str] | None) -> str:
     return f" by _{entities[0]}_, _{entities[1]}_ & {len(entities) - 2} more"
 
 
+def _pick(key: str, options: list[str]) -> str:
+    """Deterministic variety: same seed key → same pick. Keeps messages varied
+    across events without ever re-rolling the same message's phrasing."""
+    if not options:
+        return ""
+    h = sum(ord(c) * (i + 1) for i, c in enumerate(key)) if key else 0
+    return options[h % len(options)]
+
+
 def _format_release_created(u: str, d: dict) -> dict:
     code = d.get("product_code", "")
     title = d.get("title", "(untitled)")
@@ -248,14 +263,15 @@ def _format_release_created(u: str, d: dict) -> dict:
     tracks = d.get("track_count") or 0
     entities = d.get("entities") or []
     release_date = d.get("release_date")
-    bits = [f"📀 *{u}* filed a new release: *{title}* `{code}`{_fmt_by(entities)}"]
+    verb = _pick(code, ["filed", "committed", "pressed", "cut", "struck"])
+    bits = [f"📀 *{u}* {verb} a new release: *{title}* `{code}`{_fmt_by(entities)}"]
     side: list[str] = []
     if tracks:
         side.append(f"{tracks} track{'s' if tracks != 1 else ''}")
     if release_date:
-        side.append(f"releases {release_date}")
+        side.append(f"dated {release_date}")
     if not published:
-        side.append("_(draft)_")
+        side.append("_(still in draft)_")
     if side:
         bits.append(" · ".join(side))
     text = "\n".join(bits)
@@ -274,8 +290,9 @@ def _format_release_updated(u: str, d: dict) -> dict:
     changed_txt = ", ".join(changed) if changed else "details"
     status_badge = "" if published else " _(draft)_"
     link_label = "see changes" if published else "keep editing"
+    verb = _pick(code + changed_txt, ["revised", "reworked", "tweaked", "polished"])
     text = (
-        f"✏️ *{u}* edited *{title}* `{code}`{_fmt_by(entities)}{status_badge}"
+        f"✏️ *{u}* {verb} *{title}* `{code}`{_fmt_by(entities)}{status_badge}"
         f"\nchanged: {changed_txt}"
         f"\n<{_release_link(code, published=published)}|{link_label}>"
     )
@@ -292,12 +309,13 @@ def _format_release_published(u: str, d: dict) -> dict:
     extras = [
         f"{tracks} track{'s' if tracks != 1 else ''}" if tracks else None,
         duration,
-        f"released {release_date}" if release_date else None,
+        f"dated {release_date}" if release_date else None,
     ]
     extras_txt = " · ".join(x for x in extras if x)
     tail = f"\n{extras_txt}" if extras_txt else ""
+    verb = _pick(code, ["loosed", "released", "unleashed", "shipped", "published"])
     text = (
-        f"🚀 *{u}* published *{title}* `{code}`{_fmt_by(entities)}{tail}"
+        f"🚀 *{u}* {verb} *{title}* `{code}`{_fmt_by(entities)} upon the world{tail}"
         f"\n<{_release_link(code, published=True)}|listen>"
     )
     return _maybe_with_cover(text, code, True, title)
@@ -308,7 +326,7 @@ def _format_release_unpublished(u: str, d: dict) -> dict:
     title = d.get("title", "(untitled)")
     entities = d.get("entities") or []
     text = (
-        f"🙈 *{u}* pulled *{title}* `{code}`{_fmt_by(entities)} back to draft"
+        f"🙈 *{u}* yanked *{title}* `{code}`{_fmt_by(entities)} back to the vault"
         f"\n<{_release_edit_link(code)}|edit>"
     )
     return {"text": text, "unfurl_links": False}
@@ -318,7 +336,8 @@ def _format_release_deleted(u: str, d: dict) -> dict:
     code = d.get("product_code", "")
     title = d.get("title", "(untitled)")
     entities = d.get("entities") or []
-    text = f"🗑️ *{u}* deleted release *{title}* `{code}`{_fmt_by(entities)} — gone for good"
+    verb = _pick(code, ["interred", "buried", "erased", "obliterated"])
+    text = f"🗑️ *{u}* {verb} *{title}* `{code}`{_fmt_by(entities)} — gone for good"
     return {"text": text, "unfurl_links": False}
 
 
@@ -332,7 +351,9 @@ def _format_job_submitted(u: str, d: dict) -> dict:
     for k in ("recipe", "model", "processing_mode"):
         if params.get(k):
             param_bits.append(f"{k}=`{params[k]}`")
-    text = f"⚙️ *{u}* fired *{app_label}* on {inputs} input{'s' if inputs != 1 else ''}"
+    verb = _pick(job_id + app_name, ["loosed", "unleashed", "set loose", "fired"])
+    input_word = "input" if inputs == 1 else "inputs"
+    text = f"⚙️ *{u}* {verb} *{app_label}* on {inputs} {input_word}"
     if param_bits:
         text += "\n" + " · ".join(param_bits)
     links: list[str] = []
@@ -352,10 +373,10 @@ def _format_job_batch_submitted(u: str, d: dict) -> dict:
     batch_id = d.get("batch_id", "")
     count = d.get("job_count") or 0
     random_recipe = d.get("random_recipe")
-    recipe_note = " with random recipes" if random_recipe else ""
+    recipe_note = " _(random recipes)_" if random_recipe else ""
+    job_word = "sacrifice" if count == 1 else "sacrifices"
     text = (
-        f"🎰 *{u}* ran Hecatomb on *{app_label}* — {count} job{'s' if count != 1 else ''}"
-        f"{recipe_note}"
+        f"🎰 *{u}* offered Hecatomb {count} *{app_label}* {job_word}{recipe_note}"
     )
     links = [f"<{_jobs_queue_link()}|watch queue>"]
     if batch_id:
@@ -369,7 +390,8 @@ def _format_app_registered(u: str, d: dict) -> dict:
     display_name = d.get("display_name") or name or "(app)"
     image = d.get("image", "")
     description = d.get("description", "")
-    text = f"🤖 *{u}* registered a new app: *{display_name}*"
+    verb = _pick(name, ["wired up", "enlisted", "commissioned", "brought online"])
+    text = f"🤖 *{u}* {verb} a new apparatus: *{display_name}*"
     if description:
         text += f"\n_{description}_"
     if image:
@@ -382,7 +404,8 @@ def _format_app_registered(u: str, d: dict) -> dict:
 def _format_app_updated(u: str, d: dict) -> dict:
     name = d.get("name", "")
     display_name = d.get("display_name") or name or "(app)"
-    text = f"🔧 *{u}* updated the *{display_name}* manifest"
+    verb = _pick(name, ["tuned up", "rejiggered", "tweaked", "retooled"])
+    text = f"🔧 *{u}* {verb} the *{display_name}* manifest"
     if name:
         text += f"\n<{_jobs_by_app_link(name)}|jobs for this app>"
     return {"text": text, "unfurl_links": False}
@@ -461,7 +484,16 @@ async def _run_rollup() -> None:
             oldest = oldest.replace(tzinfo=timezone.utc)
         since_txt = oldest.astimezone(timezone.utc).strftime("%H:%M UTC")
 
-        text = f"🧹 *since {since_txt}*\n" + "\n".join(lines)
+        header = _pick(
+            since_txt,
+            [
+                f"🧹 *from the workshop, since {since_txt}:*",
+                f"🧹 *last sweep of the floor, since {since_txt}:*",
+                f"🧹 *the tally since {since_txt}:*",
+                f"🧹 *since {since_txt}, on the shop floor:*",
+            ],
+        )
+        text = header + "\n" + "\n".join(lines)
         await _post_slack({"text": text, "unfurl_links": False})
 
         now = datetime.now(timezone.utc)
@@ -497,19 +529,21 @@ def _format_rollup_lines(rows: list[ActivityLog], users_by_id: dict[int, str]) -
             if top:
                 tag_links = ", ".join(f"<{_search_by_tag_link(t)}|`{t}`>" for t in top)
                 extra = f" — top: {tag_links}"
-            lines.append(f"• *{user_name}* tagged {count} item{plural}{extra}")
+            verb = _pick(user_name + "tag", ["labeled", "tagged", "annotated"])
+            lines.append(f"• *{user_name}* {verb} {count} item{plural}{extra}")
 
         elif event_type == "tag.removed":
-            lines.append(f"• *{user_name}* removed {count} tag{plural}")
+            lines.append(f"• *{user_name}* stripped {count} tag{plural}")
 
         elif event_type == "midden.discarded":
             apps = Counter(p.get("app_name") for p in payloads if p.get("app_name"))
             app_bits = ", ".join(
                 f"<{_search_by_app_link(a)}|*{a}*>" for a, _ in apps.most_common(3)
             )
-            suffix = f" from {app_bits}" if app_bits else ""
+            suffix = f" of {app_bits}" if app_bits else ""
+            verb = _pick(user_name + "midden", ["consigned", "tossed", "cast"])
             lines.append(
-                f"• *{user_name}* sent {count} output{plural}{suffix} to the midden"
+                f"• *{user_name}* {verb} {count} output{plural}{suffix} to the midden"
                 f" — <{_midden_link()}|review>"
             )
 
@@ -525,14 +559,13 @@ def _format_rollup_lines(rows: list[ActivityLog], users_by_id: dict[int, str]) -
                     f"<{_search_by_index_link(i)}|{i}>" for i, _ in indices.most_common(3)
                 )
                 into_phrase = f" into {idx_links}"
-            elif apps:
-                # Old events (pre-#224) don't carry output_index. Fall back to
-                # the app-scoped search so the line always has somewhere to go.
-                into_phrase = " into search"
             else:
-                into_phrase = " into search"
+                # Old events (pre-#224) don't carry output_index. Keep the line
+                # pointing somewhere useful via the app link we already emit.
+                into_phrase = " into the archive"
+            verb = _pick(user_name + "index", ["enshrined", "filed", "catalogued"])
             lines.append(
-                f"• *{user_name}* indexed {count} output{plural}{from_phrase}{into_phrase}"
+                f"• *{user_name}* {verb} {count} output{plural}{from_phrase}{into_phrase}"
             )
 
     return lines
