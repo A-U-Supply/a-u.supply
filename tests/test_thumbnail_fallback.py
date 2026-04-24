@@ -152,7 +152,7 @@ class TestResolveThumbnailPath:
     # tmp_media_dir before _get_search_media_dir() is called.
 
     def test_returns_none_for_audio_without_thumb(self, client, db_session, tmp_media_dir):
-        from search_api import _resolve_thumbnail_path
+        from server.search_api import _resolve_thumbnail_path
 
         item = make_media_item(
             db_session,
@@ -163,7 +163,7 @@ class TestResolveThumbnailPath:
         assert _resolve_thumbnail_path(item) is None
 
     def test_prefers_webp_thumb_over_original(self, client, db_session, tmp_media_dir):
-        from search_api import _resolve_thumbnail_path
+        from server.search_api import _resolve_thumbnail_path
 
         rel = "image/2026-04/r_a.png"
         thumb_rel = "image/2026-04/r_a_thumb.webp"
@@ -178,7 +178,7 @@ class TestResolveThumbnailPath:
         assert str(path).endswith("_thumb.webp")
 
     def test_size_sm_prefers_small_sibling(self, client, db_session, tmp_media_dir):
-        from search_api import _resolve_thumbnail_path
+        from server.search_api import _resolve_thumbnail_path
 
         rel = "image/2026-04/r_sm.png"
         sm_rel = "image/2026-04/r_sm_thumb_sm.webp"
@@ -198,7 +198,7 @@ class TestResolveThumbnailPath:
         assert not str(path).endswith("_thumb_sm.webp")
 
     def test_size_sm_falls_back_to_md_when_sm_missing(self, client, db_session, tmp_media_dir):
-        from search_api import _resolve_thumbnail_path
+        from server.search_api import _resolve_thumbnail_path
 
         rel = "image/2026-04/r_fb.png"
         md_rel = "image/2026-04/r_fb_thumb.webp"
@@ -210,7 +210,7 @@ class TestResolveThumbnailPath:
         assert str(path).endswith("_thumb.webp")
 
     def test_size_lg_prefers_large_sibling(self, client, db_session, tmp_media_dir):
-        from search_api import _resolve_thumbnail_path
+        from server.search_api import _resolve_thumbnail_path
 
         rel = "image/2026-04/r_lg.png"
         _write_image(tmp_media_dir, rel)
@@ -224,7 +224,7 @@ class TestResolveThumbnailPath:
     def test_size_lg_falls_back_to_md_when_lg_missing(
         self, client, db_session, tmp_media_dir
     ):
-        from search_api import _resolve_thumbnail_path
+        from server.search_api import _resolve_thumbnail_path
 
         rel = "image/2026-04/r_lg_fb.png"
         _write_image(tmp_media_dir, rel)

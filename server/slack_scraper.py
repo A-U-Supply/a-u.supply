@@ -21,7 +21,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from models import MediaItem, MediaSource, SessionLocal, SlackUserMapping, User
+from server.models import MediaItem, MediaSource, SessionLocal, SlackUserMapping, User
 
 logger = logging.getLogger(__name__)
 
@@ -447,7 +447,7 @@ def _update_source_text(db, slack_file_id: str, text: str) -> None:
         source.slack_message_text = text
         # Re-sync to Meilisearch
         try:
-            from search_client import sync_media_item
+            from server.search_client import sync_media_item
             sync_media_item(db, source.media_item_id)
         except Exception:
             pass
@@ -465,7 +465,7 @@ def _update_source_text_by_url(db, source_url: str, channel_name: str, text: str
     if source and source.slack_message_text != text:
         source.slack_message_text = text
         try:
-            from search_client import sync_media_item
+            from server.search_client import sync_media_item
             sync_media_item(db, source.media_item_id)
         except Exception:
             pass
@@ -566,7 +566,7 @@ def _ingest_file(
 
     # Sync to Meilisearch
     try:
-        from search_client import sync_media_item
+        from server.search_client import sync_media_item
         sync_media_item(db, media_item)
     except ImportError:
         pass
@@ -950,7 +950,7 @@ def _run_scrape(channels: dict[str, str], incremental: bool = False) -> dict:
 
 def _run_post_scrape_extraction():
     """Run metadata extraction and Meilisearch sync for items missing metadata."""
-    from models import MediaImageMeta, MediaAudioMeta, MediaVideoMeta
+    from server.models import MediaImageMeta, MediaAudioMeta, MediaVideoMeta
 
     db = SessionLocal()
     try:
@@ -966,7 +966,7 @@ def _run_post_scrape_extraction():
         logger.info("Post-scrape: %d images need extraction", len(images_without_meta))
         for item in images_without_meta:
             try:
-                from extraction import run_extraction
+                from server.extraction import run_extraction
                 full_path = str(SEARCH_MEDIA_DIR / item.file_path)
                 run_extraction(item.id, full_path, item.media_type)
             except Exception as exc:
@@ -984,7 +984,7 @@ def _run_post_scrape_extraction():
         logger.info("Post-scrape: %d audio files need extraction", len(audio_without_meta))
         for item in audio_without_meta:
             try:
-                from extraction import run_extraction
+                from server.extraction import run_extraction
                 full_path = str(SEARCH_MEDIA_DIR / item.file_path)
                 run_extraction(item.id, full_path, item.media_type)
             except Exception as exc:
@@ -1002,7 +1002,7 @@ def _run_post_scrape_extraction():
         logger.info("Post-scrape: %d videos need extraction", len(videos_without_meta))
         for item in videos_without_meta:
             try:
-                from extraction import run_extraction
+                from server.extraction import run_extraction
                 full_path = str(SEARCH_MEDIA_DIR / item.file_path)
                 run_extraction(item.id, full_path, item.media_type)
             except Exception as exc:
@@ -1011,7 +1011,7 @@ def _run_post_scrape_extraction():
         # Rebuild Meilisearch index for all items
         logger.info("Post-scrape: syncing all items to Meilisearch")
         try:
-            from search_client import sync_media_item, configure_indexes
+            from server.search_client import sync_media_item, configure_indexes
             configure_indexes()
             all_items = db.query(MediaItem).all()
             for item in all_items:
@@ -1143,7 +1143,7 @@ def backfill_posters() -> dict:
         # Resync all items to Meilisearch with updated poster data
         logger.info("Resyncing %d updated sources to Meilisearch", updated)
         try:
-            from search_client import sync_media_item, configure_indexes
+            from server.search_client import sync_media_item, configure_indexes
             configure_indexes()
             items = db.query(MediaItem).all()
             for item in items:
@@ -1212,7 +1212,7 @@ def backfill_message_text() -> dict:
 
         logger.info("Resyncing %d updated sources to Meilisearch", updated)
         try:
-            from search_client import sync_media_item, configure_indexes
+            from server.search_client import sync_media_item, configure_indexes
             configure_indexes()
             items = db.query(MediaItem).all()
             for item in items:
@@ -1420,8 +1420,8 @@ def trigger_reaction_refresh(days_back: int = 7) -> dict:
     if result["updated"] > 0:
         db = SessionLocal()
         try:
-            from search_client import sync_media_item
-            from models import MediaItem
+            from server.search_client import sync_media_item
+            from server.models import MediaItem
 
             # Re-sync items whose sources were updated
             cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)

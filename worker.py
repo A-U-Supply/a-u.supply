@@ -25,7 +25,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from models import AppDefinition, Job, JobOutput, MediaItem, SessionLocal
+from server.models import AppDefinition, Job, JobOutput, MediaItem, SessionLocal
 
 logging.basicConfig(
     level=logging.INFO,

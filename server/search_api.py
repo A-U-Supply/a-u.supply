@@ -18,8 +18,8 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session, joinedload
 
-from auth import get_db, require_scope
-from models import (
+from server.auth import get_db, require_scope
+from server.models import (
     ApiKey,
     ExtractionFailure,
     Job,
@@ -30,8 +30,8 @@ from models import (
     TagVocabulary,
     User,
 )
-from search_client import delete_media_item as meili_delete, sync_media_item as meili_sync
-from slack_notifier import queue_batched
+from server.search_client import delete_media_item as meili_delete, sync_media_item as meili_sync
+from server.slack_notifier import queue_batched
 
 logger = logging.getLogger(__name__)
 
@@ -508,7 +508,7 @@ def search_media(
 
     **Scope required:** `read`
     """
-    from search_client import multi_search
+    from server.search_client import multi_search
 
     meili_filter = _build_meili_filter(body.filters)
     sort_list = [body.sort] if body.sort else None
@@ -543,7 +543,7 @@ def search_stats(
 
     **Scope required:** ``read``
     """
-    from search_client import multi_search
+    from server.search_client import multi_search
     import json as _json
 
     meili_filter = _build_meili_filter(body.filters)
@@ -686,7 +686,7 @@ def search_facets(
 
     **Scope required:** `read`
     """
-    from models import MediaItem, MediaSource
+    from server.models import MediaItem, MediaSource
     from sqlalchemy import distinct, func
 
     # Distinct channels
@@ -1145,7 +1145,7 @@ def batch_re_extract_endpoint(
     **Scope required:** `admin`
     """
     try:
-        from extraction import run_extraction_async
+        from server.extraction import run_extraction_async
     except ImportError:
         logger.warning("extraction module not available; re-extract is a no-op")
         return {"ok": False, "detail": "Extraction module not yet available", "queued": []}
@@ -1578,7 +1578,7 @@ def ingest_slack(
     **Scope required:** `admin`
     """
     try:
-        from slack_scraper import trigger_scrape
+        from server.slack_scraper import trigger_scrape
     except ImportError:
         logger.warning("slack_scraper module not available")
         return {"ok": False, "detail": "Slack scraper module not yet available"}
@@ -1604,7 +1604,7 @@ def ingest_slack_status(
     **Scope required:** `admin`
     """
     try:
-        from slack_scraper import get_scrape_status
+        from server.slack_scraper import get_scrape_status
     except ImportError:
         return {"ok": False, "detail": "Slack scraper module not yet available", "last_run": None}
 
@@ -1633,7 +1633,7 @@ def ingest_slack_reactions(
     **Scope required:** `admin`
     """
     try:
-        from slack_scraper import trigger_reaction_refresh
+        from server.slack_scraper import trigger_reaction_refresh
     except ImportError:
         return {"ok": False, "detail": "Slack scraper module not yet available"}
 
@@ -1662,7 +1662,7 @@ def ingest_slack_sync(
     **Scope required:** `admin`
     """
     try:
-        from slack_scraper import trigger_incremental_scrape, trigger_reaction_refresh
+        from server.slack_scraper import trigger_incremental_scrape, trigger_reaction_refresh
     except ImportError:
         return {"ok": False, "detail": "Slack scraper module not yet available"}
 
@@ -1698,7 +1698,7 @@ def ingest_slack_dry_run(
     **Scope required:** `admin`
     """
     try:
-        from slack_scraper import trigger_dry_run
+        from server.slack_scraper import trigger_dry_run
     except ImportError:
         return {"ok": False, "detail": "Slack scraper module not yet available"}
 
@@ -1781,7 +1781,7 @@ def create_api_key(
 
     user, _ = _auth
 
-    from auth import generate_api_key, hash_api_key
+    from server.auth import generate_api_key, hash_api_key
 
     # Generate a secure random key
     raw_key = "au_" + generate_api_key()
@@ -1915,7 +1915,7 @@ def retry_extraction_failure(
         raise HTTPException(status_code=404, detail="Extraction failure not found")
 
     try:
-        from extraction import retry_extraction
+        from server.extraction import retry_extraction
     except ImportError:
         logger.warning("extraction module not available")
         return {"ok": False, "detail": "Extraction module not yet available"}

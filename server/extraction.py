@@ -444,7 +444,7 @@ def _extract_audio_track(video_path: str, output_path: str) -> bool:
 
 def _log_failure(db, media_item_id: str, extraction_type: str, error: Exception):
     """Record an extraction failure in the database."""
-    from models import ExtractionFailure
+    from server.models import ExtractionFailure
 
     now = datetime.now(timezone.utc)
 
@@ -484,7 +484,7 @@ def _log_failure(db, media_item_id: str, extraction_type: str, error: Exception)
 def _sync_to_search(db, media_item):
     """Attempt to sync a media item to Meilisearch if the client is available."""
     try:
-        from search_client import sync_media_item
+        from server.search_client import sync_media_item
 
         sync_media_item(db, media_item)
     except ImportError:
@@ -505,7 +505,7 @@ def run_extraction(media_item_id: str, file_path: str, media_type: str):
     Each step is independent — if one fails, the others still run.
     Failures are logged to the ExtractionFailure table.
     """
-    from models import (
+    from server.models import (
         MediaAudioMeta,
         MediaImageMeta,
         MediaItem,
@@ -736,7 +736,7 @@ def retry_extraction(failure_id: str):
     Loads the ExtractionFailure record, re-runs just that extraction type,
     marks as resolved on success, increments attempts on failure.
     """
-    from models import (
+    from server.models import (
         ExtractionFailure,
         MediaAudioMeta,
         MediaImageMeta,
@@ -785,7 +785,7 @@ def retry_extraction(failure_id: str):
 
 def _retry_single_step(db, media_item, file_path: str, extraction_type: str):
     """Re-run a single extraction step by type."""
-    from models import MediaAudioMeta, MediaImageMeta, MediaVideoMeta
+    from server.models import MediaAudioMeta, MediaImageMeta, MediaVideoMeta
 
     media_item_id = media_item.id
 
@@ -857,7 +857,7 @@ def _upsert_meta(db, MetaClass, media_item_id: str, updates: dict):
 
 def batch_re_extract(media_item_ids: list[str]):
     """Re-run full extraction for multiple media items."""
-    from models import MediaItem, SessionLocal
+    from server.models import MediaItem, SessionLocal
 
     db = SessionLocal()
     try:

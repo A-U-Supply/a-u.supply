@@ -5,8 +5,8 @@ from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from auth import get_db, require_scope
-from models import Bookmark, User
+from server.auth import get_db, require_scope
+from server.models import Bookmark, User
 
 router = APIRouter(prefix="/api")
 

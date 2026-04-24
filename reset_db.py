@@ -1,5 +1,5 @@
 """Reset the users table to current schema. Drops and recreates."""
-from models import Base, engine
+from server.models import Base, engine
 from sqlalchemy import text
 
 with engine.connect() as c:

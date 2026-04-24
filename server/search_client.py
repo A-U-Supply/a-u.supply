@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import meilisearch
 from sqlalchemy.orm import Session
 
-from models import (
+from server.models import (
     MediaAudioMeta,
     MediaImageMeta,
     MediaItem,

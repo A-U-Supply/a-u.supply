@@ -8,8 +8,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from auth import COOKIE_NAME, create_access_token, hash_password
-from models import AppDefinition, Job, JobOutput, User
+from server.auth import COOKIE_NAME, create_access_token, hash_password
+from server.models import AppDefinition, Job, JobOutput, User
 
 
 @pytest.fixture
@@ -51,7 +51,7 @@ def alice_job_with_outputs(db_session, test_user, fakeapp, tmp_path, monkeypatch
     job_data_dir = tmp_path / "job-data"
     monkeypatch.setenv("JOB_DATA_DIR", str(job_data_dir))
     # jobs_api caches JOB_DATA_DIR at import time — patch it directly
-    import jobs_api
+    from server import jobs_api
     monkeypatch.setattr(jobs_api, "JOB_DATA_DIR", job_data_dir)
     import main as _main
     monkeypatch.setattr(_main, "_reap_midden_sync", _main._reap_midden_sync)

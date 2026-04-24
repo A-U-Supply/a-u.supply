@@ -16,8 +16,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, insert
 from sqlalchemy.orm import Session, joinedload
 
-from auth import get_current_user, get_db, require_admin
-from models import (
+from server.auth import get_current_user, get_db, require_admin
+from server.models import (
     DistributionLink,
     Entity,
     Release,
@@ -26,7 +26,7 @@ from models import (
     User,
     release_entities,
 )
-from slack_notifier import notify_immediate
+from server.slack_notifier import notify_immediate
 
 router = APIRouter(prefix="/api")
 
@@ -246,7 +246,7 @@ class TrackReorder(BaseModel):
 
 def optional_user(request: Request):
     """Return the current user or None if not authenticated."""
-    from auth import COOKIE_NAME, SECRET_KEY, ALGORITHM
+    from server.auth import COOKIE_NAME, SECRET_KEY, ALGORITHM
     from jose import JWTError, jwt as jose_jwt
     token = request.cookies.get(COOKIE_NAME)
     if not token:
@@ -945,7 +945,7 @@ def stream_track(code: str, track_id: int, request: Request, db: Session = Depen
                     remaining -= len(chunk)
                     yield chunk
 
-        from search_api import content_disposition
+        from server.search_api import content_disposition
         return StreamingResponse(
             iter_chunk(),
             status_code=206,
@@ -959,7 +959,7 @@ def stream_track(code: str, track_id: int, request: Request, db: Session = Depen
         )
 
     from fastapi.responses import FileResponse
-    from search_api import content_disposition
+    from server.search_api import content_disposition
     return FileResponse(
         fpath,
         media_type=mime_type,

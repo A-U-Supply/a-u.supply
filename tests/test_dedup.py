@@ -33,7 +33,7 @@ class TestSha256Consistency:
 
 @pytest.fixture(autouse=True)
 def mock_meilisearch():
-    with patch("search_api.meili_sync"), patch("search_api.meili_delete"):
+    with patch("server.search_api.meili_sync"), patch("server.search_api.meili_delete"):
         yield
 
 
@@ -88,7 +88,7 @@ class TestDatabaseDedup:
     """Tests for dedup at the database level."""
 
     def test_sha256_unique_constraint_prevents_duplicate_items(self, db_session):
-        from models import MediaItem
+        from server.models import MediaItem
         from sqlalchemy.exc import IntegrityError
 
         sha = hashlib.sha256(b"same content").hexdigest()
@@ -121,7 +121,7 @@ class TestDatabaseDedup:
 
     def test_multiple_sources_for_same_item(self, db_session):
         """Same content from different sources should have one item with multiple sources."""
-        from models import MediaSource
+        from server.models import MediaSource
 
         item = make_media_item(db_session)
 
@@ -157,7 +157,7 @@ class TestCrossSourceDedup:
     def test_upload_then_slack_scrape_same_content(self, db_session):
         """If a file is uploaded manually and then scraped from Slack,
         only one MediaItem should exist with two sources."""
-        from models import MediaItem, MediaSource
+        from server.models import MediaItem, MediaSource
 
         sha = hashlib.sha256(b"cross source content").hexdigest()
 
@@ -190,7 +190,7 @@ class TestCrossSourceDedup:
     def test_slack_scrape_then_upload_same_content(self, db_session):
         """If a file is scraped from Slack first and then manually uploaded,
         the upload should detect the duplicate and add a new source."""
-        from models import MediaItem, MediaSource
+        from server.models import MediaItem, MediaSource
 
         sha = hashlib.sha256(b"reverse order content").hexdigest()
 
