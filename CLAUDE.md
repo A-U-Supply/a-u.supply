@@ -77,6 +77,7 @@ Open http://localhost:4321.
 - **Use uv for Python**: `uv sync`, `uv run`, `uv lock` — never pip.
 - **Product codes have special characters** (`#`, spaces, dots). URL-encode them: `encodeURIComponent()` in JS, `quote(code, safe='')` in Python.
 - **Format before committing**: Run `npm run format` to auto-format code.
+- **Plan before non-trivial work**: Drop a plan at `docs/plans/YYYY-MM-DD-<slug>.md` before writing code. Open a plan-only PR first when the change is big enough to warrant review of the approach. See `docs/plans/README.md` for the format.
 
 ## File Layout
 
