@@ -9,9 +9,12 @@ Usage (from host):
     ssh dokku run au-supply .venv/bin/python manage.py seed-slack-mapping [--dry-run]
     ssh dokku run au-supply .venv/bin/python manage.py add-slack-mapping <slack-user-id> <user-email>
     ssh dokku run au-supply .venv/bin/python manage.py backfill-slack-uploader-id [--dry-run]
+    ssh dokku run au-supply .venv/bin/python manage.py refresh-app <name>
+    ssh dokku run au-supply .venv/bin/python manage.py refresh-all-apps
 """
 
 import sys
+from pathlib import Path
 
 from server.auth import hash_password
 from server.models import SessionLocal, SlackUserMapping, User
@@ -50,6 +53,79 @@ def set_role(email: str, role: str):
     db.commit()
     print(f"{user.name} ({user.email}) is now {user.role}")
     db.close()
+
+
+def refresh_app(name: str):
+    """Reload the AppDefinition row for ``name`` from ``apps/<name>.toml``.
+
+    The ``app_definitions`` table stores a frozen copy of each app's manifest
+    captured when the app was first registered. Editing ``apps/<name>.toml``
+    in the repo doesn't update that row — hence this helper, so manifest
+    tweaks can be applied in prod without a full re-register.
+    """
+    import tomllib
+    from server.models import AppDefinition
+
+    toml_path = Path(__file__).parent / "apps" / f"{name}.toml"
+    if not toml_path.is_file():
+        print(f"ERROR: {toml_path} not found")
+        sys.exit(1)
+
+    toml_text = toml_path.read_text()
+    try:
+        manifest = tomllib.loads(toml_text)
+    except Exception as e:
+        print(f"ERROR: invalid TOML in {toml_path}: {e}")
+        sys.exit(1)
+
+    db = SessionLocal()
+    try:
+        app = db.query(AppDefinition).filter(AppDefinition.name == name).first()
+        if not app:
+            print(f"ERROR: no app named {name!r} in the database")
+            print("(register it first via POST /api/apps — this command only updates existing rows)")
+            sys.exit(1)
+
+        app.display_name = manifest.get("display_name", app.display_name)
+        app.description = manifest.get("description", app.description)
+        app.image = manifest.get("image", app.image)
+        app.manifest = toml_text
+        db.commit()
+        print(f"Refreshed {name} ({toml_path.name} → DB):")
+        print(f"  display_name={app.display_name}")
+        print(f"  image={app.image}")
+        print(f"  command={manifest.get('command') or '(none — image ENTRYPOINT)'}")
+    finally:
+        db.close()
+
+
+def refresh_all_apps():
+    """Refresh every app whose name matches an apps/<name>.toml file."""
+    from server.models import AppDefinition
+
+    apps_dir = Path(__file__).parent / "apps"
+    toml_files = sorted(apps_dir.glob("*.toml")) if apps_dir.is_dir() else []
+    if not toml_files:
+        print("No apps/*.toml files found.")
+        return
+
+    db = SessionLocal()
+    try:
+        existing = {a.name for a in db.query(AppDefinition).all()}
+    finally:
+        db.close()
+
+    updated = 0
+    skipped = 0
+    for path in toml_files:
+        name = path.stem
+        if name not in existing:
+            print(f"  skip {name} (not registered in DB)")
+            skipped += 1
+            continue
+        refresh_app(name)
+        updated += 1
+    print(f"\nRefreshed {updated} app(s), skipped {skipped}.")
 
 
 def add_slack_mapping(slack_user_id: str, user_email: str):
@@ -680,6 +756,15 @@ if __name__ == "__main__":
 
     elif cmd == "backfill-thumbnails":
         backfill_image_thumbnails()
+
+    elif cmd == "refresh-app":
+        if len(sys.argv) < 3:
+            print("Usage: manage.py refresh-app <name>")
+            sys.exit(1)
+        refresh_app(sys.argv[2])
+
+    elif cmd == "refresh-all-apps":
+        refresh_all_apps()
 
     elif cmd == "migrate-index":
         if len(sys.argv) < 4:
