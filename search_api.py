@@ -31,6 +31,7 @@ from models import (
     User,
 )
 from search_client import delete_media_item as meili_delete, sync_media_item as meili_sync
+from slack_notifier import queue_batched
 
 logger = logging.getLogger(__name__)
 
@@ -1435,7 +1436,7 @@ def delete_media(
 def add_tags(
     media_id: str,
     body: TagsRequest,
-    _auth=Depends(require_scope("write")),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
     """Add one or more tags to a media item.
@@ -1448,6 +1449,7 @@ def add_tags(
 
     **Scope required:** `write`
     """
+    user = auth[0]
     item = db.query(MediaItem).filter(MediaItem.id == media_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Media item not found")
@@ -1459,7 +1461,7 @@ def add_tags(
         tag = _normalize_tag(raw_tag)
         if not tag or tag in existing_tags:
             continue
-        media_tag = MediaTag(media_item_id=media_id, tag=tag)
+        media_tag = MediaTag(media_item_id=media_id, tag=tag, tagged_by=user.id)
         db.add(media_tag)
         _update_vocabulary(db, tag, 1)
         existing_tags.add(tag)
@@ -1468,6 +1470,15 @@ def add_tags(
     db.commit()
     meili_sync(db, _get_media_item_or_404(db, media_id))
 
+    if added:
+        queue_batched(
+            "tag.added",
+            user,
+            count=1,
+            media_id=media_id,
+            tags=added,
+        )
+
     return {"ok": True, "added": added}
 
 
@@ -1475,7 +1486,7 @@ def add_tags(
 def remove_tag(
     media_id: str,
     tag: str,
-    _auth=Depends(require_scope("write")),
+    auth: tuple[User, str] = Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
     """Remove a specific tag from a media item.
@@ -1487,6 +1498,7 @@ def remove_tag(
 
     **Scope required:** `write`
     """
+    user = auth[0]
     item = db.query(MediaItem).filter(MediaItem.id == media_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Media item not found")
@@ -1504,6 +1516,14 @@ def remove_tag(
     _update_vocabulary(db, normalized, -1)
     db.commit()
     meili_sync(db, _get_media_item_or_404(db, media_id))
+
+    queue_batched(
+        "tag.removed",
+        user,
+        count=1,
+        media_id=media_id,
+        tag=normalized,
+    )
 
     return {"ok": True}
 

@@ -74,6 +74,11 @@ if "category" not in _release_cols:
     with engine.begin() as _conn:
         _conn.execute(_sa_text("ALTER TABLE releases ADD COLUMN category TEXT"))
 
+# Migrate existing DB: create activity_log table if missing
+if "activity_log" not in _sa_inspect(engine).get_table_names():
+    from models import ActivityLog as _ActivityLog
+    _ActivityLog.__table__.create(bind=engine)
+
 
 # ---------------------------------------------------------------------------
 # Background auto-sync scheduler
@@ -195,6 +200,10 @@ async def lifespan(app: FastAPI):
 
     logger.info("Midden reaper enabled (every %ds, 24h TTL)", MIDDEN_REAPER_INTERVAL)
     tasks.append(asyncio.create_task(_midden_reaper_loop()))
+
+    from slack_notifier import ROLLUP_INTERVAL_SECONDS as _ROLLUP, rollup_loop as _rollup_loop
+    logger.info("Slack activity rollup enabled (every %ds)", _ROLLUP)
+    tasks.append(asyncio.create_task(_rollup_loop()))
 
     yield
 
