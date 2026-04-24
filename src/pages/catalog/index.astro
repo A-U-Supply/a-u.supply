@@ -262,7 +262,6 @@ import Base from '../../layouts/Base.astro';
     }
 
     emptyEl.style.display = 'none';
-    grid.classList.remove('is-ready');
 
     grid.innerHTML = allReleases
       .map((r: any) => {
@@ -296,11 +295,22 @@ import Base from '../../layouts/Base.astro';
       })
       .join('');
 
-    // Wait for the browser to commit layout before revealing the grid,
-    // so auto-fill column calculation uses the correct container width.
-    requestAnimationFrame(() => {
-      grid.classList.add('is-ready');
-    });
+    // Measure the actual container width and set columns explicitly so
+    // the layout is correct regardless of ViewTransitions timing.
+    const applyGridLayout = () => {
+      const containerWidth =
+        grid.parentElement!.getBoundingClientRect().width ||
+        document.documentElement.clientWidth;
+      const isMobile = window.innerWidth <= 640;
+      const cols = isMobile ? 1 : Math.max(1, Math.floor(containerWidth / 260));
+      grid.style.display = 'grid';
+      grid.style.width = '100%';
+      grid.style.gap = 'var(--space-md)';
+      grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    };
+
+    applyGridLayout();
+    requestAnimationFrame(applyGridLayout);
   }
 
   // Run on initial load and on View Transition navigations.
@@ -314,19 +324,6 @@ import Base from '../../layouts/Base.astro';
 <style is:global>
   .catalog__grid {
     display: none;
-    width: 100%;
-    gap: var(--space-md);
-  }
-
-  .catalog__grid.is-ready {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  }
-
-  @media (max-width: 640px) {
-    .catalog__grid.is-ready {
-      grid-template-columns: 1fr;
-    }
   }
 
   .card {
