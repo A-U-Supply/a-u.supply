@@ -43,6 +43,47 @@ from server.models import (
 )
 from server.slack_notifier import notify_immediate, queue_batched
 
+
+def _notify_bulk_indexed(user, indexed_success: list[dict]) -> None:
+    """Emit one immediate Slack post per (app, output_index) bucket for a bulk
+    index call. If everything is one bucket, it's one message; mixed apps or
+    indices get one message each so Slack readers see clean attribution.
+    Called from both per-job bulk-index and cross-job bulk-index endpoints."""
+    if not indexed_success:
+        return
+    from collections import defaultdict
+
+    buckets: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    for r in indexed_success:
+        key = (r.get("app_name") or "", r.get("output_index") or "")
+        buckets[key].append(r)
+    for (app_name, output_index), items in buckets.items():
+        # If the bucket is exactly one item, send the per-item immediate so
+        # we get a thumbnail preview via OG unfurl.
+        if len(items) == 1:
+            r = items[0]
+            notify_immediate(
+                "output.indexed",
+                user,
+                media_item_id=r.get("media_item_id"),
+                app_name=app_name,
+                app_display_name=r.get("app_display_name"),
+                output_index=output_index,
+                filename=r.get("filename"),
+                from_midden=bool(r.get("was_in_midden")),
+            )
+        else:
+            from_midden_count = sum(1 for r in items if r.get("was_in_midden"))
+            notify_immediate(
+                "outputs.indexed_bulk",
+                user,
+                count=len(items),
+                app_name=app_name,
+                app_display_name=items[0].get("app_display_name"),
+                output_index=output_index,
+                from_midden_count=from_midden_count,
+            )
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
@@ -1915,6 +1956,7 @@ def cross_job_bulk_index(
         output_index=body.output_index,
     )
     results = []
+    indexed_success: list[dict] = []
     for output_id in body.output_ids:
         output = db.query(JobOutput).filter(JobOutput.id == output_id).first()
         if not output:
@@ -1923,8 +1965,11 @@ def cross_job_bulk_index(
         try:
             result = _do_index_output(output_id, output.job_id, user, db, meta)
             results.append({"output_id": output_id, **result})
+            if result.get("ok") and not result.get("duplicate"):
+                indexed_success.append(result)
         except HTTPException as e:
             results.append({"output_id": output_id, "error": e.detail})
+    _notify_bulk_indexed(user, indexed_success)
     return {"results": results}
 
 
@@ -2674,19 +2719,10 @@ def _do_index_output(
     for t in auto_tags:
         db.add(MediaTag(media_item_id=media_item.id, tag=t, tagged_by=user.id))
 
+    was_in_midden = output.discarded_at is not None
     output.indexed = True
     output.media_item_id = media_item.id
     db.commit()
-
-    queue_batched(
-        "output.indexed",
-        user,
-        count=1,
-        app_name=job.app_name,
-        job_id=job.id,
-        media_item_id=media_item.id,
-        output_index=resolved_index,
-    )
 
     # Sync to search immediately so the item is visible even if extraction is slow
     try:
@@ -2704,7 +2740,15 @@ def _do_index_output(
     except Exception:
         logger.exception("Extraction failed for indexed output %s", output.id)
 
-    return {"ok": True, "media_item_id": media_item.id}
+    return {
+        "ok": True,
+        "media_item_id": media_item.id,
+        "app_name": job.app_name,
+        "app_display_name": app_def.display_name if app_def else job.app_name,
+        "output_index": resolved_index,
+        "filename": output.filename,
+        "was_in_midden": was_in_midden,
+    }
 
 
 @router.post(
@@ -2735,7 +2779,22 @@ def index_output(
     ``job_app``, ``job_recipe``, ``job_model``, ``job_runtime_seconds``,
     ``job_input_count``.
     """
-    return _do_index_output(output_id, job_id, auth[0], db, body)
+    user = auth[0]
+    result = _do_index_output(output_id, job_id, user, db, body)
+    # Single-output index gets an immediate post with a preview link — the
+    # detail page's OG tags let Slack render a thumbnail card inline.
+    if result.get("ok") and not result.get("duplicate"):
+        notify_immediate(
+            "output.indexed",
+            user,
+            media_item_id=result.get("media_item_id"),
+            app_name=result.get("app_name"),
+            app_display_name=result.get("app_display_name"),
+            output_index=result.get("output_index"),
+            filename=result.get("filename"),
+            from_midden=bool(result.get("was_in_midden")),
+        )
+    return result
 
 
 @router.post(
@@ -2760,12 +2819,17 @@ def bulk_index_outputs(
         output_index=body.output_index,
     )
     results = []
+    indexed_success: list[dict] = []
     for output_id in body.output_ids:
         try:
             result = _do_index_output(output_id, job_id, user, db, meta)
             results.append({"output_id": output_id, **result})
+            if result.get("ok") and not result.get("duplicate"):
+                indexed_success.append(result)
         except HTTPException as e:
             results.append({"output_id": output_id, "error": e.detail})
+    # One immediate summary for the whole bulk call, grouped by app + index.
+    _notify_bulk_indexed(user, indexed_success)
     return {"results": results}
 
 

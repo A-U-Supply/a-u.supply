@@ -200,6 +200,24 @@ def _search_by_app_link(app_name: str) -> str:
     )
 
 
+def _media_detail_link(media_item_id: str) -> str:
+    """Detail page with OG tags — Slack unfurls this with a thumbnail."""
+    return f"{SITE_URL}/admin/search/detail?id={quote(media_item_id, safe='')}"
+
+
+def _app_linked(app_name: str, app_label: str) -> str:
+    """Bold app label, linked to its search results when we have a name."""
+    if app_name:
+        return f"<{_search_by_app_link(app_name)}|*{app_label}*>"
+    return f"*{app_label}*"
+
+
+def _linked_index(output_index: str) -> str:
+    if not output_index:
+        return "the archive"
+    return f"<{_search_by_index_link(output_index)}|*{output_index}*>"
+
+
 def _cover_url_if_public(code: str, published: bool) -> str | None:
     """Slack can only fetch covers for published releases (drafts 404)."""
     if not published:
@@ -353,35 +371,83 @@ def _format_job_submitted(u: str, d: dict) -> dict:
             param_bits.append(f"{k}=`{params[k]}`")
     verb = _pick(job_id + app_name, ["loosed", "unleashed", "set loose", "fired"])
     input_word = "input" if inputs == 1 else "inputs"
-    text = f"⚙️ *{u}* {verb} *{app_label}* on {inputs} {input_word}"
+    text = f"⚙️ *{u}* {verb} {_app_linked(app_name, app_label)} on {inputs} {input_word}"
     if param_bits:
         text += "\n" + " · ".join(param_bits)
-    links: list[str] = []
     if job_id:
-        links.append(f"<{_job_link(job_id)}|watch job>")
-    if app_name:
-        links.append(f"<{_search_by_app_link(app_name)}|past outputs from this app>")
-    if links:
-        text += "\n" + " · ".join(links)
+        text += f"\n<{_job_link(job_id)}|watch job>"
     return {"text": text, "unfurl_links": False}
 
 
 def _format_job_batch_submitted(u: str, d: dict) -> dict:
-    # /api/jobs/batch is what the Hecatomb UI fires — frame the message accordingly.
+    # /api/jobs/batch is the endpoint Hecatomb fires — frame accordingly.
     app_name = d.get("app_name") or ""
     app_label = d.get("app_display_name") or app_name or "an app"
     batch_id = d.get("batch_id", "")
     count = d.get("job_count") or 0
     random_recipe = d.get("random_recipe")
     recipe_note = " _(random recipes)_" if random_recipe else ""
-    job_word = "sacrifice" if count == 1 else "sacrifices"
+    job_word = "job" if count == 1 else "jobs"
     text = (
-        f"🎰 *{u}* offered Hecatomb {count} *{app_label}* {job_word}{recipe_note}"
+        f"🎰 *{u}* ran Hecatomb on {_app_linked(app_name, app_label)} — "
+        f"{count} {job_word}{recipe_note}"
     )
     links = [f"<{_jobs_queue_link()}|watch queue>"]
     if batch_id:
         links.append(f"<{_jobs_for_batch_link(batch_id)}|watch this batch>")
     text += "\n" + " · ".join(links)
+    return {"text": text, "unfurl_links": False}
+
+
+def _format_output_indexed(u: str, d: dict) -> dict:
+    """Single-output index (or rescue from midden). Includes media preview link
+    so Slack unfurls a thumbnail from the detail page's OG tags."""
+    app_name = d.get("app_name") or ""
+    app_label = d.get("app_display_name") or app_name or "an app"
+    media_item_id = d.get("media_item_id") or ""
+    output_index = d.get("output_index") or ""
+    filename = d.get("filename") or ""
+    from_midden = bool(d.get("from_midden"))
+
+    if from_midden:
+        verb = _pick(media_item_id or filename, ["rescued", "saved", "pulled"])
+        text = (
+            f"🫴 *{u}* {verb} an output from the midden — "
+            f"filed into {_linked_index(output_index)} "
+            f"(from {_app_linked(app_name, app_label)})"
+        )
+    else:
+        verb = _pick(media_item_id or filename, ["enshrined", "filed", "catalogued"])
+        text = (
+            f"🗂️ *{u}* {verb} an output from {_app_linked(app_name, app_label)} "
+            f"into {_linked_index(output_index)}"
+        )
+    if filename:
+        text += f"\n`{filename}`"
+    if media_item_id:
+        text += f"\n<{_media_detail_link(media_item_id)}|preview>"
+        # unfurl_links defaults to True — let Slack render the OG preview inline.
+        return {"text": text}
+    return {"text": text, "unfurl_links": False}
+
+
+def _format_outputs_indexed_bulk(u: str, d: dict) -> dict:
+    """Bulk-index summary. No per-item preview since it could be many."""
+    app_name = d.get("app_name") or ""
+    app_label = d.get("app_display_name") or app_name or "an app"
+    count = int(d.get("count") or 0)
+    output_index = d.get("output_index") or ""
+    from_midden_count = int(d.get("from_midden_count") or 0)
+
+    plural = "s" if count != 1 else ""
+    verb = _pick(str(count) + app_name, ["enshrined", "filed", "catalogued"])
+    text = (
+        f"🗂️ *{u}* {verb} {count} output{plural} "
+        f"from {_app_linked(app_name, app_label)} "
+        f"into {_linked_index(output_index)}"
+    )
+    if from_midden_count:
+        text += f"\n_({from_midden_count} rescued from the midden)_"
     return {"text": text, "unfurl_links": False}
 
 
@@ -429,6 +495,8 @@ _IMMEDIATE_FORMATTERS = {
     "job.batch_submitted": _format_job_batch_submitted,
     "app.registered": _format_app_registered,
     "app.updated": _format_app_updated,
+    "output.indexed": _format_output_indexed,
+    "outputs.indexed_bulk": _format_outputs_indexed_bulk,
 }
 
 
@@ -541,7 +609,7 @@ def _format_rollup_lines(rows: list[ActivityLog], users_by_id: dict[int, str]) -
                 f"<{_search_by_app_link(a)}|*{a}*>" for a, _ in apps.most_common(3)
             )
             suffix = f" of {app_bits}" if app_bits else ""
-            verb = _pick(user_name + "midden", ["consigned", "tossed", "cast"])
+            verb = _pick(user_name + "midden", ["consigned", "tossed", "dropped"])
             lines.append(
                 f"• *{user_name}* {verb} {count} output{plural}{suffix} to the midden"
                 f" — <{_midden_link()}|review>"
