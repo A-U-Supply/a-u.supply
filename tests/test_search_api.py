@@ -14,7 +14,7 @@ from tests.conftest import make_media_item, make_media_source
 # All endpoints require auth. We mock Meilisearch sync calls globally.
 @pytest.fixture(autouse=True)
 def mock_meilisearch():
-    with patch("search_api.meili_sync"), patch("search_api.meili_delete"):
+    with patch("server.search_api.meili_sync"), patch("server.search_api.meili_delete"):
         yield
 
 
@@ -26,7 +26,7 @@ class TestSearchEndpoint:
         assert resp.status_code == 401
 
     def test_search_returns_results(self, client, auth_headers):
-        with patch("search_client.multi_search", return_value={
+        with patch("server.search_client.multi_search", return_value={
             "hits": [{"id": "abc", "filename": "test.png"}],
             "total": 1,
             "facets": {},
@@ -160,7 +160,7 @@ class TestDeleteMedia:
     """Tests for DELETE /api/media/{id}."""
 
     def test_delete_removes_item(self, client, auth_headers, db_session, tmp_media_dir):
-        from models import MediaItem
+        from server.models import MediaItem
 
         item = make_media_item(db_session)
 
@@ -200,7 +200,7 @@ class TestTagCRUD:
         assert "synth" in data["added"]
 
     def test_add_duplicate_tag_silently_skipped(self, client, auth_headers, db_session):
-        from models import MediaTag
+        from server.models import MediaTag
 
         item = make_media_item(db_session)
         db_session.add(MediaTag(media_item_id=item.id, tag="drums"))
@@ -217,7 +217,7 @@ class TestTagCRUD:
         assert "bass" in resp.json()["added"]
 
     def test_remove_tag(self, client, auth_headers, db_session):
-        from models import MediaTag
+        from server.models import MediaTag
 
         item = make_media_item(db_session)
         db_session.add(MediaTag(media_item_id=item.id, tag="drums"))
@@ -331,7 +331,7 @@ class TestExtractionFailures:
     """Tests for GET /api/extraction-failures."""
 
     def test_list_extraction_failures(self, client, auth_headers, db_session):
-        from models import ExtractionFailure
+        from server.models import ExtractionFailure
 
         item = make_media_item(db_session)
         db_session.add(
@@ -354,8 +354,8 @@ class TestScopeEnforcement:
     """Tests that read-scope keys cannot access write/admin endpoints."""
 
     def test_read_scope_cannot_upload(self, client, db_session, test_user):
-        from models import ApiKey
-        from auth import hash_api_key
+        from server.models import ApiKey
+        from server.auth import hash_api_key
 
         raw_key = "read-only-key-test"
         api_key = ApiKey(
@@ -376,8 +376,8 @@ class TestScopeEnforcement:
         assert resp.status_code == 403
 
     def test_write_scope_cannot_delete(self, client, db_session, test_user):
-        from models import ApiKey
-        from auth import hash_api_key
+        from server.models import ApiKey
+        from server.auth import hash_api_key
 
         raw_key = "write-scope-key-test"
         api_key = ApiKey(

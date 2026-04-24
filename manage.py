@@ -13,8 +13,8 @@ Usage (from host):
 
 import sys
 
-from auth import hash_password
-from models import SessionLocal, SlackUserMapping, User
+from server.auth import hash_password
+from server.models import SessionLocal, SlackUserMapping, User
 
 
 def create_user(email: str, password: str, name: str, role: str = "member"):
@@ -84,8 +84,8 @@ def add_slack_mapping(slack_user_id: str, user_email: str):
 
 
 def make_apikey(email: str, label: str, scope: str):
-    from auth import generate_api_key, hash_api_key
-    from models import ApiKey
+    from server.auth import generate_api_key, hash_api_key
+    from server.models import ApiKey
 
     if scope not in ("read", "write", "admin"):
         print("ERROR: scope must be read, write, or admin")
@@ -112,7 +112,7 @@ def make_apikey(email: str, label: str, scope: str):
 
 def revoke_apikey(prefix: str):
     from datetime import datetime, timezone
-    from models import ApiKey
+    from server.models import ApiKey
 
     db = SessionLocal()
     key = db.query(ApiKey).filter(
@@ -130,8 +130,8 @@ def revoke_apikey(prefix: str):
 
 
 def reindex_search():
-    from models import MediaItem
-    from search_client import configure_indexes, sync_media_item
+    from server.models import MediaItem
+    from server.search_client import configure_indexes, sync_media_item
 
     db = SessionLocal()
     configure_indexes()
@@ -147,8 +147,8 @@ def reindex_search():
 
 def color_histogram():
     import json
-    from models import MediaImageMeta
-    from search_client import _hex_to_color_groups
+    from server.models import MediaImageMeta
+    from server.search_client import _hex_to_color_groups
 
     db = SessionLocal()
     metas = db.query(MediaImageMeta).filter(MediaImageMeta.dominant_colors.isnot(None)).all()
@@ -198,7 +198,7 @@ def color_histogram():
 def color_overlap():
     import json
     from collections import Counter
-    from models import MediaImageMeta
+    from server.models import MediaImageMeta
 
     db = SessionLocal()
     metas = db.query(MediaImageMeta).filter(MediaImageMeta.dominant_colors.isnot(None)).all()
@@ -231,7 +231,7 @@ def source_audit():
     """Look at what source data actually exists — filenames, metadata, URLs."""
     import json
     from collections import Counter
-    from models import MediaItem, MediaSource
+    from server.models import MediaItem, MediaSource
 
     db = SessionLocal()
 
@@ -309,7 +309,7 @@ def source_audit():
 
 
 def check_meta():
-    from models import MediaItem, MediaImageMeta, MediaAudioMeta, MediaVideoMeta, ExtractionFailure
+    from server.models import MediaItem, MediaImageMeta, MediaAudioMeta, MediaVideoMeta, ExtractionFailure
     db = SessionLocal()
     total = db.query(MediaItem).count()
     imgs = db.query(MediaItem).filter(MediaItem.media_type == "image").count()
@@ -335,8 +335,8 @@ def backfill_transcripts():
     """Find audio/video items missing transcripts and run whisper on them."""
     import os
     import tempfile
-    from models import MediaItem, MediaAudioMeta, MediaVideoMeta
-    from extraction import (
+    from server.models import MediaItem, MediaAudioMeta, MediaVideoMeta
+    from server.extraction import (
         transcribe_audio, _extract_audio_track, _has_audio_stream,
         _upsert_meta, SEARCH_MEDIA_DIR,
     )
@@ -454,8 +454,8 @@ def backfill_transcripts():
 def backfill_ocr():
     """Find images missing OCR text and run tesseract on them."""
     import os
-    from models import MediaItem, MediaImageMeta
-    from extraction import extract_text_ocr, _upsert_meta, SEARCH_MEDIA_DIR
+    from server.models import MediaItem, MediaImageMeta
+    from server.extraction import extract_text_ocr, _upsert_meta, SEARCH_MEDIA_DIR
 
     db = SessionLocal()
 
@@ -518,8 +518,8 @@ def list_users():
 def backfill_image_thumbnails():
     """Generate sm + md + lg WebP thumbnails for any image missing one."""
     import os
-    from models import MediaItem
-    from extraction import (
+    from server.models import MediaItem
+    from server.extraction import (
         SEARCH_MEDIA_DIR,
         _image_thumbnail_path,
         _image_thumbnail_sm_path,
@@ -630,7 +630,7 @@ if __name__ == "__main__":
         source_audit()
 
     elif cmd == "backfill-posters":
-        from slack_scraper import backfill_posters
+        from server.slack_scraper import backfill_posters
         result = backfill_posters()
         print(f"Updated: {result['updated']}, Errors: {result['errors']}")
 
@@ -641,7 +641,7 @@ if __name__ == "__main__":
         add_slack_mapping(sys.argv[2], sys.argv[3])
 
     elif cmd == "seed-slack-mapping":
-        from slack_scraper import seed_slack_user_mapping
+        from server.slack_scraper import seed_slack_user_mapping
         dry_run = "--dry-run" in sys.argv[2:]
         result = seed_slack_user_mapping(dry_run=dry_run)
         print(f"Inserted: {result['inserted']}")
@@ -654,7 +654,7 @@ if __name__ == "__main__":
             print("(dry-run — nothing written)")
 
     elif cmd == "backfill-slack-uploader-id":
-        from slack_scraper import backfill_slack_uploader_id
+        from server.slack_scraper import backfill_slack_uploader_id
         dry_run = "--dry-run" in sys.argv[2:]
         result = backfill_slack_uploader_id(dry_run=dry_run)
         print(f"Scanned: {result['scanned']}")
@@ -668,7 +668,7 @@ if __name__ == "__main__":
             print("(dry-run — nothing written)")
 
     elif cmd == "backfill-text":
-        from slack_scraper import backfill_message_text
+        from server.slack_scraper import backfill_message_text
         result = backfill_message_text()
         print(f"Updated: {result['updated']}, Errors: {result['errors']}")
 
@@ -686,7 +686,7 @@ if __name__ == "__main__":
             print("Usage: manage.py migrate-index <old-index> <new-index>")
             sys.exit(1)
         old_idx, new_idx = sys.argv[2], sys.argv[3]
-        from models import MediaItem, MediaTag
+        from server.models import MediaItem, MediaTag
         db = SessionLocal()
         items = db.query(MediaItem).filter(MediaItem.output_index == old_idx).all()
         print(f"Found {len(items)} items with output_index={old_idx}")

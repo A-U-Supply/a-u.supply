@@ -17,7 +17,7 @@ class TestExtractImageMetadata:
 
     def test_extract_png_metadata(self, tmp_media_dir):
         from PIL import Image
-        from extraction import extract_image_metadata
+        from server.extraction import extract_image_metadata
 
         # Create a small 10x10 red PNG
         img = Image.new("RGB", (10, 10), color=(255, 0, 0))
@@ -31,7 +31,7 @@ class TestExtractImageMetadata:
 
     def test_extract_jpeg_metadata(self, tmp_media_dir):
         from PIL import Image
-        from extraction import extract_image_metadata
+        from server.extraction import extract_image_metadata
 
         img = Image.new("RGB", (640, 480), color=(0, 128, 255))
         path = os.path.join(tmp_media_dir, "test.jpg")
@@ -48,7 +48,7 @@ class TestExtractDominantColors:
 
     def test_returns_hex_color_strings(self, tmp_media_dir):
         from PIL import Image
-        from extraction import extract_dominant_colors
+        from server.extraction import extract_dominant_colors
 
         # Create a solid red image
         img = Image.new("RGB", (100, 100), color=(255, 0, 0))
@@ -64,7 +64,7 @@ class TestExtractDominantColors:
 
     def test_solid_color_image(self, tmp_media_dir):
         from PIL import Image
-        from extraction import extract_dominant_colors
+        from server.extraction import extract_dominant_colors
 
         img = Image.new("RGB", (50, 50), color=(0, 0, 255))
         path = os.path.join(tmp_media_dir, "blue.png")
@@ -84,7 +84,7 @@ class TestExtractAudioMetadata:
     """Tests for extract_audio_metadata (mocked ffprobe)."""
 
     def test_extract_audio_metadata_success(self):
-        from extraction import extract_audio_metadata
+        from server.extraction import extract_audio_metadata
 
         ffprobe_output = json.dumps({
             "format": {"duration": "120.5"},
@@ -98,7 +98,7 @@ class TestExtractAudioMetadata:
             ],
         })
 
-        with patch("extraction.subprocess.run") as mock_run:
+        with patch("server.extraction.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0,
                 stdout=ffprobe_output,
@@ -112,9 +112,9 @@ class TestExtractAudioMetadata:
         assert meta["bit_depth"] == 16
 
     def test_extract_audio_metadata_ffprobe_failure(self):
-        from extraction import extract_audio_metadata
+        from server.extraction import extract_audio_metadata
 
-        with patch("extraction.subprocess.run") as mock_run:
+        with patch("server.extraction.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=1,
                 stdout="",
@@ -124,14 +124,14 @@ class TestExtractAudioMetadata:
                 extract_audio_metadata("/fake/audio.wav")
 
     def test_extract_audio_no_audio_stream(self):
-        from extraction import extract_audio_metadata
+        from server.extraction import extract_audio_metadata
 
         ffprobe_output = json.dumps({
             "format": {"duration": "10.0"},
             "streams": [{"codec_type": "video"}],
         })
 
-        with patch("extraction.subprocess.run") as mock_run:
+        with patch("server.extraction.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0,
                 stdout=ffprobe_output,
@@ -145,15 +145,15 @@ class TestTranscribeAudio:
     """Tests for transcribe_audio with mocked whisper."""
 
     def test_gracefully_handles_missing_whisper(self):
-        from extraction import transcribe_audio
+        from server.extraction import transcribe_audio
 
-        with patch("extraction._get_whisper_model", side_effect=ImportError("no module")):
+        with patch("server.extraction._get_whisper_model", side_effect=ImportError("no module")):
             result = transcribe_audio("/fake/audio.wav")
 
         assert result is None
 
     def test_transcribe_returns_transcript_and_confidence(self):
-        from extraction import transcribe_audio
+        from server.extraction import transcribe_audio
 
         mock_segment = MagicMock()
         mock_segment.text = " Hello world "
@@ -162,7 +162,7 @@ class TestTranscribeAudio:
         mock_model = MagicMock()
         mock_model.transcribe.return_value = (iter([mock_segment]), MagicMock())
 
-        with patch("extraction._get_whisper_model", return_value=mock_model):
+        with patch("server.extraction._get_whisper_model", return_value=mock_model):
             result = transcribe_audio("/fake/audio.wav")
 
         assert result is not None
@@ -170,12 +170,12 @@ class TestTranscribeAudio:
         assert 0 < result["confidence"] < 1
 
     def test_transcribe_no_segments(self):
-        from extraction import transcribe_audio
+        from server.extraction import transcribe_audio
 
         mock_model = MagicMock()
         mock_model.transcribe.return_value = (iter([]), MagicMock())
 
-        with patch("extraction._get_whisper_model", return_value=mock_model):
+        with patch("server.extraction._get_whisper_model", return_value=mock_model):
             result = transcribe_audio("/fake/audio.wav")
 
         assert result is None
@@ -185,7 +185,7 @@ class TestExtractVideoMetadata:
     """Tests for extract_video_metadata (mocked ffprobe)."""
 
     def test_extract_video_metadata_success(self):
-        from extraction import extract_video_metadata
+        from server.extraction import extract_video_metadata
 
         ffprobe_output = json.dumps({
             "format": {"duration": "60.0"},
@@ -199,7 +199,7 @@ class TestExtractVideoMetadata:
             ],
         })
 
-        with patch("extraction.subprocess.run") as mock_run:
+        with patch("server.extraction.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0,
                 stdout=ffprobe_output,
@@ -213,7 +213,7 @@ class TestExtractVideoMetadata:
         assert meta["fps"] == 30.0
 
     def test_extract_video_fractional_fps(self):
-        from extraction import extract_video_metadata
+        from server.extraction import extract_video_metadata
 
         ffprobe_output = json.dumps({
             "format": {"duration": "120.0"},
@@ -227,7 +227,7 @@ class TestExtractVideoMetadata:
             ],
         })
 
-        with patch("extraction.subprocess.run") as mock_run:
+        with patch("server.extraction.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0,
                 stdout=ffprobe_output,
@@ -243,7 +243,7 @@ class TestGenerateImageThumbnail:
 
     def test_thumbnail_capped_at_400px_longest_side(self, tmp_media_dir):
         from PIL import Image
-        from extraction import generate_image_thumbnail, _image_thumbnail_path
+        from server.extraction import generate_image_thumbnail, _image_thumbnail_path
 
         src = os.path.join(tmp_media_dir, "big.png")
         Image.new("RGB", (1200, 800), color=(40, 40, 200)).save(src, format="PNG")
@@ -262,7 +262,7 @@ class TestGenerateImageThumbnail:
 
     def test_thumbnail_does_not_upscale_small_images(self, tmp_media_dir):
         from PIL import Image
-        from extraction import generate_image_thumbnail, _image_thumbnail_path
+        from server.extraction import generate_image_thumbnail, _image_thumbnail_path
 
         src = os.path.join(tmp_media_dir, "small.png")
         Image.new("RGB", (50, 50), color=(255, 0, 0)).save(src, format="PNG")
@@ -273,7 +273,7 @@ class TestGenerateImageThumbnail:
             assert thumb.size == (50, 50)
 
     def test_returns_false_on_bad_input(self, tmp_media_dir):
-        from extraction import generate_image_thumbnail
+        from server.extraction import generate_image_thumbnail
 
         src = os.path.join(tmp_media_dir, "not-an-image.txt")
         with open(src, "w") as f:
@@ -283,7 +283,7 @@ class TestGenerateImageThumbnail:
         assert not os.path.exists(out)
 
     def test_image_thumbnail_path_helper(self):
-        from extraction import (
+        from server.extraction import (
             _image_thumbnail_path,
             _image_thumbnail_sm_path,
             _image_thumbnail_lg_path,
@@ -296,7 +296,7 @@ class TestGenerateImageThumbnail:
 
     def test_small_thumbnail_capped_at_128px(self, tmp_media_dir):
         from PIL import Image
-        from extraction import generate_image_thumbnail_sm, _image_thumbnail_sm_path
+        from server.extraction import generate_image_thumbnail_sm, _image_thumbnail_sm_path
 
         src = os.path.join(tmp_media_dir, "big.png")
         Image.new("RGB", (1200, 800), color=(10, 40, 200)).save(src, format="PNG")
@@ -311,7 +311,7 @@ class TestGenerateImageThumbnail:
 
     def test_large_thumbnail_capped_at_1600px(self, tmp_media_dir):
         from PIL import Image
-        from extraction import generate_image_thumbnail_lg, _image_thumbnail_lg_path
+        from server.extraction import generate_image_thumbnail_lg, _image_thumbnail_lg_path
 
         src = os.path.join(tmp_media_dir, "big.png")
         Image.new("RGB", (4000, 2500), color=(30, 30, 30)).save(src, format="PNG")
@@ -326,7 +326,7 @@ class TestGenerateImageThumbnail:
 
     def test_large_thumbnail_does_not_upscale(self, tmp_media_dir):
         from PIL import Image
-        from extraction import generate_image_thumbnail_lg, _image_thumbnail_lg_path
+        from server.extraction import generate_image_thumbnail_lg, _image_thumbnail_lg_path
 
         src = os.path.join(tmp_media_dir, "small.png")
         Image.new("RGB", (300, 200), color=(0, 0, 0)).save(src, format="PNG")
@@ -340,9 +340,9 @@ class TestGenerateVideoThumbnail:
     """Tests for generate_video_thumbnail (mocked ffmpeg)."""
 
     def test_successful_thumbnail_generation(self):
-        from extraction import generate_video_thumbnail
+        from server.extraction import generate_video_thumbnail
 
-        with patch("extraction.subprocess.run") as mock_run:
+        with patch("server.extraction.subprocess.run") as mock_run:
             # First call is ffprobe for duration, second is ffmpeg
             mock_run.side_effect = [
                 MagicMock(returncode=0, stdout='{"format":{"duration":"60.0"}}', stderr=""),
@@ -353,9 +353,9 @@ class TestGenerateVideoThumbnail:
         assert result is True
 
     def test_failed_thumbnail_generation(self):
-        from extraction import generate_video_thumbnail
+        from server.extraction import generate_video_thumbnail
 
-        with patch("extraction.subprocess.run") as mock_run:
+        with patch("server.extraction.subprocess.run") as mock_run:
             mock_run.side_effect = [
                 MagicMock(returncode=0, stdout='{"format":{"duration":"60.0"}}', stderr=""),
                 MagicMock(returncode=1, stdout="", stderr="ffmpeg error"),
@@ -370,7 +370,7 @@ class TestRunExtraction:
 
     def test_run_extraction_creates_image_meta(self, db_session, tmp_media_dir):
         from PIL import Image
-        from models import MediaImageMeta, SessionLocal
+        from server.models import MediaImageMeta, SessionLocal
 
         item = make_media_item(db_session, media_type="image")
 
@@ -380,10 +380,10 @@ class TestRunExtraction:
         img.save(file_path, format="PNG")
 
         # Patch SessionLocal to return our test session
-        with patch("models.SessionLocal", return_value=db_session):
+        with patch("server.models.SessionLocal", return_value=db_session):
             # Prevent session.close() from actually closing our test session
             with patch.object(db_session, "close"):
-                from extraction import run_extraction
+                from server.extraction import run_extraction
 
                 run_extraction(item.id, file_path, "image")
 
@@ -396,7 +396,7 @@ class TestRunExtraction:
 
     def test_run_extraction_creates_image_thumbnail(self, db_session, tmp_media_dir):
         from PIL import Image
-        from extraction import (
+        from server.extraction import (
             _image_thumbnail_path,
             _image_thumbnail_sm_path,
             _image_thumbnail_lg_path,
@@ -408,9 +408,9 @@ class TestRunExtraction:
         file_path = os.path.join(tmp_media_dir, "thumb-test.png")
         img.save(file_path, format="PNG")
 
-        with patch("models.SessionLocal", return_value=db_session):
+        with patch("server.models.SessionLocal", return_value=db_session):
             with patch.object(db_session, "close"):
-                from extraction import run_extraction
+                from server.extraction import run_extraction
 
                 run_extraction(item.id, file_path, "image")
 
@@ -433,9 +433,9 @@ class TestRunExtraction:
 
     def test_run_extraction_nonexistent_item(self, db_session):
         """Extraction for a nonexistent item should not raise."""
-        with patch("models.SessionLocal", return_value=db_session):
+        with patch("server.models.SessionLocal", return_value=db_session):
             with patch.object(db_session, "close"):
-                from extraction import run_extraction
+                from server.extraction import run_extraction
 
                 run_extraction("nonexistent-id", "/fake/path", "image")
 
@@ -444,8 +444,8 @@ class TestFailureLogging:
     """Tests for extraction failure recording."""
 
     def test_log_failure_creates_record(self, db_session):
-        from extraction import _log_failure
-        from models import ExtractionFailure
+        from server.extraction import _log_failure
+        from server.models import ExtractionFailure
 
         item = make_media_item(db_session)
         error = RuntimeError("Pillow crash")
@@ -462,8 +462,8 @@ class TestFailureLogging:
         assert failure.resolved is False
 
     def test_log_failure_increments_attempts_on_existing(self, db_session):
-        from extraction import _log_failure
-        from models import ExtractionFailure
+        from server.extraction import _log_failure
+        from server.models import ExtractionFailure
 
         item = make_media_item(db_session)
 
@@ -485,7 +485,7 @@ class TestPartialFailure:
     def test_image_extraction_partial_failure(self, db_session, tmp_media_dir):
         """If dominant color extraction fails, image metadata should still be saved."""
         from PIL import Image
-        from models import MediaImageMeta, ExtractionFailure
+        from server.models import MediaImageMeta, ExtractionFailure
 
         item = make_media_item(db_session, media_type="image")
 
@@ -493,10 +493,10 @@ class TestPartialFailure:
         file_path = os.path.join(tmp_media_dir, "partial.png")
         img.save(file_path, format="PNG")
 
-        with patch("models.SessionLocal", return_value=db_session):
+        with patch("server.models.SessionLocal", return_value=db_session):
             with patch.object(db_session, "close"):
-                with patch("extraction.extract_dominant_colors", side_effect=RuntimeError("color crash")):
-                    from extraction import run_extraction
+                with patch("server.extraction.extract_dominant_colors", side_effect=RuntimeError("color crash")):
+                    from server.extraction import run_extraction
 
                     run_extraction(item.id, file_path, "image")
 
@@ -519,8 +519,8 @@ class TestRetryExtraction:
     """Tests for retry_extraction."""
 
     def test_retry_increments_attempts_on_failure(self, db_session):
-        from models import ExtractionFailure
-        from extraction import retry_extraction
+        from server.models import ExtractionFailure
+        from server.extraction import retry_extraction
 
         item = make_media_item(db_session, media_type="image")
         failure = ExtractionFailure(
@@ -534,9 +534,9 @@ class TestRetryExtraction:
         db_session.add(failure)
         db_session.commit()
 
-        with patch("models.SessionLocal", return_value=db_session):
+        with patch("server.models.SessionLocal", return_value=db_session):
             with patch.object(db_session, "close"):
-                with patch("extraction._retry_single_step", side_effect=RuntimeError("still broken")):
+                with patch("server.extraction._retry_single_step", side_effect=RuntimeError("still broken")):
                     retry_extraction(failure.id)
 
         db_session.refresh(failure)
@@ -545,8 +545,8 @@ class TestRetryExtraction:
         assert "still broken" in failure.error_message
 
     def test_retry_marks_resolved_on_success(self, db_session):
-        from models import ExtractionFailure
-        from extraction import retry_extraction
+        from server.models import ExtractionFailure
+        from server.extraction import retry_extraction
 
         item = make_media_item(db_session, media_type="image")
         failure = ExtractionFailure(
@@ -560,9 +560,9 @@ class TestRetryExtraction:
         db_session.add(failure)
         db_session.commit()
 
-        with patch("models.SessionLocal", return_value=db_session):
+        with patch("server.models.SessionLocal", return_value=db_session):
             with patch.object(db_session, "close"):
-                with patch("extraction._retry_single_step"):
+                with patch("server.extraction._retry_single_step"):
                     retry_extraction(failure.id)
 
         db_session.refresh(failure)

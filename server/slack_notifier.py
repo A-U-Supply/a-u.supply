@@ -26,7 +26,7 @@ from urllib.parse import quote
 import httpx
 from sqlalchemy.orm import Session
 
-from models import ActivityLog, SessionLocal, User
+from server.models import ActivityLog, SessionLocal, User
 
 logger = logging.getLogger(__name__)
 

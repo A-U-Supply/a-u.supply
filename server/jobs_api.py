@@ -29,8 +29,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session, joinedload
 
-from auth import get_db, require_scope
-from models import (
+from server.auth import get_db, require_scope
+from server.models import (
     AppDefinition,
     Job,
     JobOutput,
@@ -41,7 +41,7 @@ from models import (
     Workspace,
     WorkspaceItem,
 )
-from slack_notifier import notify_immediate, queue_batched
+from server.slack_notifier import notify_immediate, queue_batched
 
 logger = logging.getLogger(__name__)
 
@@ -1432,8 +1432,8 @@ def _build_batch_pool(
     """Resolve a candidate pool from the search index, filter to media types,
     subtract already-processed items, return MediaItem rows.
     """
-    from search_api import SearchFilters, _build_meili_filter
-    from search_client import multi_search
+    from server.search_api import SearchFilters, _build_meili_filter
+    from server.search_client import multi_search
 
     filters = SearchFilters(
         tags=shuffle.tags or None,
@@ -2366,7 +2366,7 @@ def download_output(
     # Serve inline (not as attachment) so browsers can render images/video/audio
     # previews and "open in new tab" shows full-size instead of downloading.
     # Explicit download UI uses HTML <a download> which forces save client-side.
-    from search_api import content_disposition
+    from server.search_api import content_disposition
 
     return FileResponse(
         file_path,
@@ -2399,7 +2399,7 @@ def job_output_thumbnail(
     frame-grab calls on first load.
     """
     from fastapi.responses import FileResponse
-    from search_api import (
+    from server.search_api import (
         _media_type_from_mime,
         _placeholder_response,
         _thumbnail_response,
@@ -2454,7 +2454,7 @@ def job_output_thumbnail(
             suffix = "_thumb.webp"
         thumb_path = src.with_name(src.stem + suffix)
         if not thumb_path.exists():
-            from extraction import (
+            from server.extraction import (
                 generate_image_thumbnail,
                 generate_image_thumbnail_sm,
                 generate_image_thumbnail_lg,
@@ -2547,7 +2547,7 @@ def _do_index_output(
     import shutil
     from datetime import datetime, timezone
 
-    from models import MediaSource, MediaTag
+    from server.models import MediaSource, MediaTag
 
     # Load manifest for output config
     app_def = db.query(AppDefinition).filter(AppDefinition.name == job.app_name).first()
@@ -2690,7 +2690,7 @@ def _do_index_output(
 
     # Sync to search immediately so the item is visible even if extraction is slow
     try:
-        from search_client import sync_media_item
+        from server.search_client import sync_media_item
 
         sync_media_item(db, media_item)
     except Exception:
@@ -2698,7 +2698,7 @@ def _do_index_output(
 
     # Run extraction in background (will re-sync with enriched metadata when done)
     try:
-        from extraction import run_extraction_async
+        from server.extraction import run_extraction_async
 
         run_extraction_async(media_item.id, str(dest_path), media_type)
     except Exception:

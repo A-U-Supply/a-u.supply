@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 import pytest
 from PIL import Image
 
-from models import AppDefinition, Job, JobOutput, MediaItem
+from server.models import AppDefinition, Job, JobOutput, MediaItem
 from tests.conftest import make_media_item
 
 
@@ -39,7 +39,7 @@ def job_with_image_output(db_session, test_user, fakeapp, tmp_path, monkeypatch)
     """A completed job with one image output written to disk under JOB_DATA_DIR."""
     job_data_dir = tmp_path / "job-data"
     monkeypatch.setenv("JOB_DATA_DIR", str(job_data_dir))
-    import jobs_api
+    from server import jobs_api
     monkeypatch.setattr(jobs_api, "JOB_DATA_DIR", job_data_dir)
 
     job = Job(
@@ -203,7 +203,7 @@ class TestMediaTypeFormat:
     def _make_image_output(self, db_session, test_user, monkeypatch, tmp_path, mtype):
         job_data_dir = tmp_path / "job-data"
         monkeypatch.setenv("JOB_DATA_DIR", str(job_data_dir))
-        import jobs_api
+        from server import jobs_api
         monkeypatch.setattr(jobs_api, "JOB_DATA_DIR", job_data_dir)
 
         job = Job(
@@ -269,7 +269,7 @@ class TestUnindexedAudioVideoOutput:
     def audio_output(self, db_session, test_user, fakeapp, tmp_path, monkeypatch):
         job_data_dir = tmp_path / "job-data"
         monkeypatch.setenv("JOB_DATA_DIR", str(job_data_dir))
-        import jobs_api
+        from server import jobs_api
         monkeypatch.setattr(jobs_api, "JOB_DATA_DIR", job_data_dir)
 
         job = Job(
@@ -322,7 +322,7 @@ class TestIndexedOutputDelegates:
     ):
         job_data_dir = tmp_path / "job-data"
         monkeypatch.setenv("JOB_DATA_DIR", str(job_data_dir))
-        import jobs_api
+        from server import jobs_api
         monkeypatch.setattr(jobs_api, "JOB_DATA_DIR", job_data_dir)
 
         # Make a MediaItem with a _thumb.webp on the search-media side

@@ -19,7 +19,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
-from auth import (
+from server.auth import (
     COOKIE_NAME,
     create_access_token,
     generate_csrf_token,
@@ -29,12 +29,12 @@ from auth import (
     require_admin,
     verify_password,
 )
-from admin_api import router as admin_router
-from bookmarks_api import router as bookmarks_router
-from catalog import router as catalog_router
-from jobs_api import router as jobs_router
-from search_api import router as search_router
-from models import Base, User, engine
+from server.admin_api import router as admin_router
+from server.bookmarks_api import router as bookmarks_router
+from server.catalog import router as catalog_router
+from server.jobs_api import router as jobs_router
+from server.search_api import router as search_router
+from server.models import Base, User, engine
 
 logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -76,7 +76,7 @@ if "category" not in _release_cols:
 
 # Migrate existing DB: create activity_log table if missing
 if "activity_log" not in _sa_inspect(engine).get_table_names():
-    from models import ActivityLog as _ActivityLog
+    from server.models import ActivityLog as _ActivityLog
     _ActivityLog.__table__.create(bind=engine)
 
 
@@ -100,7 +100,7 @@ async def _auto_scrape_loop():
     loop = asyncio.get_running_loop()
     while True:
         try:
-            from slack_scraper import trigger_incremental_scrape
+            from server.slack_scraper import trigger_incremental_scrape
             result = await loop.run_in_executor(_sync_executor, trigger_incremental_scrape)
             logger.info("Auto-sync scrape: %s", result.get("status"))
         except Exception:
@@ -114,7 +114,7 @@ async def _auto_reactions_loop():
     loop = asyncio.get_running_loop()
     while True:
         try:
-            from slack_scraper import trigger_reaction_refresh
+            from server.slack_scraper import trigger_reaction_refresh
             result = await loop.run_in_executor(_sync_executor, lambda: trigger_reaction_refresh(days_back=7))
             logger.info("Auto-sync reactions: updated=%s errors=%s skipped=%s",
                         result.get("updated"), result.get("errors"), result.get("skipped", 0))
@@ -132,8 +132,8 @@ def _reap_midden_sync() -> dict:
 
     from sqlalchemy.orm import sessionmaker
 
-    from jobs_api import JOB_DATA_DIR, MIDDEN_TTL_HOURS
-    from models import JobOutput
+    from server.jobs_api import JOB_DATA_DIR, MIDDEN_TTL_HOURS
+    from server.models import JobOutput
 
     from datetime import datetime as _dt, timedelta as _td
 
@@ -201,7 +201,7 @@ async def lifespan(app: FastAPI):
     logger.info("Midden reaper enabled (every %ds, 24h TTL)", MIDDEN_REAPER_INTERVAL)
     tasks.append(asyncio.create_task(_midden_reaper_loop()))
 
-    from slack_notifier import ROLLUP_INTERVAL_SECONDS as _ROLLUP, rollup_loop as _rollup_loop
+    from server.slack_notifier import ROLLUP_INTERVAL_SECONDS as _ROLLUP, rollup_loop as _rollup_loop
     logger.info("Slack activity rollup enabled (every %ds)", _ROLLUP)
     tasks.append(asyncio.create_task(_rollup_loop()))
 
@@ -793,7 +793,7 @@ def media_detail_with_og(request: Request, id: str | None = None):
     if not id:
         return HTMLResponse(raw_html)
 
-    from models import MediaItem
+    from server.models import MediaItem
     from sqlalchemy.orm import joinedload
 
     db = next(get_db())

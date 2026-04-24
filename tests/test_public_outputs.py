@@ -2,7 +2,7 @@
 
 import json
 
-from models import MediaImageMeta, MediaVideoMeta
+from server.models import MediaImageMeta, MediaVideoMeta
 from tests.conftest import make_media_item
 
 

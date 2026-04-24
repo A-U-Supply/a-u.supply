@@ -10,8 +10,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from auth import hash_password
-from models import Base, SessionLocal, User, engine
+from server.auth import hash_password
+from server.models import Base, SessionLocal, User, engine
 
 Path("data").mkdir(exist_ok=True)
 Base.metadata.create_all(bind=engine)

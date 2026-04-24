@@ -12,7 +12,7 @@ class TestMediaItem:
     """Tests for the MediaItem model."""
 
     def test_create_media_item(self, db_session):
-        from models import MediaItem
+        from server.models import MediaItem
 
         item = MediaItem(
             id=str(uuid.uuid4()),
@@ -37,7 +37,7 @@ class TestMediaItem:
         assert fetched.updated_at is not None
 
     def test_sha256_unique_constraint(self, db_session):
-        from models import MediaItem
+        from server.models import MediaItem
 
         sha = "b" * 64
         item1 = MediaItem(
@@ -78,7 +78,7 @@ class TestMediaSource:
     """Tests for the MediaSource model."""
 
     def test_create_source(self, db_session):
-        from models import MediaSource
+        from server.models import MediaSource
 
         item = make_media_item(db_session)
         source = MediaSource(
@@ -113,7 +113,7 @@ class TestMediaMetaModels:
     """Tests for type-specific metadata models."""
 
     def test_image_meta(self, db_session):
-        from models import MediaImageMeta
+        from server.models import MediaImageMeta
 
         item = make_media_item(db_session, media_type="image")
         meta = MediaImageMeta(
@@ -134,7 +134,7 @@ class TestMediaMetaModels:
         assert item.image_meta.format == "JPEG"
 
     def test_audio_meta(self, db_session):
-        from models import MediaAudioMeta
+        from server.models import MediaAudioMeta
 
         item = make_media_item(db_session, media_type="audio", mime_type="audio/wav")
         meta = MediaAudioMeta(
@@ -155,7 +155,7 @@ class TestMediaMetaModels:
         assert item.audio_meta.sample_rate == 44100
 
     def test_video_meta(self, db_session):
-        from models import MediaVideoMeta
+        from server.models import MediaVideoMeta
 
         item = make_media_item(db_session, media_type="video", mime_type="video/mp4")
         meta = MediaVideoMeta(
@@ -178,7 +178,7 @@ class TestMediaTag:
     """Tests for the MediaTag model."""
 
     def test_create_tag(self, db_session):
-        from models import MediaTag
+        from server.models import MediaTag
 
         item = make_media_item(db_session)
         tag = MediaTag(media_item_id=item.id, tag="drums")
@@ -190,7 +190,7 @@ class TestMediaTag:
         assert item.tags[0].tag == "drums"
 
     def test_unique_constraint_same_item_same_tag(self, db_session):
-        from models import MediaTag
+        from server.models import MediaTag
 
         item = make_media_item(db_session)
         tag1 = MediaTag(media_item_id=item.id, tag="drums")
@@ -204,7 +204,7 @@ class TestMediaTag:
         db_session.rollback()
 
     def test_same_tag_different_items(self, db_session):
-        from models import MediaTag
+        from server.models import MediaTag
 
         item1 = make_media_item(db_session)
         item2 = make_media_item(db_session)
@@ -218,7 +218,7 @@ class TestTagVocabulary:
     """Tests for the TagVocabulary model."""
 
     def test_create_vocabulary_entry(self, db_session):
-        from models import TagVocabulary
+        from server.models import TagVocabulary
 
         vocab = TagVocabulary(tag="drums", usage_count=5)
         db_session.add(vocab)
@@ -234,7 +234,7 @@ class TestApiKey:
     """Tests for the ApiKey model."""
 
     def test_create_api_key(self, db_session, test_user):
-        from models import ApiKey
+        from server.models import ApiKey
 
         key = ApiKey(
             user_id=test_user.id,
@@ -255,7 +255,7 @@ class TestExtractionFailure:
     """Tests for the ExtractionFailure model."""
 
     def test_create_failure(self, db_session):
-        from models import ExtractionFailure
+        from server.models import ExtractionFailure
 
         item = make_media_item(db_session)
         failure = ExtractionFailure(
@@ -276,7 +276,7 @@ class TestCascadeDeletes:
     """Tests for cascade delete behavior."""
 
     def test_delete_media_item_cascades_to_sources(self, db_session):
-        from models import MediaItem, MediaSource
+        from server.models import MediaItem, MediaSource
 
         item = make_media_item(db_session)
         make_media_source(db_session, item.id)
@@ -290,7 +290,7 @@ class TestCascadeDeletes:
         assert len(sources) == 0
 
     def test_delete_media_item_cascades_to_tags(self, db_session):
-        from models import MediaItem, MediaTag
+        from server.models import MediaItem, MediaTag
 
         item = make_media_item(db_session)
         db_session.add(MediaTag(media_item_id=item.id, tag="drums"))
@@ -305,7 +305,7 @@ class TestCascadeDeletes:
         assert len(tags) == 0
 
     def test_delete_media_item_cascades_to_meta(self, db_session):
-        from models import MediaImageMeta
+        from server.models import MediaImageMeta
 
         item = make_media_item(db_session)
         meta = MediaImageMeta(
@@ -323,7 +323,7 @@ class TestCascadeDeletes:
         ).first() is None
 
     def test_delete_media_item_cascades_to_extraction_failures(self, db_session):
-        from models import ExtractionFailure
+        from server.models import ExtractionFailure
 
         item = make_media_item(db_session)
         db_session.add(

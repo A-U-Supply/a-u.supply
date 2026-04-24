@@ -18,7 +18,7 @@ from pathlib import Path
 
 from sqlalchemy import insert
 
-from models import (
+from server.models import (
     Base,
     DistributionLink,
     Entity,

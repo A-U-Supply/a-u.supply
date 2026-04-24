@@ -13,9 +13,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
-from auth import get_db, require_scope
-from jobs_api import MIDDEN_TTL_HOURS
-from models import (
+from server.auth import get_db, require_scope
+from server.jobs_api import MIDDEN_TTL_HOURS
+from server.models import (
     ExtractionFailure,
     Job,
     JobOutput,
