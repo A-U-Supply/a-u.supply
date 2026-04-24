@@ -146,20 +146,52 @@ def _persist(
 # ---------------------------------------------------------------------------
 
 
-def _release_link(code: str) -> str:
-    return f"{SITE_URL}/catalog/{quote(code, safe='')}"
+def _release_link(code: str, *, published: bool) -> str:
+    """Public catalog page if published, admin edit page if still draft.
+
+    Published releases: /catalog/release?code=X (user-facing).
+    Drafts: /admin/catalog/edit?code=X (public page 404s for unauthenticated).
+    """
+    encoded = quote(code, safe="")
+    if published:
+        return f"{SITE_URL}/catalog/release?code={encoded}"
+    return f"{SITE_URL}/admin/catalog/edit?code={encoded}"
+
+
+def _release_edit_link(code: str) -> str:
+    return f"{SITE_URL}/admin/catalog/edit?code={quote(code, safe='')}"
 
 
 def _job_link(job_id: str) -> str:
-    return f"{SITE_URL}/dashboard/jobs/{job_id}"
+    return f"{SITE_URL}/admin/jobs/detail?id={quote(job_id, safe='')}"
 
 
-def _batch_link(batch_id: str) -> str:
-    return f"{SITE_URL}/dashboard/jobs?batch_id={batch_id}"
+def _jobs_queue_link() -> str:
+    return f"{SITE_URL}/admin/jobs"
+
+
+def _jobs_by_app_link(app_name: str) -> str:
+    return f"{SITE_URL}/admin/jobs?app={quote(app_name, safe='')}"
+
+
+def _slop_for_batch_link(batch_id: str) -> str:
+    return f"{SITE_URL}/admin/search/slop?batch_id={quote(batch_id, safe='')}"
 
 
 def _midden_link() -> str:
-    return f"{SITE_URL}/dashboard/the-midden"
+    return f"{SITE_URL}/admin/search/midden"
+
+
+def _search_by_tag_link(tag: str) -> str:
+    return f"{SITE_URL}/admin/search?tags={quote(tag, safe='')}"
+
+
+def _search_by_index_link(output_index: str) -> str:
+    return f"{SITE_URL}/admin/search?output_index={quote(output_index, safe='')}"
+
+
+def _search_by_app_link(app_name: str) -> str:
+    return f"{SITE_URL}/admin/search?app={quote(app_name, safe='')}"
 
 
 def _cover_url_if_public(code: str, published: bool) -> str | None:
@@ -197,29 +229,55 @@ def _format_immediate(event_type: str, user_name: str, d: dict) -> dict | None:
     return fn(user_name, d) if fn else None
 
 
+def _fmt_by(entities: list[str] | None) -> str:
+    """Return ' by _Name_' / ' by _A_ & _B_' / '' depending on entity list."""
+    if not entities:
+        return ""
+    if len(entities) == 1:
+        return f" by _{entities[0]}_"
+    if len(entities) == 2:
+        return f" by _{entities[0]}_ & _{entities[1]}_"
+    return f" by _{entities[0]}_, _{entities[1]}_ & {len(entities) - 2} more"
+
+
 def _format_release_created(u: str, d: dict) -> dict:
     code = d.get("product_code", "")
     title = d.get("title", "(untitled)")
     status = d.get("status", "draft")
+    published = status == "published"
     tracks = d.get("track_count") or 0
-    bits = [f"📀 *{u}* filed a new release: *{title}* `{code}`"]
+    entities = d.get("entities") or []
+    release_date = d.get("release_date")
+    bits = [f"📀 *{u}* filed a new release: *{title}* `{code}`{_fmt_by(entities)}"]
+    side: list[str] = []
     if tracks:
-        bits.append(f"{tracks} track{'s' if tracks != 1 else ''}")
-    if status == "draft":
-        bits.append("_(draft)_")
-    text = " · ".join(bits)
-    text += f"\n<{_release_link(code)}|open release>"
-    return _maybe_with_cover(text, code, status == "published", title)
+        side.append(f"{tracks} track{'s' if tracks != 1 else ''}")
+    if release_date:
+        side.append(f"releases {release_date}")
+    if not published:
+        side.append("_(draft)_")
+    if side:
+        bits.append(" · ".join(side))
+    text = "\n".join(bits)
+    link_label = "open release" if published else "keep editing"
+    text += f"\n<{_release_link(code, published=published)}|{link_label}>"
+    return _maybe_with_cover(text, code, published, title)
 
 
 def _format_release_updated(u: str, d: dict) -> dict:
     code = d.get("product_code", "")
     title = d.get("title", "(untitled)")
+    status = d.get("status", "draft")
+    published = status == "published"
     changed = d.get("changed_fields") or []
+    entities = d.get("entities") or []
     changed_txt = ", ".join(changed) if changed else "details"
+    status_badge = "" if published else " _(draft)_"
+    link_label = "see changes" if published else "keep editing"
     text = (
-        f"✏️ *{u}* edited *{title}* `{code}` — changed: {changed_txt}"
-        f"\n<{_release_link(code)}|see changes>"
+        f"✏️ *{u}* edited *{title}* `{code}`{_fmt_by(entities)}{status_badge}"
+        f"\nchanged: {changed_txt}"
+        f"\n<{_release_link(code, published=published)}|{link_label}>"
     )
     return {"text": text, "unfurl_links": False}
 
@@ -229,12 +287,18 @@ def _format_release_published(u: str, d: dict) -> dict:
     title = d.get("title", "(untitled)")
     tracks = d.get("track_count") or 0
     duration = _fmt_duration(d.get("total_duration_seconds"))
-    extras = [f"{tracks} track{'s' if tracks != 1 else ''}" if tracks else None, duration]
+    entities = d.get("entities") or []
+    release_date = d.get("release_date")
+    extras = [
+        f"{tracks} track{'s' if tracks != 1 else ''}" if tracks else None,
+        duration,
+        f"released {release_date}" if release_date else None,
+    ]
     extras_txt = " · ".join(x for x in extras if x)
-    tail = f" · {extras_txt}" if extras_txt else ""
+    tail = f"\n{extras_txt}" if extras_txt else ""
     text = (
-        f"🚀 *{u}* published *{title}* `{code}`{tail}"
-        f"\n<{_release_link(code)}|listen>"
+        f"🚀 *{u}* published *{title}* `{code}`{_fmt_by(entities)}{tail}"
+        f"\n<{_release_link(code, published=True)}|listen>"
     )
     return _maybe_with_cover(text, code, True, title)
 
@@ -242,19 +306,25 @@ def _format_release_published(u: str, d: dict) -> dict:
 def _format_release_unpublished(u: str, d: dict) -> dict:
     code = d.get("product_code", "")
     title = d.get("title", "(untitled)")
-    text = f"🙈 *{u}* pulled *{title}* `{code}` back to draft"
+    entities = d.get("entities") or []
+    text = (
+        f"🙈 *{u}* pulled *{title}* `{code}`{_fmt_by(entities)} back to draft"
+        f"\n<{_release_edit_link(code)}|edit>"
+    )
     return {"text": text, "unfurl_links": False}
 
 
 def _format_release_deleted(u: str, d: dict) -> dict:
     code = d.get("product_code", "")
     title = d.get("title", "(untitled)")
-    text = f"🗑️ *{u}* deleted release *{title}* `{code}` — gone for good"
+    entities = d.get("entities") or []
+    text = f"🗑️ *{u}* deleted release *{title}* `{code}`{_fmt_by(entities)} — gone for good"
     return {"text": text, "unfurl_links": False}
 
 
 def _format_job_submitted(u: str, d: dict) -> dict:
-    app_label = d.get("app_display_name") or d.get("app_name") or "an app"
+    app_name = d.get("app_name") or ""
+    app_label = d.get("app_display_name") or app_name or "an app"
     job_id = d.get("job_id", "")
     inputs = d.get("input_count") or 0
     params = d.get("params") or {}
@@ -265,36 +335,56 @@ def _format_job_submitted(u: str, d: dict) -> dict:
     text = f"⚙️ *{u}* fired *{app_label}* on {inputs} input{'s' if inputs != 1 else ''}"
     if param_bits:
         text += "\n" + " · ".join(param_bits)
+    links: list[str] = []
     if job_id:
-        text += f"\n<{_job_link(job_id)}|watch job>"
+        links.append(f"<{_job_link(job_id)}|watch job>")
+    if app_name:
+        links.append(f"<{_search_by_app_link(app_name)}|past outputs from this app>")
+    if links:
+        text += "\n" + " · ".join(links)
     return {"text": text, "unfurl_links": False}
 
 
 def _format_job_batch_submitted(u: str, d: dict) -> dict:
-    app_label = d.get("app_display_name") or d.get("app_name") or "an app"
+    # /api/jobs/batch is what the Hecatomb UI fires — frame the message accordingly.
+    app_name = d.get("app_name") or ""
+    app_label = d.get("app_display_name") or app_name or "an app"
     batch_id = d.get("batch_id", "")
     count = d.get("job_count") or 0
     random_recipe = d.get("random_recipe")
-    text = f"🎰 *{u}* queued a batch of {count} *{app_label}* job{'s' if count != 1 else ''}"
-    if random_recipe:
-        text += " _(random recipes)_"
+    recipe_note = " with random recipes" if random_recipe else ""
+    text = (
+        f"🎰 *{u}* ran Hecatomb on *{app_label}* — {count} job{'s' if count != 1 else ''}"
+        f"{recipe_note}"
+    )
+    links = [f"<{_jobs_queue_link()}|watch queue>"]
     if batch_id:
-        text += f"\n<{_batch_link(batch_id)}|watch batch>"
+        links.append(f"<{_slop_for_batch_link(batch_id)}|review outputs as they land>")
+    text += "\n" + " · ".join(links)
     return {"text": text, "unfurl_links": False}
 
 
 def _format_app_registered(u: str, d: dict) -> dict:
-    name = d.get("display_name") or d.get("name", "(app)")
+    name = d.get("name", "")
+    display_name = d.get("display_name") or name or "(app)"
     image = d.get("image", "")
-    text = f"🤖 *{u}* registered a new app: *{name}*"
+    description = d.get("description", "")
+    text = f"🤖 *{u}* registered a new app: *{display_name}*"
+    if description:
+        text += f"\n_{description}_"
     if image:
         text += f"\n`{image}`"
+    if name:
+        text += f"\n<{_jobs_by_app_link(name)}|jobs for this app>"
     return {"text": text, "unfurl_links": False}
 
 
 def _format_app_updated(u: str, d: dict) -> dict:
-    name = d.get("display_name") or d.get("name", "(app)")
-    text = f"🔧 *{u}* updated the *{name}* manifest"
+    name = d.get("name", "")
+    display_name = d.get("display_name") or name or "(app)"
+    text = f"🔧 *{u}* updated the *{display_name}* manifest"
+    if name:
+        text += f"\n<{_jobs_by_app_link(name)}|jobs for this app>"
     return {"text": text, "unfurl_links": False}
 
 
@@ -403,7 +493,10 @@ def _format_rollup_lines(rows: list[ActivityLog], users_by_id: dict[int, str]) -
                 for t in p.get("tags") or []:
                     tag_counter[t] += 1
             top = [t for t, _ in tag_counter.most_common(5)]
-            extra = f" — top: {', '.join(f'`{t}`' for t in top)}" if top else ""
+            extra = ""
+            if top:
+                tag_links = ", ".join(f"<{_search_by_tag_link(t)}|`{t}`>" for t in top)
+                extra = f" — top: {tag_links}"
             lines.append(f"• *{user_name}* tagged {count} item{plural}{extra}")
 
         elif event_type == "tag.removed":
@@ -421,7 +514,17 @@ def _format_rollup_lines(rows: list[ActivityLog], users_by_id: dict[int, str]) -
         elif event_type == "output.indexed":
             apps = Counter(p.get("app_name") for p in payloads if p.get("app_name"))
             app_bits = ", ".join(f"*{a}*" for a, _ in apps.most_common(3))
-            suffix = f" from {app_bits}" if app_bits else ""
-            lines.append(f"• *{user_name}* indexed {count} output{plural}{suffix} into search")
+            from_phrase = f" from {app_bits}" if app_bits else ""
+            indices = Counter(p.get("output_index") for p in payloads if p.get("output_index"))
+            if indices:
+                idx_links = ", ".join(
+                    f"<{_search_by_index_link(i)}|{i}>" for i, _ in indices.most_common(3)
+                )
+                into_phrase = f" into {idx_links}"
+            else:
+                into_phrase = " into search"
+            lines.append(
+                f"• *{user_name}* indexed {count} output{plural}{from_phrase}{into_phrase}"
+            )
 
     return lines

@@ -1026,6 +1026,7 @@ def register_app(
         name=app.name,
         display_name=app.display_name,
         image=app.image,
+        description=app.description,
     )
     return AppResponse(
         name=app.name,
@@ -2676,6 +2677,7 @@ def _do_index_output(
         app_name=job.app_name,
         job_id=job.id,
         media_item_id=media_item.id,
+        output_index=resolved_index,
     )
 
     # Sync to search immediately so the item is visible even if extraction is slow
