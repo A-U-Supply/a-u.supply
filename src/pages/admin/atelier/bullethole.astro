@@ -81,6 +81,7 @@ import Admin from '../../../layouts/Admin.astro';
         <button class="btn btn--secondary" id="reroll-btn" disabled>⟳ Re-roll</button>
         <button class="btn btn--secondary" id="download-btn" disabled>↓ Download</button>
         <button class="btn btn--primary" id="save-btn" disabled>☁ Save to Outputs</button>
+        <button class="btn btn--secondary" id="save-png-btn" disabled>☁ HD PNG</button>
       </div>
     </div>
   </div>
@@ -356,6 +357,7 @@ import Admin from '../../../layouts/Admin.astro';
     const rerollBtn   = document.getElementById('reroll-btn') as HTMLButtonElement;
     const downloadBtn = document.getElementById('download-btn') as HTMLButtonElement;
     const saveBtn     = document.getElementById('save-btn') as HTMLButtonElement;
+    const savePngBtn  = document.getElementById('save-png-btn') as HTMLButtonElement;
     const libraryBtn  = document.getElementById('library-btn') as HTMLButtonElement;
 
     const libraryOverlay = document.getElementById('library-overlay') as HTMLDivElement;
@@ -578,6 +580,7 @@ import Admin from '../../../layouts/Admin.astro';
         rerollBtn.disabled   = false;
         downloadBtn.disabled = false;
         saveBtn.disabled     = false;
+        savePngBtn.disabled  = false;
         reroll();
         URL.revokeObjectURL(url);
       };
@@ -596,6 +599,7 @@ import Admin from '../../../layouts/Admin.astro';
         rerollBtn.disabled   = false;
         downloadBtn.disabled = false;
         saveBtn.disabled     = false;
+        savePngBtn.disabled  = false;
         reroll();
       };
       img.onerror = () => {
@@ -664,19 +668,19 @@ import Admin from '../../../layouts/Admin.astro';
 
     downloadBtn.addEventListener('click', () => {
       const link = document.createElement('a');
-      link.download = 'bullethole.png';
-      link.href = canvas.toDataURL('image/png');
+      link.download = 'bullethole.jpg';
+      link.href = canvas.toDataURL('image/jpeg', 0.85);
       link.click();
     });
 
-    saveBtn.addEventListener('click', async () => {
-      saveBtn.disabled = true;
-      saveBtn.textContent = 'Saving…';
+    async function saveToOutputs(mimeType: string, filename: string, btn: HTMLButtonElement, label: string) {
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
       canvas.toBlob(async (blob) => {
-        if (!blob) { (window as any).toast?.error('Failed to export canvas'); return; }
+        if (!blob) { (window as any).toast?.error('Failed to export canvas'); btn.disabled = false; btn.textContent = label; return; }
         try {
           const fd = new FormData();
-          fd.append('file', blob, 'bullethole.png');
+          fd.append('file', blob, filename);
           fd.append('tags', 'bullethole,atelier');
           fd.append('output_index', 'outputs');
           const res = await fetch('/api/media/upload', {
@@ -689,11 +693,14 @@ import Admin from '../../../layouts/Admin.astro';
         } catch (err: any) {
           (window as any).toast?.error(`Save failed: ${err.message}`);
         } finally {
-          saveBtn.disabled = false;
-          saveBtn.textContent = '☁ Save to Outputs';
+          btn.disabled = false;
+          btn.textContent = label;
         }
-      }, 'image/png');
-    });
+      }, mimeType, mimeType === 'image/jpeg' ? 0.85 : undefined);
+    }
+
+    saveBtn.addEventListener('click', () => saveToOutputs('image/jpeg', 'bullethole.jpg', saveBtn, '☁ Save to Outputs'));
+    savePngBtn.addEventListener('click', () => saveToOutputs('image/png', 'bullethole.png', savePngBtn, '☁ HD PNG'));
 
     // ─── Library modal ─────────────────────────────────────────────────────
 
