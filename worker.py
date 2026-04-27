@@ -264,6 +264,13 @@ def _collect_outputs(job: Job, job_dir: Path, db: Session):
         try:
             data = json.loads(output_manifest_path.read_text())
             output_manifest = {o["filename"]: o for o in data.get("outputs", [])}
+            if "seed" in data:
+                try:
+                    current_params = json.loads(job.params) if job.params else {}
+                    current_params["seed"] = data["seed"]
+                    job.params = json.dumps(current_params)
+                except Exception:
+                    logger.warning("Failed to capture seed for job %s", job.id)
         except Exception:
             logger.warning("Failed to parse output manifest.json for job %s", job.id)
 

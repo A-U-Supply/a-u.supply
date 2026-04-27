@@ -4,7 +4,7 @@ description = "Punch circular holes into an image. Each hole gets an effect appl
 image = "ghcr.io/a-u-supply/bullethole:latest"
 timeout_seconds = 120
 input_mode = "positional"
-output_flag = "--output /work/output/output.png"
+output_flag = "--output /work/output/output.jpg"
 
 [output]
 index = "outputs"
@@ -55,3 +55,20 @@ label = "No Overlap"
 description = "Prevent circles from overlapping each other."
 default = false
 flag = "--no-overlap"
+
+[params.seed]
+type = "int"
+label = "Seed"
+description = "Random seed for reproducible results (0 = auto-generate)"
+default = 0
+flag = "--seed"
+hidden = true
+
+[params.format]
+type = "select"
+label = "Format"
+description = "Output image format"
+options = ["jpeg", "png"]
+default = "jpeg"
+flag = "--format"
+hidden = true

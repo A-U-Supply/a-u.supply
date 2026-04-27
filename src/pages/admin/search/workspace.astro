@@ -1444,6 +1444,7 @@ import Admin from '../../../layouts/Admin.astro';
         string,
         any,
       ][]) {
+        if (spec.hidden) continue;
         const field = document.createElement('div');
         field.className = 'config-field';
         field.setAttribute('data-param-field', name);

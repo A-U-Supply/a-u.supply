@@ -64,6 +64,9 @@ import Admin from '../../../layouts/Admin.astro';
         <button class="action-btn" id="play-all-btn" style="display:none;"
           >Play All</button
         >
+        <button class="action-btn" id="hd-png-btn" style="display:none;"
+          >HD PNG</button
+        >
         <button class="action-btn" id="index-all-btn"
           >Index All to Search</button
         >
@@ -640,6 +643,40 @@ import Admin from '../../../layouts/Admin.astro';
             }),
           );
         };
+
+        // HD PNG button (bullethole only)
+        const hdBtn = document.getElementById('hd-png-btn')!;
+        if (
+          job.app_name === 'bullethole' &&
+          job.params.seed &&
+          job.params.format !== 'png'
+        ) {
+          hdBtn.style.display = '';
+          hdBtn.onclick = async () => {
+            hdBtn.setAttribute('disabled', '');
+            hdBtn.textContent = 'Queuing...';
+            const newParams = { ...job.params, format: 'png' };
+            const res = await fetch('/api/jobs', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                app_name: 'bullethole',
+                media_item_ids: data.input_items,
+                params: newParams,
+                priority: 0,
+              }),
+            });
+            if (res.ok) {
+              const newJob = await res.json();
+              window.location.href = `/admin/jobs/detail?id=${newJob.id}`;
+            } else {
+              (window as any).toast.error('Failed to queue HD PNG job');
+              hdBtn.removeAttribute('disabled');
+              hdBtn.textContent = 'HD PNG';
+            }
+          };
+        }
 
         // Index buttons → open dialog
         listEl.querySelectorAll('[data-index]').forEach((btn) => {
