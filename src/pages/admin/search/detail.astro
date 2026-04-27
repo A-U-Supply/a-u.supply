@@ -114,6 +114,12 @@ import Admin from '../../../layouts/Admin.astro';
         download
         style="display:none;">Download Source</a
       >
+      <a
+        class="action-btn"
+        id="hd-png-btn"
+        href="#"
+        style="display:none;text-decoration:none;">HD PNG</a
+      >
       <button class="action-btn" id="re-extract-btn">Re-extract Metadata</button
       >
       <button class="action-btn action-btn--danger" id="delete-btn"
@@ -459,8 +465,32 @@ import Admin from '../../../layouts/Admin.astro';
         ? formatSize(item.file_size_bytes)
         : '--';
       document.getElementById('meta-hash')!.textContent = item.sha256 || '--';
+      // Parse atelier metadata from description (JSON blob stored on save)
+      let atelierMeta: any = null;
+      try {
+        if (item.description?.startsWith('{"atelier":"bullethole"')) {
+          atelierMeta = JSON.parse(item.description);
+        }
+      } catch {}
       document.getElementById('meta-description')!.textContent =
-        item.description || '--';
+        atelierMeta ? `Bullet Hole · seed ${atelierMeta.seed}` : (item.description || '--');
+
+      // HD PNG button — only for Atelier bullethole images with a known source
+      const hdPngBtn = document.getElementById('hd-png-btn') as HTMLAnchorElement;
+      if (atelierMeta?.source_id) {
+        const p = new URLSearchParams({
+          autoexport: 'png',
+          source: atelierMeta.source_id,
+          seed: String(atelierMeta.seed),
+          chaos: String(atelierMeta.chaos),
+          placement: atelierMeta.placement,
+          effect: atelierMeta.effect,
+          jitter: String(atelierMeta.jitter),
+          no_overlap: String(atelierMeta.no_overlap),
+        });
+        hdPngBtn.href = `/admin/atelier/bullethole?${p}`;
+        hdPngBtn.style.display = '';
+      }
       document.getElementById('meta-created')!.textContent = item.created_at
         ? new Date(item.created_at).toLocaleString()
         : '--';
