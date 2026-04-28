@@ -14,6 +14,13 @@ import Admin from '../../../layouts/Admin.astro';
           <option value="bw">BW</option>
           <option value="cyanotype">Cyanotype</option>
           <option value="wobbleeye">Wobble Eye</option>
+          <option value="lathe">Lathe</option>
+          <option value="bullseye">Bullseye</option>
+          <option value="sixshooter">Six Shooter</option>
+          <option value="lattice">Lattice</option>
+          <option value="stencilburn">Stencil Burn</option>
+          <option value="zellij">Zellij</option>
+          <option value="zellij_medium">Zellij Medium</option>
         </select>
       </div>
     </div>
@@ -566,6 +573,36 @@ import Admin from '../../../layouts/Admin.astro';
       return c;
     }
 
+    function otsuBinary(src: OffscreenCanvas, W: number, H: number): HTMLCanvasElement {
+      const tmp = new OffscreenCanvas(W, H);
+      tmp.getContext('2d')!.drawImage(src, 0, 0, W, H);
+      const id = tmp.getContext('2d')!.getImageData(0, 0, W, H);
+      const thresh = otsuThreshold(id);
+      const out = tmp.getContext('2d')!.createImageData(W, H);
+      for (let i = 0; i < id.data.length; i += 4) {
+        const g = Math.round(0.299 * id.data[i] + 0.587 * id.data[i+1] + 0.114 * id.data[i+2]);
+        const v = g >= thresh ? 255 : 0;
+        out.data[i] = out.data[i+1] = out.data[i+2] = v; out.data[i+3] = 255;
+      }
+      tmp.getContext('2d')!.putImageData(out, 0, 0);
+      return ocToCanvas(tmp);
+    }
+
+    function bullseyeCenters(W: number, H: number, r1: number, rng: () => number): [number, number][] {
+      const short = Math.min(W, H), longDim = Math.max(W, H);
+      const cell = short, margin = Math.floor(short / 2) - r1;
+      const n = Math.max(1, Math.floor(longDim / cell));
+      const first = rng() < 0.5
+        ? r1 + margin
+        : (longDim - r1 - margin) - (n - 1) * cell;
+      const centers: [number, number][] = [];
+      for (let i = 0; i < n; i++) {
+        const longPos = first + i * cell;
+        centers.push(W <= H ? [Math.floor(W / 2), longPos] : [longPos, Math.floor(H / 2)]);
+      }
+      return centers;
+    }
+
     // ─── Bot render functions ──────────────────────────────────────────────────
 
     type Output = { canvas: HTMLCanvasElement; label: string; mimeType: string };
@@ -895,6 +932,427 @@ import Admin from '../../../layouts/Admin.astro';
       return [{ canvas: ocToCanvas(oc), label: 'Wobble Eye', mimeType: 'image/jpeg' }];
     }
 
+    function renderLathe(imgs: (HTMLImageElement | null)[], params: Record<string, any>, rng: () => number): Output[] {
+      const img = imgs[0]; if (!img) return [];
+      const W = img.naturalWidth, H = img.naturalHeight;
+      const rings: number = params.rings ?? 80;
+      const r1 = Math.floor(Math.max(W, H) * 0.46);
+      const radii = Array.from({ length: rings }, (_, i) => Math.max(1, Math.floor(r1 * (rings - i) / rings)));
+      const centers = bullseyeCenters(W, H, r1, rng);
+
+      const oc = new OffscreenCanvas(W, H);
+      const ctx = oc.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+
+      for (const [cx, cy] of centers) {
+        for (let i = 0; i < radii.length; i++) {
+          const rOuter = radii[i];
+          const rInner = i + 1 < radii.length ? radii[i + 1] : 0;
+          const angle = rng() * (300 * Math.PI / 180) + (30 * Math.PI / 180);
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(cx, cy, rOuter, 0, Math.PI * 2, false);
+          if (rInner > 0) ctx.arc(cx, cy, rInner, 0, Math.PI * 2, true);
+          ctx.clip('evenodd');
+          ctx.translate(cx, cy);
+          ctx.rotate(angle);
+          ctx.drawImage(img, -cx, -cy);
+          ctx.restore();
+        }
+      }
+
+      return [
+        { canvas: ocToCanvas(oc), label: 'Color', mimeType: 'image/png' },
+        { canvas: otsuBinary(oc, W, H), label: 'BW', mimeType: 'image/png' },
+      ];
+    }
+
+    function renderBullseye(imgs: (HTMLImageElement | null)[], params: Record<string, any>, rng: () => number): Output[] {
+      const img = imgs[0]; if (!img) return [];
+      const W = img.naturalWidth, H = img.naturalHeight;
+      const short = Math.min(W, H);
+      const r1 = Math.floor(short * 0.46);
+      const radii = [r1, Math.floor(r1 * 2 / 3), Math.floor(r1 / 3)];
+      const centers = bullseyeCenters(W, H, r1, rng);
+
+      const oc = new OffscreenCanvas(W, H);
+      const ctx = oc.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+
+      for (const [cx, cy] of centers) {
+        for (const r of radii) {
+          const angle = rng() * (300 * Math.PI / 180) + (30 * Math.PI / 180);
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.clip();
+          ctx.translate(cx, cy);
+          ctx.rotate(angle);
+          ctx.drawImage(img, -cx, -cy);
+          ctx.restore();
+        }
+      }
+
+      return [
+        { canvas: ocToCanvas(oc), label: 'Color', mimeType: 'image/png' },
+        { canvas: otsuBinary(oc, W, H), label: 'BW', mimeType: 'image/png' },
+      ];
+    }
+
+    function renderSixShooter(imgs: (HTMLImageElement | null)[], _params: Record<string, any>, rng: () => number): Output[] {
+      const img = imgs[0]; if (!img) return [];
+      const W = img.naturalWidth, H = img.naturalHeight;
+      const aspect = W / H;
+      const circles: [number, number, number][] = [];
+
+      if (aspect > 1.25) {
+        const cw = Math.floor(W / 3), ch = Math.floor(H / 2);
+        const r = Math.floor(Math.min(cw, ch) / 2);
+        for (let row = 0; row < 2; row++) for (let col = 0; col < 3; col++)
+          circles.push([col * cw + Math.floor(cw / 2), row * ch + Math.floor(ch / 2), r]);
+      } else if (aspect < 0.80) {
+        const cw = Math.floor(W / 2), ch = Math.floor(H / 3);
+        const r = Math.floor(Math.min(cw, ch) / 2);
+        for (let row = 0; row < 3; row++) for (let col = 0; col < 2; col++)
+          circles.push([col * cw + Math.floor(cw / 2), row * ch + Math.floor(ch / 2), r]);
+      } else {
+        const R = Math.floor(Math.min(W, H) / 2 / 1.42);
+        const r = Math.max(4, Math.floor(R * 0.42));
+        for (let i = 0; i < 6; i++) {
+          const a = (90 + i * 60) * Math.PI / 180;
+          circles.push([Math.floor(W / 2) + Math.round(R * Math.cos(a)), Math.floor(H / 2) - Math.round(R * Math.sin(a)), r]);
+        }
+      }
+
+      const srcIdx = [0, 1, 2, 3, 4, 5];
+      for (let i = 5; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        [srcIdx[i], srcIdx[j]] = [srcIdx[j], srcIdx[i]];
+      }
+
+      const oc = new OffscreenCanvas(W, H);
+      const ctx = oc.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+
+      for (let dest = 0; dest < 6; dest++) {
+        const [dCx, dCy, dR] = circles[dest];
+        const [sCx, sCy] = [circles[srcIdx[dest]][0], circles[srcIdx[dest]][1]];
+        const angle = rng() * (300 * Math.PI / 180) + (30 * Math.PI / 180);
+        // Rotate dest disk around dest center; fill from source region centered at (sCx, sCy)
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(dCx, dCy, dR, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.translate(dCx, dCy);
+        ctx.rotate(angle);
+        ctx.drawImage(img, -sCx, -sCy);
+        ctx.restore();
+      }
+
+      return [
+        { canvas: ocToCanvas(oc), label: 'Color', mimeType: 'image/png' },
+        { canvas: otsuBinary(oc, W, H), label: 'BW', mimeType: 'image/png' },
+      ];
+    }
+
+    function renderLattice(imgs: (HTMLImageElement | null)[], params: Record<string, any>, _rng: () => number): Output[] {
+      if (!imgs[0] || !imgs[1] || !imgs[2]) return [];
+      const n_strips: number = params.n_strips ?? 20;
+      const gap_raw: number = params.gap ?? 6;
+
+      const sizes = [imgs[0], imgs[1], imgs[2]].map(i => [i!.naturalWidth, i!.naturalHeight]);
+      const [W, H] = sizes.reduce((best, s) => s[0] * s[1] > best[0] * best[1] ? s : best);
+
+      const resScale = Math.min(W, H) / 1024.0;
+      const gap = Math.max(2, Math.round(gap_raw * resScale));
+
+      const toData = (img: HTMLImageElement) => {
+        const tmp = new OffscreenCanvas(W, H);
+        tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+        return tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+      };
+      const dA = toData(imgs[0]!), dB = toData(imgs[1]!), dC = toData(imgs[2]!);
+
+      const col_pitch = W / n_strips;
+      const row_pitch = H / n_strips;
+      const strip_half_w = (col_pitch - gap) / 2.0;
+      const strip_half_h = (row_pitch - gap) / 2.0;
+      if (strip_half_w < 1 || strip_half_h < 1) return [];
+
+      const undulate_amp_col = strip_half_w * 0.25;
+      const undulate_amp_row = strip_half_h * 0.25;
+      const undulate_period_col = 2.0 * row_pitch;
+      const undulate_period_row = 2.0 * col_pitch;
+
+      const col_idx  = new Int32Array(W * H);
+      const row_idx  = new Int32Array(W * H);
+      const in_col   = new Uint8Array(W * H);
+      const in_row   = new Uint8Array(W * H);
+      const dist_col = new Float32Array(W * H);
+      const dist_row = new Float32Array(W * H);
+
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const p = y * W + x;
+          const j  = Math.min(Math.floor(x / col_pitch), n_strips - 1);
+          const j1 = Math.min(j + 1, n_strips - 1);
+          const col_c_j  = (j  + 0.5) * col_pitch + undulate_amp_col * Math.sin(2 * Math.PI * y / undulate_period_col + Math.PI * j);
+          const col_c_j1 = (j1 + 0.5) * col_pitch + undulate_amp_col * Math.sin(2 * Math.PI * y / undulate_period_col + Math.PI * j1);
+          const dj  = Math.abs(x - col_c_j);
+          const dj1 = Math.abs(x - col_c_j1);
+          const inJ  = dj  <= strip_half_w;
+          const inJ1 = dj1 <= strip_half_w;
+          if (inJ && inJ1) {
+            if (dj <= dj1) { col_idx[p] = j;  dist_col[p] = dj;  in_col[p] = 1; }
+            else           { col_idx[p] = j1; dist_col[p] = dj1; in_col[p] = 1; }
+          } else if (inJ)  { col_idx[p] = j;  dist_col[p] = dj;  in_col[p] = 1; }
+          else if (inJ1)   { col_idx[p] = j1; dist_col[p] = dj1; in_col[p] = 1; }
+
+          const i  = Math.min(Math.floor(y / row_pitch), n_strips - 1);
+          const i1 = Math.min(i + 1, n_strips - 1);
+          const row_c_i  = (i  + 0.5) * row_pitch + undulate_amp_row * Math.sin(2 * Math.PI * x / undulate_period_row + Math.PI * i);
+          const row_c_i1 = (i1 + 0.5) * row_pitch + undulate_amp_row * Math.sin(2 * Math.PI * x / undulate_period_row + Math.PI * i1);
+          const di  = Math.abs(y - row_c_i);
+          const di1 = Math.abs(y - row_c_i1);
+          const inI  = di  <= strip_half_h;
+          const inI1 = di1 <= strip_half_h;
+          if (inI && inI1) {
+            if (di <= di1) { row_idx[p] = i;  dist_row[p] = di;  in_row[p] = 1; }
+            else           { row_idx[p] = i1; dist_row[p] = di1; in_row[p] = 1; }
+          } else if (inI)  { row_idx[p] = i;  dist_row[p] = di;  in_row[p] = 1; }
+          else if (inI1)   { row_idx[p] = i1; dist_row[p] = di1; in_row[p] = 1; }
+        }
+      }
+
+      const weaves = ['plain', 'basket', 'twill', 'herringbone', 'satin'];
+      const wLabels = ['Plain', 'Basket', 'Twill', 'Herringbone', 'Satin'];
+      const shadow_decay = Math.max(gap * 2.5, 4.0);
+      const outputs: Output[] = [];
+
+      for (let wi = 0; wi < 5; wi++) {
+        const weave = weaves[wi];
+        const tmp = new OffscreenCanvas(W, H);
+        const outData = tmp.getContext('2d')!.createImageData(W, H);
+        const od = outData.data;
+        const n = n_strips;
+
+        for (let p = 0; p < W * H; p++) {
+          const ic = in_col[p], ir = in_row[p];
+          if (!ic && !ir) { od[p*4+3] = 255; continue; }
+
+          const ci = col_idx[p], ri = row_idx[p];
+          let use_col: boolean;
+          if      (weave === 'plain')       use_col = (ri + ci) % 2 === 0;
+          else if (weave === 'basket')      use_col = (Math.floor(ri/2) + Math.floor(ci/2)) % 2 === 0;
+          else if (weave === 'twill')       use_col = (ri + ci) % 4 >= 2;
+          else if (weave === 'herringbone') use_col = ci < Math.floor(n/2) ? (ri + ci) % 4 >= 2 : (ri + (n - 1 - ci)) % 4 >= 2;
+          else                              use_col = (ci - ri * 2) % 5 !== 0;
+
+          const col_src = ci % 3 === 0 ? dA : ci % 3 === 1 ? dB : dC;
+          const row_src = ri % 3 === 0 ? dB : ri % 3 === 1 ? dC : dA;
+          const src = !ir ? col_src : !ic ? row_src : (use_col ? col_src : row_src);
+
+          od[p*4]   = src[p*4];
+          od[p*4+1] = src[p*4+1];
+          od[p*4+2] = src[p*4+2];
+          od[p*4+3] = 255;
+
+          if (ic && ir) {
+            const dist = use_col ? dist_row[p] : dist_col[p];
+            const half = use_col ? strip_half_h : strip_half_w;
+            const shadow = Math.exp(-(half - Math.min(dist, half)) / shadow_decay) * 0.45;
+            od[p*4]   = Math.round(od[p*4]   * (1 - shadow));
+            od[p*4+1] = Math.round(od[p*4+1] * (1 - shadow));
+            od[p*4+2] = Math.round(od[p*4+2] * (1 - shadow));
+          }
+        }
+
+        tmp.getContext('2d')!.putImageData(outData, 0, 0);
+        outputs.push({ canvas: ocToCanvas(tmp), label: wLabels[wi], mimeType: 'image/png' });
+      }
+
+      return outputs;
+    }
+
+    function colorBurn(base: Uint8ClampedArray, blend: Uint8ClampedArray): Uint8ClampedArray {
+      const out = new Uint8ClampedArray(base.length);
+      for (let i = 0; i < base.length; i += 4) {
+        for (let c = 0; c < 3; c++) {
+          const b = base[i+c] / 255, s = blend[i+c] / 255;
+          out[i+c] = Math.round(Math.max(0, Math.min(1, 1 - (1 - b) / Math.max(s, 1e-6))) * 255);
+        }
+        out[i+3] = 255;
+      }
+      return out;
+    }
+
+    function colorDodge(base: Uint8ClampedArray, blend: Uint8ClampedArray): Uint8ClampedArray {
+      const out = new Uint8ClampedArray(base.length);
+      for (let i = 0; i < base.length; i += 4) {
+        for (let c = 0; c < 3; c++) {
+          const b = base[i+c] / 255, s = blend[i+c] / 255;
+          out[i+c] = Math.round(Math.min(1, b / Math.max(1 - s, 1e-6)) * 255);
+        }
+        out[i+3] = 255;
+      }
+      return out;
+    }
+
+    function renderStencilBurn(imgs: (HTMLImageElement | null)[], _params: Record<string, any>, _rng: () => number): Output[] {
+      if (!imgs[0] || !imgs[1] || !imgs[2] || !imgs[3]) return [];
+      const sizes = (imgs as HTMLImageElement[]).slice(0, 4).map(i => [i.naturalWidth, i.naturalHeight]);
+      const [W, H] = sizes.reduce((best, s) => s[0] * s[1] > best[0] * best[1] ? s : best);
+
+      const getPixels = (img: HTMLImageElement) => {
+        const tmp = new OffscreenCanvas(W, H);
+        tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+        return tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+      };
+      const dA = getPixels(imgs[0]!), dB = getPixels(imgs[1]!), dC = getPixels(imgs[2]!), dD = getPixels(imgs[3]!);
+      const dataByIdx = [dA, dB, dC];
+
+      const toOC = (pixels: Uint8ClampedArray) => {
+        const oc = new OffscreenCanvas(W, H);
+        const id = oc.getContext('2d')!.createImageData(W, H);
+        id.data.set(pixels);
+        oc.getContext('2d')!.putImageData(id, 0, 0);
+        return oc;
+      };
+
+      const outputs: Output[] = [];
+      const triples: [number, number, number][] = [[0,1,2],[1,0,2],[2,0,1]];
+      for (const [s, p, q] of triples) {
+        const b2 = colorBurn(dataByIdx[p], dD);
+        const c2 = colorDodge(dataByIdx[q], dD);
+        const ocB2 = toOC(b2), ocC2 = toOC(c2);
+
+        for (const [fillA, fillB, variant] of [[ocB2, ocC2, '1'], [ocC2, ocB2, '2']] as [OffscreenCanvas, OffscreenCanvas, string][]) {
+          const dest = new OffscreenCanvas(W, H);
+          stencilCompose(dest, imgs[s]!, fillA, fillB);
+          outputs.push({ canvas: ocToCanvas(dest), label: `S${s+1}v${variant}`, mimeType: 'image/png' });
+        }
+      }
+      return outputs;
+    }
+
+    function renderZellij(imgs: (HTMLImageElement | null)[], _params: Record<string, any>, rng: () => number, scale = 1/6): Output[] {
+      const img = imgs[0]; if (!img) return [];
+      const W = img.naturalWidth, H = img.naturalHeight;
+      const S = Math.max(60, Math.floor(Math.min(W, H) * scale));
+      const R_out = S * 0.42, R_in = R_out * 0.50;
+      const SQRT3 = Math.sqrt(3);
+
+      const cx_img = W / 2, cy_img = H / 2;
+      const margin = 2 * S;
+      const steps = Math.floor(Math.max(W, H) / S) + 4;
+      const latticeKeys: [number, number][] = [];
+      const latticePos = new Map<string, [number, number]>();
+      for (let r = -steps; r <= steps; r++) {
+        for (let q = -steps; q <= steps; q++) {
+          const px = cx_img + S * q + S * 0.5 * r;
+          const py = cy_img + S * SQRT3 / 2 * r;
+          if (px > -margin && px < W + margin && py > -margin && py < H + margin) {
+            latticeKeys.push([q, r]);
+            latticePos.set(`${q},${r}`, [px, py]);
+          }
+        }
+      }
+
+      // Star mask (centered at origin)
+      const starPath = new Path2D();
+      for (let i = 0; i < 12; i++) {
+        const a = i * Math.PI / 6;
+        const r = i % 2 === 0 ? R_out : R_in;
+        if (i === 0) starPath.moveTo(r * Math.cos(a), r * Math.sin(a));
+        else         starPath.lineTo(r * Math.cos(a), r * Math.sin(a));
+      }
+      starPath.closePath();
+
+      // Shuffle star src positions
+      const starDest: [number, number][] = [...latticePos.values()];
+      const starSrc = starDest.map((_, i) => i);
+      for (let i = starSrc.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        [starSrc[i], starSrc[j]] = [starSrc[j], starSrc[i]];
+      }
+
+      // Shield groups: 3 neighbor directions × 2 signs = 6 groups
+      type ShieldItem = { destRef: [number, number]; pts: number[]; srcRef: [number, number] };
+      const shieldGroups: ShieldItem[][] = Array.from({ length: 6 }, () => []);
+      const neighborDirs: [number, number, number][] = [[1,0,0],[0,1,60],[-1,1,120]];
+
+      for (let di = 0; di < 3; di++) {
+        const [dq, dr, theta_deg] = neighborDirs[di];
+        const theta = theta_deg * Math.PI / 180;
+        for (const [q, r] of latticeKeys) {
+          const nbKey = `${q+dq},${r+dr}`;
+          if (!latticePos.has(nbKey)) continue;
+          const [ax, ay] = latticePos.get(`${q},${r}`)!;
+          const [bx, by] = latticePos.get(nbKey)!;
+          for (const [sign, gOff] of [[1, 0], [-1, 3]] as [number, number][]) {
+            const pts = [
+              ax + R_out * Math.cos(theta),                      ay + R_out * Math.sin(theta),
+              ax + R_in  * Math.cos(theta + sign * Math.PI/6),   ay + R_in  * Math.sin(theta + sign * Math.PI/6),
+              ax + R_out * Math.cos(theta + sign * Math.PI/3),   ay + R_out * Math.sin(theta + sign * Math.PI/3),
+              bx + R_out * Math.cos(theta + sign * 2*Math.PI/3), by + R_out * Math.sin(theta + sign * 2*Math.PI/3),
+              bx + R_in  * Math.cos(theta + sign * 5*Math.PI/6), by + R_in  * Math.sin(theta + sign * 5*Math.PI/6),
+              bx + R_out * Math.cos(theta + Math.PI),            by + R_out * Math.sin(theta + Math.PI),
+            ];
+            shieldGroups[di + gOff].push({ destRef: [ax, ay], pts, srcRef: [ax, ay] });
+          }
+        }
+      }
+
+      // Shuffle src within each shield group
+      for (const group of shieldGroups) {
+        const srcs = group.map(item => item.srcRef);
+        for (let i = srcs.length - 1; i > 0; i--) {
+          const j = Math.floor(rng() * (i + 1));
+          [srcs[i], srcs[j]] = [srcs[j], srcs[i]];
+        }
+        group.forEach((item, k) => { item.srcRef = srcs[k]; });
+      }
+
+      const oc = new OffscreenCanvas(W, H);
+      const ctx = oc.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+
+      // Paste shields first (clip polygon in image coords, draw shifted to read from src region)
+      for (const group of shieldGroups) {
+        for (const { destRef, pts, srcRef } of group) {
+          const [dx, dy] = destRef, [sx, sy] = srcRef;
+          const path = new Path2D();
+          for (let i = 0; i < 6; i++) {
+            if (i === 0) path.moveTo(pts[i*2], pts[i*2+1]);
+            else         path.lineTo(pts[i*2], pts[i*2+1]);
+          }
+          path.closePath();
+          ctx.save();
+          ctx.clip(path);
+          // drawImage(img, dx-sx, dy-sy): at canvas (cx,cy) reads image (cx-(dx-sx), cy-(dy-sy)) = (cx+sx-dx, cy+sy-dy)
+          // which is the corresponding point in the src shield (shifted by sx-dx, sy-dy)
+          ctx.drawImage(img, dx - sx, dy - sy);
+          ctx.restore();
+        }
+      }
+
+      // Paste stars on top (star path centered at origin, translate to dest, read from src)
+      for (let destIdx = 0; destIdx < starDest.length; destIdx++) {
+        const [dx, dy] = starDest[destIdx];
+        const [sx, sy] = starDest[starSrc[destIdx]];
+        ctx.save();
+        ctx.translate(dx, dy);
+        ctx.clip(starPath);
+        ctx.drawImage(img, -sx, -sy);  // src center (sx,sy) → local origin → canvas (dx,dy)
+        ctx.restore();
+      }
+
+      return [
+        { canvas: ocToCanvas(oc), label: 'Color', mimeType: 'image/png' },
+        { canvas: otsuBinary(oc, W, H), label: 'BW', mimeType: 'image/png' },
+      ];
+    }
+
     // ─── Bot config registry ───────────────────────────────────────────────────
 
     type BotDef = {
@@ -934,6 +1392,40 @@ import Admin from '../../../layouts/Admin.astro';
         buildParams: buildWobbleeyeParams,
         getParams: getWobbleeyeParams,
         setParams: setWobbleeyeParams,
+      },
+      lathe: {
+        label: 'Lathe', inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        render: renderLathe,
+        buildParams: buildLatheParams,
+        getParams: getLatheParams,
+        setParams: setLatheParams,
+      },
+      bullseye: {
+        label: 'Bullseye', inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        render: renderBullseye,
+      },
+      sixshooter: {
+        label: 'Six Shooter', inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        render: renderSixShooter,
+      },
+      lattice: {
+        label: 'Lattice', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false,
+        render: renderLattice,
+        buildParams: buildLatticeParams,
+        getParams: getLatticeParams,
+        setParams: setLatticeParams,
+      },
+      stencilburn: {
+        label: 'Stencil Burn', inputs: 4, inputLabels: ['Stencil A', 'Stencil B', 'Stencil C', 'Burn/Dodge'], hasRandomness: false,
+        render: renderStencilBurn,
+      },
+      zellij: {
+        label: 'Zellij', inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        render: renderZellij,
+      },
+      zellij_medium: {
+        label: 'Zellij Medium', inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        render: (imgs, params, rng) => renderZellij(imgs, params, rng, 1/4),
       },
     };
 
@@ -1076,6 +1568,81 @@ import Admin from '../../../layouts/Admin.astro';
         const el = document.getElementById('we-rings') as HTMLInputElement | null;
         if (el) el.value = String(p.rings);
       }
+    }
+
+    // ─── Lathe params ──────────────────────────────────────────────────────────
+
+    function buildLatheParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="lt-rings">Rings <span class="pt-val" id="lt-rings-val">80</span></label>
+          <input class="pt-range" type="range" id="lt-rings" min="5" max="120" step="1" value="80" />
+          <div class="pt-range-hints"><span>5</span><span>120</span></div>
+        </div>`;
+      const el = document.getElementById('lt-rings') as HTMLInputElement;
+      const val = document.getElementById('lt-rings-val') as HTMLSpanElement;
+      let t: ReturnType<typeof setTimeout>;
+      el.addEventListener('input', () => {
+        val.textContent = el.value;
+        clearTimeout(t); t = setTimeout(doReroll, 150);
+      });
+    }
+
+    function getLatheParams(): Record<string, any> {
+      return { rings: parseInt((document.getElementById('lt-rings') as HTMLInputElement)?.value ?? '80', 10) };
+    }
+
+    function setLatheParams(p: Record<string, any>) {
+      if (p.rings !== undefined) {
+        const el = document.getElementById('lt-rings') as HTMLInputElement | null;
+        if (el) { el.value = String(p.rings); const v = document.getElementById('lt-rings-val'); if (v) v.textContent = String(p.rings); }
+      }
+    }
+
+    // ─── Lattice params ────────────────────────────────────────────────────────
+
+    function buildLatticeParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="lat-strips">Strips <span class="pt-val" id="lat-strips-val">20</span></label>
+          <input class="pt-range" type="range" id="lat-strips" min="3" max="40" step="1" value="20" />
+          <div class="pt-range-hints"><span>3</span><span>40</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="lat-gap">Gap <span class="pt-val" id="lat-gap-val">6</span></label>
+          <input class="pt-range" type="range" id="lat-gap" min="0" max="20" step="1" value="6" />
+          <div class="pt-range-hints"><span>0</span><span>20</span></div>
+        </div>`;
+      const stripsEl = document.getElementById('lat-strips') as HTMLInputElement;
+      const stripsVal = document.getElementById('lat-strips-val') as HTMLSpanElement;
+      const gapEl = document.getElementById('lat-gap') as HTMLInputElement;
+      const gapVal = document.getElementById('lat-gap-val') as HTMLSpanElement;
+      let t: ReturnType<typeof setTimeout>;
+      stripsEl.addEventListener('input', () => {
+        stripsVal.textContent = stripsEl.value;
+        clearTimeout(t); t = setTimeout(doRender, 200);
+      });
+      gapEl.addEventListener('input', () => {
+        gapVal.textContent = gapEl.value;
+        clearTimeout(t); t = setTimeout(doRender, 200);
+      });
+    }
+
+    function getLatticeParams(): Record<string, any> {
+      return {
+        n_strips: parseInt((document.getElementById('lat-strips') as HTMLInputElement)?.value ?? '20', 10),
+        gap:      parseInt((document.getElementById('lat-gap')    as HTMLInputElement)?.value ?? '6',  10),
+      };
+    }
+
+    function setLatticeParams(p: Record<string, any>) {
+      const set = (id: string, valId: string, v: any) => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        const ve = document.getElementById(valId) as HTMLElement | null;
+        if (el) { el.value = String(v); if (ve) ve.textContent = String(v); }
+      };
+      if (p.n_strips !== undefined) set('lat-strips', 'lat-strips-val', p.n_strips);
+      if (p.gap      !== undefined) set('lat-gap',    'lat-gap-val',    p.gap);
     }
 
     // ─── Slot building ─────────────────────────────────────────────────────────
