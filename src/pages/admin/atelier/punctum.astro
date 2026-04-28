@@ -31,6 +31,7 @@ import Admin from '../../../layouts/Admin.astro';
       </div>
     </div>
     <p class="pt-bot-desc" id="pt-bot-desc">Circular crop rotations from random positions across the image</p>
+    <div id="pt-params"></div>
     <div class="pt-actions">
       <button class="btn btn--secondary" id="reroll-btn" disabled>⟳ Re-roll</button>
       <button class="btn btn--secondary" id="download-btn" disabled>↓ Download</button>
@@ -55,11 +56,6 @@ import Admin from '../../../layouts/Admin.astro';
 
       <!-- Input slots -->
       <div class="pt-slots" id="pt-slots"></div>
-    </div>
-
-    <!-- Controls -->
-    <div class="pt-controls">
-      <div id="pt-params"></div>
     </div>
   </div>
 
@@ -113,7 +109,7 @@ import Admin from '../../../layouts/Admin.astro';
 
   .pt-shell {
     display: grid;
-    grid-template-columns: 1fr 260px;
+    grid-template-columns: 1fr;
     gap: var(--space-lg);
     align-items: start;
   }
@@ -250,12 +246,59 @@ import Admin from '../../../layouts/Admin.astro';
     cursor: not-allowed;
   }
 
-  /* Controls panel */
-  .pt-controls {
+  /* Params bar (above canvas) */
+  #pt-params {
     display: flex;
-    flex-direction: column;
-    gap: var(--space-sm);
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--space-sm) var(--space-lg);
+    align-items: flex-end;
+    width: 100%;
+    margin-top: var(--space-xs);
   }
+
+  #pt-params .pt-field {
+    flex: 0 0 160px;
+    min-width: 120px;
+  }
+
+  #pt-params .pt-check-field {
+    flex: 0 0 auto;
+    padding-bottom: 2px;
+  }
+
+  #pt-params .pt-divider {
+    display: none;
+  }
+
+  /* Slider + number input row */
+  .pt-range-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .pt-range-row .pt-range {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .pt-num-input {
+    width: 48px;
+    background: var(--color-surface, #111);
+    color: var(--color-text, #ccc);
+    border: 1px solid var(--color-border, #333);
+    border-radius: 3px;
+    padding: 2px 4px;
+    font-size: 0.72rem;
+    font-family: var(--font-mono, monospace);
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .pt-num-input::-webkit-inner-spin-button,
+  .pt-num-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+  .pt-num-input { -moz-appearance: textfield; }
 
   .pt-divider {
     height: 1px;
@@ -2267,7 +2310,7 @@ import Admin from '../../../layouts/Admin.astro';
           </div>
           <div class="pt-slot__label">${label}</div>
           <div class="pt-slot__controls">
-            <button class="pt-slot__lib" data-slot-lib="${i}">Lib</button>
+            <button class="pt-slot__lib" data-slot-lib="${i}">IMG</button>
             <button class="pt-slot__xform" data-slot-xform="${i}" data-xform="rotl" disabled title="Rotate left">↺</button>
             <button class="pt-slot__xform" data-slot-xform="${i}" data-xform="rotr" disabled title="Rotate right">↻</button>
             <button class="pt-slot__xform" data-slot-xform="${i}" data-xform="flip" disabled title="Mirror">⇔</button>
@@ -2441,9 +2484,43 @@ import Admin from '../../../layouts/Admin.astro';
 
       paramsEl.innerHTML = '';
       bot.buildParams?.();
+      enhanceSliders();
 
       // re-roll only makes sense for randomness bots
       rerollBtn.disabled = !bot.hasRandomness;
+    }
+
+    // ─── Slider number-input enhancement ──────────────────────────────────────
+
+    function enhanceSliders() {
+      paramsEl.querySelectorAll<HTMLInputElement>('input.pt-range').forEach(range => {
+        const num = document.createElement('input');
+        num.type = 'number';
+        num.className = 'pt-num-input';
+        num.min = range.min;
+        num.max = range.max;
+        num.step = range.step;
+        num.value = range.value;
+
+        const row = document.createElement('div');
+        row.className = 'pt-range-row';
+        range.parentNode!.insertBefore(row, range);
+        row.appendChild(range);
+        row.appendChild(num);
+
+        range.addEventListener('input', () => { num.value = range.value; });
+
+        num.addEventListener('change', () => {
+          let v = parseFloat(num.value);
+          if (isNaN(v)) { num.value = range.value; return; }
+          const mn = parseFloat(range.min), mx = parseFloat(range.max);
+          const st = parseFloat(range.step) || 1;
+          v = Math.max(mn, Math.min(mx, Math.round(v / st) * st));
+          num.value = String(v);
+          range.value = String(v);
+          range.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+      });
     }
 
     // ─── Load image into slot ──────────────────────────────────────────────────
