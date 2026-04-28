@@ -25,6 +25,12 @@ import Admin from '../../../layouts/Admin.astro';
       </div>
     </div>
     <p class="pt-bot-desc" id="pt-bot-desc">Circular crop rotations from random positions across the image</p>
+    <div class="pt-actions">
+      <button class="btn btn--secondary" id="reroll-btn" disabled>⟳ Re-roll</button>
+      <button class="btn btn--secondary" id="download-btn" disabled>↓ Download</button>
+      <button class="btn btn--primary"   id="save-btn"     disabled>☁ Save</button>
+      <button class="btn btn--secondary" id="save-png-btn" disabled>☁ HD PNG</button>
+    </div>
   </div>
 
   <div class="pt-shell">
@@ -48,15 +54,6 @@ import Admin from '../../../layouts/Admin.astro';
     <!-- Controls -->
     <div class="pt-controls">
       <div id="pt-params"></div>
-
-      <div class="pt-divider"></div>
-
-      <div class="pt-actions">
-        <button class="btn btn--secondary" id="reroll-btn" disabled>⟳ Re-roll</button>
-        <button class="btn btn--secondary" id="download-btn" disabled>↓ Download</button>
-        <button class="btn btn--primary"   id="save-btn"     disabled>☁ Save</button>
-        <button class="btn btn--secondary" id="save-png-btn" disabled>☁ HD PNG</button>
-      </div>
     </div>
   </div>
 
@@ -296,12 +293,10 @@ import Admin from '../../../layouts/Admin.astro';
 
   .pt-actions {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
     gap: var(--space-xs);
-  }
-
-  .pt-actions .btn {
-    width: 100%;
+    margin-top: var(--space-sm);
   }
 
   /* Thumbnail strip */
@@ -452,16 +447,6 @@ import Admin from '../../../layouts/Admin.astro';
   @media (max-width: 700px) {
     .pt-shell {
       grid-template-columns: 1fr;
-    }
-
-    .pt-actions {
-      flex-direction: row;
-      flex-wrap: wrap;
-    }
-
-    .pt-actions .btn {
-      flex: 1 1 calc(50% - var(--space-xs));
-      min-width: 100px;
     }
 
     .pt-header-row {
