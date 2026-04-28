@@ -1266,6 +1266,7 @@ import Admin from '../../../layouts/Admin.astro';
         bot: currentBot,
         source_ids: ids,
         seed: currentSeed,
+        output_idx: activeOutputIdx,
         params: bot.getParams?.() ?? {},
       });
     }
@@ -1391,10 +1392,16 @@ import Admin from '../../../layouts/Admin.astro';
       let loadCount = 0;
       const sourceCount = bot.inputs;
 
+      const outputIdx = parseInt(urlParams.get('output_idx') ?? '0', 10);
+
       function onAllLoaded() {
         const mimeType = autoExport === 'png' ? 'image/png' : 'image/jpeg';
         const filename  = autoExport === 'png' ? `${currentBot}.png` : `${currentBot}.jpg`;
         doReroll(seed);
+        // doReroll resets activeOutputIdx to 0; restore the saved index
+        if (outputIdx > 0 && outputIdx < outputs.length) {
+          setActiveOutput(outputIdx);
+        }
         saveToOutputs(mimeType, filename, savePngBtn, '☁ HD PNG').then((newId) => {
           if (newId) window.location.href = `/admin/search/detail?id=${newId}`;
         });

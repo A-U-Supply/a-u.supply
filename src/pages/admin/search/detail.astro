@@ -506,6 +506,7 @@ import Admin from '../../../layouts/Admin.astro';
           const p = new URLSearchParams({ autoexport: 'png', bot: atelierMeta.bot || 'bullethole' });
           sourceIds.forEach((id: string, i: number) => { if (id) p.set(`source${i}`, id); });
           if (atelierMeta.seed) p.set('seed', String(atelierMeta.seed));
+          if (atelierMeta.output_idx) p.set('output_idx', String(atelierMeta.output_idx));
           const params = atelierMeta.params || {};
           Object.entries(params).forEach(([k, v]) => p.set(k, String(v)));
           hdPngBtn.href = `/admin/atelier/punctum?${p}`;
