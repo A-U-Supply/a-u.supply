@@ -1460,7 +1460,19 @@ import Admin from '../../../layouts/Admin.astro';
       const outputs: Output[] = [];
       for (const [s, a, b] of [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]] as [number,number,number][]) {
         const dest = new OffscreenCanvas(W, H);
-        stencilCompose(dest, masks[s] as any, imgs[a]!, imgs[b]!);
+        const maskCtx = masks[s].getContext('2d')!;
+        const sd = maskCtx.getImageData(0, 0, W, H).data;
+        const ac = new OffscreenCanvas(W, H); ac.getContext('2d')!.drawImage(imgs[a]!, 0, 0, W, H);
+        const ad = ac.getContext('2d')!.getImageData(0, 0, W, H).data;
+        const bc = new OffscreenCanvas(W, H); bc.getContext('2d')!.drawImage(imgs[b]!, 0, 0, W, H);
+        const bd = bc.getContext('2d')!.getImageData(0, 0, W, H).data;
+        const ctx = dest.getContext('2d')!;
+        const od = ctx.createImageData(W, H);
+        for (let i = 0; i < sd.length; i += 4) {
+          const src = sd[i] >= 128 ? ad : bd;
+          od.data[i] = src[i]; od.data[i+1] = src[i+1]; od.data[i+2] = src[i+2]; od.data[i+3] = 255;
+        }
+        ctx.putImageData(od, 0, 0);
         outputs.push({ canvas: ocToCanvas(dest), label: `S${s+1} ${a+1}/${b+1}`, mimeType: 'image/png' });
       }
       return outputs;
@@ -1545,7 +1557,19 @@ import Admin from '../../../layouts/Admin.astro';
       const outputs: Output[] = [];
       for (const [s, a, b] of [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]] as [number,number,number][]) {
         const dest = new OffscreenCanvas(W, H);
-        stencilCompose(dest, masks[s] as any, imgs[a]!, imgs[b]!);
+        const maskCtx = masks[s].getContext('2d')!;
+        const sd = maskCtx.getImageData(0, 0, W, H).data;
+        const ac = new OffscreenCanvas(W, H); ac.getContext('2d')!.drawImage(imgs[a]!, 0, 0, W, H);
+        const ad = ac.getContext('2d')!.getImageData(0, 0, W, H).data;
+        const bc = new OffscreenCanvas(W, H); bc.getContext('2d')!.drawImage(imgs[b]!, 0, 0, W, H);
+        const bd = bc.getContext('2d')!.getImageData(0, 0, W, H).data;
+        const ctx = dest.getContext('2d')!;
+        const od = ctx.createImageData(W, H);
+        for (let i = 0; i < sd.length; i += 4) {
+          const src = sd[i] >= 128 ? ad : bd;
+          od.data[i] = src[i]; od.data[i+1] = src[i+1]; od.data[i+2] = src[i+2]; od.data[i+3] = 255;
+        }
+        ctx.putImageData(od, 0, 0);
         outputs.push({ canvas: ocToCanvas(dest), label: `S${s+1} ${a+1}/${b+1}`, mimeType: 'image/png' });
       }
       return outputs;
