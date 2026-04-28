@@ -206,8 +206,14 @@ import Admin from '../../../layouts/Admin.astro';
     pointer-events: none;
   }
 
-  .pt-slot__lib {
+  .pt-slot__controls {
+    display: flex;
+    gap: 2px;
     width: 90px;
+  }
+
+  .pt-slot__lib {
+    flex: 1;
     font-size: 0.72rem;
     padding: 3px 0;
     background: var(--color-surface, #111);
@@ -220,6 +226,28 @@ import Admin from '../../../layouts/Admin.astro';
   .pt-slot__lib:hover {
     color: var(--color-text, #ccc);
     border-color: var(--color-accent, #fff);
+  }
+
+  .pt-slot__xform {
+    width: 22px;
+    font-size: 0.9rem;
+    padding: 2px 0;
+    background: var(--color-surface, #111);
+    color: var(--color-muted, #888);
+    border: 1px solid var(--color-border, #333);
+    border-radius: 3px;
+    cursor: pointer;
+    line-height: 1;
+  }
+
+  .pt-slot__xform:hover:not(:disabled) {
+    color: var(--color-text, #ccc);
+    border-color: var(--color-accent, #fff);
+  }
+
+  .pt-slot__xform:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
   }
 
   /* Controls panel */
@@ -1929,6 +1957,10 @@ import Admin from '../../../layouts/Admin.astro';
     let currentBot = 'bullethole';
     let sourceImgs: (HTMLImageElement | null)[] = [null, null, null, null];
     let sourceIds: (string | null)[] = [null, null, null, null];
+    let slotTransforms: { rot: number; flip: boolean }[] = [
+      {rot:0,flip:false},{rot:0,flip:false},{rot:0,flip:false},{rot:0,flip:false}
+    ];
+    let effectiveImgs: (HTMLImageElement | null)[] = [null, null, null, null];
     let currentSeed = 0;
     let rng: () => number = Math.random.bind(Math);
     let outputs: Output[] = [];
@@ -2142,6 +2174,53 @@ import Admin from '../../../layouts/Admin.astro';
 
     // ─── Slot building ─────────────────────────────────────────────────────────
 
+    async function applyTransformAndUpdate(slotIdx: number): Promise<void> {
+      const img = sourceImgs[slotIdx];
+      if (!img) { effectiveImgs[slotIdx] = null; return; }
+
+      const { rot, flip } = slotTransforms[slotIdx];
+
+      if (rot === 0 && !flip) {
+        effectiveImgs[slotIdx] = img;
+      } else {
+        const nW = img.naturalWidth, nH = img.naturalHeight;
+        const swapped = rot === 90 || rot === 270;
+        const outW = swapped ? nH : nW, outH = swapped ? nW : nH;
+
+        const c = document.createElement('canvas');
+        c.width = outW; c.height = outH;
+        const ctx = c.getContext('2d')!;
+        ctx.translate(outW / 2, outH / 2);
+        ctx.rotate(rot * Math.PI / 180);
+        if (flip) ctx.scale(-1, 1);
+        ctx.drawImage(img, -nW / 2, -nH / 2);
+
+        await new Promise<void>(resolve => {
+          c.toBlob(blob => {
+            const url = URL.createObjectURL(blob!);
+            const result = new Image();
+            result.onload = () => { effectiveImgs[slotIdx] = result; resolve(); };
+            result.src = url;
+          });
+        });
+      }
+
+      const thumb = document.getElementById(`slot-thumb-${slotIdx}`) as HTMLImageElement | null;
+      const empty = document.getElementById(`slot-empty-${slotIdx}`);
+      if (thumb && effectiveImgs[slotIdx]) {
+        thumb.src = effectiveImgs[slotIdx]!.src;
+        thumb.style.display = 'block';
+        if (empty) empty.style.display = 'none';
+      }
+    }
+
+    function updateXformButtons(slotIdx: number) {
+      const loaded = sourceImgs[slotIdx] !== null;
+      slotsEl.querySelectorAll(`[data-slot-xform="${slotIdx}"]`).forEach(btn => {
+        (btn as HTMLButtonElement).disabled = !loaded;
+      });
+    }
+
     function buildSlots(bot: BotDef) {
       slotsEl.innerHTML = bot.inputLabels.map((label, i) => `
         <div class="pt-slot" data-slot="${i}">
@@ -2151,7 +2230,12 @@ import Admin from '../../../layouts/Admin.astro';
             <input type="file" accept="image/*" style="display:none" id="slot-file-${i}" />
           </div>
           <div class="pt-slot__label">${label}</div>
-          <button class="pt-slot__lib" data-slot-lib="${i}">Library</button>
+          <div class="pt-slot__controls">
+            <button class="pt-slot__lib" data-slot-lib="${i}">Lib</button>
+            <button class="pt-slot__xform" data-slot-xform="${i}" data-xform="rotl" disabled title="Rotate left">↺</button>
+            <button class="pt-slot__xform" data-slot-xform="${i}" data-xform="rotr" disabled title="Rotate right">↻</button>
+            <button class="pt-slot__xform" data-slot-xform="${i}" data-xform="flip" disabled title="Mirror">⇔</button>
+          </div>
         </div>
       `).join('');
 
@@ -2181,11 +2265,25 @@ import Admin from '../../../layouts/Admin.astro';
         const slotIdx = i;
         libBtn.addEventListener('click', () => openLibrary(slotIdx));
 
+        slotsEl.querySelectorAll(`[data-slot-xform="${i}"]`).forEach(btn => {
+          btn.addEventListener('click', () => {
+            const xform = (btn as HTMLElement).dataset.xform!;
+            const t = slotTransforms[slotIdx];
+            if (xform === 'rotl') t.rot = (t.rot + 270) % 360;
+            if (xform === 'rotr') t.rot = (t.rot + 90) % 360;
+            if (xform === 'flip') t.flip = !t.flip;
+            applyTransformAndUpdate(slotIdx).then(() => {
+              if (allSlotsReady()) doRender();
+            });
+          });
+        });
+
         // Restore any already-loaded image for this slot (after bot switch with same n)
         if (sourceImgs[i]) {
-          thumb.src = sourceImgs[i]!.src;
+          thumb.src = effectiveImgs[i]?.src ?? sourceImgs[i]!.src;
           thumb.style.display = 'block';
           empty.style.display = 'none';
+          updateXformButtons(i);
         }
       }
     }
@@ -2194,7 +2292,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     function allSlotsReady(): boolean {
       const n = BOTS[currentBot].inputs;
-      return sourceImgs.slice(0, n).every(img => img !== null);
+      return effectiveImgs.slice(0, n).every(img => img !== null);
     }
 
     function doReroll(seed?: number) {
@@ -2205,7 +2303,7 @@ import Admin from '../../../layouts/Admin.astro';
         rng = mulberry32(currentSeed);
       }
       const params = bot.getParams?.() ?? {};
-      outputs = bot.render(sourceImgs, params, rng);
+      outputs = bot.render(effectiveImgs, params, rng);
       activeOutputIdx = 0;
       renderStrip();
       setActiveOutput(0);
@@ -2218,7 +2316,7 @@ import Admin from '../../../layouts/Admin.astro';
       // Re-render with same seed (only changes that don't affect layout, e.g. effect)
       if (bot.hasRandomness) rng = mulberry32(currentSeed);
       const params = bot.getParams?.() ?? {};
-      outputs = bot.render(sourceImgs, params, rng);
+      outputs = bot.render(effectiveImgs, params, rng);
       renderStrip();
       setActiveOutput(activeOutputIdx < outputs.length ? activeOutputIdx : 0);
     }
@@ -2293,6 +2391,8 @@ import Admin from '../../../layouts/Admin.astro';
       // Reset state
       sourceImgs = [null, null, null, null];
       sourceIds  = [null, null, null, null];
+      slotTransforms = [{rot:0,flip:false},{rot:0,flip:false},{rot:0,flip:false},{rot:0,flip:false}];
+      effectiveImgs  = [null, null, null, null];
       outputs = [];
       activeOutputIdx = 0;
       stageCanvas.style.display = 'none';
@@ -2313,14 +2413,11 @@ import Admin from '../../../layouts/Admin.astro';
     // ─── Load image into slot ──────────────────────────────────────────────────
 
     function onSlotLoaded(slotIdx: number) {
-      const thumb = document.getElementById(`slot-thumb-${slotIdx}`) as HTMLImageElement | null;
-      const empty = document.getElementById(`slot-empty-${slotIdx}`);
-      if (thumb && sourceImgs[slotIdx]) {
-        thumb.src = sourceImgs[slotIdx]!.src;
-        thumb.style.display = 'block';
-        if (empty) empty.style.display = 'none';
-      }
-      if (allSlotsReady()) doReroll();
+      slotTransforms[slotIdx] = { rot: 0, flip: false };
+      applyTransformAndUpdate(slotIdx).then(() => {
+        updateXformButtons(slotIdx);
+        if (allSlotsReady()) doReroll();
+      });
     }
 
     function loadSlotFromBlob(slotIdx: number, blob: Blob) {
