@@ -477,6 +477,12 @@ import Admin from '../../../layouts/Admin.astro';
 
   .pt-lib-thumb:hover { border-color: var(--color-accent, #fff); }
 
+  /* Override global page-header flex-row so header/desc/actions stack vertically */
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .pt-bot-desc {
     font-size: var(--text-sm, 0.8rem);
     color: var(--color-muted, #888);
