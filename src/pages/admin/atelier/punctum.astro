@@ -21,6 +21,12 @@ import Admin from '../../../layouts/Admin.astro';
           <option value="stencilburn">Stencil Burn</option>
           <option value="zellij">Zellij</option>
           <option value="zellij_medium">Zellij Medium</option>
+          <option value="halftone">Halftone</option>
+          <option value="linescreen">Line Screen</option>
+          <option value="penrose">Penrose</option>
+          <option value="monochrome">Monochrome</option>
+          <option value="silver">Silver</option>
+          <option value="quad">Quad</option>
         </select>
       </div>
     </div>
@@ -611,6 +617,26 @@ import Admin from '../../../layouts/Admin.astro';
         centers.push(W <= H ? [Math.floor(W / 2), longPos] : [longPos, Math.floor(H / 2)]);
       }
       return centers;
+    }
+
+    function piecewiseLerp(xs: number[], ys: number[], v: number): number {
+      if (v <= xs[0]) return ys[0];
+      if (v >= xs[xs.length-1]) return ys[ys.length-1];
+      let i = 0;
+      while (i < xs.length-2 && xs[i+1] <= v) i++;
+      return ys[i] + (ys[i+1]-ys[i]) * (v-xs[i]) / (xs[i+1]-xs[i]);
+    }
+
+    function applyBlur(pixels: Uint8ClampedArray, W: number, H: number, sigma: number): Uint8ClampedArray {
+      const src = new OffscreenCanvas(W, H);
+      const id = src.getContext('2d')!.createImageData(W, H);
+      id.data.set(pixels);
+      src.getContext('2d')!.putImageData(id, 0, 0);
+      const dst = new OffscreenCanvas(W, H);
+      const ctx = dst.getContext('2d')!;
+      ctx.filter = `blur(${sigma}px)`;
+      ctx.drawImage(src, 0, 0);
+      return dst.getContext('2d')!.getImageData(0, 0, W, H).data;
     }
 
     // ─── Bot render functions ──────────────────────────────────────────────────
@@ -1363,6 +1389,420 @@ import Admin from '../../../layouts/Admin.astro';
       ];
     }
 
+    // ─── Halftone ──────────────────────────────────────────────────────────────
+
+    function renderHalftone(imgs: (HTMLImageElement | null)[], params: Record<string, any>, _rng: () => number): Output[] {
+      if (!imgs[0] || !imgs[1] || !imgs[2]) return [];
+      const W = imgs[0].naturalWidth, H = imgs[0].naturalHeight;
+      const freq: number = params.freq ?? 14;
+      const angle: number = params.angle ?? 45;
+      const rad = angle * Math.PI / 180;
+      const cosA = Math.cos(rad), sinA = Math.sin(rad);
+      const sCurveIn  = [0, 64, 128, 192, 255];
+      const sCurveOut = [0, 40, 128, 215, 255];
+
+      const makeHalftoneMask = (img: HTMLImageElement): OffscreenCanvas => {
+        const tmp = new OffscreenCanvas(W, H);
+        tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+        const src = tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+        const out = new OffscreenCanvas(W, H);
+        const od = out.getContext('2d')!.createImageData(W, H);
+        for (let y = 0; y < H; y++) {
+          for (let x = 0; x < W; x++) {
+            const i = (y * W + x) * 4;
+            const g = piecewiseLerp(sCurveIn, sCurveOut, Math.round(0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2]));
+            const xr = x * cosA + y * sinA;
+            const yr = -x * sinA + y * cosA;
+            const screen = (Math.cos(2 * Math.PI * xr / freq) * Math.cos(2 * Math.PI * yr / freq) + 1) / 2;
+            const v = (g / 255) > screen ? 255 : 0;
+            od.data[i] = od.data[i+1] = od.data[i+2] = v; od.data[i+3] = 255;
+          }
+        }
+        out.getContext('2d')!.putImageData(od, 0, 0);
+        return out;
+      };
+
+      const masks = [makeHalftoneMask(imgs[0]!), makeHalftoneMask(imgs[1]!), makeHalftoneMask(imgs[2]!)];
+      const outputs: Output[] = [];
+      for (const [s, a, b] of [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]] as [number,number,number][]) {
+        const dest = new OffscreenCanvas(W, H);
+        stencilCompose(dest, masks[s] as any, imgs[a]!, imgs[b]!);
+        outputs.push({ canvas: ocToCanvas(dest), label: `S${s+1} ${a+1}/${b+1}`, mimeType: 'image/png' });
+      }
+      return outputs;
+    }
+
+    function buildHalftoneParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="ht-freq">Frequency <span class="pt-val" id="ht-freq-val">14</span></label>
+          <input class="pt-range" type="range" id="ht-freq" min="5" max="40" step="1" value="14" />
+          <div class="pt-range-hints"><span>5</span><span>40</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ht-angle">Angle <span class="pt-val" id="ht-angle-val">45°</span></label>
+          <input class="pt-range" type="range" id="ht-angle" min="0" max="180" step="5" value="45" />
+          <div class="pt-range-hints"><span>0°</span><span>180°</span></div>
+        </div>`;
+      const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+      const dRender = debounce(() => doRender(), 200);
+      document.getElementById('ht-freq')!.addEventListener('input', (e) => {
+        document.getElementById('ht-freq-val')!.textContent = (e.target as HTMLInputElement).value;
+        dRender();
+      });
+      document.getElementById('ht-angle')!.addEventListener('input', (e) => {
+        document.getElementById('ht-angle-val')!.textContent = (e.target as HTMLInputElement).value + '°';
+        dRender();
+      });
+    }
+    function getHalftoneParams(): Record<string, any> {
+      return {
+        freq: parseInt((document.getElementById('ht-freq') as HTMLInputElement).value, 10),
+        angle: parseFloat((document.getElementById('ht-angle') as HTMLInputElement).value),
+      };
+    }
+    function setHalftoneParams(p: Record<string, any>) {
+      if (p.freq != null) { (document.getElementById('ht-freq') as HTMLInputElement).value = String(p.freq); document.getElementById('ht-freq-val')!.textContent = String(p.freq); }
+      if (p.angle != null) { (document.getElementById('ht-angle') as HTMLInputElement).value = String(p.angle); document.getElementById('ht-angle-val')!.textContent = p.angle + '°'; }
+    }
+
+    // ─── Line Screen ───────────────────────────────────────────────────────────
+
+    function renderLinescreen(imgs: (HTMLImageElement | null)[], params: Record<string, any>, _rng: () => number): Output[] {
+      if (!imgs[0] || !imgs[1] || !imgs[2]) return [];
+      const W = imgs[0].naturalWidth, H = imgs[0].naturalHeight;
+      const freq: number = params.freq ?? 30;
+      const angle: number = params.angle ?? 0;
+      const rad = angle * Math.PI / 180;
+      const cosA = Math.cos(rad), sinA = Math.sin(rad);
+      const sCurveIn  = [0, 64, 128, 192, 255];
+      const sCurveOut = [0, 25, 128, 230, 255];
+      const MIN_LINE = 0.10;
+
+      const makeLinescreenMask = (img: HTMLImageElement): OffscreenCanvas => {
+        const tmp = new OffscreenCanvas(W, H);
+        tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+        const rawData = tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+        const grayRaw = new Uint8ClampedArray(W * H * 4);
+        for (let i = 0; i < W * H * 4; i += 4) {
+          const g = Math.round(0.299 * rawData[i] + 0.587 * rawData[i+1] + 0.114 * rawData[i+2]);
+          const v = Math.round(piecewiseLerp(sCurveIn, sCurveOut, g));
+          grayRaw[i] = grayRaw[i+1] = grayRaw[i+2] = v; grayRaw[i+3] = 255;
+        }
+        const blurred = applyBlur(grayRaw, W, H, 1.5);
+        const out = new OffscreenCanvas(W, H);
+        const od = out.getContext('2d')!.createImageData(W, H);
+        for (let y = 0; y < H; y++) {
+          for (let x = 0; x < W; x++) {
+            const i = (y * W + x) * 4;
+            let g01 = blurred[i] / 255;
+            g01 = Math.max(MIN_LINE, Math.min(1 - MIN_LINE, g01));
+            const phase = x * cosA + y * sinA;
+            const screen = (((phase % freq) + freq) % freq) / freq;
+            const v = g01 > screen ? 255 : 0;
+            od.data[i] = od.data[i+1] = od.data[i+2] = v; od.data[i+3] = 255;
+          }
+        }
+        out.getContext('2d')!.putImageData(od, 0, 0);
+        return out;
+      };
+
+      const masks = [makeLinescreenMask(imgs[0]!), makeLinescreenMask(imgs[1]!), makeLinescreenMask(imgs[2]!)];
+      const outputs: Output[] = [];
+      for (const [s, a, b] of [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]] as [number,number,number][]) {
+        const dest = new OffscreenCanvas(W, H);
+        stencilCompose(dest, masks[s] as any, imgs[a]!, imgs[b]!);
+        outputs.push({ canvas: ocToCanvas(dest), label: `S${s+1} ${a+1}/${b+1}`, mimeType: 'image/png' });
+      }
+      return outputs;
+    }
+
+    function buildLinescreenParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="ls-freq">Frequency <span class="pt-val" id="ls-freq-val">30</span></label>
+          <input class="pt-range" type="range" id="ls-freq" min="10" max="60" step="1" value="30" />
+          <div class="pt-range-hints"><span>10</span><span>60</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ls-angle">Angle <span class="pt-val" id="ls-angle-val">0°</span></label>
+          <input class="pt-range" type="range" id="ls-angle" min="0" max="180" step="5" value="0" />
+          <div class="pt-range-hints"><span>0°</span><span>180°</span></div>
+        </div>`;
+      const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+      const dRender = debounce(() => doRender(), 200);
+      document.getElementById('ls-freq')!.addEventListener('input', (e) => {
+        document.getElementById('ls-freq-val')!.textContent = (e.target as HTMLInputElement).value;
+        dRender();
+      });
+      document.getElementById('ls-angle')!.addEventListener('input', (e) => {
+        document.getElementById('ls-angle-val')!.textContent = (e.target as HTMLInputElement).value + '°';
+        dRender();
+      });
+    }
+    function getLinescreenParams(): Record<string, any> {
+      return {
+        freq: parseInt((document.getElementById('ls-freq') as HTMLInputElement).value, 10),
+        angle: parseFloat((document.getElementById('ls-angle') as HTMLInputElement).value),
+      };
+    }
+    function setLinescreenParams(p: Record<string, any>) {
+      if (p.freq != null) { (document.getElementById('ls-freq') as HTMLInputElement).value = String(p.freq); document.getElementById('ls-freq-val')!.textContent = String(p.freq); }
+      if (p.angle != null) { (document.getElementById('ls-angle') as HTMLInputElement).value = String(p.angle); document.getElementById('ls-angle-val')!.textContent = p.angle + '°'; }
+    }
+
+    // ─── Penrose ───────────────────────────────────────────────────────────────
+
+    function renderPenrose(imgs: (HTMLImageElement | null)[], _params: Record<string, any>, rng: () => number): Output[] {
+      const img = imgs[0]; if (!img) return [];
+      const W = img.naturalWidth, H = img.naturalHeight;
+      const PHI = (1 + Math.sqrt(5)) / 2;
+
+      type C = { re: number; im: number };
+      const cadd   = (a: C, b: C): C => ({ re: a.re + b.re, im: a.im + b.im });
+      const csub   = (a: C, b: C): C => ({ re: a.re - b.re, im: a.im - b.im });
+      const cscale = (a: C, s: number): C => ({ re: a.re * s, im: a.im * s });
+      const cpolar = (r: number, θ: number): C => ({ re: r * Math.cos(θ), im: r * Math.sin(θ) });
+
+      function inflate(tris: [number, C, C, C][]): [number, C, C, C][] {
+        const out: [number, C, C, C][] = [];
+        for (const [k, A, B, Cv] of tris) {
+          if (k === 0) {
+            const P = cadd(A, cscale(csub(B, A), 1 / PHI));
+            out.push([0, Cv, P, B], [1, P, Cv, A]);
+          } else {
+            const Q = cadd(B, cscale(csub(Cv, B), 1 / PHI));
+            const R = cadd(B, cscale(csub(A, B), 1 / PHI));
+            out.push([1, R, Cv, A], [1, Q, R, B], [0, R, Q, A]);
+          }
+        }
+        return out;
+      }
+
+      const diag = Math.sqrt(W * W + H * H) / 2 * 1.3;
+      const targetTile = Math.min(W, H) * 0.06;
+      const N = Math.max(3, Math.round(Math.log(diag / targetTile) / Math.log(PHI)));
+
+      let tris: [number, C, C, C][] = [];
+      for (let i = 0; i < 10; i++) {
+        let B = cpolar(1, (2 * i - 1) * Math.PI / 10);
+        let Cv = cpolar(1, (2 * i + 1) * Math.PI / 10);
+        if (i % 2 === 0) [B, Cv] = [Cv, B];
+        tris.push([0, { re: 0, im: 0 }, B, Cv]);
+      }
+      for (let n = 0; n < N; n++) tris = inflate(tris);
+
+      const cx = W / 2, cy = H / 2;
+      const toPx = (z: C): [number, number] => [cx + z.re * diag, cy + z.im * diag];
+      const tileHalf = Math.max(4, Math.floor(diag / PHI ** N * 1.2));
+
+      type Tile = { destCx: number; destCy: number; pts: [number, number][] };
+      const thick: Tile[] = [], thin: Tile[] = [];
+
+      for (const [k, A, B, Cv] of tris) {
+        const [ax, ay] = toPx(A), [bx, by] = toPx(B), [cx2, cy2] = toPx(Cv);
+        const dcx = (ax + bx + cx2) / 3, dcy = (ay + by + cy2) / 3;
+        if (dcx + tileHalf < 0 || dcx - tileHalf > W || dcy + tileHalf < 0 || dcy - tileHalf > H) continue;
+        const tile: Tile = { destCx: dcx, destCy: dcy, pts: [[ax, ay], [bx, by], [cx2, cy2]] };
+        (k === 0 ? thick : thin).push(tile);
+      }
+
+      const shuffleSrcs = (tiles: Tile[]) => {
+        const srcs = tiles.map(t => ({ srcCx: t.destCx, srcCy: t.destCy }));
+        for (let i = srcs.length - 1; i > 0; i--) {
+          const j = Math.floor(rng() * (i + 1));
+          [srcs[i], srcs[j]] = [srcs[j], srcs[i]];
+        }
+        return srcs;
+      };
+      const thickSrcs = shuffleSrcs(thick);
+      const thinSrcs  = shuffleSrcs(thin);
+
+      const oc = new OffscreenCanvas(W, H);
+      const ctx = oc.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+
+      for (const [tiles, srcs] of [[thick, thickSrcs], [thin, thinSrcs]] as [Tile[], {srcCx:number,srcCy:number}[]][]) {
+        for (let i = 0; i < tiles.length; i++) {
+          const { destCx, destCy, pts } = tiles[i];
+          const { srcCx, srcCy } = srcs[i];
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(pts[0][0], pts[0][1]);
+          ctx.lineTo(pts[1][0], pts[1][1]);
+          ctx.lineTo(pts[2][0], pts[2][1]);
+          ctx.closePath();
+          ctx.clip();
+          ctx.drawImage(img, destCx - srcCx, destCy - srcCy);
+          ctx.restore();
+        }
+      }
+
+      return [
+        { canvas: ocToCanvas(oc), label: 'Color', mimeType: 'image/png' },
+        { canvas: otsuBinary(oc, W, H), label: 'BW', mimeType: 'image/png' },
+      ];
+    }
+
+    // ─── Monochrome ────────────────────────────────────────────────────────────
+
+    function toSilverGelatin(img: HTMLImageElement, W: number, H: number): OffscreenCanvas {
+      const tmp = new OffscreenCanvas(W, H);
+      tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+      const src = tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+      const gray = new Uint8ClampedArray(W * H * 4);
+      for (let i = 0; i < W * H * 4; i += 4) {
+        const g = Math.round(0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2]);
+        gray[i] = gray[i+1] = gray[i+2] = g; gray[i+3] = 255;
+      }
+      const blurred = applyBlur(gray, W, H, 1.5);
+      const out = new OffscreenCanvas(W, H);
+      const od = out.getContext('2d')!.createImageData(W, H);
+      for (let i = 0; i < W * H * 4; i += 4) {
+        const diff = gray[i] - blurred[i];
+        const v = Math.max(0, Math.min(255, Math.round(gray[i] + (Math.abs(diff) > 3 ? diff * 1.2 : 0))));
+        od.data[i] = od.data[i+1] = od.data[i+2] = v; od.data[i+3] = 255;
+      }
+      out.getContext('2d')!.putImageData(od, 0, 0);
+      return out;
+    }
+
+    function renderMonochrome(imgs: (HTMLImageElement | null)[], _params: Record<string, any>, _rng: () => number): Output[] {
+      if (!imgs[0] || !imgs[1] || !imgs[2]) return [];
+      const W = imgs[0].naturalWidth, H = imgs[0].naturalHeight;
+      const mono = [toSilverGelatin(imgs[0]!, W, H), toSilverGelatin(imgs[1]!, W, H), toSilverGelatin(imgs[2]!, W, H)];
+      const outputs: Output[] = [];
+      for (const [s, a, b] of [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]] as [number,number,number][]) {
+        const dest = new OffscreenCanvas(W, H);
+        stencilCompose(dest, imgs[s]!, mono[a], mono[b]);
+        outputs.push({ canvas: ocToCanvas(dest), label: `S${s+1} ${a+1}/${b+1}`, mimeType: 'image/png' });
+      }
+      return outputs;
+    }
+
+    // ─── Silver ────────────────────────────────────────────────────────────────
+
+    function toSilverHalation(img: HTMLImageElement, W: number, H: number, rng: () => number): OffscreenCanvas {
+      const tmp = new OffscreenCanvas(W, H);
+      tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+      const src = tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+
+      const curveIn  = [0, 30, 128, 210, 255];
+      const curveOut = [0,  5, 140, 248, 255];
+
+      const curved = new Uint8ClampedArray(W * H * 4);
+      for (let i = 0; i < W * H * 4; i += 4) {
+        const g = Math.round(0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2]);
+        const v = Math.round(piecewiseLerp(curveIn, curveOut, g));
+        curved[i] = curved[i+1] = curved[i+2] = v; curved[i+3] = 255;
+      }
+
+      const highlights = new Uint8ClampedArray(W * H * 4);
+      for (let i = 0; i < W * H * 4; i += 4) {
+        const v = curved[i] > 170 ? curved[i] : 0;
+        highlights[i] = highlights[i+1] = highlights[i+2] = v; highlights[i+3] = 255;
+      }
+      const halo = applyBlur(highlights, W, H, 26);
+
+      const screened = new Uint8ClampedArray(W * H * 4);
+      for (let i = 0; i < W * H * 4; i += 4) {
+        const a = curved[i], h = halo[i];
+        screened[i] = screened[i+1] = screened[i+2] = Math.round(255 - (255 - a) * (255 - h) / 255);
+        screened[i+3] = 255;
+      }
+
+      const afterBlur = applyBlur(screened, W, H, 1.2);
+      const result = new Uint8ClampedArray(W * H * 4);
+      for (let i = 0; i < W * H * 4; i += 4) {
+        const u1 = rng() || 1e-10, u2 = rng();
+        const grain = Math.round(9 * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2));
+        const diff = screened[i] - afterBlur[i];
+        let v = screened[i] + (Math.abs(diff) > 2 ? diff * 1.5 : 0) + grain;
+        v = Math.max(0, Math.min(255, v));
+        result[i]   = Math.round(v * 0.95);
+        result[i+1] = v;
+        result[i+2] = Math.min(255, Math.round(v * 1.06));
+        result[i+3] = 255;
+      }
+
+      const out = new OffscreenCanvas(W, H);
+      const od = out.getContext('2d')!.createImageData(W, H);
+      od.data.set(result);
+      out.getContext('2d')!.putImageData(od, 0, 0);
+      return out;
+    }
+
+    function renderSilver(imgs: (HTMLImageElement | null)[], _params: Record<string, any>, rng: () => number): Output[] {
+      if (!imgs[0] || !imgs[1] || !imgs[2]) return [];
+      const W = imgs[0].naturalWidth, H = imgs[0].naturalHeight;
+      const silver = [
+        toSilverHalation(imgs[0]!, W, H, rng),
+        toSilverHalation(imgs[1]!, W, H, rng),
+        toSilverHalation(imgs[2]!, W, H, rng),
+      ];
+      const outputs: Output[] = [];
+      for (const [s, a, b] of [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]] as [number,number,number][]) {
+        const dest = new OffscreenCanvas(W, H);
+        stencilCompose(dest, imgs[s]!, silver[a], silver[b]);
+        outputs.push({ canvas: ocToCanvas(dest), label: `S${s+1} ${a+1}/${b+1}`, mimeType: 'image/png' });
+      }
+      return outputs;
+    }
+
+    // ─── Quad ──────────────────────────────────────────────────────────────────
+
+    function renderQuad(imgs: (HTMLImageElement | null)[], _params: Record<string, any>, _rng: () => number): Output[] {
+      if (!imgs[0] || !imgs[1] || !imgs[2] || !imgs[3]) return [];
+      const sizes = ([imgs[0], imgs[1], imgs[2], imgs[3]] as HTMLImageElement[]).map(i => [i.naturalWidth, i.naturalHeight]);
+      const [W, H] = sizes.reduce((b, s) => s[0] * s[1] > b[0] * b[1] ? s : b);
+
+      const getGray = (img: HTMLImageElement): Uint8Array => {
+        const tmp = new OffscreenCanvas(W, H);
+        tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+        const d = tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+        const g = new Uint8Array(W * H);
+        for (let i = 0; i < W * H; i++) g[i] = Math.round(0.299 * d[i*4] + 0.587 * d[i*4+1] + 0.114 * d[i*4+2]);
+        return g;
+      };
+      const getPixels = (img: HTMLImageElement): Uint8ClampedArray => {
+        const tmp = new OffscreenCanvas(W, H);
+        tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+        return tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+      };
+      const make3Level = (gray: Uint8Array): Uint8Array => {
+        const sorted = Array.from(gray).sort((a, b) => a - b);
+        const p33 = sorted[Math.floor(sorted.length * 0.33)];
+        const p67 = sorted[Math.floor(sorted.length * 0.67)];
+        const mask = new Uint8Array(W * H);
+        for (let i = 0; i < W * H; i++) mask[i] = gray[i] < p33 ? 0 : gray[i] < p67 ? 128 : 255;
+        return mask;
+      };
+
+      const grays  = [0, 1, 2, 3].map(i => getGray(imgs[i]!));
+      const pixels = [0, 1, 2, 3].map(i => getPixels(imgs[i]!));
+      const masks  = grays.map(make3Level);
+
+      const outputs: Output[] = [];
+      const perms: [number,number,number][] = [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+      for (let s = 0; s < 4; s++) {
+        const mask = masks[s];
+        const others = [0, 1, 2, 3].filter(i => i !== s);
+        for (const [pa, pb, pc] of perms) {
+          const dA = pixels[others[pa]], dB = pixels[others[pb]], dC = pixels[others[pc]];
+          const oc = new OffscreenCanvas(W, H);
+          const od = oc.getContext('2d')!.createImageData(W, H);
+          for (let i = 0; i < W * H; i++) {
+            const src = mask[i] < 64 ? dA : mask[i] < 192 ? dB : dC;
+            od.data[i*4] = src[i*4]; od.data[i*4+1] = src[i*4+1];
+            od.data[i*4+2] = src[i*4+2]; od.data[i*4+3] = 255;
+          }
+          oc.getContext('2d')!.putImageData(od, 0, 0);
+          outputs.push({ canvas: ocToCanvas(oc), label: `S${s+1} ${others[pa]+1}/${others[pb]+1}/${others[pc]+1}`, mimeType: 'image/png' });
+        }
+      }
+      return outputs;
+    }
+
     // ─── Bot config registry ───────────────────────────────────────────────────
 
     type BotDef = {
@@ -1449,6 +1889,38 @@ import Admin from '../../../layouts/Admin.astro';
         label: 'Zellij Medium', desc: 'Zellij tiling with larger tiles',
         inputs: 1, inputLabels: ['Image'], hasRandomness: true,
         render: (imgs, params, rng) => renderZellij(imgs, params, rng, 1/4),
+      },
+      halftone: {
+        label: 'Halftone', desc: 'AM halftone dot screen composited with two fill images',
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
+        render: renderHalftone,
+        buildParams: buildHalftoneParams, getParams: getHalftoneParams, setParams: setHalftoneParams,
+      },
+      linescreen: {
+        label: 'Line Screen', desc: 'Parallel line screen composited with two fill images',
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
+        render: renderLinescreen,
+        buildParams: buildLinescreenParams, getParams: getLinescreenParams, setParams: setLinescreenParams,
+      },
+      penrose: {
+        label: 'Penrose', desc: 'Aperiodic Penrose P3 tiling with shuffled crops',
+        inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        render: renderPenrose,
+      },
+      monochrome: {
+        label: 'Monochrome', desc: 'Silver gelatin grayscale fills composited with stencil',
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
+        render: renderMonochrome,
+      },
+      silver: {
+        label: 'Silver', desc: 'Tonal curve + halation glow applied to fills before stencil composite',
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: true,
+        render: renderSilver,
+      },
+      quad: {
+        label: 'Quad', desc: 'Three-level (black/grey/white) stencil — 24 fill permutations',
+        inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false,
+        render: renderQuad,
       },
     };
 
