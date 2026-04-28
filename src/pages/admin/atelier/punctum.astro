@@ -439,10 +439,16 @@ import Admin from '../../../layouts/Admin.astro';
     margin: var(--space-sm) var(--space-md);
     background: var(--color-surface, #111);
     border: 1px solid var(--color-border, #333);
-    color: #fff;
+    color: #fff !important;
     border-radius: 3px;
     padding: 6px 10px;
     font-size: var(--text-sm, 0.85rem);
+    width: calc(100% - 2 * var(--space-md));
+    box-sizing: border-box;
+  }
+
+  .pt-modal__search::placeholder {
+    color: #666;
   }
 
   .pt-modal__grid {
