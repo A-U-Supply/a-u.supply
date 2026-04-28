@@ -60,6 +60,10 @@ import Admin from '../../../layouts/Admin.astro';
         <h2>Pick an Image</h2>
         <button class="pt-modal__close" id="library-close">✕</button>
       </div>
+      <div class="pt-modal__tabs">
+        <button class="pt-modal__tab pt-modal__tab--active" id="lib-tab-library">Library</button>
+        <button class="pt-modal__tab" id="lib-tab-workspace">Workspace</button>
+      </div>
       <input class="pt-modal__search" type="text" id="library-search" placeholder="Search…" />
       <div class="pt-modal__grid" id="library-grid">
         <div class="pt-modal__loading loading-dots">Loading</div>
@@ -376,6 +380,28 @@ import Admin from '../../../layouts/Admin.astro';
 
   .pt-modal__close:hover { color: var(--color-text, #ccc); }
 
+  .pt-modal__tabs {
+    display: flex;
+    padding: 0 var(--space-md);
+    border-bottom: 1px solid var(--color-border, #333);
+  }
+
+  .pt-modal__tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--color-muted, #888);
+    cursor: pointer;
+    font-size: var(--text-sm, 0.85rem);
+    padding: var(--space-sm) var(--space-md);
+    margin-bottom: -1px;
+  }
+
+  .pt-modal__tab--active {
+    color: var(--color-text, #ccc);
+    border-bottom-color: var(--color-accent, #fff);
+  }
+
   .pt-modal__search {
     margin: var(--space-sm) var(--space-md);
     background: var(--color-surface, #111);
@@ -428,10 +454,12 @@ import Admin from '../../../layouts/Admin.astro';
     const downloadBtn = document.getElementById('download-btn') as HTMLButtonElement;
     const saveBtn     = document.getElementById('save-btn') as HTMLButtonElement;
     const savePngBtn  = document.getElementById('save-png-btn') as HTMLButtonElement;
-    const libraryOverlay = document.getElementById('library-overlay') as HTMLDivElement;
-    const libraryClose   = document.getElementById('library-close') as HTMLButtonElement;
-    const librarySearch  = document.getElementById('library-search') as HTMLInputElement;
-    const libraryGrid    = document.getElementById('library-grid') as HTMLDivElement;
+    const libraryOverlay  = document.getElementById('library-overlay') as HTMLDivElement;
+    const libraryClose    = document.getElementById('library-close') as HTMLButtonElement;
+    const librarySearch   = document.getElementById('library-search') as HTMLInputElement;
+    const libraryGrid     = document.getElementById('library-grid') as HTMLDivElement;
+    const libTabLibrary   = document.getElementById('lib-tab-library') as HTMLButtonElement;
+    const libTabWorkspace = document.getElementById('lib-tab-workspace') as HTMLButtonElement;
 
     // ─── Seeded PRNG (mulberry32) ──────────────────────────────────────────────
     function mulberry32(seed: number): () => number {
@@ -919,6 +947,7 @@ import Admin from '../../../layouts/Admin.astro';
     let outputs: Output[] = [];
     let activeOutputIdx = 0;
     let pendingSlot = 0;
+    let activeLibTab: 'library' | 'workspace' = 'library';
     let librarySearchTimer: ReturnType<typeof setTimeout>;
 
     // ─── Bullethole params ─────────────────────────────────────────────────────
@@ -1315,11 +1344,53 @@ import Admin from '../../../layouts/Admin.astro';
 
     // ─── Library modal ─────────────────────────────────────────────────────────
 
+    function setLibTab(tab: 'library' | 'workspace') {
+      activeLibTab = tab;
+      libTabLibrary.classList.toggle('pt-modal__tab--active', tab === 'library');
+      libTabWorkspace.classList.toggle('pt-modal__tab--active', tab === 'workspace');
+      librarySearch.style.display = tab === 'library' ? '' : 'none';
+    }
+
     function openLibrary(slotIdx: number) {
       pendingSlot = slotIdx;
+      setLibTab('library');
       libraryOverlay.style.display = 'flex';
       librarySearch.value = '';
       loadLibrary('');
+    }
+
+    async function loadWorkspace() {
+      libraryGrid.innerHTML = '<div class="pt-modal__loading loading-dots">Loading</div>';
+      const wsId = localStorage.getItem('active_workspace_id');
+      if (!wsId) {
+        libraryGrid.innerHTML = '<div class="pt-modal__loading">No active workspace</div>';
+        return;
+      }
+      try {
+        const res = await fetch(`/api/workspaces/${wsId}/items?per_page=100`, { credentials: 'include' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const images = (data.items || []).filter((i: any) => i.media_type === 'image');
+        if (images.length === 0) {
+          libraryGrid.innerHTML = '<div class="pt-modal__loading">No images in workspace</div>';
+          return;
+        }
+        libraryGrid.innerHTML = '';
+        for (const item of images) {
+          const img = document.createElement('img');
+          img.className = 'pt-lib-thumb';
+          img.src = `/api/media/${item.media_item_id}/thumbnail`;
+          img.alt = item.filename || '';
+          img.loading = 'lazy';
+          img.addEventListener('click', () => {
+            libraryOverlay.style.display = 'none';
+            loadSlotFromUrl(pendingSlot, `/api/media/${item.media_item_id}/file`, item.media_item_id);
+          });
+          libraryGrid.appendChild(img);
+        }
+      } catch (err: any) {
+        libraryGrid.innerHTML = `<div class="pt-modal__loading">Error: ${err.message}</div>`;
+      }
     }
 
     async function loadLibrary(q: string) {
@@ -1357,6 +1428,8 @@ import Admin from '../../../layouts/Admin.astro';
 
     libraryClose.addEventListener('click', () => { libraryOverlay.style.display = 'none'; });
     libraryOverlay.addEventListener('click', (e) => { if (e.target === libraryOverlay) libraryOverlay.style.display = 'none'; });
+    libTabLibrary.addEventListener('click', () => { setLibTab('library'); loadLibrary(librarySearch.value); });
+    libTabWorkspace.addEventListener('click', () => { setLibTab('workspace'); loadWorkspace(); });
     librarySearch.addEventListener('input', () => {
       clearTimeout(librarySearchTimer);
       librarySearchTimer = setTimeout(() => loadLibrary(librarySearch.value), 300);
