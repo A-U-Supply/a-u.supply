@@ -65,6 +65,16 @@
   margin-top: 2px;
 }
 
+.sidebar__section-hint {
+  display: block;
+  font-size: 0.6rem;
+  color: #444;
+  text-transform: none;
+  letter-spacing: 0;
+  font-style: italic;
+  margin-top: 1px;
+}
+
 .sidebar__footer {
   padding: var(--space-sm) var(--space-md);
   border-top: 1px solid #333;

@@ -24,7 +24,7 @@ import Admin from '../../../layouts/Admin.astro';
         </select>
       </div>
     </div>
-    <p class="page-subtitle">Live image editor</p>
+    <p class="pt-bot-desc" id="pt-bot-desc">Circular crop rotations from random positions across the image</p>
   </div>
 
   <div class="pt-shell">
@@ -444,6 +444,34 @@ import Admin from '../../../layouts/Admin.astro';
   }
 
   .pt-lib-thumb:hover { border-color: var(--color-accent, #fff); }
+
+  .pt-bot-desc {
+    font-size: var(--text-sm, 0.8rem);
+    color: var(--color-muted, #888);
+    margin: var(--space-xs) 0 0;
+    min-height: 1.2em;
+  }
+
+  @media (max-width: 700px) {
+    .pt-shell {
+      grid-template-columns: 1fr;
+    }
+
+    .pt-actions {
+      flex-direction: row;
+      flex-wrap: wrap;
+    }
+
+    .pt-actions .btn {
+      flex: 1 1 calc(50% - var(--space-xs));
+      min-width: 100px;
+    }
+
+    .pt-header-row {
+      flex-wrap: wrap;
+      gap: var(--space-sm);
+    }
+  }
 </style>
 
 <script>
@@ -1357,6 +1385,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     type BotDef = {
       label: string;
+      desc: string;
       inputs: number;
       inputLabels: string[];
       hasRandomness: boolean;
@@ -1368,63 +1397,75 @@ import Admin from '../../../layouts/Admin.astro';
 
     const BOTS: Record<string, BotDef> = {
       bullethole: {
-        label: 'Bullet Hole', inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        label: 'Bullet Hole', desc: 'Circular crop rotations from random positions across the image',
+        inputs: 1, inputLabels: ['Image'], hasRandomness: true,
         render: renderBullethole,
         buildParams: buildBulletholeParams,
         getParams: getBulletholeParams,
         setParams: setBulletholeParams,
       },
       stencil: {
-        label: 'Stencil', inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
+        label: 'Stencil', desc: 'Threshold mask with two fill images — swap to see both versions',
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
         render: renderStencil,
       },
       bw: {
-        label: 'BW', inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
+        label: 'BW', desc: 'Otsu threshold binarization to pure black and white',
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
         render: renderBW,
       },
       cyanotype: {
-        label: 'Cyanotype', inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: true,
+        label: 'Cyanotype', desc: 'Blueprint-style toning via threshold and tint',
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: true,
         render: renderCyanotype,
       },
       wobbleeye: {
-        label: 'Wobble Eye', inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        label: 'Wobble Eye', desc: 'Concentric ellipses, each rotated independently',
+        inputs: 1, inputLabels: ['Image'], hasRandomness: true,
         render: renderWobbleeye,
         buildParams: buildWobbleeyeParams,
         getParams: getWobbleeyeParams,
         setParams: setWobbleeyeParams,
       },
       lathe: {
-        label: 'Lathe', inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        label: 'Lathe', desc: 'Annular bands rotated at random angles around a bullseye center',
+        inputs: 1, inputLabels: ['Image'], hasRandomness: true,
         render: renderLathe,
         buildParams: buildLatheParams,
         getParams: getLatheParams,
         setParams: setLatheParams,
       },
       bullseye: {
-        label: 'Bullseye', inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        label: 'Bullseye', desc: 'Three concentric circles, each independently rotated',
+        inputs: 1, inputLabels: ['Image'], hasRandomness: true,
         render: renderBullseye,
       },
       sixshooter: {
-        label: 'Six Shooter', inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        label: 'Six Shooter', desc: 'Six circular crops laid out in a grid or hex pattern',
+        inputs: 1, inputLabels: ['Image'], hasRandomness: true,
         render: renderSixShooter,
       },
       lattice: {
-        label: 'Lattice', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false,
+        label: 'Lattice', desc: 'Three images woven together in five weave patterns',
+        inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false,
         render: renderLattice,
         buildParams: buildLatticeParams,
         getParams: getLatticeParams,
         setParams: setLatticeParams,
       },
       stencilburn: {
-        label: 'Stencil Burn', inputs: 4, inputLabels: ['Stencil A', 'Stencil B', 'Stencil C', 'Burn/Dodge'], hasRandomness: false,
+        label: 'Stencil Burn', desc: 'Color burn and dodge blend four images into six stencil composites',
+        inputs: 4, inputLabels: ['Stencil A', 'Stencil B', 'Stencil C', 'Burn/Dodge'], hasRandomness: false,
         render: renderStencilBurn,
       },
       zellij: {
-        label: 'Zellij', inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        label: 'Zellij', desc: 'Islamic six-pointed star tiling with shuffled crops',
+        inputs: 1, inputLabels: ['Image'], hasRandomness: true,
         render: renderZellij,
       },
       zellij_medium: {
-        label: 'Zellij Medium', inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        label: 'Zellij Medium', desc: 'Zellij tiling with larger tiles',
+        inputs: 1, inputLabels: ['Image'], hasRandomness: true,
         render: (imgs, params, rng) => renderZellij(imgs, params, rng, 1/4),
       },
     };
@@ -1791,6 +1832,9 @@ import Admin from '../../../layouts/Admin.astro';
     function switchBot(id: string) {
       currentBot = id;
       const bot = BOTS[id];
+
+      const descEl = document.getElementById('pt-bot-desc');
+      if (descEl) descEl.textContent = bot?.desc ?? '';
 
       // Reset state
       sourceImgs = [null, null, null, null];
