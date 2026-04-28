@@ -1,0 +1,1423 @@
+---
+import Admin from '../../../layouts/Admin.astro';
+---
+
+<Admin title="Punctum" current="punctum">
+  <div class="page-header">
+    <div class="pt-header-row">
+      <h1>Punctum</h1>
+      <div class="pt-bot-wrap">
+        <label class="pt-bot-label" for="bot-select">Bot</label>
+        <select class="pt-bot-select" id="bot-select">
+          <option value="bullethole">Bullet Hole</option>
+          <option value="stencil">Stencil</option>
+          <option value="bw">BW</option>
+          <option value="cyanotype">Cyanotype</option>
+          <option value="wobbleeye">Wobble Eye</option>
+        </select>
+      </div>
+    </div>
+    <p class="page-subtitle">Live image editor</p>
+  </div>
+
+  <div class="pt-shell">
+    <div class="pt-left">
+      <!-- Output stage -->
+      <div class="pt-stage" id="pt-stage">
+        <canvas id="pt-canvas" style="display:none"></canvas>
+        <div class="pt-empty" id="pt-empty">
+          <div class="pt-empty__icon">⬡</div>
+          <div id="pt-empty-text">Load an image to begin</div>
+        </div>
+      </div>
+
+      <!-- Input slots -->
+      <div class="pt-slots" id="pt-slots"></div>
+    </div>
+
+    <!-- Controls -->
+    <div class="pt-controls">
+      <div id="pt-params"></div>
+
+      <div class="pt-divider"></div>
+
+      <div class="pt-actions">
+        <button class="btn btn--secondary" id="reroll-btn" disabled>⟳ Re-roll</button>
+        <button class="btn btn--secondary" id="download-btn" disabled>↓ Download</button>
+        <button class="btn btn--primary"   id="save-btn"     disabled>☁ Save</button>
+        <button class="btn btn--secondary" id="save-png-btn" disabled>☁ HD PNG</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Thumbnail strip (multi-output bots) -->
+  <div class="pt-strip" id="pt-strip" style="display:none"></div>
+
+  <!-- Library modal -->
+  <div class="pt-modal-overlay" id="library-overlay" style="display:none">
+    <div class="pt-modal">
+      <div class="pt-modal__header">
+        <h2>Pick an Image</h2>
+        <button class="pt-modal__close" id="library-close">✕</button>
+      </div>
+      <input class="pt-modal__search" type="text" id="library-search" placeholder="Search…" />
+      <div class="pt-modal__grid" id="library-grid">
+        <div class="pt-modal__loading loading-dots">Loading</div>
+      </div>
+    </div>
+  </div>
+</Admin>
+
+<style>
+  .pt-header-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-lg);
+  }
+
+  .pt-header-row h1 { margin: 0; }
+
+  .pt-bot-wrap {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .pt-bot-label {
+    font-size: var(--text-sm, 0.8rem);
+    color: var(--color-muted, #888);
+  }
+
+  .pt-bot-select {
+    background: var(--color-surface, #111);
+    color: var(--color-text, #ccc);
+    border: 1px solid var(--color-border, #333);
+    border-radius: 3px;
+    padding: 5px 10px;
+    font-size: var(--text-sm, 0.85rem);
+  }
+
+  .pt-shell {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    gap: var(--space-lg);
+    align-items: start;
+  }
+
+  .pt-left {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+  }
+
+  .pt-stage {
+    background: var(--color-surface, #111);
+    border: 1px solid var(--color-border, #333);
+    border-radius: 4px;
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  #pt-canvas {
+    max-width: 100%;
+    max-height: 65vh;
+  }
+
+  .pt-empty {
+    text-align: center;
+    color: var(--color-muted, #666);
+    line-height: 1.7;
+  }
+
+  .pt-empty__icon {
+    font-size: 2.5rem;
+    margin-bottom: var(--space-sm);
+    opacity: 0.4;
+  }
+
+  /* Input slots */
+  .pt-slots {
+    display: flex;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+  }
+
+  .pt-slot {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+    min-width: 90px;
+  }
+
+  .pt-slot__label {
+    font-size: 0.7rem;
+    color: var(--color-muted, #888);
+    text-align: center;
+  }
+
+  .pt-slot__drop {
+    width: 90px;
+    height: 90px;
+    border: 1px dashed var(--color-border, #333);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    background: var(--color-surface, #111);
+    transition: border-color 0.15s;
+  }
+
+  .pt-slot__drop:hover,
+  .pt-slot__drop.drag-over {
+    border-color: var(--color-accent, #fff);
+  }
+
+  .pt-slot__thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: none;
+  }
+
+  .pt-slot__empty-icon {
+    font-size: 1.5rem;
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  .pt-slot__lib {
+    width: 90px;
+    font-size: 0.72rem;
+    padding: 3px 0;
+    background: var(--color-surface, #111);
+    color: var(--color-muted, #888);
+    border: 1px solid var(--color-border, #333);
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  .pt-slot__lib:hover {
+    color: var(--color-text, #ccc);
+    border-color: var(--color-accent, #fff);
+  }
+
+  /* Controls panel */
+  .pt-controls {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .pt-divider {
+    height: 1px;
+    background: var(--color-border, #333);
+    margin: var(--space-xs) 0;
+  }
+
+  .pt-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .pt-label {
+    font-size: var(--text-sm, 0.8rem);
+    color: var(--color-muted, #888);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .pt-val {
+    font-family: var(--font-mono, monospace);
+    color: var(--color-text, #ccc);
+  }
+
+  .pt-range {
+    width: 100%;
+    accent-color: var(--color-accent, #fff);
+  }
+
+  .pt-range-hints {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: var(--color-muted, #555);
+  }
+
+  .pt-select {
+    width: 100%;
+    background: var(--color-surface, #111);
+    color: var(--color-text, #ccc);
+    border: 1px solid var(--color-border, #333);
+    border-radius: 3px;
+    padding: 5px 8px;
+    font-size: var(--text-sm, 0.85rem);
+  }
+
+  .pt-check-field {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .pt-check-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-size: var(--text-sm, 0.85rem);
+    color: var(--color-text, #ccc);
+    cursor: pointer;
+  }
+
+  .pt-field.disabled .pt-label,
+  .pt-field.disabled .pt-range,
+  .pt-field.disabled .pt-val {
+    opacity: 0.35;
+    pointer-events: none;
+  }
+
+  .pt-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+
+  .pt-actions .btn {
+    width: 100%;
+  }
+
+  /* Thumbnail strip */
+  .pt-strip {
+    display: flex;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    margin-top: var(--space-md);
+    padding-top: var(--space-md);
+    border-top: 1px solid var(--color-border, #333);
+  }
+
+  .pt-thumb {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+  }
+
+  .pt-thumb__canvas {
+    width: 90px;
+    height: 90px;
+    object-fit: cover;
+    border: 2px solid transparent;
+    border-radius: 3px;
+    display: block;
+  }
+
+  .pt-thumb--active .pt-thumb__canvas {
+    border-color: var(--color-accent, #fff);
+  }
+
+  .pt-thumb__label {
+    font-size: 0.65rem;
+    color: var(--color-muted, #888);
+    font-family: var(--font-mono, monospace);
+  }
+
+  /* Library modal */
+  .pt-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .pt-modal {
+    background: var(--color-bg, #0a0a0a);
+    border: 1px solid var(--color-border, #333);
+    border-radius: 6px;
+    width: min(90vw, 700px);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .pt-modal__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-md);
+    border-bottom: 1px solid var(--color-border, #333);
+  }
+
+  .pt-modal__header h2 {
+    margin: 0;
+    font-size: var(--text-lg, 1rem);
+  }
+
+  .pt-modal__close {
+    background: none;
+    border: none;
+    color: var(--color-muted, #888);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 4px 8px;
+  }
+
+  .pt-modal__close:hover { color: var(--color-text, #ccc); }
+
+  .pt-modal__search {
+    margin: var(--space-sm) var(--space-md);
+    background: var(--color-surface, #111);
+    border: 1px solid var(--color-border, #333);
+    color: var(--color-text, #ccc);
+    border-radius: 3px;
+    padding: 6px 10px;
+    font-size: var(--text-sm, 0.85rem);
+  }
+
+  .pt-modal__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 6px;
+    padding: var(--space-sm) var(--space-md) var(--space-md);
+    overflow-y: auto;
+  }
+
+  .pt-modal__loading {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: var(--color-muted, #666);
+    padding: var(--space-lg);
+  }
+
+  .pt-lib-thumb {
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: 3px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.1s;
+  }
+
+  .pt-lib-thumb:hover { border-color: var(--color-accent, #fff); }
+</style>
+
+<script>
+  document.addEventListener('astro:page-load', () => {
+
+    // ─── Elements ─────────────────────────────────────────────────────────────
+    const botSelect   = document.getElementById('bot-select') as HTMLSelectElement;
+    const stageCanvas = document.getElementById('pt-canvas') as HTMLCanvasElement;
+    const emptyEl     = document.getElementById('pt-empty') as HTMLDivElement;
+    const emptyText   = document.getElementById('pt-empty-text') as HTMLDivElement;
+    const slotsEl     = document.getElementById('pt-slots') as HTMLDivElement;
+    const paramsEl    = document.getElementById('pt-params') as HTMLDivElement;
+    const stripEl     = document.getElementById('pt-strip') as HTMLDivElement;
+    const rerollBtn   = document.getElementById('reroll-btn') as HTMLButtonElement;
+    const downloadBtn = document.getElementById('download-btn') as HTMLButtonElement;
+    const saveBtn     = document.getElementById('save-btn') as HTMLButtonElement;
+    const savePngBtn  = document.getElementById('save-png-btn') as HTMLButtonElement;
+    const libraryOverlay = document.getElementById('library-overlay') as HTMLDivElement;
+    const libraryClose   = document.getElementById('library-close') as HTMLButtonElement;
+    const librarySearch  = document.getElementById('library-search') as HTMLInputElement;
+    const libraryGrid    = document.getElementById('library-grid') as HTMLDivElement;
+
+    // ─── Seeded PRNG (mulberry32) ──────────────────────────────────────────────
+    function mulberry32(seed: number): () => number {
+      return function() {
+        seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+        let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      };
+    }
+
+    // ─── Canvas helpers ────────────────────────────────────────────────────────
+
+    function otsuThreshold(imgData: ImageData): number {
+      const hist = new Int32Array(256);
+      const total = imgData.width * imgData.height;
+      for (let i = 0; i < imgData.data.length; i += 4) {
+        const g = Math.round(0.299 * imgData.data[i] + 0.587 * imgData.data[i+1] + 0.114 * imgData.data[i+2]);
+        hist[g]++;
+      }
+      let sum = 0;
+      for (let i = 0; i < 256; i++) sum += i * hist[i];
+      let sumB = 0, wB = 0, maxVar = 0, thresh = 128;
+      for (let t = 0; t < 256; t++) {
+        wB += hist[t];
+        if (wB === 0) continue;
+        const wF = total - wB;
+        if (wF === 0) break;
+        sumB += t * hist[t];
+        const mB = sumB / wB;
+        const mF = (sum - sumB) / wF;
+        const v = wB * wF * (mB - mF) ** 2;
+        if (v > maxVar) { maxVar = v; thresh = t; }
+      }
+      return thresh;
+    }
+
+    function stencilCompose(
+      dest: OffscreenCanvas,
+      stencil: HTMLImageElement,
+      fillA: OffscreenCanvas | HTMLImageElement,
+      fillB: OffscreenCanvas | HTMLImageElement,
+    ) {
+      const W = dest.width, H = dest.height;
+      const ctx = dest.getContext('2d')!;
+
+      // Get stencil grayscale + Otsu threshold
+      const sc = new OffscreenCanvas(W, H);
+      sc.getContext('2d')!.drawImage(stencil, 0, 0, W, H);
+      const stencilData = sc.getContext('2d')!.getImageData(0, 0, W, H);
+      const thresh = otsuThreshold(stencilData);
+
+      // Get fillA pixel data
+      const ac = new OffscreenCanvas(W, H);
+      ac.getContext('2d')!.drawImage(fillA, 0, 0, W, H);
+      const aData = ac.getContext('2d')!.getImageData(0, 0, W, H);
+
+      // Get fillB pixel data
+      const bc = new OffscreenCanvas(W, H);
+      bc.getContext('2d')!.drawImage(fillB, 0, 0, W, H);
+      const bData = bc.getContext('2d')!.getImageData(0, 0, W, H);
+
+      const out = ctx.createImageData(W, H);
+      const sd = stencilData.data, ad = aData.data, bd = bData.data, od = out.data;
+      for (let i = 0; i < sd.length; i += 4) {
+        const g = 0.299 * sd[i] + 0.587 * sd[i+1] + 0.114 * sd[i+2];
+        const src = g >= thresh ? ad : bd;
+        od[i] = src[i]; od[i+1] = src[i+1]; od[i+2] = src[i+2]; od[i+3] = 255;
+      }
+      ctx.putImageData(out, 0, 0);
+    }
+
+    function mapPixels(
+      oc: OffscreenCanvas,
+      fn: (r: number, g: number, b: number, a: number) => [number, number, number, number],
+    ) {
+      const ctx = oc.getContext('2d')!;
+      const id = ctx.getImageData(0, 0, oc.width, oc.height);
+      const d = id.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const [r, g, b, a] = fn(d[i], d[i+1], d[i+2], d[i+3]);
+        d[i] = r; d[i+1] = g; d[i+2] = b; d[i+3] = a;
+      }
+      ctx.putImageData(id, 0, 0);
+    }
+
+    function buildLUT(points: [number, number][]): Uint8Array {
+      const lut = new Uint8Array(256);
+      for (let x = 0; x < 256; x++) {
+        if (x <= points[0][0]) { lut[x] = points[0][1]; continue; }
+        if (x >= points[points.length - 1][0]) { lut[x] = points[points.length - 1][1]; continue; }
+        let i = 0;
+        while (i < points.length - 2 && points[i + 1][0] <= x) i++;
+        const [x0, y0] = points[i], [x1, y1] = points[i + 1];
+        lut[x] = Math.round(y0 + (y1 - y0) * (x - x0) / (x1 - x0));
+      }
+      return lut;
+    }
+
+    function ocToCanvas(oc: OffscreenCanvas): HTMLCanvasElement {
+      const c = document.createElement('canvas');
+      c.width = oc.width; c.height = oc.height;
+      c.getContext('2d')!.drawImage(oc, 0, 0);
+      return c;
+    }
+
+    // ─── Bot render functions ──────────────────────────────────────────────────
+
+    type Output = { canvas: HTMLCanvasElement; label: string; mimeType: string };
+
+    function renderBullethole(imgs: (HTMLImageElement | null)[], params: Record<string, any>, rng: () => number): Output[] {
+      const img = imgs[0];
+      if (!img) return [];
+      const W = img.naturalWidth, H = img.naturalHeight;
+      const chaos     = params.chaos     ?? 0.5;
+      const placement = params.placement ?? 'random';
+      const effect    = params.effect    ?? 'rotate';
+      const jitter    = params.jitter    ?? 0;
+      const noOverlap = params.no_overlap ?? false;
+
+      function removeOverlap(centers: [number,number][], r: number): [number,number][] {
+        const kept: [number,number][] = [];
+        const d2 = (r * 2) ** 2;
+        for (const [cx,cy] of centers) {
+          if (!kept.some(([ox,oy]) => (cx-ox)**2+(cy-oy)**2 < d2)) kept.push([cx,cy]);
+        }
+        return kept;
+      }
+
+      function placeRandom(n: number, w: number, h: number, r: number): [number,number][] {
+        const cs: [number,number][] = [];
+        const d2 = (r * 2) ** 2;
+        for (let i = 0; i < n; i++) {
+          if (noOverlap) {
+            for (let a = 0; a < 100; a++) {
+              const cx = r + rng() * (w - r * 2);
+              const cy = r + rng() * (h - r * 2);
+              if (!cs.some(([ox,oy]) => (cx-ox)**2+(cy-oy)**2 < d2)) { cs.push([cx,cy]); break; }
+            }
+          } else {
+            cs.push([r + rng() * (w - r * 2), r + rng() * (h - r * 2)]);
+          }
+        }
+        return cs;
+      }
+
+      function placeGrid(n: number, w: number, h: number, r: number, hex: boolean): [number,number][] {
+        const cols = Math.max(1, Math.round(Math.sqrt(n * w / h)));
+        const rows = Math.max(1, Math.ceil(n / cols));
+        const cw = w / cols, ch = h / rows;
+        const cs: [number,number][] = [];
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            if (cs.length >= n) break;
+            let cx = cw * (col + 0.5), cy = ch * (row + 0.5);
+            if (hex && row % 2 === 1) cx += cw * 0.5;
+            if (jitter > 0) {
+              cx += (rng() * 2 - 1) * cw * jitter * 0.5;
+              cy += (rng() * 2 - 1) * ch * jitter * 0.5;
+            }
+            cs.push([Math.max(r, Math.min(w - r, cx)), Math.max(r, Math.min(h - r, cy))]);
+          }
+        }
+        return cs;
+      }
+
+      function placeRadial(n: number, w: number, h: number, r: number): [number,number][] {
+        const cx0 = w / 2, cy0 = h / 2;
+        const maxD = Math.min(cx0, cy0) - r;
+        if (maxD <= 0 || n <= 1) return Array(n).fill([cx0, cy0]);
+        const numRings = Math.max(1, Math.round(Math.sqrt(n)));
+        const ringR = Array.from({length: numRings}, (_, i) => maxD * (i + 1) / numRings);
+        const totalR = ringR.reduce((a, b) => a + b, 0);
+        const counts: number[] = [];
+        let rem = n;
+        for (let i = 0; i < numRings; i++) {
+          if (i === numRings - 1) { counts.push(rem); break; }
+          const c = Math.max(1, Math.round(n * ringR[i] / totalR));
+          counts.push(c); rem -= c;
+        }
+        const cs: [number,number][] = [];
+        for (let i = 0; i < numRings; i++) {
+          for (let k = 0; k < counts[i]; k++) {
+            let angle = 2 * Math.PI * k / counts[i];
+            let dist = ringR[i];
+            if (jitter > 0) {
+              angle += (rng() * 2 - 1) * Math.PI / counts[i] * jitter;
+              dist += (rng() * 2 - 1) * (maxD / numRings) * jitter * 0.5;
+              dist = Math.max(r, Math.min(maxD, dist));
+            }
+            cs.push([
+              Math.max(r, Math.min(w - r, cx0 + dist * Math.cos(angle))),
+              Math.max(r, Math.min(h - r, cy0 + dist * Math.sin(angle))),
+            ]);
+          }
+        }
+        return cs.slice(0, n);
+      }
+
+      const n = Math.max(2, Math.round(2 + chaos * 84 + (rng() * 2 - 1)));
+      const frac = 0.33 + (0.05 - 0.33) * chaos;
+      const maxR = Math.max(4, Math.round(W * frac));
+      const minR = Math.max(2, Math.round(maxR * 0.6));
+      const radius = minR + Math.floor(rng() * (maxR - minR + 1));
+
+      let centers: [number,number][];
+      if (placement === 'grid')        centers = placeGrid(n, W, H, radius, false);
+      else if (placement === 'hex')    centers = placeGrid(n, W, H, radius, true);
+      else if (placement === 'radial') centers = placeRadial(n, W, H, radius);
+      else                             centers = placeRandom(n, W, H, radius);
+      if (noOverlap && placement !== 'random') centers = removeOverlap(centers, radius);
+
+      const holes = centers.map(([cx, cy]) => ({ cx, cy, angle: rng() * 300 + 30 }));
+
+      const oc = new OffscreenCanvas(W, H);
+      const ctx = oc.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, W, H);
+
+      for (const { cx, cy, angle } of holes) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.clip();
+        switch (effect) {
+          case 'rotate':
+            ctx.translate(cx, cy); ctx.rotate(angle * Math.PI / 180); ctx.translate(-cx, -cy);
+            ctx.drawImage(img, 0, 0, W, H); break;
+          case 'invert':
+            ctx.filter = 'invert(1)'; ctx.drawImage(img, 0, 0, W, H); ctx.filter = 'none'; break;
+          case 'blur':
+            ctx.filter = `blur(${Math.max(2, Math.floor(radius / 6))}px)`;
+            ctx.drawImage(img, 0, 0, W, H); ctx.filter = 'none'; break;
+          case 'grayscale':
+            ctx.filter = 'grayscale(1)'; ctx.drawImage(img, 0, 0, W, H); ctx.filter = 'none'; break;
+          case 'pixelate': {
+            const block = Math.max(4, Math.floor(radius / 8));
+            const tw = Math.max(1, Math.floor(W / block)), th = Math.max(1, Math.floor(H / block));
+            const tmp = new OffscreenCanvas(tw, th);
+            tmp.getContext('2d')!.drawImage(img, 0, 0, tw, th);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(tmp, 0, 0, tw, th, 0, 0, W, H);
+            ctx.imageSmoothingEnabled = true; break;
+          }
+          case 'fill_black': ctx.fillStyle = '#000'; ctx.fill(); break;
+          case 'fill_white': ctx.fillStyle = '#fff'; ctx.fill(); break;
+        }
+        ctx.restore();
+      }
+
+      return [{ canvas: ocToCanvas(oc), label: 'Bullet Hole', mimeType: 'image/jpeg' }];
+    }
+
+    const STENCIL_PERMS: [number, number, number][] = [
+      [0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0],
+    ];
+
+    function renderStencil(imgs: (HTMLImageElement | null)[], _params: Record<string, any>, _rng: () => number): Output[] {
+      if (!imgs[0] || !imgs[1] || !imgs[2]) return [];
+      const W = imgs[0].naturalWidth, H = imgs[0].naturalHeight;
+      return STENCIL_PERMS.map(([s, a, b]) => {
+        const dest = new OffscreenCanvas(W, H);
+        stencilCompose(dest, imgs[s]!, imgs[a]!, imgs[b]!);
+        return { canvas: ocToCanvas(dest), label: `S${s}·A${a}·B${b}`, mimeType: 'image/jpeg' };
+      });
+    }
+
+    function binarize(img: HTMLImageElement, W: number, H: number): OffscreenCanvas {
+      const oc = new OffscreenCanvas(W, H);
+      const ctx = oc.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, W, H);
+      const id = ctx.getImageData(0, 0, W, H);
+      const thresh = otsuThreshold(id);
+      for (let i = 0; i < id.data.length; i += 4) {
+        const g = 0.299 * id.data[i] + 0.587 * id.data[i+1] + 0.114 * id.data[i+2];
+        const v = g >= thresh ? 255 : 0;
+        id.data[i] = id.data[i+1] = id.data[i+2] = v; id.data[i+3] = 255;
+      }
+      ctx.putImageData(id, 0, 0);
+      return oc;
+    }
+
+    function renderBW(imgs: (HTMLImageElement | null)[], _params: Record<string, any>, _rng: () => number): Output[] {
+      if (!imgs[0] || !imgs[1] || !imgs[2]) return [];
+      const W = imgs[0].naturalWidth, H = imgs[0].naturalHeight;
+      const bi = imgs.map(img => img ? binarize(img, W, H) : null) as OffscreenCanvas[];
+      // For BW we treat each binarized image as a canvas that can be used as stencil/fill
+      return STENCIL_PERMS.map(([s, a, b]) => {
+        const dest = new OffscreenCanvas(W, H);
+        // stencilCompose expects HTMLImageElement for stencil, but bi[s] is OffscreenCanvas
+        // Use bi[s] as stencil by drawing it to a temp img-like canvas
+        const ctx = dest.getContext('2d')!;
+        ctx.drawImage(bi[s], 0, 0);
+        const stencilData = ctx.getImageData(0, 0, W, H);
+        const thresh = otsuThreshold(stencilData);
+        const aData = bi[a].getContext('2d')!.getImageData(0, 0, W, H);
+        const bData = bi[b].getContext('2d')!.getImageData(0, 0, W, H);
+        const out = ctx.createImageData(W, H);
+        const sd = stencilData.data, ad = aData.data, bd = bData.data, od = out.data;
+        for (let i = 0; i < sd.length; i += 4) {
+          const g = 0.299 * sd[i] + 0.587 * sd[i+1] + 0.114 * sd[i+2];
+          const src = g >= thresh ? ad : bd;
+          od[i] = src[i]; od[i+1] = src[i+1]; od[i+2] = src[i+2]; od[i+3] = 255;
+        }
+        ctx.putImageData(out, 0, 0);
+        return { canvas: ocToCanvas(dest), label: `S${s}·A${a}·B${b}`, mimeType: 'image/jpeg' };
+      });
+    }
+
+    function cyanotypeProcess(img: HTMLImageElement, W: number, H: number, rng: () => number): OffscreenCanvas {
+      const tonalLUT = buildLUT([[0,0],[40,20],[128,120],[200,230],[255,255]]);
+      const rLUT = buildLUT([[0,5],[64,20],[128,50],[200,130],[255,200]]);
+      const gLUT = buildLUT([[0,30],[64,60],[128,120],[200,180],[255,220]]);
+      const bLUT = buildLUT([[0,60],[64,110],[128,165],[200,210],[255,240]]);
+
+      const oc = new OffscreenCanvas(W, H);
+      const ctx = oc.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, W, H);
+
+      // Grayscale + tonal curve
+      mapPixels(oc, (r, g, b, a) => {
+        const gray = tonalLUT[Math.round(0.299 * r + 0.587 * g + 0.114 * b)];
+        return [gray, gray, gray, a];
+      });
+
+      // Highlight bloom: extract pixels > 180, blur, screen blend
+      const bloom = new OffscreenCanvas(W, H);
+      const bctx = bloom.getContext('2d')!;
+      bctx.drawImage(oc, 0, 0);
+      mapPixels(bloom, (r, g, b, a) => {
+        return r > 180 ? [r, g, b, a] : [0, 0, 0, 0];
+      });
+      const bloomed = new OffscreenCanvas(W, H);
+      const blmctx = bloomed.getContext('2d')!;
+      blmctx.filter = 'blur(18px)';
+      blmctx.drawImage(bloom, 0, 0);
+      blmctx.filter = 'none';
+
+      // Screen blend bloomed onto base
+      const baseData = ctx.getImageData(0, 0, W, H);
+      const bloomData = bloomed.getContext('2d')!.getImageData(0, 0, W, H);
+      for (let i = 0; i < baseData.data.length; i += 4) {
+        const ba = baseData.data[i] / 255;
+        const bb = bloomData.data[i] / 255;
+        baseData.data[i] = baseData.data[i+1] = baseData.data[i+2] =
+          Math.round((1 - (1 - ba) * (1 - bb)) * 255);
+      }
+      ctx.putImageData(baseData, 0, 0);
+
+      // Map gray to Prussian blue + grain
+      mapPixels(oc, (r, _g, _b, a) => {
+        const noiseR = (rng() - 0.5) * 20;
+        const noiseG = (rng() - 0.5) * 20;
+        const noiseB = (rng() - 0.5) * 10;
+        return [
+          Math.max(0, Math.min(255, rLUT[r] + noiseR)),
+          Math.max(0, Math.min(255, gLUT[r] + noiseG)),
+          Math.max(0, Math.min(255, bLUT[r] + noiseB)),
+          a,
+        ];
+      });
+
+      return oc;
+    }
+
+    function renderCyanotype(imgs: (HTMLImageElement | null)[], _params: Record<string, any>, rng: () => number): Output[] {
+      if (!imgs[0] || !imgs[1] || !imgs[2]) return [];
+      const W = imgs[0].naturalWidth, H = imgs[0].naturalHeight;
+      return STENCIL_PERMS.map(([s, a, b]) => {
+        const processedA = cyanotypeProcess(imgs[a]!, W, H, rng);
+        const processedB = cyanotypeProcess(imgs[b]!, W, H, rng);
+        const dest = new OffscreenCanvas(W, H);
+        stencilCompose(dest, imgs[s]!, processedA, processedB);
+        return { canvas: ocToCanvas(dest), label: `S${s}·A${a}·B${b}`, mimeType: 'image/jpeg' };
+      });
+    }
+
+    function renderWobbleeye(imgs: (HTMLImageElement | null)[], params: Record<string, any>, rng: () => number): Output[] {
+      const img = imgs[0];
+      if (!img) return [];
+      const W = img.naturalWidth, H = img.naturalHeight;
+      const N = Math.max(2, Math.min(10, params.rings ?? 5));
+
+      const shortDim = Math.min(W, H);
+      const outerRadius = shortDim * 0.46;
+      const bandWidth = outerRadius / N;
+      const isLandscape = W >= H;
+
+      // Ring radii: index 0 = outermost
+      const ringRadii = Array.from({ length: N }, (_, i) => outerRadius - i * bandWidth);
+
+      // Outermost center: midpoint on short axis, random on long axis
+      let cx0: number, cy0: number;
+      if (isLandscape) {
+        cy0 = H / 2;
+        cx0 = outerRadius + rng() * (W - 2 * outerRadius);
+      } else {
+        cx0 = W / 2;
+        cy0 = outerRadius + rng() * (H - 2 * outerRadius);
+      }
+
+      // Drifting centers
+      const centers: [number, number][] = [[cx0, cy0]];
+      for (let i = 1; i < N; i++) {
+        const [px, py] = centers[i - 1];
+        const drift = (0.85 + rng() * 0.10) * bandWidth;
+        const angle = rng() * Math.PI * 2;
+        centers.push([px + drift * Math.cos(angle), py + drift * Math.sin(angle)]);
+      }
+
+      const oc = new OffscreenCanvas(W, H);
+      const ctx = oc.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, W, H);
+
+      for (let i = 0; i < N; i++) {
+        const r = ringRadii[i];
+        const [cx, cy] = centers[i];
+        const angle = (rng() * 300 + 30) * Math.PI / 180;
+
+        const cap = new OffscreenCanvas(W, H);
+        cap.getContext('2d')!.drawImage(oc, 0, 0);
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        ctx.translate(-cx, -cy);
+        ctx.drawImage(cap, 0, 0);
+        ctx.restore();
+      }
+
+      return [{ canvas: ocToCanvas(oc), label: 'Wobble Eye', mimeType: 'image/jpeg' }];
+    }
+
+    // ─── Bot config registry ───────────────────────────────────────────────────
+
+    type BotDef = {
+      label: string;
+      inputs: number;
+      inputLabels: string[];
+      hasRandomness: boolean;
+      render: (imgs: (HTMLImageElement | null)[], params: Record<string, any>, rng: () => number) => Output[];
+      buildParams?: () => void;
+      getParams?: () => Record<string, any>;
+      setParams?: (p: Record<string, any>) => void;
+    };
+
+    const BOTS: Record<string, BotDef> = {
+      bullethole: {
+        label: 'Bullet Hole', inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        render: renderBullethole,
+        buildParams: buildBulletholeParams,
+        getParams: getBulletholeParams,
+        setParams: setBulletholeParams,
+      },
+      stencil: {
+        label: 'Stencil', inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
+        render: renderStencil,
+      },
+      bw: {
+        label: 'BW', inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
+        render: renderBW,
+      },
+      cyanotype: {
+        label: 'Cyanotype', inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: true,
+        render: renderCyanotype,
+      },
+      wobbleeye: {
+        label: 'Wobble Eye', inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        render: renderWobbleeye,
+        buildParams: buildWobbleeyeParams,
+        getParams: getWobbleeyeParams,
+        setParams: setWobbleeyeParams,
+      },
+    };
+
+    // ─── State ─────────────────────────────────────────────────────────────────
+
+    let currentBot = 'bullethole';
+    let sourceImgs: (HTMLImageElement | null)[] = [null, null, null, null];
+    let sourceIds: (string | null)[] = [null, null, null, null];
+    let currentSeed = 0;
+    let rng: () => number = Math.random.bind(Math);
+    let outputs: Output[] = [];
+    let activeOutputIdx = 0;
+    let pendingSlot = 0;
+    let librarySearchTimer: ReturnType<typeof setTimeout>;
+
+    // ─── Bullethole params ─────────────────────────────────────────────────────
+
+    function buildBulletholeParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="bh-chaos">Chaos <span class="pt-val" id="bh-chaos-val">0.50</span></label>
+          <input class="pt-range" type="range" id="bh-chaos" min="0" max="1" step="0.01" value="0.5" />
+          <div class="pt-range-hints"><span>few large</span><span>many small</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="bh-placement">Placement</label>
+          <select class="pt-select" id="bh-placement">
+            <option value="random">Random</option>
+            <option value="grid">Grid</option>
+            <option value="hex">Hex</option>
+            <option value="radial">Radial</option>
+          </select>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="bh-effect">Effect</label>
+          <select class="pt-select" id="bh-effect">
+            <option value="rotate">Rotate</option>
+            <option value="invert">Invert</option>
+            <option value="blur">Blur</option>
+            <option value="grayscale">Grayscale</option>
+            <option value="pixelate">Pixelate</option>
+            <option value="fill_black">Fill Black</option>
+            <option value="fill_white">Fill White</option>
+          </select>
+        </div>
+        <div class="pt-field" id="bh-jitter-field">
+          <label class="pt-label" for="bh-jitter">Jitter <span class="pt-val" id="bh-jitter-val">0.00</span></label>
+          <input class="pt-range" type="range" id="bh-jitter" min="0" max="1" step="0.01" value="0" />
+        </div>
+        <div class="pt-field pt-check-field">
+          <label class="pt-check-label">
+            <input type="checkbox" id="bh-no-overlap" />
+            No Overlap
+          </label>
+        </div>`;
+
+      const chaosEl       = document.getElementById('bh-chaos') as HTMLInputElement;
+      const chaosValEl    = document.getElementById('bh-chaos-val') as HTMLSpanElement;
+      const placementEl   = document.getElementById('bh-placement') as HTMLSelectElement;
+      const effectEl      = document.getElementById('bh-effect') as HTMLSelectElement;
+      const jitterEl      = document.getElementById('bh-jitter') as HTMLInputElement;
+      const jitterValEl   = document.getElementById('bh-jitter-val') as HTMLSpanElement;
+      const jitterField   = document.getElementById('bh-jitter-field') as HTMLDivElement;
+
+      function updateJitter() {
+        const disabled = placementEl.value === 'random';
+        jitterField.classList.toggle('disabled', disabled);
+        jitterEl.disabled = disabled;
+      }
+
+      let t: ReturnType<typeof setTimeout>;
+      chaosEl.addEventListener('input', () => {
+        chaosValEl.textContent = parseFloat(chaosEl.value).toFixed(2);
+        clearTimeout(t); t = setTimeout(doReroll, 150);
+      });
+      jitterEl.addEventListener('input', () => {
+        jitterValEl.textContent = parseFloat(jitterEl.value).toFixed(2);
+        clearTimeout(t); t = setTimeout(doReroll, 150);
+      });
+      placementEl.addEventListener('change', () => { updateJitter(); doReroll(); });
+      (document.getElementById('bh-no-overlap') as HTMLInputElement)
+        .addEventListener('change', doReroll);
+      effectEl.addEventListener('change', doRender);
+      updateJitter();
+    }
+
+    function getBulletholeParams(): Record<string, any> {
+      return {
+        chaos:      parseFloat((document.getElementById('bh-chaos') as HTMLInputElement)?.value ?? '0.5'),
+        placement:  (document.getElementById('bh-placement') as HTMLSelectElement)?.value ?? 'random',
+        effect:     (document.getElementById('bh-effect') as HTMLSelectElement)?.value ?? 'rotate',
+        jitter:     parseFloat((document.getElementById('bh-jitter') as HTMLInputElement)?.value ?? '0'),
+        no_overlap: (document.getElementById('bh-no-overlap') as HTMLInputElement)?.checked ?? false,
+      };
+    }
+
+    function setBulletholeParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => {
+        const el = document.getElementById(id) as any;
+        if (!el) return;
+        if (el.type === 'checkbox') el.checked = v;
+        else el.value = String(v);
+      };
+      if (p.chaos      !== undefined) { set('bh-chaos', p.chaos); const el = document.getElementById('bh-chaos-val'); if (el) el.textContent = parseFloat(p.chaos).toFixed(2); }
+      if (p.placement  !== undefined) set('bh-placement', p.placement);
+      if (p.effect     !== undefined) set('bh-effect', p.effect);
+      if (p.jitter     !== undefined) { set('bh-jitter', p.jitter); const el = document.getElementById('bh-jitter-val'); if (el) el.textContent = parseFloat(p.jitter).toFixed(2); }
+      if (p.no_overlap !== undefined) set('bh-no-overlap', p.no_overlap);
+      // Re-trigger jitter state
+      const placementEl = document.getElementById('bh-placement') as HTMLSelectElement | null;
+      const jitterField = document.getElementById('bh-jitter-field') as HTMLDivElement | null;
+      const jitterEl    = document.getElementById('bh-jitter') as HTMLInputElement | null;
+      if (placementEl && jitterField && jitterEl) {
+        const disabled = placementEl.value === 'random';
+        jitterField.classList.toggle('disabled', disabled);
+        jitterEl.disabled = disabled;
+      }
+    }
+
+    // ─── Wobble Eye params ─────────────────────────────────────────────────────
+
+    function buildWobbleeyeParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="we-rings">Rings</label>
+          <input class="pt-range" type="range" id="we-rings" min="2" max="10" step="1" value="5" />
+          <div class="pt-range-hints"><span>2</span><span>10</span></div>
+        </div>`;
+      document.getElementById('we-rings')!
+        .addEventListener('input', doReroll);
+    }
+
+    function getWobbleeyeParams(): Record<string, any> {
+      return { rings: parseInt((document.getElementById('we-rings') as HTMLInputElement)?.value ?? '5', 10) };
+    }
+
+    function setWobbleeyeParams(p: Record<string, any>) {
+      if (p.rings !== undefined) {
+        const el = document.getElementById('we-rings') as HTMLInputElement | null;
+        if (el) el.value = String(p.rings);
+      }
+    }
+
+    // ─── Slot building ─────────────────────────────────────────────────────────
+
+    function buildSlots(bot: BotDef) {
+      slotsEl.innerHTML = bot.inputLabels.map((label, i) => `
+        <div class="pt-slot" data-slot="${i}">
+          <div class="pt-slot__drop" id="slot-drop-${i}" tabindex="0">
+            <img class="pt-slot__thumb" id="slot-thumb-${i}" alt="${label}" />
+            <div class="pt-slot__empty-icon" id="slot-empty-${i}">+</div>
+            <input type="file" accept="image/*" style="display:none" id="slot-file-${i}" />
+          </div>
+          <div class="pt-slot__label">${label}</div>
+          <button class="pt-slot__lib" data-slot-lib="${i}">Library</button>
+        </div>
+      `).join('');
+
+      for (let i = 0; i < bot.inputs; i++) {
+        const drop  = document.getElementById(`slot-drop-${i}`)!;
+        const thumb = document.getElementById(`slot-thumb-${i}`) as HTMLImageElement;
+        const empty = document.getElementById(`slot-empty-${i}`)!;
+        const file  = document.getElementById(`slot-file-${i}`) as HTMLInputElement;
+        const libBtn = slotsEl.querySelector(`[data-slot-lib="${i}"]`) as HTMLButtonElement;
+
+        drop.addEventListener('click', (e) => {
+          if ((e.target as Element).closest('button')) return;
+          file.click();
+        });
+        drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('drag-over'); });
+        drop.addEventListener('dragleave', () => drop.classList.remove('drag-over'));
+        drop.addEventListener('drop', (e) => {
+          e.preventDefault();
+          drop.classList.remove('drag-over');
+          const f = e.dataTransfer?.files[0];
+          if (f && f.type.startsWith('image/')) loadSlotFromBlob(i, f);
+        });
+        file.addEventListener('change', () => {
+          if (file.files?.[0]) loadSlotFromBlob(i, file.files[0]);
+        });
+
+        const slotIdx = i;
+        libBtn.addEventListener('click', () => openLibrary(slotIdx));
+
+        // Restore any already-loaded image for this slot (after bot switch with same n)
+        if (sourceImgs[i]) {
+          thumb.src = sourceImgs[i]!.src;
+          thumb.style.display = 'block';
+          empty.style.display = 'none';
+        }
+      }
+    }
+
+    // ─── Core flow ─────────────────────────────────────────────────────────────
+
+    function allSlotsReady(): boolean {
+      const n = BOTS[currentBot].inputs;
+      return sourceImgs.slice(0, n).every(img => img !== null);
+    }
+
+    function doReroll(seed?: number) {
+      if (!allSlotsReady()) return;
+      const bot = BOTS[currentBot];
+      if (bot.hasRandomness) {
+        currentSeed = seed !== undefined ? seed : (Math.random() * 2**31 | 0) || 1;
+        rng = mulberry32(currentSeed);
+      }
+      const params = bot.getParams?.() ?? {};
+      outputs = bot.render(sourceImgs, params, rng);
+      activeOutputIdx = 0;
+      renderStrip();
+      setActiveOutput(0);
+      enableActions(true);
+    }
+
+    function doRender() {
+      if (!allSlotsReady()) return;
+      const bot = BOTS[currentBot];
+      // Re-render with same seed (only changes that don't affect layout, e.g. effect)
+      if (bot.hasRandomness) rng = mulberry32(currentSeed);
+      const params = bot.getParams?.() ?? {};
+      outputs = bot.render(sourceImgs, params, rng);
+      renderStrip();
+      setActiveOutput(activeOutputIdx < outputs.length ? activeOutputIdx : 0);
+    }
+
+    function setActiveOutput(idx: number) {
+      if (outputs.length === 0) return;
+      activeOutputIdx = idx;
+
+      const out = outputs[idx];
+      stageCanvas.width  = out.canvas.width;
+      stageCanvas.height = out.canvas.height;
+      stageCanvas.getContext('2d')!.drawImage(out.canvas, 0, 0);
+      stageCanvas.style.display = 'block';
+      emptyEl.style.display = 'none';
+
+      // Update strip active highlight
+      stripEl.querySelectorAll('.pt-thumb').forEach((el, i) => {
+        el.classList.toggle('pt-thumb--active', i === idx);
+      });
+    }
+
+    function renderStrip() {
+      if (outputs.length <= 1) {
+        stripEl.style.display = 'none';
+        return;
+      }
+      stripEl.style.display = 'flex';
+      stripEl.innerHTML = '';
+
+      outputs.forEach((o, i) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = `pt-thumb${i === activeOutputIdx ? ' pt-thumb--active' : ''}`;
+        wrapper.dataset.idx = String(i);
+
+        const tc = document.createElement('canvas');
+        tc.className = 'pt-thumb__canvas';
+        tc.width = 90; tc.height = 90;
+        const aspect = o.canvas.width / o.canvas.height;
+        let sw = 90, sh = 90;
+        if (aspect > 1) sh = Math.round(90 / aspect);
+        else sw = Math.round(90 * aspect);
+        const ox = Math.round((90 - sw) / 2), oy = Math.round((90 - sh) / 2);
+        tc.getContext('2d')!.drawImage(o.canvas, ox, oy, sw, sh);
+
+        const lbl = document.createElement('div');
+        lbl.className = 'pt-thumb__label';
+        lbl.textContent = o.label;
+
+        wrapper.appendChild(tc);
+        wrapper.appendChild(lbl);
+        wrapper.addEventListener('click', () => setActiveOutput(i));
+        stripEl.appendChild(wrapper);
+      });
+    }
+
+    function enableActions(on: boolean) {
+      rerollBtn.disabled   = !on || !BOTS[currentBot].hasRandomness;
+      downloadBtn.disabled = !on;
+      saveBtn.disabled     = !on;
+      savePngBtn.disabled  = !on;
+    }
+
+    // ─── Switch bot ────────────────────────────────────────────────────────────
+
+    function switchBot(id: string) {
+      currentBot = id;
+      const bot = BOTS[id];
+
+      // Reset state
+      sourceImgs = [null, null, null, null];
+      sourceIds  = [null, null, null, null];
+      outputs = [];
+      activeOutputIdx = 0;
+      stageCanvas.style.display = 'none';
+      emptyEl.style.display = '';
+      emptyText.textContent = `Load ${bot.inputs > 1 ? bot.inputs + ' images' : 'an image'} to begin`;
+      stripEl.style.display = 'none';
+      enableActions(false);
+
+      buildSlots(bot);
+
+      paramsEl.innerHTML = '';
+      bot.buildParams?.();
+
+      // re-roll only makes sense for randomness bots
+      rerollBtn.disabled = !bot.hasRandomness;
+    }
+
+    // ─── Load image into slot ──────────────────────────────────────────────────
+
+    function onSlotLoaded(slotIdx: number) {
+      const thumb = document.getElementById(`slot-thumb-${slotIdx}`) as HTMLImageElement | null;
+      const empty = document.getElementById(`slot-empty-${slotIdx}`);
+      if (thumb && sourceImgs[slotIdx]) {
+        thumb.src = sourceImgs[slotIdx]!.src;
+        thumb.style.display = 'block';
+        if (empty) empty.style.display = 'none';
+      }
+      if (allSlotsReady()) doReroll();
+    }
+
+    function loadSlotFromBlob(slotIdx: number, blob: Blob) {
+      sourceIds[slotIdx] = null;
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        sourceImgs[slotIdx] = img;
+        onSlotLoaded(slotIdx);
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    }
+
+    function loadSlotFromUrl(slotIdx: number, url: string, sourceId: string | null, onReady?: () => void) {
+      sourceIds[slotIdx] = sourceId;
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        sourceImgs[slotIdx] = img;
+        onSlotLoaded(slotIdx);
+        onReady?.();
+      };
+      img.onerror = () => (window as any).toast?.error('Failed to load image');
+      img.src = url;
+    }
+
+    // ─── atelier metadata ──────────────────────────────────────────────────────
+
+    function atelierMeta(): string {
+      const bot = BOTS[currentBot];
+      const ids = sourceIds.slice(0, bot.inputs);
+      if (!ids[0]) return '';
+      return JSON.stringify({
+        atelier: 'punctum',
+        v: 1,
+        bot: currentBot,
+        source_ids: ids,
+        seed: currentSeed,
+        params: bot.getParams?.() ?? {},
+      });
+    }
+
+    // ─── Save / download ───────────────────────────────────────────────────────
+
+    async function saveToOutputs(mimeType: string, filename: string, btn: HTMLButtonElement, label: string): Promise<string | null> {
+      if (outputs.length === 0) return null;
+      const out = outputs[activeOutputIdx];
+      btn.disabled = true; btn.textContent = 'Saving…';
+      return new Promise((resolve) => {
+        out.canvas.toBlob(async (blob) => {
+          if (!blob) { (window as any).toast?.error('Export failed'); btn.disabled = false; btn.textContent = label; resolve(null); return; }
+          try {
+            const fd = new FormData();
+            fd.append('file', blob, filename);
+            fd.append('tags', `${currentBot},atelier,punctum`);
+            fd.append('output_index', 'outputs');
+            const meta = atelierMeta();
+            if (meta) fd.append('description', meta);
+            const res = await fetch('/api/media/upload', { method: 'POST', body: fd, credentials: 'include' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            (window as any).toast?.success('Saved to outputs');
+            resolve(data.id || null);
+          } catch (err: any) {
+            (window as any).toast?.error(`Save failed: ${err.message}`);
+            resolve(null);
+          } finally { btn.disabled = false; btn.textContent = label; }
+        }, mimeType, mimeType === 'image/jpeg' ? 0.85 : undefined);
+      });
+    }
+
+    rerollBtn.addEventListener('click', () => doReroll());
+    downloadBtn.addEventListener('click', () => {
+      if (outputs.length === 0) return;
+      const link = document.createElement('a');
+      link.download = `${currentBot}.jpg`;
+      link.href = outputs[activeOutputIdx].canvas.toDataURL('image/jpeg', 0.85);
+      link.click();
+    });
+    saveBtn.addEventListener('click', () =>
+      saveToOutputs('image/jpeg', `${currentBot}.jpg`, saveBtn, '☁ Save'));
+    savePngBtn.addEventListener('click', () =>
+      saveToOutputs('image/png', `${currentBot}.png`, savePngBtn, '☁ HD PNG'));
+
+    // ─── Library modal ─────────────────────────────────────────────────────────
+
+    function openLibrary(slotIdx: number) {
+      pendingSlot = slotIdx;
+      libraryOverlay.style.display = 'flex';
+      librarySearch.value = '';
+      loadLibrary('');
+    }
+
+    async function loadLibrary(q: string) {
+      libraryGrid.innerHTML = '<div class="pt-modal__loading loading-dots">Loading</div>';
+      try {
+        const res = await fetch('/api/search', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: q, media_types: ['image'], sort: 'created_at:desc', page: 1, per_page: 48, filters: {} }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const results: any[] = data.results || data.hits || [];
+        if (results.length === 0) {
+          libraryGrid.innerHTML = '<div class="pt-modal__loading">No images found</div>';
+          return;
+        }
+        libraryGrid.innerHTML = '';
+        for (const item of results) {
+          const img = document.createElement('img');
+          img.className = 'pt-lib-thumb';
+          img.src = `/api/media/${item.id}/thumbnail`;
+          img.alt = item.filename || '';
+          img.loading = 'lazy';
+          img.addEventListener('click', () => {
+            libraryOverlay.style.display = 'none';
+            loadSlotFromUrl(pendingSlot, `/api/media/${item.id}/file`, item.id);
+          });
+          libraryGrid.appendChild(img);
+        }
+      } catch (err: any) {
+        libraryGrid.innerHTML = `<div class="pt-modal__loading">Error: ${err.message}</div>`;
+      }
+    }
+
+    libraryClose.addEventListener('click', () => { libraryOverlay.style.display = 'none'; });
+    libraryOverlay.addEventListener('click', (e) => { if (e.target === libraryOverlay) libraryOverlay.style.display = 'none'; });
+    librarySearch.addEventListener('input', () => {
+      clearTimeout(librarySearchTimer);
+      librarySearchTimer = setTimeout(() => loadLibrary(librarySearch.value), 300);
+    });
+
+    // ─── Bot selector ──────────────────────────────────────────────────────────
+
+    botSelect.addEventListener('change', () => switchBot(botSelect.value));
+
+    // ─── URL param auto-export ─────────────────────────────────────────────────
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const botParam  = urlParams.get('bot');
+    const autoExport = urlParams.get('autoexport');
+
+    // Set bot from URL
+    if (botParam && BOTS[botParam]) {
+      botSelect.value = botParam;
+    }
+
+    // Initialize with correct bot (builds slots + params)
+    switchBot(botSelect.value);
+
+    if (autoExport) {
+      // Restore params before loading images
+      BOTS[currentBot].setParams?.(Object.fromEntries(urlParams.entries()));
+
+      const seedParam = urlParams.get('seed');
+      const seed = seedParam ? parseInt(seedParam, 10) : undefined;
+
+      // Load all source images then save
+      const bot = BOTS[currentBot];
+      let loadCount = 0;
+      const sourceCount = bot.inputs;
+
+      function onAllLoaded() {
+        const mimeType = autoExport === 'png' ? 'image/png' : 'image/jpeg';
+        const filename  = autoExport === 'png' ? `${currentBot}.png` : `${currentBot}.jpg`;
+        doReroll(seed);
+        saveToOutputs(mimeType, filename, savePngBtn, '☁ HD PNG').then((newId) => {
+          if (newId) window.location.href = `/admin/search/detail?id=${newId}`;
+        });
+      }
+
+      for (let i = 0; i < sourceCount; i++) {
+        const sid = urlParams.get(`source${i}`);
+        if (sid) {
+          loadSlotFromUrl(i, `/api/media/${sid}/file`, sid, () => {
+            loadCount++;
+            if (loadCount === sourceCount) onAllLoaded();
+          });
+        } else {
+          loadCount++;
+          if (loadCount === sourceCount) onAllLoaded();
+        }
+      }
+    }
+
+    // Cleanup on Astro view transitions
+    document.addEventListener('astro:before-swap', () => {
+      clearTimeout(librarySearchTimer);
+    }, { once: true });
+
+  });
+</script>

@@ -468,28 +468,49 @@ import Admin from '../../../layouts/Admin.astro';
       // Parse atelier metadata from description (JSON blob stored on save)
       let atelierMeta: any = null;
       try {
-        if (item.description?.startsWith('{"atelier":"bullethole"')) {
-          atelierMeta = JSON.parse(item.description);
+        if (item.description?.startsWith('{"atelier":')) {
+          const parsed = JSON.parse(item.description);
+          if (parsed.atelier === 'bullethole' || parsed.atelier === 'punctum') {
+            atelierMeta = parsed;
+          }
         }
       } catch {}
-      document.getElementById('meta-description')!.textContent =
-        atelierMeta ? `Bullet Hole · seed ${atelierMeta.seed}` : (item.description || '--');
 
-      // HD PNG button — only for Atelier bullethole images with a known source
+      const botLabel = atelierMeta?.bot
+        ? ({ bullethole: 'Bullet Hole', stencil: 'Stencil', bw: 'BW', cyanotype: 'Cyanotype', wobbleeye: 'Wobble Eye' } as Record<string,string>)[atelierMeta.bot] || atelierMeta.bot
+        : atelierMeta?.atelier === 'bullethole' ? 'Bullet Hole' : null;
+      document.getElementById('meta-description')!.textContent =
+        atelierMeta
+          ? `${botLabel || 'Punctum'}${atelierMeta.seed ? ' · seed ' + atelierMeta.seed : ''}`
+          : (item.description || '--');
+
+      // HD PNG button — only for Atelier images with a known source
       const hdPngBtn = document.getElementById('hd-png-btn') as HTMLAnchorElement;
-      if (atelierMeta?.source_id) {
+      if (atelierMeta?.atelier === 'bullethole' && atelierMeta.source_id) {
+        // Legacy bullethole format → redirect to punctum with bot=bullethole
         const p = new URLSearchParams({
-          autoexport: 'png',
-          source: atelierMeta.source_id,
-          seed: String(atelierMeta.seed),
-          chaos: String(atelierMeta.chaos),
-          placement: atelierMeta.placement,
-          effect: atelierMeta.effect,
-          jitter: String(atelierMeta.jitter),
-          no_overlap: String(atelierMeta.no_overlap),
+          autoexport: 'png', bot: 'bullethole',
+          source0: atelierMeta.source_id,
+          seed: String(atelierMeta.seed ?? 0),
+          chaos: String(atelierMeta.chaos ?? 0.5),
+          placement: atelierMeta.placement ?? 'random',
+          effect: atelierMeta.effect ?? 'rotate',
+          jitter: String(atelierMeta.jitter ?? 0),
+          no_overlap: String(atelierMeta.no_overlap ?? false),
         });
-        hdPngBtn.href = `/admin/atelier/bullethole?${p}`;
+        hdPngBtn.href = `/admin/atelier/punctum?${p}`;
         hdPngBtn.style.display = '';
+      } else if (atelierMeta?.atelier === 'punctum') {
+        const sourceIds: string[] = atelierMeta.source_ids || [];
+        if (sourceIds.length > 0 && sourceIds[0]) {
+          const p = new URLSearchParams({ autoexport: 'png', bot: atelierMeta.bot || 'bullethole' });
+          sourceIds.forEach((id: string, i: number) => { if (id) p.set(`source${i}`, id); });
+          if (atelierMeta.seed) p.set('seed', String(atelierMeta.seed));
+          const params = atelierMeta.params || {};
+          Object.entries(params).forEach(([k, v]) => p.set(k, String(v)));
+          hdPngBtn.href = `/admin/atelier/punctum?${p}`;
+          hdPngBtn.style.display = '';
+        }
       }
       document.getElementById('meta-created')!.textContent = item.created_at
         ? new Date(item.created_at).toLocaleString()
