@@ -37,7 +37,7 @@ import Admin from '../../../layouts/Admin.astro';
     </div>
     <p class="pt-bot-desc" id="pt-bot-desc">Circular crop rotations from random positions across the image</p>
     <div id="pt-params"></div>
-    <div id="pt-stencil-params" style="display:none">
+    <div id="pt-stencil-params">
       <div class="pt-stencil-divider">Stencil</div>
       <div class="pt-field pt-stencil-field">
         <label class="pt-label" for="st-bias">Threshold Bias <span class="pt-val" id="st-bias-val">0</span></label>
@@ -796,7 +796,7 @@ import Admin from '../../../layouts/Admin.astro';
       };
     }
 
-    function stencilBinarize(img: HTMLImageElement | OffscreenCanvas, W: number, H: number): OffscreenCanvas {
+    function stencilBinarize(img: HTMLImageElement | OffscreenCanvas | HTMLCanvasElement, W: number, H: number): OffscreenCanvas {
       const { bias, contrast, invert } = getStencilParams();
       const oc = new OffscreenCanvas(W, H);
       const ctx = oc.getContext('2d')!;
@@ -818,14 +818,10 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     function appendStencilOutputs() {
-      const bot = BOTS[currentBot];
-      if (!bot.isStencil) return;
-      const labels = ['A', 'B', 'C', 'D'];
-      for (let i = 0; i < bot.inputs; i++) {
-        const img = effectiveImgs[i];
-        if (!img) continue;
-        const W = img.naturalWidth, H = img.naturalHeight;
-        outputs.push({ canvas: ocToCanvas(stencilBinarize(img, W, H)), label: `Stencil ${labels[i]}`, mimeType: 'image/png' });
+      const snapshot = outputs.slice();
+      for (const out of snapshot) {
+        const W = out.canvas.width, H = out.canvas.height;
+        outputs.push({ canvas: ocToCanvas(stencilBinarize(out.canvas, W, H)), label: `BW·${out.label}`, mimeType: 'image/png' });
       }
     }
 
@@ -3360,7 +3356,7 @@ import Admin from '../../../layouts/Admin.astro';
       bot.buildParams?.();
       enhanceSliders();
 
-      stencilParamsEl.style.display = bot.isStencil ? 'flex' : 'none';
+      stencilParamsEl.style.display = 'flex';
       seedInput.style.display = bot.hasRandomness ? '' : 'none';
 
       // re-roll only makes sense for randomness bots
