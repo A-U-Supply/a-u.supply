@@ -181,31 +181,71 @@ import Admin from '../../../layouts/Admin.astro';
   }
 
   /* Input slots */
+  /* ── Slot grid ── */
   .pt-slots {
     display: flex;
     gap: var(--space-sm);
     flex-wrap: wrap;
   }
 
+  /* ── Card ── */
   .pt-slot {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    min-width: 110px;
+    flex: 1 1 110px;
+    max-width: 180px;
+    background: var(--color-surface, #111);
+    border: 1px solid var(--color-border, #333);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .pt-slot.locked {
+    border-left: 3px solid #b8860b;
+  }
+
+  /* ── Header ── */
+  .pt-slot__header {
+    display: flex;
     align-items: center;
-    min-width: 90px;
+    justify-content: space-between;
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--color-border, #333);
+    min-height: 26px;
   }
-
   .pt-slot__label {
-    font-size: 0.7rem;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
     color: var(--color-muted, #888);
-    text-align: center;
   }
 
+  /* ── Lock button ── */
+  .pt-slot__lock-btn {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 3px;
+    border-radius: 2px;
+    color: var(--color-muted, #555);
+    line-height: 1;
+  }
+  .pt-slot__lock-icon { font-size: 0.8rem; }
+  .pt-slot__lock-btn .pt-slot__btn-lbl {
+    font-size: 0.52rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .pt-slot__lock-btn:hover { color: var(--color-text, #ccc); }
+  .pt-slot.locked .pt-slot__lock-btn { color: #b8860b; }
+
+  /* ── Drop area ── */
   .pt-slot__drop {
-    width: 90px;
-    height: 90px;
-    border: 1px dashed var(--color-border, #333);
-    border-radius: 3px;
+    width: 100%;
+    aspect-ratio: 1;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -213,69 +253,114 @@ import Admin from '../../../layouts/Admin.astro';
     position: relative;
     overflow: hidden;
     background: var(--color-surface, #111);
-    transition: border-color 0.15s;
   }
-
   .pt-slot__drop:hover,
-  .pt-slot__drop.drag-over {
-    border-color: var(--color-accent, #fff);
-  }
-
+  .pt-slot__drop.drag-over { outline: 1px solid var(--color-accent, #fff); }
   .pt-slot__thumb {
-    width: 100%;
-    height: 100%;
+    width: 100%; height: 100%;
     object-fit: cover;
     display: none;
   }
-
   .pt-slot__empty-icon {
-    font-size: 1.5rem;
-    opacity: 0.3;
+    font-size: 1.5rem; opacity: 0.25; pointer-events: none;
+  }
+  .pt-slot__kept-badge {
+    position: absolute;
+    top: 4px; right: 4px;
+    background: rgba(184,134,11,0.88);
+    color: #fff;
+    font-size: 0.5rem;
+    padding: 1px 5px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
     pointer-events: none;
   }
 
+  /* ── Controls row ── */
   .pt-slot__controls {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    border-top: 1px solid var(--color-border, #333);
+  }
+  .pt-slot__btn {
     display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     gap: 2px;
-    width: 90px;
-  }
-
-  .pt-slot__lib {
-    flex: 1;
-    font-size: 0.72rem;
-    padding: 3px 0;
-    background: var(--color-surface, #111);
-    color: var(--color-muted, #888);
-    border: 1px solid var(--color-border, #333);
-    border-radius: 3px;
+    padding: 5px 2px;
+    background: none;
+    border: none;
+    border-right: 1px solid var(--color-border, #222);
+    color: var(--color-muted, #666);
     cursor: pointer;
+    min-height: 44px;
+    position: relative;
   }
-
-  .pt-slot__lib:hover {
+  .pt-slot__btn:last-child { border-right: none; }
+  .pt-slot__btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.04);
     color: var(--color-text, #ccc);
-    border-color: var(--color-accent, #fff);
   }
-
-  .pt-slot__xform {
-    width: 22px;
-    font-size: 0.9rem;
-    padding: 2px 0;
-    background: var(--color-surface, #111);
-    color: var(--color-muted, #888);
-    border: 1px solid var(--color-border, #333);
-    border-radius: 3px;
-    cursor: pointer;
+  .pt-slot__btn:disabled { opacity: 0.28; cursor: not-allowed; }
+  .pt-slot__btn-icon { font-size: 0.95rem; line-height: 1; }
+  .pt-slot__btn-lbl {
+    font-size: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
     line-height: 1;
   }
 
-  .pt-slot__xform:hover:not(:disabled) {
-    color: var(--color-text, #ccc);
-    border-color: var(--color-accent, #fff);
+  /* ── Fit sub-panel ── */
+  .pt-slot__fit-panel {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    padding: 5px;
+    border-top: 1px solid var(--color-border, #333);
+    background: rgba(255,255,255,0.02);
   }
+  .pt-slot__fit-opt {
+    flex: 1 1 auto;
+    font-size: 0.6rem;
+    padding: 4px 6px;
+    background: var(--color-surface, #111);
+    border: 1px solid var(--color-border, #333);
+    border-radius: 3px;
+    color: var(--color-muted, #888);
+    cursor: pointer;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .pt-slot__fit-opt:hover { color: #fff; border-color: var(--color-accent, #fff); }
 
-  .pt-slot__xform:disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
+  /* ── CSS tooltips (mouse hover only) ── */
+  [data-tooltip] { position: relative; }
+  [data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 5px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.88);
+    color: #fff;
+    font-size: 0.62rem;
+    padding: 3px 7px;
+    border-radius: 3px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s;
+    z-index: 200;
+  }
+  [data-tooltip]:hover::after { opacity: 1; }
+
+  /* ── Mobile: full-width stacked slots ── */
+  @media (max-width: 540px) {
+    .pt-slots { flex-direction: column; }
+    .pt-slot { max-width: 100%; flex: 1 1 100%; }
+    .pt-slot__drop { aspect-ratio: 4/3; }
   }
 
   /* Params bar (above canvas) */
@@ -2898,9 +2983,10 @@ import Admin from '../../../layouts/Admin.astro';
     let currentBot = 'bullethole';
     let sourceImgs: (HTMLImageElement | null)[] = [null, null, null, null];
     let sourceIds: (string | null)[] = [null, null, null, null];
-    let slotTransforms: { rot: number; flip: boolean }[] = [
+    let slotTransforms: { rot: number; flip: boolean; aspect?: number }[] = [
       {rot:0,flip:false},{rot:0,flip:false},{rot:0,flip:false},{rot:0,flip:false}
     ];
+    let slotLocked: boolean[] = [false, false, false, false];
     let effectiveImgs: (HTMLImageElement | null)[] = [null, null, null, null];
     let currentSeed = 0;
     let rng: () => number = Math.random.bind(Math);
@@ -3122,32 +3208,59 @@ import Admin from '../../../layouts/Admin.astro';
       const img = sourceImgs[slotIdx];
       if (!img) { effectiveImgs[slotIdx] = null; return; }
 
-      const { rot, flip } = slotTransforms[slotIdx];
+      const { rot, flip, aspect } = slotTransforms[slotIdx];
 
-      if (rot === 0 && !flip) {
+      let canvas: HTMLCanvasElement;
+
+      if (rot === 0 && !flip && !aspect) {
         effectiveImgs[slotIdx] = img;
-      } else {
+        const thumb = document.getElementById(`slot-thumb-${slotIdx}`) as HTMLImageElement | null;
+        const empty = document.getElementById(`slot-empty-${slotIdx}`);
+        if (thumb) { thumb.src = img.src; thumb.style.display = 'block'; }
+        if (empty) empty.style.display = 'none';
+        return;
+      }
+
+      {
         const nW = img.naturalWidth, nH = img.naturalHeight;
         const swapped = rot === 90 || rot === 270;
         const outW = swapped ? nH : nW, outH = swapped ? nW : nH;
 
-        const c = document.createElement('canvas');
-        c.width = outW; c.height = outH;
-        const ctx = c.getContext('2d')!;
+        canvas = document.createElement('canvas');
+        canvas.width = outW; canvas.height = outH;
+        const ctx = canvas.getContext('2d')!;
         ctx.translate(outW / 2, outH / 2);
         ctx.rotate(rot * Math.PI / 180);
         if (flip) ctx.scale(-1, 1);
         ctx.drawImage(img, -nW / 2, -nH / 2);
-
-        await new Promise<void>(resolve => {
-          c.toBlob(blob => {
-            const url = URL.createObjectURL(blob!);
-            const result = new Image();
-            result.onload = () => { effectiveImgs[slotIdx] = result; resolve(); };
-            result.src = url;
-          });
-        });
       }
+
+      // Apply aspect-ratio center-crop if requested
+      if (aspect) {
+        const cW = canvas.width, cH = canvas.height;
+        const srcAspect = cW / cH;
+        let cropX = 0, cropY = 0, cropW = cW, cropH = cH;
+        if (srcAspect > aspect) {
+          cropW = Math.round(cH * aspect);
+          cropX = Math.round((cW - cropW) / 2);
+        } else {
+          cropH = Math.round(cW / aspect);
+          cropY = Math.round((cH - cropH) / 2);
+        }
+        const cropped = document.createElement('canvas');
+        cropped.width = cropW; cropped.height = cropH;
+        cropped.getContext('2d')!.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+        canvas = cropped;
+      }
+
+      await new Promise<void>(resolve => {
+        canvas.toBlob(blob => {
+          const url = URL.createObjectURL(blob!);
+          const result = new Image();
+          result.onload = () => { effectiveImgs[slotIdx] = result; resolve(); };
+          result.src = url;
+        });
+      });
 
       const thumb = document.getElementById(`slot-thumb-${slotIdx}`) as HTMLImageElement | null;
       const empty = document.getElementById(`slot-empty-${slotIdx}`);
@@ -3163,23 +3276,55 @@ import Admin from '../../../layouts/Admin.astro';
       slotsEl.querySelectorAll(`[data-slot-xform="${slotIdx}"]`).forEach(btn => {
         (btn as HTMLButtonElement).disabled = !loaded;
       });
+      const fitBtn = slotsEl.querySelector(`[data-slot-fit="${slotIdx}"]`) as HTMLButtonElement | null;
+      if (fitBtn) fitBtn.disabled = !loaded;
     }
 
     function buildSlots(bot: BotDef) {
       slotsEl.innerHTML = bot.inputLabels.map((label, i) => `
-        <div class="pt-slot" data-slot="${i}">
+        <div class="pt-slot" id="slot-card-${i}" data-slot="${i}">
+          <div class="pt-slot__header">
+            <span class="pt-slot__label">${label}</span>
+            <button class="pt-slot__lock-btn" data-slot-lock="${i}"
+              data-tooltip="Keep this image when switching bots">
+              <span class="pt-slot__lock-icon">○</span>
+              <span class="pt-slot__btn-lbl">KEEP</span>
+            </button>
+          </div>
           <div class="pt-slot__drop" id="slot-drop-${i}" tabindex="0">
             <img class="pt-slot__thumb" id="slot-thumb-${i}" alt="${label}" />
             <div class="pt-slot__empty-icon" id="slot-empty-${i}">+</div>
             <input type="file" accept="image/*" style="display:none" id="slot-file-${i}" />
+            <div class="pt-slot__kept-badge" id="slot-kept-badge-${i}" style="display:none">KEPT</div>
           </div>
-          <div class="pt-slot__label">${label}</div>
-          <div class="pt-slot__controls">
-            <button class="pt-slot__lib" data-slot-lib="${i}">IMG</button>
-            <button class="pt-slot__xform" data-slot-xform="${i}" data-xform="rotl" disabled title="Rotate left">↺</button>
-            <button class="pt-slot__xform" data-slot-xform="${i}" data-xform="rotr" disabled title="Rotate right">↻</button>
-            <button class="pt-slot__xform" data-slot-xform="${i}" data-xform="flip" disabled title="Mirror">⇔</button>
+          <div class="pt-slot__controls" id="slot-controls-${i}">
+            <button class="pt-slot__btn" data-slot-lib="${i}"
+              data-tooltip="Load from library">
+              <span class="pt-slot__btn-icon">⊞</span>
+              <span class="pt-slot__btn-lbl">IMG</span>
+            </button>
+            <button class="pt-slot__btn" data-slot-xform="${i}" data-xform="rotl" disabled
+              data-tooltip="Rotate left 90°">
+              <span class="pt-slot__btn-icon">↺</span>
+              <span class="pt-slot__btn-lbl">ROTL</span>
+            </button>
+            <button class="pt-slot__btn" data-slot-xform="${i}" data-xform="rotr" disabled
+              data-tooltip="Rotate right 90°">
+              <span class="pt-slot__btn-icon">↻</span>
+              <span class="pt-slot__btn-lbl">ROTR</span>
+            </button>
+            <button class="pt-slot__btn" data-slot-xform="${i}" data-xform="flip" disabled
+              data-tooltip="Mirror horizontally">
+              <span class="pt-slot__btn-icon">⇔</span>
+              <span class="pt-slot__btn-lbl">FLIP</span>
+            </button>
+            <button class="pt-slot__btn pt-slot__btn--fit" data-slot-fit="${i}" disabled
+              data-tooltip="Crop to square or match another slot">
+              <span class="pt-slot__btn-icon">⊡</span>
+              <span class="pt-slot__btn-lbl">FIT</span>
+            </button>
           </div>
+          <div class="pt-slot__fit-panel" id="slot-fit-panel-${i}" style="display:none"></div>
         </div>
       `).join('');
 
@@ -3222,12 +3367,64 @@ import Admin from '../../../layouts/Admin.astro';
           });
         });
 
+        // Lock button
+        const lockBtn = slotsEl.querySelector(`[data-slot-lock="${i}"]`) as HTMLButtonElement;
+        lockBtn.addEventListener('click', () => {
+          slotLocked[slotIdx] = !slotLocked[slotIdx];
+          const card = document.getElementById(`slot-card-${slotIdx}`)!;
+          card.classList.toggle('locked', slotLocked[slotIdx]);
+          const badge = document.getElementById(`slot-kept-badge-${slotIdx}`)!;
+          badge.style.display = slotLocked[slotIdx] && sourceImgs[slotIdx] ? 'block' : 'none';
+          lockBtn.querySelector('.pt-slot__btn-lbl')!.textContent = slotLocked[slotIdx] ? 'KEPT' : 'KEEP';
+          lockBtn.querySelector('.pt-slot__lock-icon')!.textContent = slotLocked[slotIdx] ? '●' : '○';
+        });
+
+        // FIT button
+        const fitBtn = slotsEl.querySelector(`[data-slot-fit="${i}"]`) as HTMLButtonElement;
+        fitBtn.addEventListener('click', () => {
+          const panel = document.getElementById(`slot-fit-panel-${slotIdx}`)!;
+          if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+          panel.innerHTML = '';
+          const squareBtn = document.createElement('button');
+          squareBtn.className = 'pt-slot__fit-opt';
+          squareBtn.textContent = 'Square';
+          squareBtn.addEventListener('click', () => {
+            slotTransforms[slotIdx].aspect = 1;
+            applyTransformAndUpdate(slotIdx).then(() => { if (allSlotsReady()) doRender(); });
+            panel.style.display = 'none';
+          });
+          panel.appendChild(squareBtn);
+          for (let j = 0; j < BOTS[currentBot].inputs; j++) {
+            if (j === slotIdx || !effectiveImgs[j]) continue;
+            const img = effectiveImgs[j]!;
+            const ratio = img.naturalWidth / img.naturalHeight;
+            const matchBtn = document.createElement('button');
+            matchBtn.className = 'pt-slot__fit-opt';
+            matchBtn.textContent = `Slot ${j + 1}`;
+            matchBtn.addEventListener('click', () => {
+              slotTransforms[slotIdx].aspect = ratio;
+              applyTransformAndUpdate(slotIdx).then(() => { if (allSlotsReady()) doRender(); });
+              panel.style.display = 'none';
+            });
+            panel.appendChild(matchBtn);
+          }
+          panel.style.display = 'flex';
+        });
+
         // Restore any already-loaded image for this slot (after bot switch with same n)
         if (sourceImgs[i]) {
           thumb.src = effectiveImgs[i]?.src ?? sourceImgs[i]!.src;
           thumb.style.display = 'block';
           empty.style.display = 'none';
           updateXformButtons(i);
+        }
+        // Restore lock visual if slot was locked before bot switch
+        if (slotLocked[i]) {
+          const card = document.getElementById(`slot-card-${i}`)!;
+          card.classList.add('locked');
+          document.getElementById(`slot-kept-badge-${i}`)!.style.display = sourceImgs[i] ? 'block' : 'none';
+          lockBtn.querySelector('.pt-slot__btn-lbl')!.textContent = 'KEPT';
+          lockBtn.querySelector('.pt-slot__lock-icon')!.textContent = '●';
         }
       }
     }
@@ -3354,11 +3551,15 @@ import Admin from '../../../layouts/Admin.astro';
       const descEl = document.getElementById('pt-bot-desc');
       if (descEl) descEl.textContent = bot?.desc ?? '';
 
-      // Reset state
-      sourceImgs = [null, null, null, null];
-      sourceIds  = [null, null, null, null];
-      slotTransforms = [{rot:0,flip:false},{rot:0,flip:false},{rot:0,flip:false},{rot:0,flip:false}];
-      effectiveImgs  = [null, null, null, null];
+      // Reset state — preserve locked slots
+      for (let i = 0; i < 4; i++) {
+        if (!slotLocked[i]) {
+          sourceImgs[i] = null;
+          sourceIds[i] = null;
+          slotTransforms[i] = { rot: 0, flip: false };
+          effectiveImgs[i] = null;
+        }
+      }
       outputs = [];
       activeOutputIdx = 0;
       stageCanvas.style.display = 'none';
@@ -3416,7 +3617,7 @@ import Admin from '../../../layouts/Admin.astro';
     // ─── Load image into slot ──────────────────────────────────────────────────
 
     function onSlotLoaded(slotIdx: number) {
-      slotTransforms[slotIdx] = { rot: 0, flip: false };
+      slotTransforms[slotIdx] = { rot: 0, flip: false }; // aspect intentionally absent
       applyTransformAndUpdate(slotIdx).then(() => {
         updateXformButtons(slotIdx);
         if (allSlotsReady()) doReroll();
