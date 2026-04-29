@@ -55,8 +55,10 @@ import Admin from '../../../layouts/Admin.astro';
       </div>
     </div>
     <div class="pt-actions">
-      <button class="btn btn--secondary" id="reroll-btn" disabled>⟳ Re-roll</button>
-      <input type="number" id="seed-input" class="pt-seed-input" style="display:none" placeholder="seed" min="1" max="2147483647" step="1" />
+      <div class="pt-reroll-wrap">
+        <button class="btn btn--secondary" id="reroll-btn" disabled>⟳<span class="pt-reroll-label"> RE-ROLL</span></button>
+        <input type="number" id="seed-input" class="pt-seed-input" style="display:none" placeholder="seed" min="1" max="2147483647" step="1" />
+      </div>
       <button class="btn btn--secondary" id="download-btn" disabled>↓ Download</button>
       <button class="btn btn--primary"   id="save-btn"     disabled>☁ Save</button>
       <button class="btn btn--secondary" id="save-all-btn" disabled>☁ All</button>
@@ -484,6 +486,15 @@ import Admin from '../../../layouts/Admin.astro';
     line-height: 1.4;
   }
   .pt-thumb__send-btn:hover { background: rgba(40,100,40,0.88); }
+
+  .pt-reroll-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .pt-reroll-label { display: none; }
+  #reroll-btn:not([disabled]):hover .pt-reroll-label { display: inline; }
 
   .pt-seed-input {
     width: 90px;
@@ -3297,7 +3308,7 @@ import Admin from '../../../layouts/Admin.astro';
         for (let s = 0; s < bot.inputs; s++) {
           const sb = document.createElement('button');
           sb.className = 'pt-thumb__send-btn';
-          sb.textContent = bot.inputs === 1 ? '→' : `→${s + 1}`;
+          sb.textContent = `→SLOT${s + 1}`;
           sb.title = `Use as ${bot.inputLabels[s] ?? `Slot ${s + 1}`}`;
           const oIdx = i, sIdx = s;
           sb.addEventListener('click', (e) => {
