@@ -102,6 +102,8 @@ import Admin from '../../../layouts/Admin.astro';
       <div class="pt-modal__toolbar">
         <input class="pt-modal__search" type="text" id="library-search" placeholder="Search…" />
         <button class="pt-modal__shuffle" id="library-shuffle" style="display:none">↻ Shuffle</button>
+        <input type="file" accept="image/*" id="library-upload-file" style="display:none" />
+        <button class="pt-modal__upload" id="library-upload-btn">↑ Upload</button>
       </div>
       <div class="pt-modal__grid" id="library-grid">
         <div class="pt-modal__loading loading-dots">Loading</div>
@@ -201,7 +203,7 @@ import Admin from '../../../layouts/Admin.astro';
     overflow: hidden;
   }
   .pt-slot.locked {
-    border-left: 3px solid #b8860b;
+    border-left: 3px solid #e07b54;
   }
 
   /* ── Header ── */
@@ -239,8 +241,8 @@ import Admin from '../../../layouts/Admin.astro';
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
-  .pt-slot__lock-btn:hover { color: var(--color-text, #ccc); }
-  .pt-slot.locked .pt-slot__lock-btn { color: #b8860b; }
+  .pt-slot__lock-btn:hover { color: #aaa; }
+  .pt-slot.locked .pt-slot__lock-btn { color: #e07b54; }
 
   /* ── Drop area ── */
   .pt-slot__drop {
@@ -267,7 +269,7 @@ import Admin from '../../../layouts/Admin.astro';
   .pt-slot__kept-badge {
     position: absolute;
     top: 4px; right: 4px;
-    background: rgba(184,134,11,0.88);
+    background: rgba(224,123,84,0.88);
     color: #fff;
     font-size: 0.5rem;
     padding: 1px 5px;
@@ -703,6 +705,22 @@ import Admin from '../../../layouts/Admin.astro';
     border-color: var(--color-accent, #fff);
   }
 
+  .pt-modal__upload {
+    flex-shrink: 0;
+    padding: 5px 10px;
+    font-size: 0.85rem;
+    background: var(--color-surface, #111);
+    color: var(--color-muted, #888);
+    border: 1px solid var(--color-border, #333);
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .pt-modal__upload:hover {
+    color: var(--color-text, #ccc);
+    border-color: var(--color-accent, #fff);
+  }
+
   .pt-modal__grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
@@ -782,6 +800,8 @@ import Admin from '../../../layouts/Admin.astro';
     const libTabRandInputs  = document.getElementById('lib-tab-rand-inputs')  as HTMLButtonElement;
     const libTabRandOutputs = document.getElementById('lib-tab-rand-outputs') as HTMLButtonElement;
     const libraryShuffleBtn = document.getElementById('library-shuffle')      as HTMLButtonElement;
+    const libraryUploadBtn  = document.getElementById('library-upload-btn')   as HTMLButtonElement;
+    const libraryUploadFile = document.getElementById('library-upload-file')  as HTMLInputElement;
 
     // ─── Seeded PRNG (mulberry32) ──────────────────────────────────────────────
     function mulberry32(seed: number): () => number {
@@ -3287,7 +3307,7 @@ import Admin from '../../../layouts/Admin.astro';
             <span class="pt-slot__label">${label}</span>
             <button class="pt-slot__lock-btn" data-slot-lock="${i}"
               data-tooltip="Keep this image when switching bots">
-              <span class="pt-slot__lock-icon">○</span>
+              <span class="pt-slot__lock-icon">🔓</span>
               <span class="pt-slot__btn-lbl">KEEP</span>
             </button>
           </div>
@@ -3376,7 +3396,7 @@ import Admin from '../../../layouts/Admin.astro';
           const badge = document.getElementById(`slot-kept-badge-${slotIdx}`)!;
           badge.style.display = slotLocked[slotIdx] && sourceImgs[slotIdx] ? 'block' : 'none';
           lockBtn.querySelector('.pt-slot__btn-lbl')!.textContent = slotLocked[slotIdx] ? 'KEPT' : 'KEEP';
-          lockBtn.querySelector('.pt-slot__lock-icon')!.textContent = slotLocked[slotIdx] ? '●' : '○';
+          lockBtn.querySelector('.pt-slot__lock-icon')!.textContent = slotLocked[slotIdx] ? '🔒' : '🔓';
         });
 
         // FIT button
@@ -3424,7 +3444,7 @@ import Admin from '../../../layouts/Admin.astro';
           card.classList.add('locked');
           document.getElementById(`slot-kept-badge-${i}`)!.style.display = sourceImgs[i] ? 'block' : 'none';
           lockBtn.querySelector('.pt-slot__btn-lbl')!.textContent = 'KEPT';
-          lockBtn.querySelector('.pt-slot__lock-icon')!.textContent = '●';
+          lockBtn.querySelector('.pt-slot__lock-icon')!.textContent = '🔒';
         }
       }
     }
@@ -3928,6 +3948,14 @@ import Admin from '../../../layouts/Admin.astro';
     libraryShuffleBtn.addEventListener('click', () => {
       if (activeLibTab === 'rand-inputs')  loadRandInputs();
       if (activeLibTab === 'rand-outputs') loadRandOutputs();
+    });
+    libraryUploadBtn.addEventListener('click', () => libraryUploadFile.click());
+    libraryUploadFile.addEventListener('change', () => {
+      const f = libraryUploadFile.files?.[0];
+      if (!f) return;
+      libraryUploadFile.value = '';
+      libraryOverlay.style.display = 'none';
+      loadSlotFromBlob(pendingSlot, f);
     });
     librarySearch.addEventListener('input', () => {
       clearTimeout(librarySearchTimer);
