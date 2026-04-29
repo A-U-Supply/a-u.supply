@@ -2459,6 +2459,7 @@ import Admin from '../../../layouts/Admin.astro';
         oc.getContext('2d')!.putImageData(od, 0, 0);
         out.push({ canvas: ocToCanvas(oc), label: `S${s}·A${a}·B${b}`, mimeType: 'image/jpeg' });
       }
+      ['A','B','C'].forEach((lbl, i) => out.push({ canvas: ocToCanvas(masks[i]), label: `Spiral ${lbl}`, mimeType: 'image/png' }));
       return out;
     }
 
@@ -2586,6 +2587,7 @@ import Admin from '../../../layouts/Admin.astro';
         oc.getContext('2d')!.putImageData(od, 0, 0);
         out.push({ canvas: ocToCanvas(oc), label: `S${s}·A${a}·B${b}`, mimeType: 'image/jpeg' });
       }
+      ['A','B','C'].forEach((lbl, i) => out.push({ canvas: ocToCanvas(masks[i]), label: `Spiral ${lbl}`, mimeType: 'image/png' }));
       return out;
     }
 
@@ -2758,13 +2760,13 @@ import Admin from '../../../layouts/Admin.astro';
       },
       oilspiral: {
         label: 'Oil Spiral', desc: 'Multi-centre Voronoi r³ spiral screen anchored to brightness peaks',
-        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false, isStencil: true,
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
         render: renderOilSpiral,
         buildParams: buildOilSpiralParams, getParams: getOilSpiralParams, setParams: setOilSpiralParams,
       },
       soapyspiral: {
         label: 'Soapy Spiral', desc: 'Single-centre r³ spiral screen anchored to the salient region',
-        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false, isStencil: true,
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
         render: renderSoapySpiral,
         buildParams: buildSoapySpiralParams, getParams: getSoapySpiralParams, setParams: setSoapySpiralParams,
       },
