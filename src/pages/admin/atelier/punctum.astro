@@ -818,10 +818,26 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     function appendStencilOutputs() {
-      const snapshot = outputs.slice();
-      for (const out of snapshot) {
-        const W = out.canvas.width, H = out.canvas.height;
-        outputs.push({ canvas: ocToCanvas(stencilBinarize(out.canvas, W, H)), label: `BW·${out.label}`, mimeType: 'image/png' });
+      const bot = BOTS[currentBot];
+      const labels = ['A', 'B', 'C', 'D'];
+
+      // BW output versions: non-stencil bots without native BW outputs
+      if (!bot.isStencil && !bot.hasNativeBW) {
+        const baseOutputs = outputs.slice();
+        for (const out of baseOutputs) {
+          const W = out.canvas.width, H = out.canvas.height;
+          outputs.push({ canvas: ocToCanvas(stencilBinarize(out.canvas, W, H)), label: `BW·${out.label}`, mimeType: 'image/png' });
+        }
+      }
+
+      // Source stencils: isStencil bots only — binarize each input slot image
+      if (bot.isStencil) {
+        for (let i = 0; i < bot.inputs; i++) {
+          const img = effectiveImgs[i];
+          if (!img) continue;
+          const W = img.naturalWidth, H = img.naturalHeight;
+          outputs.push({ canvas: ocToCanvas(stencilBinarize(img, W, H)), label: `Stencil ${labels[i]}`, mimeType: 'image/png' });
+        }
       }
     }
 
@@ -2733,6 +2749,7 @@ import Admin from '../../../layouts/Admin.astro';
       inputLabels: string[];
       hasRandomness: boolean;
       isStencil?: boolean;
+      hasNativeBW?: boolean;
       render: (imgs: (HTMLImageElement | null)[], params: Record<string, any>, rng: () => number) => Output[];
       buildParams?: () => void;
       getParams?: () => Record<string, any>;
@@ -2773,7 +2790,7 @@ import Admin from '../../../layouts/Admin.astro';
       },
       lathe: {
         label: 'Lathe', desc: 'Annular bands rotated at random angles around a bullseye center',
-        inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        inputs: 1, inputLabels: ['Image'], hasRandomness: true, hasNativeBW: true,
         render: renderLathe,
         buildParams: buildLatheParams,
         getParams: getLatheParams,
@@ -2781,12 +2798,12 @@ import Admin from '../../../layouts/Admin.astro';
       },
       bullseye: {
         label: 'Bullseye', desc: 'Three concentric circles, each independently rotated',
-        inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        inputs: 1, inputLabels: ['Image'], hasRandomness: true, hasNativeBW: true,
         render: renderBullseye,
       },
       sixshooter: {
         label: 'Six Shooter', desc: 'Six circular crops laid out in a grid or hex pattern',
-        inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        inputs: 1, inputLabels: ['Image'], hasRandomness: true, hasNativeBW: true,
         render: renderSixShooter,
       },
       lattice: {
@@ -2804,12 +2821,12 @@ import Admin from '../../../layouts/Admin.astro';
       },
       zellij: {
         label: 'Zellij', desc: 'Islamic six-pointed star tiling with shuffled crops',
-        inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        inputs: 1, inputLabels: ['Image'], hasRandomness: true, hasNativeBW: true,
         render: renderZellij,
       },
       zellij_medium: {
         label: 'Zellij Medium', desc: 'Zellij tiling with larger tiles',
-        inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        inputs: 1, inputLabels: ['Image'], hasRandomness: true, hasNativeBW: true,
         render: (imgs, params, rng) => renderZellij(imgs, params, rng, 1/4),
       },
       halftone: {
@@ -2826,7 +2843,7 @@ import Admin from '../../../layouts/Admin.astro';
       },
       penrose: {
         label: 'Penrose', desc: 'Aperiodic Penrose P3 tiling with shuffled crops',
-        inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        inputs: 1, inputLabels: ['Image'], hasRandomness: true, hasNativeBW: true,
         render: renderPenrose,
       },
       monochrome: {
@@ -2846,7 +2863,7 @@ import Admin from '../../../layouts/Admin.astro';
       },
       kaleidoscope: {
         label: 'Kaleidoscope', desc: 'N-fold radial symmetry applied to concentric rings',
-        inputs: 1, inputLabels: ['Image'], hasRandomness: true,
+        inputs: 1, inputLabels: ['Image'], hasRandomness: true, hasNativeBW: true,
         render: renderKaleidoscope,
         buildParams: buildKaleidoscopeParams, getParams: getKaleidoscopeParams, setParams: setKaleidoscopeParams,
       },
