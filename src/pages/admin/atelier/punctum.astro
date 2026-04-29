@@ -2351,7 +2351,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     // ─── Oil Spiral ───────────────────────────────────────────────────────────
 
-    function makeOilSpiralMask(img: HTMLImageElement, W: number, H: number, freq: number, warpStr: number, nPeaks: number): OffscreenCanvas {
+    function makeOilSpiralMask(img: HTMLImageElement, W: number, H: number, freq: number, warpStr: number, nPeaks: number, bias = 0, contrast = 1, power = 3): OffscreenCanvas {
       const tmp = new OffscreenCanvas(W, H);
       tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
       const rawData = tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
@@ -2359,6 +2359,8 @@ import Admin from '../../../layouts/Admin.astro';
       for (let i = 0; i < W * H; i++) gray[i] = 0.299*rawData[i*4] + 0.587*rawData[i*4+1] + 0.114*rawData[i*4+2];
       const tone = new Float32Array(W * H);
       for (let i = 0; i < W * H; i++) tone[i] = Math.max(0.1, Math.min(0.9, piecewiseLerp([0,64,128,192,255],[0,25,128,230,255], gray[i]) / 255));
+      const toneAdj = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) toneAdj[i] = Math.max(0.01, Math.min(0.99, (tone[i] - 0.5) * contrast + 0.5 + bias));
       // Peak detection via heavy blur
       const grayPx = new Uint8ClampedArray(W * H * 4);
       for (let i = 0; i < W * H; i++) { grayPx[i*4]=grayPx[i*4+1]=grayPx[i*4+2]=gray[i]; grayPx[i*4+3]=255; }
@@ -2426,9 +2428,9 @@ import Admin from '../../../layouts/Admin.astro';
       const od = oc.getContext('2d')!.createImageData(W, H);
       for (let i = 0; i < W * H; i++) {
         const k = cellIdx[i], [px, py] = peaks[k];
-        const sc = rMap[i]**3 / (freq * peakRMax[k]**2 + 1e-6) - Math.atan2(yw[i]-py, xw[i]-px) / (2*Math.PI);
+        const sc = rMap[i]**power / (freq * peakRMax[k]**(power-1) + 1e-6) - Math.atan2(yw[i]-py, xw[i]-px) / (2*Math.PI);
         const screen = ((sc % 1) + 1) % 1;
-        const v = tone[i] > screen ? 255 : 0;
+        const v = toneAdj[i] > screen ? 255 : 0;
         od.data[i*4] = od.data[i*4+1] = od.data[i*4+2] = v; od.data[i*4+3] = 255;
       }
       oc.getContext('2d')!.putImageData(od, 0, 0);
@@ -2441,7 +2443,10 @@ import Admin from '../../../layouts/Admin.astro';
       const freq = params['oil-freq'] ?? 20;
       const warpStr = params['oil-warp'] ?? 4;
       const nPeaks = params['oil-peaks'] ?? 6;
-      const masks = [imgs[0]!, imgs[1]!, imgs[2]!].map(img => makeOilSpiralMask(img, W, H, freq, warpStr, nPeaks));
+      const bias = params['oil-bias'] ?? 0;
+      const contrast = params['oil-contrast'] ?? 1;
+      const power = params['oil-power-exp'] ?? 3;
+      const masks = [imgs[0]!, imgs[1]!, imgs[2]!].map(img => makeOilSpiralMask(img, W, H, freq, warpStr, nPeaks, bias, contrast, power));
       const pixelData = [imgs[0]!, imgs[1]!, imgs[2]!].map(img => {
         const tmp = new OffscreenCanvas(W, H); tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
         return tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
@@ -2479,6 +2484,21 @@ import Admin from '../../../layouts/Admin.astro';
           <label class="pt-label" for="oil-peaks">Peaks <span class="pt-val" id="oil-peaks-val">6</span></label>
           <input class="pt-range" type="range" id="oil-peaks" min="2" max="12" step="1" value="6" />
           <div class="pt-range-hints"><span>2</span><span>12</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="oil-bias">Bias <span class="pt-val" id="oil-bias-val">0.00</span></label>
+          <input class="pt-range" type="range" id="oil-bias" min="-0.4" max="0.4" step="0.02" value="0" />
+          <div class="pt-range-hints"><span>−0.4</span><span>+0.4</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="oil-contrast">Contrast <span class="pt-val" id="oil-contrast-val">1.00</span></label>
+          <input class="pt-range" type="range" id="oil-contrast" min="0.25" max="4" step="0.05" value="1" />
+          <div class="pt-range-hints"><span>0.25</span><span>4</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="oil-power-exp">Power <span class="pt-val" id="oil-power-exp-val">3.0</span></label>
+          <input class="pt-range" type="range" id="oil-power-exp" min="1" max="5" step="0.5" value="3" />
+          <div class="pt-range-hints"><span>1</span><span>5</span></div>
         </div>`;
       enhanceSliders();
       const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
@@ -2486,18 +2506,27 @@ import Admin from '../../../layouts/Admin.astro';
       document.getElementById('oil-freq')!.addEventListener('input', (e) => { document.getElementById('oil-freq-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
       document.getElementById('oil-warp')!.addEventListener('input', (e) => { document.getElementById('oil-warp-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(1); dRender(); });
       document.getElementById('oil-peaks')!.addEventListener('input', (e) => { document.getElementById('oil-peaks-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+      document.getElementById('oil-bias')!.addEventListener('input', (e) => { document.getElementById('oil-bias-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(2); dRender(); });
+      document.getElementById('oil-contrast')!.addEventListener('input', (e) => { document.getElementById('oil-contrast-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(2); dRender(); });
+      document.getElementById('oil-power-exp')!.addEventListener('input', (e) => { document.getElementById('oil-power-exp-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(1); dRender(); });
     }
     function getOilSpiralParams(): Record<string, any> {
       return {
         'oil-freq': parseInt((document.getElementById('oil-freq') as HTMLInputElement).value, 10),
         'oil-warp': parseFloat((document.getElementById('oil-warp') as HTMLInputElement).value),
         'oil-peaks': parseInt((document.getElementById('oil-peaks') as HTMLInputElement).value, 10),
+        'oil-bias': parseFloat((document.getElementById('oil-bias') as HTMLInputElement).value),
+        'oil-contrast': parseFloat((document.getElementById('oil-contrast') as HTMLInputElement).value),
+        'oil-power-exp': parseFloat((document.getElementById('oil-power-exp') as HTMLInputElement).value),
       };
     }
     function setOilSpiralParams(p: Record<string, any>) {
       if (p['oil-freq'] != null) { (document.getElementById('oil-freq') as HTMLInputElement).value = String(p['oil-freq']); document.getElementById('oil-freq-val')!.textContent = String(p['oil-freq']); }
       if (p['oil-warp'] != null) { (document.getElementById('oil-warp') as HTMLInputElement).value = String(p['oil-warp']); document.getElementById('oil-warp-val')!.textContent = parseFloat(p['oil-warp']).toFixed(1); }
       if (p['oil-peaks'] != null) { (document.getElementById('oil-peaks') as HTMLInputElement).value = String(p['oil-peaks']); document.getElementById('oil-peaks-val')!.textContent = String(p['oil-peaks']); }
+      if (p['oil-bias'] != null) { (document.getElementById('oil-bias') as HTMLInputElement).value = String(p['oil-bias']); document.getElementById('oil-bias-val')!.textContent = parseFloat(p['oil-bias']).toFixed(2); }
+      if (p['oil-contrast'] != null) { (document.getElementById('oil-contrast') as HTMLInputElement).value = String(p['oil-contrast']); document.getElementById('oil-contrast-val')!.textContent = parseFloat(p['oil-contrast']).toFixed(2); }
+      if (p['oil-power-exp'] != null) { (document.getElementById('oil-power-exp') as HTMLInputElement).value = String(p['oil-power-exp']); document.getElementById('oil-power-exp-val')!.textContent = parseFloat(p['oil-power-exp']).toFixed(1); }
     }
 
     // ─── Soapy Spiral ────────────────────────────────────────────────────────
@@ -2517,7 +2546,7 @@ import Admin from '../../../layouts/Admin.astro';
       return count > 0 ? [sumX / count, sumY / count] : [W / 2, H / 2];
     }
 
-    function makeSoapySpiralMask(img: HTMLImageElement, W: number, H: number, freq: number, warpStr: number): OffscreenCanvas {
+    function makeSoapySpiralMask(img: HTMLImageElement, W: number, H: number, freq: number, warpStr: number, bias = 0, contrast = 1, power = 3): OffscreenCanvas {
       const tmp = new OffscreenCanvas(W, H);
       tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
       const rawData = tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
@@ -2525,6 +2554,8 @@ import Admin from '../../../layouts/Admin.astro';
       for (let i = 0; i < W * H; i++) gray[i] = 0.299*rawData[i*4] + 0.587*rawData[i*4+1] + 0.114*rawData[i*4+2];
       const tone = new Float32Array(W * H);
       for (let i = 0; i < W * H; i++) tone[i] = Math.max(0.1, Math.min(0.9, piecewiseLerp([0,64,128,192,255],[0,25,128,230,255], gray[i]) / 255));
+      const toneAdj = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) toneAdj[i] = Math.max(0.01, Math.min(0.99, (tone[i] - 0.5) * contrast + 0.5 + bias));
       const [cx, cy] = computeSaliencyCenter(gray, W, H);
       // Edge direction field (same as oil spiral)
       const grayPx = new Uint8ClampedArray(W * H * 4);
@@ -2555,9 +2586,9 @@ import Admin from '../../../layouts/Admin.astro';
         const yw = y + ew[i]*warpPx*Math.sin(smoothAngle[i]);
         const dx = xw-cx, dy = yw-cy;
         const r = Math.sqrt(dx*dx+dy*dy);
-        const sc = r**3 / (freq * rMax**2 + 1e-6) - Math.atan2(dy, dx) / (2*Math.PI);
+        const sc = r**power / (freq * rMax**(power-1) + 1e-6) - Math.atan2(dy, dx) / (2*Math.PI);
         const screen = ((sc % 1) + 1) % 1;
-        const v = tone[i] > screen ? 255 : 0;
+        const v = toneAdj[i] > screen ? 255 : 0;
         od.data[i*4]=od.data[i*4+1]=od.data[i*4+2]=v; od.data[i*4+3]=255;
       }
       oc.getContext('2d')!.putImageData(od, 0, 0);
@@ -2569,7 +2600,10 @@ import Admin from '../../../layouts/Admin.astro';
       const W = imgs[0].naturalWidth, H = imgs[0].naturalHeight;
       const freq = params['soap-freq'] ?? 40;
       const warpStr = params['soap-warp'] ?? 0.7;
-      const masks = [imgs[0]!, imgs[1]!, imgs[2]!].map(img => makeSoapySpiralMask(img, W, H, freq, warpStr));
+      const bias = params['soap-bias'] ?? 0;
+      const contrast = params['soap-contrast'] ?? 1;
+      const power = params['soap-power-exp'] ?? 3;
+      const masks = [imgs[0]!, imgs[1]!, imgs[2]!].map(img => makeSoapySpiralMask(img, W, H, freq, warpStr, bias, contrast, power));
       const pixelData = [imgs[0]!, imgs[1]!, imgs[2]!].map(img => {
         const tmp = new OffscreenCanvas(W, H); tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
         return tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
@@ -2602,22 +2636,46 @@ import Admin from '../../../layouts/Admin.astro';
           <label class="pt-label" for="soap-warp">Warp <span class="pt-val" id="soap-warp-val">0.7</span></label>
           <input class="pt-range" type="range" id="soap-warp" min="0" max="4" step="0.1" value="0.7" />
           <div class="pt-range-hints"><span>0</span><span>4</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="soap-bias">Bias <span class="pt-val" id="soap-bias-val">0.00</span></label>
+          <input class="pt-range" type="range" id="soap-bias" min="-0.4" max="0.4" step="0.02" value="0" />
+          <div class="pt-range-hints"><span>−0.4</span><span>+0.4</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="soap-contrast">Contrast <span class="pt-val" id="soap-contrast-val">1.00</span></label>
+          <input class="pt-range" type="range" id="soap-contrast" min="0.25" max="4" step="0.05" value="1" />
+          <div class="pt-range-hints"><span>0.25</span><span>4</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="soap-power-exp">Power <span class="pt-val" id="soap-power-exp-val">3.0</span></label>
+          <input class="pt-range" type="range" id="soap-power-exp" min="1" max="5" step="0.5" value="3" />
+          <div class="pt-range-hints"><span>1</span><span>5</span></div>
         </div>`;
       enhanceSliders();
       const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
       const dRender = debounce(() => doRender(), 200);
       document.getElementById('soap-freq')!.addEventListener('input', (e) => { document.getElementById('soap-freq-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
       document.getElementById('soap-warp')!.addEventListener('input', (e) => { document.getElementById('soap-warp-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(1); dRender(); });
+      document.getElementById('soap-bias')!.addEventListener('input', (e) => { document.getElementById('soap-bias-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(2); dRender(); });
+      document.getElementById('soap-contrast')!.addEventListener('input', (e) => { document.getElementById('soap-contrast-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(2); dRender(); });
+      document.getElementById('soap-power-exp')!.addEventListener('input', (e) => { document.getElementById('soap-power-exp-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(1); dRender(); });
     }
     function getSoapySpiralParams(): Record<string, any> {
       return {
         'soap-freq': parseInt((document.getElementById('soap-freq') as HTMLInputElement).value, 10),
         'soap-warp': parseFloat((document.getElementById('soap-warp') as HTMLInputElement).value),
+        'soap-bias': parseFloat((document.getElementById('soap-bias') as HTMLInputElement).value),
+        'soap-contrast': parseFloat((document.getElementById('soap-contrast') as HTMLInputElement).value),
+        'soap-power-exp': parseFloat((document.getElementById('soap-power-exp') as HTMLInputElement).value),
       };
     }
     function setSoapySpiralParams(p: Record<string, any>) {
       if (p['soap-freq'] != null) { (document.getElementById('soap-freq') as HTMLInputElement).value = String(p['soap-freq']); document.getElementById('soap-freq-val')!.textContent = String(p['soap-freq']); }
       if (p['soap-warp'] != null) { (document.getElementById('soap-warp') as HTMLInputElement).value = String(p['soap-warp']); document.getElementById('soap-warp-val')!.textContent = parseFloat(p['soap-warp']).toFixed(1); }
+      if (p['soap-bias'] != null) { (document.getElementById('soap-bias') as HTMLInputElement).value = String(p['soap-bias']); document.getElementById('soap-bias-val')!.textContent = parseFloat(p['soap-bias']).toFixed(2); }
+      if (p['soap-contrast'] != null) { (document.getElementById('soap-contrast') as HTMLInputElement).value = String(p['soap-contrast']); document.getElementById('soap-contrast-val')!.textContent = parseFloat(p['soap-contrast']).toFixed(2); }
+      if (p['soap-power-exp'] != null) { (document.getElementById('soap-power-exp') as HTMLInputElement).value = String(p['soap-power-exp']); document.getElementById('soap-power-exp-val')!.textContent = parseFloat(p['soap-power-exp']).toFixed(1); }
     }
 
     // ─── Bot config registry ───────────────────────────────────────────────────
