@@ -32,6 +32,23 @@ import Admin from '../../../layouts/Admin.astro';
     </div>
     <p class="pt-bot-desc" id="pt-bot-desc">Circular crop rotations from random positions across the image</p>
     <div id="pt-params"></div>
+    <div id="pt-stencil-params" style="display:none">
+      <div class="pt-stencil-divider">Stencil</div>
+      <div class="pt-field pt-stencil-field">
+        <label class="pt-label" for="st-bias">Threshold Bias <span class="pt-val" id="st-bias-val">0</span></label>
+        <input class="pt-range" type="range" id="st-bias" min="-64" max="64" step="1" value="0" />
+      </div>
+      <div class="pt-field pt-stencil-field">
+        <label class="pt-label" for="st-contrast">Contrast <span class="pt-val" id="st-contrast-val">1.00</span></label>
+        <input class="pt-range" type="range" id="st-contrast" min="0.25" max="3" step="0.05" value="1" />
+      </div>
+      <div class="pt-field pt-stencil-field pt-check-field">
+        <label class="pt-check-label">
+          <input type="checkbox" id="st-invert" />
+          Invert
+        </label>
+      </div>
+    </div>
     <div class="pt-actions">
       <button class="btn btn--secondary" id="reroll-btn" disabled>⟳ Re-roll</button>
       <button class="btn btn--secondary" id="download-btn" disabled>↓ Download</button>
@@ -305,6 +322,29 @@ import Admin from '../../../layouts/Admin.astro';
   .pt-num-input::-webkit-inner-spin-button,
   .pt-num-input::-webkit-outer-spin-button { -webkit-appearance: none; }
   .pt-num-input { -moz-appearance: textfield; }
+
+  #pt-stencil-params {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--space-sm) var(--space-lg);
+    align-items: flex-end;
+    padding: var(--space-xs) var(--space-sm) var(--space-xs) var(--space-md);
+    border-left: 3px solid #8a6a3a;
+    background: rgba(100, 70, 20, 0.07);
+    border-radius: 0 3px 3px 0;
+    margin-top: var(--space-xs);
+  }
+  .pt-stencil-divider {
+    width: 100%;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #8a7050;
+    margin-bottom: 2px;
+  }
+  .pt-stencil-field .pt-label { color: #a08060; }
+  #pt-stencil-params input[type="range"] { accent-color: #c08040; }
 
   .pt-divider {
     height: 1px;
@@ -585,7 +625,8 @@ import Admin from '../../../layouts/Admin.astro';
     const emptyEl     = document.getElementById('pt-empty') as HTMLDivElement;
     const emptyText   = document.getElementById('pt-empty-text') as HTMLDivElement;
     const slotsEl     = document.getElementById('pt-slots') as HTMLDivElement;
-    const paramsEl    = document.getElementById('pt-params') as HTMLDivElement;
+    const paramsEl        = document.getElementById('pt-params') as HTMLDivElement;
+    const stencilParamsEl = document.getElementById('pt-stencil-params') as HTMLDivElement;
     const stripEl     = document.getElementById('pt-strip') as HTMLDivElement;
     const rerollBtn   = document.getElementById('reroll-btn') as HTMLButtonElement;
     const downloadBtn = document.getElementById('download-btn') as HTMLButtonElement;
@@ -640,37 +681,97 @@ import Admin from '../../../layouts/Admin.astro';
 
     function stencilCompose(
       dest: OffscreenCanvas,
-      stencil: HTMLImageElement,
+      stencil: HTMLImageElement | OffscreenCanvas,
       fillA: OffscreenCanvas | HTMLImageElement,
       fillB: OffscreenCanvas | HTMLImageElement,
     ) {
       const W = dest.width, H = dest.height;
       const ctx = dest.getContext('2d')!;
+      const { bias, contrast, invert } = getStencilParams();
 
-      // Get stencil grayscale + Otsu threshold
+      // Get stencil pixel data
       const sc = new OffscreenCanvas(W, H);
-      sc.getContext('2d')!.drawImage(stencil, 0, 0, W, H);
+      sc.getContext('2d')!.drawImage(stencil as any, 0, 0, W, H);
       const stencilData = sc.getContext('2d')!.getImageData(0, 0, W, H);
-      const thresh = otsuThreshold(stencilData);
+
+      // Apply contrast around mid-grey and compute adjusted grayscale
+      const adjGray = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) {
+        const j = i * 4;
+        const g = 0.299 * stencilData.data[j] + 0.587 * stencilData.data[j+1] + 0.114 * stencilData.data[j+2];
+        adjGray[i] = Math.max(0, Math.min(255, 128 + (g - 128) * contrast));
+      }
+
+      // Build Otsu threshold on contrast-adjusted values + apply bias
+      const adjId = new ImageData(W, H);
+      for (let i = 0; i < W * H; i++) {
+        adjId.data[i*4] = adjId.data[i*4+1] = adjId.data[i*4+2] = adjGray[i]; adjId.data[i*4+3] = 255;
+      }
+      const thresh = Math.max(0, Math.min(255, otsuThreshold(adjId) + bias));
 
       // Get fillA pixel data
       const ac = new OffscreenCanvas(W, H);
-      ac.getContext('2d')!.drawImage(fillA, 0, 0, W, H);
+      ac.getContext('2d')!.drawImage(fillA as any, 0, 0, W, H);
       const aData = ac.getContext('2d')!.getImageData(0, 0, W, H);
 
       // Get fillB pixel data
       const bc = new OffscreenCanvas(W, H);
-      bc.getContext('2d')!.drawImage(fillB, 0, 0, W, H);
+      bc.getContext('2d')!.drawImage(fillB as any, 0, 0, W, H);
       const bData = bc.getContext('2d')!.getImageData(0, 0, W, H);
 
       const out = ctx.createImageData(W, H);
-      const sd = stencilData.data, ad = aData.data, bd = bData.data, od = out.data;
-      for (let i = 0; i < sd.length; i += 4) {
-        const g = 0.299 * sd[i] + 0.587 * sd[i+1] + 0.114 * sd[i+2];
-        const src = g >= thresh ? ad : bd;
-        od[i] = src[i]; od[i+1] = src[i+1]; od[i+2] = src[i+2]; od[i+3] = 255;
+      const ad = aData.data, bd = bData.data, od = out.data;
+      for (let i = 0; i < W * H; i++) {
+        const g = adjGray[i];
+        const useA = invert ? g < thresh : g >= thresh;
+        const src = useA ? ad : bd;
+        const j = i * 4;
+        od[j] = src[j]; od[j+1] = src[j+1]; od[j+2] = src[j+2]; od[j+3] = 255;
       }
       ctx.putImageData(out, 0, 0);
+    }
+
+    // ─── Stencil adjustment helpers ────────────────────────────────────────────
+
+    function getStencilParams() {
+      return {
+        bias:     parseInt((document.getElementById('st-bias') as HTMLInputElement)?.value ?? '0', 10),
+        contrast: parseFloat((document.getElementById('st-contrast') as HTMLInputElement)?.value ?? '1'),
+        invert:   (document.getElementById('st-invert') as HTMLInputElement)?.checked ?? false,
+      };
+    }
+
+    function stencilBinarize(img: HTMLImageElement | OffscreenCanvas, W: number, H: number): OffscreenCanvas {
+      const { bias, contrast, invert } = getStencilParams();
+      const oc = new OffscreenCanvas(W, H);
+      const ctx = oc.getContext('2d')!;
+      ctx.drawImage(img as any, 0, 0, W, H);
+      const id = ctx.getImageData(0, 0, W, H);
+      const adj = new Uint8ClampedArray(id.data.length);
+      for (let i = 0; i < id.data.length; i += 4) {
+        const g = Math.max(0, Math.min(255, 128 + (0.299*id.data[i] + 0.587*id.data[i+1] + 0.114*id.data[i+2] - 128) * contrast));
+        adj[i] = adj[i+1] = adj[i+2] = g; adj[i+3] = 255;
+      }
+      const thresh = Math.max(0, Math.min(255, otsuThreshold(new ImageData(adj, W, H)) + bias));
+      for (let i = 0; i < id.data.length; i += 4) {
+        let v = adj[i] >= thresh ? 255 : 0;
+        if (invert) v = 255 - v;
+        id.data[i] = id.data[i+1] = id.data[i+2] = v; id.data[i+3] = 255;
+      }
+      ctx.putImageData(id, 0, 0);
+      return oc;
+    }
+
+    function appendStencilOutputs() {
+      const bot = BOTS[currentBot];
+      if (!bot.isStencil) return;
+      const labels = ['A', 'B', 'C', 'D'];
+      for (let i = 0; i < bot.inputs; i++) {
+        const img = effectiveImgs[i];
+        if (!img) continue;
+        const W = img.naturalWidth, H = img.naturalHeight;
+        outputs.push({ canvas: ocToCanvas(stencilBinarize(img, W, H)), label: `Stencil ${labels[i]}`, mimeType: 'image/png' });
+      }
     }
 
     function mapPixels(
@@ -918,18 +1019,7 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     function binarize(img: HTMLImageElement, W: number, H: number): OffscreenCanvas {
-      const oc = new OffscreenCanvas(W, H);
-      const ctx = oc.getContext('2d')!;
-      ctx.drawImage(img, 0, 0, W, H);
-      const id = ctx.getImageData(0, 0, W, H);
-      const thresh = otsuThreshold(id);
-      for (let i = 0; i < id.data.length; i += 4) {
-        const g = 0.299 * id.data[i] + 0.587 * id.data[i+1] + 0.114 * id.data[i+2];
-        const v = g >= thresh ? 255 : 0;
-        id.data[i] = id.data[i+1] = id.data[i+2] = v; id.data[i+3] = 255;
-      }
-      ctx.putImageData(id, 0, 0);
-      return oc;
+      return stencilBinarize(img, W, H);
     }
 
     function renderBW(imgs: (HTMLImageElement | null)[], _params: Record<string, any>, _rng: () => number): Output[] {
@@ -1520,6 +1610,7 @@ import Admin from '../../../layouts/Admin.astro';
       const sCurveOut = [0, 40, 128, 215, 255];
 
       const makeHalftoneMask = (img: HTMLImageElement): OffscreenCanvas => {
+        const { bias, contrast, invert } = getStencilParams();
         const tmp = new OffscreenCanvas(W, H);
         tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
         const src = tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
@@ -1528,11 +1619,13 @@ import Admin from '../../../layouts/Admin.astro';
         for (let y = 0; y < H; y++) {
           for (let x = 0; x < W; x++) {
             const i = (y * W + x) * 4;
-            const g = piecewiseLerp(sCurveIn, sCurveOut, Math.round(0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2]));
+            const gRaw = piecewiseLerp(sCurveIn, sCurveOut, Math.round(0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2]));
+            const gAdj = Math.max(0, Math.min(255, 128 + (gRaw - 128) * contrast + bias));
             const xr = x * cosA + y * sinA;
             const yr = -x * sinA + y * cosA;
             const screen = (Math.cos(2 * Math.PI * xr / freq) * Math.cos(2 * Math.PI * yr / freq) + 1) / 2;
-            const v = (g / 255) > screen ? 255 : 0;
+            const lit = (gAdj / 255) > screen;
+            const v = invert ? (lit ? 0 : 255) : (lit ? 255 : 0);
             od.data[i] = od.data[i+1] = od.data[i+2] = v; od.data[i+3] = 255;
           }
         }
@@ -1610,6 +1703,7 @@ import Admin from '../../../layouts/Admin.astro';
       const MIN_LINE = 0.10;
 
       const makeLinescreenMask = (img: HTMLImageElement): OffscreenCanvas => {
+        const { bias, contrast, invert } = getStencilParams();
         const tmp = new OffscreenCanvas(W, H);
         tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
         const rawData = tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
@@ -1625,11 +1719,13 @@ import Admin from '../../../layouts/Admin.astro';
         for (let y = 0; y < H; y++) {
           for (let x = 0; x < W; x++) {
             const i = (y * W + x) * 4;
-            let g01 = blurred[i] / 255;
+            const gAdj = Math.max(0, Math.min(255, 128 + (blurred[i] - 128) * contrast + bias));
+            let g01 = gAdj / 255;
             g01 = Math.max(MIN_LINE, Math.min(1 - MIN_LINE, g01));
             const phase = x * cosA + y * sinA;
             const screen = (((phase % freq) + freq) % freq) / freq;
-            const v = g01 > screen ? 255 : 0;
+            const lit = g01 > screen;
+            const v = invert ? (lit ? 0 : 255) : (lit ? 255 : 0);
             od.data[i] = od.data[i+1] = od.data[i+2] = v; od.data[i+3] = 255;
           }
         }
@@ -1899,11 +1995,15 @@ import Admin from '../../../layouts/Admin.astro';
       const [W, H] = sizes.reduce((b, s) => s[0] * s[1] > b[0] * b[1] ? s : b);
 
       const getGray = (img: HTMLImageElement): Uint8Array => {
+        const { bias, contrast } = getStencilParams();
         const tmp = new OffscreenCanvas(W, H);
         tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
         const d = tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
         const g = new Uint8Array(W * H);
-        for (let i = 0; i < W * H; i++) g[i] = Math.round(0.299 * d[i*4] + 0.587 * d[i*4+1] + 0.114 * d[i*4+2]);
+        for (let i = 0; i < W * H; i++) {
+          const raw = Math.round(0.299 * d[i*4] + 0.587 * d[i*4+1] + 0.114 * d[i*4+2]);
+          g[i] = Math.max(0, Math.min(255, Math.round(128 + (raw - 128) * contrast + bias)));
+        }
         return g;
       };
       const getPixels = (img: HTMLImageElement): Uint8ClampedArray => {
@@ -1953,6 +2053,7 @@ import Admin from '../../../layouts/Admin.astro';
       inputs: number;
       inputLabels: string[];
       hasRandomness: boolean;
+      isStencil?: boolean;
       render: (imgs: (HTMLImageElement | null)[], params: Record<string, any>, rng: () => number) => Output[];
       buildParams?: () => void;
       getParams?: () => Record<string, any>;
@@ -1970,17 +2071,17 @@ import Admin from '../../../layouts/Admin.astro';
       },
       stencil: {
         label: 'Stencil', desc: 'Threshold mask with two fill images — swap to see both versions',
-        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false, isStencil: true,
         render: renderStencil,
       },
       bw: {
         label: 'BW', desc: 'Otsu threshold binarization to pure black and white',
-        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false, isStencil: true,
         render: renderBW,
       },
       cyanotype: {
         label: 'Cyanotype', desc: 'Blueprint-style toning via threshold and tint',
-        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: true,
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: true, isStencil: true,
         render: renderCyanotype,
       },
       wobbleeye: {
@@ -2019,7 +2120,7 @@ import Admin from '../../../layouts/Admin.astro';
       },
       stencilburn: {
         label: 'Stencil Burn', desc: 'Color burn and dodge blend four images into six stencil composites',
-        inputs: 4, inputLabels: ['Stencil A', 'Stencil B', 'Stencil C', 'Burn/Dodge'], hasRandomness: false,
+        inputs: 4, inputLabels: ['Stencil A', 'Stencil B', 'Stencil C', 'Burn/Dodge'], hasRandomness: false, isStencil: true,
         render: renderStencilBurn,
       },
       zellij: {
@@ -2034,13 +2135,13 @@ import Admin from '../../../layouts/Admin.astro';
       },
       halftone: {
         label: 'Halftone', desc: 'AM halftone dot screen composited with two fill images',
-        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false, isStencil: true,
         render: renderHalftone,
         buildParams: buildHalftoneParams, getParams: getHalftoneParams, setParams: setHalftoneParams,
       },
       linescreen: {
         label: 'Line Screen', desc: 'Parallel line screen composited with two fill images',
-        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false, isStencil: true,
         render: renderLinescreen,
         buildParams: buildLinescreenParams, getParams: getLinescreenParams, setParams: setLinescreenParams,
       },
@@ -2051,17 +2152,17 @@ import Admin from '../../../layouts/Admin.astro';
       },
       monochrome: {
         label: 'Monochrome', desc: 'Silver gelatin grayscale fills composited with stencil',
-        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false, isStencil: true,
         render: renderMonochrome,
       },
       silver: {
         label: 'Silver', desc: 'Tonal curve + halation glow applied to fills before stencil composite',
-        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: true,
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: true, isStencil: true,
         render: renderSilver,
       },
       quad: {
         label: 'Quad', desc: 'Three-level (black/grey/white) stencil — 24 fill permutations',
-        inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false,
+        inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, isStencil: true,
         render: renderQuad,
       },
     };
@@ -2421,6 +2522,7 @@ import Admin from '../../../layouts/Admin.astro';
       }
       const params = bot.getParams?.() ?? {};
       outputs = bot.render(effectiveImgs, params, rng);
+      appendStencilOutputs();
       activeOutputIdx = 0;
       renderStrip();
       setActiveOutput(0);
@@ -2434,6 +2536,7 @@ import Admin from '../../../layouts/Admin.astro';
       if (bot.hasRandomness) rng = mulberry32(currentSeed);
       const params = bot.getParams?.() ?? {};
       outputs = bot.render(effectiveImgs, params, rng);
+      appendStencilOutputs();
       renderStrip();
       setActiveOutput(activeOutputIdx < outputs.length ? activeOutputIdx : 0);
     }
@@ -2524,14 +2627,16 @@ import Admin from '../../../layouts/Admin.astro';
       bot.buildParams?.();
       enhanceSliders();
 
+      stencilParamsEl.style.display = bot.isStencil ? '' : 'none';
+
       // re-roll only makes sense for randomness bots
       rerollBtn.disabled = !bot.hasRandomness;
     }
 
     // ─── Slider number-input enhancement ──────────────────────────────────────
 
-    function enhanceSliders() {
-      paramsEl.querySelectorAll<HTMLInputElement>('input.pt-range').forEach(range => {
+    function enhanceSliders(container: HTMLElement = paramsEl) {
+      container.querySelectorAll<HTMLInputElement>('input.pt-range').forEach(range => {
         const num = document.createElement('input');
         num.type = 'number';
         num.className = 'pt-num-input';
@@ -2832,6 +2937,20 @@ import Admin from '../../../layouts/Admin.astro';
       clearTimeout(librarySearchTimer);
       librarySearchTimer = setTimeout(() => loadInputs(librarySearch.value), 300);
     });
+
+    // ─── Stencil controls ──────────────────────────────────────────────────────
+
+    enhanceSliders(stencilParamsEl);
+    let stencilDebounce: ReturnType<typeof setTimeout>;
+    document.getElementById('st-bias')?.addEventListener('input', (e) => {
+      document.getElementById('st-bias-val')!.textContent = (e.target as HTMLInputElement).value;
+      clearTimeout(stencilDebounce); stencilDebounce = setTimeout(doRender, 150);
+    });
+    document.getElementById('st-contrast')?.addEventListener('input', (e) => {
+      document.getElementById('st-contrast-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(2);
+      clearTimeout(stencilDebounce); stencilDebounce = setTimeout(doRender, 150);
+    });
+    document.getElementById('st-invert')?.addEventListener('change', () => doRender());
 
     // ─── Bot selector ──────────────────────────────────────────────────────────
 
