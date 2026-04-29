@@ -449,6 +449,8 @@ def _build_meili_filter(filters: SearchFilters | None) -> str | None:
 
     if filters.output_index == "__inputs__":
         parts.append("output_index IS NULL")
+    elif filters.output_index == "__outputs__":
+        parts.append("output_index IS NOT NULL")
     elif filters.output_index:
         parts.append(f'output_index = "{_escape_filter_value(filters.output_index)}"')
 

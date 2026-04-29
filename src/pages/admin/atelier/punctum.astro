@@ -67,10 +67,16 @@ import Admin from '../../../layouts/Admin.astro';
         <button class="pt-modal__close" id="library-close">✕</button>
       </div>
       <div class="pt-modal__tabs">
-        <button class="pt-modal__tab pt-modal__tab--active" id="lib-tab-library">Library</button>
+        <button class="pt-modal__tab pt-modal__tab--active" id="lib-tab-inputs">Inputs</button>
+        <button class="pt-modal__tab" id="lib-tab-outputs">Outputs</button>
         <button class="pt-modal__tab" id="lib-tab-workspace">Workspace</button>
+        <button class="pt-modal__tab" id="lib-tab-rand-inputs">⟳ In</button>
+        <button class="pt-modal__tab" id="lib-tab-rand-outputs">⟳ Out</button>
       </div>
-      <input class="pt-modal__search" type="text" id="library-search" placeholder="Search…" />
+      <div class="pt-modal__toolbar">
+        <input class="pt-modal__search" type="text" id="library-search" placeholder="Search…" />
+        <button class="pt-modal__shuffle" id="library-shuffle" style="display:none">↻ Shuffle</button>
+      </div>
       <div class="pt-modal__grid" id="library-grid">
         <div class="pt-modal__loading loading-dots">Loading</div>
       </div>
@@ -468,9 +474,10 @@ import Admin from '../../../layouts/Admin.astro';
     border-bottom: 2px solid transparent;
     color: var(--color-muted, #888);
     cursor: pointer;
-    font-size: var(--text-sm, 0.85rem);
-    padding: var(--space-sm) var(--space-md);
+    font-size: 0.75rem;
+    padding: 5px 8px;
     margin-bottom: -1px;
+    white-space: nowrap;
   }
 
   .pt-modal__tab--active {
@@ -478,20 +485,44 @@ import Admin from '../../../layouts/Admin.astro';
     border-bottom-color: var(--color-accent, #fff);
   }
 
+  .pt-modal__toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md) var(--space-xs);
+  }
+
   .pt-modal__search {
-    margin: var(--space-sm) var(--space-md);
+    flex: 1;
     background: var(--color-surface, #111);
     border: 1px solid var(--color-border, #333);
     color: #fff !important;
     border-radius: 3px;
     padding: 6px 10px;
     font-size: var(--text-sm, 0.85rem);
-    width: calc(100% - 2 * var(--space-md));
+    min-width: 0;
     box-sizing: border-box;
   }
 
   .pt-modal__search::placeholder {
     color: #666;
+  }
+
+  .pt-modal__shuffle {
+    flex-shrink: 0;
+    padding: 5px 10px;
+    font-size: 0.85rem;
+    background: var(--color-surface, #111);
+    color: var(--color-muted, #888);
+    border: 1px solid var(--color-border, #333);
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .pt-modal__shuffle:hover {
+    color: var(--color-text, #ccc);
+    border-color: var(--color-accent, #fff);
   }
 
   .pt-modal__grid {
@@ -560,12 +591,16 @@ import Admin from '../../../layouts/Admin.astro';
     const downloadBtn = document.getElementById('download-btn') as HTMLButtonElement;
     const saveBtn     = document.getElementById('save-btn') as HTMLButtonElement;
     const savePngBtn  = document.getElementById('save-png-btn') as HTMLButtonElement;
-    const libraryOverlay  = document.getElementById('library-overlay') as HTMLDivElement;
-    const libraryClose    = document.getElementById('library-close') as HTMLButtonElement;
-    const librarySearch   = document.getElementById('library-search') as HTMLInputElement;
-    const libraryGrid     = document.getElementById('library-grid') as HTMLDivElement;
-    const libTabLibrary   = document.getElementById('lib-tab-library') as HTMLButtonElement;
-    const libTabWorkspace = document.getElementById('lib-tab-workspace') as HTMLButtonElement;
+    const libraryOverlay    = document.getElementById('library-overlay')     as HTMLDivElement;
+    const libraryClose      = document.getElementById('library-close')        as HTMLButtonElement;
+    const librarySearch     = document.getElementById('library-search')       as HTMLInputElement;
+    const libraryGrid       = document.getElementById('library-grid')         as HTMLDivElement;
+    const libTabInputs      = document.getElementById('lib-tab-inputs')       as HTMLButtonElement;
+    const libTabOutputs     = document.getElementById('lib-tab-outputs')      as HTMLButtonElement;
+    const libTabWorkspace   = document.getElementById('lib-tab-workspace')    as HTMLButtonElement;
+    const libTabRandInputs  = document.getElementById('lib-tab-rand-inputs')  as HTMLButtonElement;
+    const libTabRandOutputs = document.getElementById('lib-tab-rand-outputs') as HTMLButtonElement;
+    const libraryShuffleBtn = document.getElementById('library-shuffle')      as HTMLButtonElement;
 
     // ─── Seeded PRNG (mulberry32) ──────────────────────────────────────────────
     function mulberry32(seed: number): () => number {
@@ -2045,8 +2080,11 @@ import Admin from '../../../layouts/Admin.astro';
     let outputs: Output[] = [];
     let activeOutputIdx = 0;
     let pendingSlot = 0;
-    let activeLibTab: 'library' | 'workspace' = 'library';
+    type LibTab = 'inputs' | 'outputs' | 'workspace' | 'rand-inputs' | 'rand-outputs';
+    let activeLibTab: LibTab = 'inputs';
     let librarySearchTimer: ReturnType<typeof setTimeout>;
+    let randInputsPool: any[] = [];
+    let randOutputsPool: any[] = [];
 
     // ─── Bullethole params ─────────────────────────────────────────────────────
 
@@ -2619,19 +2657,78 @@ import Admin from '../../../layouts/Admin.astro';
 
     // ─── Library modal ─────────────────────────────────────────────────────────
 
-    function setLibTab(tab: 'library' | 'workspace') {
+    const ALL_LIB_TABS = [libTabInputs, libTabOutputs, libTabWorkspace, libTabRandInputs, libTabRandOutputs];
+
+    function setLibTab(tab: LibTab) {
       activeLibTab = tab;
-      libTabLibrary.classList.toggle('pt-modal__tab--active', tab === 'library');
-      libTabWorkspace.classList.toggle('pt-modal__tab--active', tab === 'workspace');
-      librarySearch.style.display = tab === 'library' ? '' : 'none';
+      ALL_LIB_TABS.forEach(b => b.classList.remove('pt-modal__tab--active'));
+      ({ inputs: libTabInputs, outputs: libTabOutputs, workspace: libTabWorkspace,
+         'rand-inputs': libTabRandInputs, 'rand-outputs': libTabRandOutputs } as Record<LibTab, HTMLButtonElement>)[tab]
+        .classList.add('pt-modal__tab--active');
+      librarySearch.style.display     = tab === 'inputs' ? '' : 'none';
+      libraryShuffleBtn.style.display = (tab === 'rand-inputs' || tab === 'rand-outputs') ? '' : 'none';
     }
 
     function openLibrary(slotIdx: number) {
       pendingSlot = slotIdx;
-      setLibTab('library');
+      setLibTab('inputs');
       libraryOverlay.style.display = 'flex';
       librarySearch.value = '';
-      loadLibrary('');
+      loadInputs('');
+    }
+
+    function renderGrid(items: { id: string; filename?: string }[]) {
+      if (items.length === 0) {
+        libraryGrid.innerHTML = '<div class="pt-modal__loading">No images found</div>';
+        return;
+      }
+      libraryGrid.innerHTML = '';
+      for (const item of items) {
+        const img = document.createElement('img');
+        img.className = 'pt-lib-thumb';
+        img.src = `/api/media/${item.id}/thumbnail`;
+        img.alt = item.filename || '';
+        img.loading = 'lazy';
+        img.addEventListener('click', () => {
+          libraryOverlay.style.display = 'none';
+          loadSlotFromUrl(pendingSlot, `/api/media/${item.id}/file`, item.id);
+        });
+        libraryGrid.appendChild(img);
+      }
+    }
+
+    async function loadInputs(q: string) {
+      libraryGrid.innerHTML = '<div class="pt-modal__loading loading-dots">Loading</div>';
+      try {
+        const res = await fetch('/api/search', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: q, media_types: ['image'], sort: 'created_at:desc',
+                                 page: 1, per_page: 48, filters: { output_index: '__inputs__' } }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        renderGrid(data.results || data.hits || []);
+      } catch (err: any) {
+        libraryGrid.innerHTML = `<div class="pt-modal__loading">Error: ${err.message}</div>`;
+      }
+    }
+
+    async function loadOutputs() {
+      libraryGrid.innerHTML = '<div class="pt-modal__loading loading-dots">Loading</div>';
+      try {
+        const res = await fetch('/api/search', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: '', media_types: ['image'], sort: 'created_at:desc',
+                                 page: 1, per_page: 48, filters: { output_index: '__outputs__' } }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        renderGrid(data.results || data.hits || []);
+      } catch (err: any) {
+        libraryGrid.innerHTML = `<div class="pt-modal__loading">Error: ${err.message}</div>`;
+      }
     }
 
     async function loadWorkspace() {
@@ -2668,46 +2765,72 @@ import Admin from '../../../layouts/Admin.astro';
       }
     }
 
-    async function loadLibrary(q: string) {
-      libraryGrid.innerHTML = '<div class="pt-modal__loading loading-dots">Loading</div>';
-      try {
-        const res = await fetch('/api/search', {
-          method: 'POST', credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: q, media_types: ['image'], sort: 'created_at:desc', page: 1, per_page: 48, filters: {} }),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        const results: any[] = data.results || data.hits || [];
-        if (results.length === 0) {
-          libraryGrid.innerHTML = '<div class="pt-modal__loading">No images found</div>';
+    async function loadRandInputs() {
+      if (randInputsPool.length === 0) {
+        libraryGrid.innerHTML = '<div class="pt-modal__loading loading-dots">Loading</div>';
+        try {
+          const res = await fetch('/api/search', {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: '', media_types: ['image'], sort: 'created_at:desc',
+                                   page: 1, per_page: 200, filters: { output_index: '__inputs__' } }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          randInputsPool = (data.results || data.hits || []).slice(48);
+        } catch (err: any) {
+          libraryGrid.innerHTML = `<div class="pt-modal__loading">Error: ${err.message}</div>`;
           return;
         }
-        libraryGrid.innerHTML = '';
-        for (const item of results) {
-          const img = document.createElement('img');
-          img.className = 'pt-lib-thumb';
-          img.src = `/api/media/${item.id}/thumbnail`;
-          img.alt = item.filename || '';
-          img.loading = 'lazy';
-          img.addEventListener('click', () => {
-            libraryOverlay.style.display = 'none';
-            loadSlotFromUrl(pendingSlot, `/api/media/${item.id}/file`, item.id);
-          });
-          libraryGrid.appendChild(img);
-        }
-      } catch (err: any) {
-        libraryGrid.innerHTML = `<div class="pt-modal__loading">Error: ${err.message}</div>`;
       }
+      const pool = [...randInputsPool];
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+      renderGrid(pool.slice(0, 48));
+    }
+
+    async function loadRandOutputs() {
+      if (randOutputsPool.length === 0) {
+        libraryGrid.innerHTML = '<div class="pt-modal__loading loading-dots">Loading</div>';
+        try {
+          const res = await fetch('/api/search', {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: '', media_types: ['image'], sort: 'created_at:desc',
+                                   page: 1, per_page: 200, filters: { output_index: '__outputs__' } }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          randOutputsPool = (data.results || data.hits || []).slice(48);
+        } catch (err: any) {
+          libraryGrid.innerHTML = `<div class="pt-modal__loading">Error: ${err.message}</div>`;
+          return;
+        }
+      }
+      const pool = [...randOutputsPool];
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+      renderGrid(pool.slice(0, 48));
     }
 
     libraryClose.addEventListener('click', () => { libraryOverlay.style.display = 'none'; });
     libraryOverlay.addEventListener('click', (e) => { if (e.target === libraryOverlay) libraryOverlay.style.display = 'none'; });
-    libTabLibrary.addEventListener('click', () => { setLibTab('library'); loadLibrary(librarySearch.value); });
-    libTabWorkspace.addEventListener('click', () => { setLibTab('workspace'); loadWorkspace(); });
+    libTabInputs.addEventListener('click',      () => { setLibTab('inputs');       loadInputs(librarySearch.value); });
+    libTabOutputs.addEventListener('click',     () => { setLibTab('outputs');      loadOutputs(); });
+    libTabWorkspace.addEventListener('click',   () => { setLibTab('workspace');    loadWorkspace(); });
+    libTabRandInputs.addEventListener('click',  () => { setLibTab('rand-inputs');  loadRandInputs(); });
+    libTabRandOutputs.addEventListener('click', () => { setLibTab('rand-outputs'); loadRandOutputs(); });
+    libraryShuffleBtn.addEventListener('click', () => {
+      if (activeLibTab === 'rand-inputs')  loadRandInputs();
+      if (activeLibTab === 'rand-outputs') loadRandOutputs();
+    });
     librarySearch.addEventListener('input', () => {
       clearTimeout(librarySearchTimer);
-      librarySearchTimer = setTimeout(() => loadLibrary(librarySearch.value), 300);
+      librarySearchTimer = setTimeout(() => loadInputs(librarySearch.value), 300);
     });
 
     // ─── Bot selector ──────────────────────────────────────────────────────────
