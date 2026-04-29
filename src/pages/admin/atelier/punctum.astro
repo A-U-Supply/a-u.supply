@@ -3230,7 +3230,7 @@ import Admin from '../../../layouts/Admin.astro';
       bot.buildParams?.();
       enhanceSliders();
 
-      stencilParamsEl.style.display = bot.isStencil ? '' : 'none';
+      stencilParamsEl.style.display = bot.isStencil ? 'flex' : 'none';
 
       // re-roll only makes sense for randomness bots
       rerollBtn.disabled = !bot.hasRandomness;
