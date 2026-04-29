@@ -56,8 +56,10 @@ import Admin from '../../../layouts/Admin.astro';
     </div>
     <div class="pt-actions">
       <button class="btn btn--secondary" id="reroll-btn" disabled>⟳ Re-roll</button>
+      <input type="number" id="seed-input" class="pt-seed-input" style="display:none" placeholder="seed" min="1" max="2147483647" step="1" />
       <button class="btn btn--secondary" id="download-btn" disabled>↓ Download</button>
       <button class="btn btn--primary"   id="save-btn"     disabled>☁ Save</button>
+      <button class="btn btn--secondary" id="save-all-btn" disabled>☁ All</button>
       <button class="btn btn--secondary" id="save-png-btn" disabled>☁ HD PNG</button>
     </div>
   </div>
@@ -440,6 +442,7 @@ import Admin from '../../../layouts/Admin.astro';
     align-items: center;
     gap: 4px;
     cursor: pointer;
+    position: relative;
   }
 
   .pt-thumb__canvas {
@@ -460,6 +463,40 @@ import Admin from '../../../layouts/Admin.astro';
     color: var(--color-muted, #888);
     font-family: var(--font-mono, monospace);
   }
+
+  .pt-thumb__send {
+    position: absolute;
+    bottom: 18px;
+    left: 0; right: 0;
+    display: none;
+    justify-content: center;
+    gap: 2px;
+  }
+  .pt-thumb:hover .pt-thumb__send { display: flex; }
+  .pt-thumb__send-btn {
+    background: rgba(0,0,0,0.72);
+    color: #fff;
+    border: none;
+    border-radius: 2px;
+    padding: 2px 5px;
+    font-size: 0.68rem;
+    cursor: pointer;
+    line-height: 1.4;
+  }
+  .pt-thumb__send-btn:hover { background: rgba(40,100,40,0.88); }
+
+  .pt-seed-input {
+    width: 90px;
+    background: var(--color-surface, #111);
+    color: #fff;
+    border: 1px solid var(--color-border, #333);
+    border-radius: 3px;
+    padding: 5px 8px;
+    font-size: var(--text-sm, 0.85rem);
+    -moz-appearance: textfield;
+  }
+  .pt-seed-input::-webkit-outer-spin-button,
+  .pt-seed-input::-webkit-inner-spin-button { -webkit-appearance: none; }
 
   /* Library modal */
   .pt-modal-overlay {
@@ -634,8 +671,10 @@ import Admin from '../../../layouts/Admin.astro';
     const stencilParamsEl = document.getElementById('pt-stencil-params') as HTMLDivElement;
     const stripEl     = document.getElementById('pt-strip') as HTMLDivElement;
     const rerollBtn   = document.getElementById('reroll-btn') as HTMLButtonElement;
+    const seedInput   = document.getElementById('seed-input') as HTMLInputElement;
     const downloadBtn = document.getElementById('download-btn') as HTMLButtonElement;
     const saveBtn     = document.getElementById('save-btn') as HTMLButtonElement;
+    const saveAllBtn  = document.getElementById('save-all-btn') as HTMLButtonElement;
     const savePngBtn  = document.getElementById('save-png-btn') as HTMLButtonElement;
     const libraryOverlay    = document.getElementById('library-overlay')     as HTMLDivElement;
     const libraryClose      = document.getElementById('library-close')        as HTMLButtonElement;
@@ -3182,6 +3221,7 @@ import Admin from '../../../layouts/Admin.astro';
       if (bot.hasRandomness) {
         currentSeed = seed !== undefined ? seed : (Math.random() * 2**31 | 0) || 1;
         rng = mulberry32(currentSeed);
+        seedInput.value = String(currentSeed);
       }
       const params = bot.getParams?.() ?? {};
       outputs = bot.render(effectiveImgs, params, rng);
@@ -3250,6 +3290,24 @@ import Admin from '../../../layouts/Admin.astro';
 
         wrapper.appendChild(tc);
         wrapper.appendChild(lbl);
+
+        const bot = BOTS[currentBot];
+        const sendWrap = document.createElement('div');
+        sendWrap.className = 'pt-thumb__send';
+        for (let s = 0; s < bot.inputs; s++) {
+          const sb = document.createElement('button');
+          sb.className = 'pt-thumb__send-btn';
+          sb.textContent = bot.inputs === 1 ? '→' : `→${s + 1}`;
+          sb.title = `Use as ${bot.inputLabels[s] ?? `Slot ${s + 1}`}`;
+          const oIdx = i, sIdx = s;
+          sb.addEventListener('click', (e) => {
+            e.stopPropagation();
+            loadSlotFromCanvas(sIdx, outputs[oIdx].canvas);
+          });
+          sendWrap.appendChild(sb);
+        }
+        wrapper.appendChild(sendWrap);
+
         wrapper.addEventListener('click', () => setActiveOutput(i));
         stripEl.appendChild(wrapper);
       });
@@ -3259,6 +3317,7 @@ import Admin from '../../../layouts/Admin.astro';
       rerollBtn.disabled   = !on || !BOTS[currentBot].hasRandomness;
       downloadBtn.disabled = !on;
       saveBtn.disabled     = !on;
+      saveAllBtn.disabled  = !on;
       savePngBtn.disabled  = !on;
     }
 
@@ -3291,6 +3350,7 @@ import Admin from '../../../layouts/Admin.astro';
       enhanceSliders();
 
       stencilParamsEl.style.display = bot.isStencil ? 'flex' : 'none';
+      seedInput.style.display = bot.hasRandomness ? '' : 'none';
 
       // re-roll only makes sense for randomness bots
       rerollBtn.disabled = !bot.hasRandomness;
@@ -3364,6 +3424,21 @@ import Admin from '../../../layouts/Admin.astro';
       img.src = url;
     }
 
+    function loadSlotFromCanvas(slotIdx: number, canvas: HTMLCanvasElement) {
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        sourceIds[slotIdx] = null;
+        const img = new Image();
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          sourceImgs[slotIdx] = img;
+          onSlotLoaded(slotIdx);
+        };
+        img.src = url;
+      }, 'image/png');
+    }
+
     // ─── atelier metadata ──────────────────────────────────────────────────────
 
     function atelierMeta(): string {
@@ -3411,6 +3486,10 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     rerollBtn.addEventListener('click', () => doReroll());
+    seedInput.addEventListener('change', () => {
+      const v = parseInt(seedInput.value);
+      if (v >= 1) doReroll(v);
+    });
     downloadBtn.addEventListener('click', () => {
       if (outputs.length === 0) return;
       const link = document.createElement('a');
@@ -3422,6 +3501,35 @@ import Admin from '../../../layouts/Admin.astro';
       saveToOutputs('image/jpeg', `${currentBot}.jpg`, saveBtn, '☁ Save'));
     savePngBtn.addEventListener('click', () =>
       saveToOutputs('image/png', `${currentBot}.png`, savePngBtn, '☁ HD PNG'));
+    saveAllBtn.addEventListener('click', async () => {
+      if (outputs.length === 0) return;
+      saveAllBtn.disabled = true;
+      const orig = saveAllBtn.textContent!;
+      let saved = 0;
+      for (let i = 0; i < outputs.length; i++) {
+        saveAllBtn.textContent = `${i + 1}/${outputs.length}`;
+        const out = outputs[i];
+        await new Promise<void>((resolve) => {
+          out.canvas.toBlob(async (blob) => {
+            if (!blob) { resolve(); return; }
+            try {
+              const ext = out.mimeType === 'image/png' ? 'png' : 'jpg';
+              const fd = new FormData();
+              fd.append('file', blob, `${currentBot}-${i}.${ext}`);
+              fd.append('tags', `${currentBot},atelier,punctum`);
+              fd.append('output_index', 'outputs');
+              fd.append('description', JSON.stringify({ atelier: 'punctum', v: 1, bot: currentBot, source_ids: sourceIds.slice(0, BOTS[currentBot].inputs), seed: currentSeed, output_idx: i, params: BOTS[currentBot].getParams?.() ?? {} }));
+              await fetch('/api/media/upload', { method: 'POST', body: fd, credentials: 'include' });
+              saved++;
+            } catch {}
+            resolve();
+          }, out.mimeType, out.mimeType === 'image/jpeg' ? 0.85 : undefined);
+        });
+      }
+      saveAllBtn.disabled = false;
+      saveAllBtn.textContent = orig;
+      (window as any).toast?.success(`Saved ${saved} of ${outputs.length}`);
+    });
 
     // ─── Library modal ─────────────────────────────────────────────────────────
 
