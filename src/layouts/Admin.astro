@@ -211,14 +211,17 @@ const { title, current } = Astro.props;
     if (loader) loader.style.display = 'block';
   });
 
-  // Page-specific body backgrounds: set/clear on every swap before scripts re-run
-  document.addEventListener('astro:after-swap', () => {
+  // Page-specific body backgrounds: astro:after-swap covers ViewTransitions,
+  // astro:page-load covers initial load and hard refresh
+  function applyPageBackground() {
     if (window.location.pathname === '/admin/atelier/punctum') {
       document.body.style.background = '#221c00';
     } else {
       document.body.style.removeProperty('background');
     }
-  });
+  }
+  document.addEventListener('astro:after-swap', applyPageBackground);
+  document.addEventListener('astro:page-load', applyPageBackground);
 
   document.addEventListener('astro:page-load', () => {
 
