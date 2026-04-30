@@ -200,7 +200,7 @@ import Admin from '../../../layouts/Admin.astro';
     background: var(--color-surface, #111);
     border: 1px solid #444;
     border-radius: 4px;
-    overflow: hidden;
+    position: relative;
   }
   .pt-slot.locked {
     border-left: 3px solid #e07b54;
@@ -316,12 +316,19 @@ import Admin from '../../../layouts/Admin.astro';
 
   /* ── Fit sub-panel ── */
   .pt-slot__fit-panel {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 20;
     display: flex;
     flex-wrap: wrap;
     gap: 3px;
     padding: 5px;
-    border-top: 1px solid var(--color-border, #333);
-    background: rgba(255,255,255,0.02);
+    border: 1px solid #444;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    background: #1a1a1a;
   }
   .pt-slot__fit-opt {
     flex: 1 1 auto;
@@ -3342,7 +3349,7 @@ import Admin from '../../../layouts/Admin.astro';
             <button class="pt-slot__btn pt-slot__btn--fit" data-slot-fit="${i}" disabled
               data-tooltip="Crop to square or match another slot">
               <span class="pt-slot__btn-icon">⊡</span>
-              <span class="pt-slot__btn-lbl">FIT</span>
+              <span class="pt-slot__btn-lbl">CROP</span>
             </button>
           </div>
           <div class="pt-slot__fit-panel" id="slot-fit-panel-${i}" style="display:none"></div>
