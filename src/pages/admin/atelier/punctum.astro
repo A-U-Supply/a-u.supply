@@ -190,6 +190,7 @@ import Admin from '../../../layouts/Admin.astro';
     display: flex;
     gap: var(--space-sm);
     flex-wrap: wrap;
+    align-items: flex-start;
   }
 
   /* ── Card ── */
@@ -252,7 +253,7 @@ import Admin from '../../../layouts/Admin.astro';
   /* ── Drop area ── */
   .pt-slot__drop {
     width: 100%;
-    aspect-ratio: 1;
+    min-height: 60px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -264,8 +265,8 @@ import Admin from '../../../layouts/Admin.astro';
   .pt-slot__drop:hover,
   .pt-slot__drop.drag-over { outline: 1px solid var(--color-accent, #fff); }
   .pt-slot__thumb {
-    width: 100%; height: 100%;
-    object-fit: cover;
+    width: 100%;
+    height: auto;
     display: none;
   }
   .pt-slot__empty-icon {
@@ -371,10 +372,15 @@ import Admin from '../../../layouts/Admin.astro';
   [data-tooltip]:hover::after { opacity: 1; }
 
   /* ── Mobile: full-width stacked slots ── */
+  /* ── RATIO button active state ── */
+  .pt-slot__btn--fit.ratio-active {
+    color: #e07b54;
+  }
+
+  /* ── Mobile: full-width stacked slots ── */
   @media (max-width: 540px) {
     .pt-slots { flex-direction: column; }
     .pt-slot { max-width: 100%; flex: 1 1 100%; }
-    .pt-slot__drop { aspect-ratio: 4/3; }
   }
 
   /* Params bar (above canvas) */
@@ -3310,7 +3316,12 @@ import Admin from '../../../layouts/Admin.astro';
         (btn as HTMLButtonElement).disabled = !loaded;
       });
       const fitBtn = slotsEl.querySelector(`[data-slot-fit="${slotIdx}"]`) as HTMLButtonElement | null;
-      if (fitBtn) fitBtn.disabled = !loaded;
+      if (fitBtn) {
+        fitBtn.disabled = !loaded;
+        const isRatioActive = !!slotTransforms[slotIdx]?.aspect;
+        fitBtn.classList.toggle('ratio-active', isRatioActive);
+        fitBtn.querySelector('.pt-slot__btn-lbl')!.textContent = isRatioActive ? 'RATIO·ON' : 'RATIO';
+      }
     }
 
     function buildSlots(bot: BotDef) {
@@ -3352,9 +3363,9 @@ import Admin from '../../../layouts/Admin.astro';
               <span class="pt-slot__btn-lbl">FLIP</span>
             </button>
             <button class="pt-slot__btn pt-slot__btn--fit" data-slot-fit="${i}" disabled
-              data-tooltip="Crop to square or match another slot">
+              data-tooltip="Crop image to a fixed aspect ratio">
               <span class="pt-slot__btn-icon">⊡</span>
-              <span class="pt-slot__btn-lbl">CROP</span>
+              <span class="pt-slot__btn-lbl">RATIO</span>
             </button>
           </div>
           <div class="pt-slot__fit-panel" id="slot-fit-panel-${i}" style="display:none"></div>
@@ -3412,31 +3423,59 @@ import Admin from '../../../layouts/Admin.astro';
           lockBtn.querySelector('.pt-slot__lock-icon')!.textContent = slotLocked[slotIdx] ? '🔒' : '🔓';
         });
 
-        // FIT button
+        // RATIO button
+        function gcd(a: number, b: number): number { return b === 0 ? a : gcd(b, a % b); }
+        function approxRatio(w: number, h: number): string {
+          const d = gcd(w, h);
+          const rw = w / d, rh = h / d;
+          if (rw <= 16 && rh <= 16) return `${rw}:${rh}`;
+          return `${(w / h).toFixed(2)}`;
+        }
         const fitBtn = slotsEl.querySelector(`[data-slot-fit="${i}"]`) as HTMLButtonElement;
         fitBtn.addEventListener('click', () => {
           const panel = document.getElementById(`slot-fit-panel-${slotIdx}`)!;
           if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
           panel.innerHTML = '';
+
+          // Off — clears ratio
+          const offBtn = document.createElement('button');
+          offBtn.className = 'pt-slot__fit-opt';
+          offBtn.textContent = 'Off';
+          offBtn.addEventListener('click', () => {
+            delete slotTransforms[slotIdx].aspect;
+            applyTransformAndUpdate(slotIdx).then(() => { if (allSlotsReady()) doRender(); });
+            fitBtn.classList.remove('ratio-active');
+            fitBtn.querySelector('.pt-slot__btn-lbl')!.textContent = 'RATIO';
+            panel.style.display = 'none';
+          });
+          panel.appendChild(offBtn);
+
+          // Square · 1:1
           const squareBtn = document.createElement('button');
           squareBtn.className = 'pt-slot__fit-opt';
-          squareBtn.textContent = 'Square';
+          squareBtn.textContent = 'Square · 1:1';
           squareBtn.addEventListener('click', () => {
             slotTransforms[slotIdx].aspect = 1;
             applyTransformAndUpdate(slotIdx).then(() => { if (allSlotsReady()) doRender(); });
+            fitBtn.classList.add('ratio-active');
+            fitBtn.querySelector('.pt-slot__btn-lbl')!.textContent = 'RATIO·ON';
             panel.style.display = 'none';
           });
           panel.appendChild(squareBtn);
+
+          // Match other loaded slots
           for (let j = 0; j < BOTS[currentBot].inputs; j++) {
             if (j === slotIdx || !effectiveImgs[j]) continue;
             const img = effectiveImgs[j]!;
             const ratio = img.naturalWidth / img.naturalHeight;
             const matchBtn = document.createElement('button');
             matchBtn.className = 'pt-slot__fit-opt';
-            matchBtn.textContent = `Slot ${j + 1}`;
+            matchBtn.textContent = `Slot ${j + 1} · ${approxRatio(img.naturalWidth, img.naturalHeight)}`;
             matchBtn.addEventListener('click', () => {
               slotTransforms[slotIdx].aspect = ratio;
               applyTransformAndUpdate(slotIdx).then(() => { if (allSlotsReady()) doRender(); });
+              fitBtn.classList.add('ratio-active');
+              fitBtn.querySelector('.pt-slot__btn-lbl')!.textContent = 'RATIO·ON';
               panel.style.display = 'none';
             });
             panel.appendChild(matchBtn);
@@ -3650,7 +3689,12 @@ import Admin from '../../../layouts/Admin.astro';
     // ─── Load image into slot ──────────────────────────────────────────────────
 
     function onSlotLoaded(slotIdx: number) {
-      slotTransforms[slotIdx] = { rot: 0, flip: false }; // aspect intentionally absent
+      slotTransforms[slotIdx] = { rot: 0, flip: false }; // aspect intentionally absent — cleared on new image load
+      const fitBtn = slotsEl.querySelector(`[data-slot-fit="${slotIdx}"]`) as HTMLButtonElement | null;
+      if (fitBtn) {
+        fitBtn.classList.remove('ratio-active');
+        fitBtn.querySelector('.pt-slot__btn-lbl')!.textContent = 'RATIO';
+      }
       applyTransformAndUpdate(slotIdx).then(() => {
         updateXformButtons(slotIdx);
         if (allSlotsReady()) doReroll();
