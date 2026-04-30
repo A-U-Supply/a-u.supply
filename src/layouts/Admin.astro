@@ -211,9 +211,16 @@ const { title, current } = Astro.props;
     if (loader) loader.style.display = 'block';
   });
 
+  // Page-specific body backgrounds: set/clear on every swap before scripts re-run
+  document.addEventListener('astro:after-swap', () => {
+    if (window.location.pathname === '/admin/atelier/punctum') {
+      document.body.style.background = '#221c00';
+    } else {
+      document.body.style.removeProperty('background');
+    }
+  });
+
   document.addEventListener('astro:page-load', () => {
-    // Clear any page-specific body background set by the previous page
-    document.body.style.removeProperty('background');
 
     const loader = document.getElementById('page-loading');
     if (loader) loader.style.display = 'none';
