@@ -212,6 +212,9 @@ const { title, current } = Astro.props;
   });
 
   document.addEventListener('astro:page-load', () => {
+    // Clear any page-specific body background set by the previous page
+    document.body.style.removeProperty('background');
+
     const loader = document.getElementById('page-loading');
     if (loader) loader.style.display = 'none';
 
