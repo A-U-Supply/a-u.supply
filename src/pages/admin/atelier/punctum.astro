@@ -90,6 +90,8 @@ import Admin from '../../../layouts/Admin.astro';
     <div class="pt-modal">
       <div class="pt-modal__header">
         <h2>Pick an Image</h2>
+        <input type="file" accept="image/*" id="library-upload-file" style="display:none" />
+        <button class="pt-modal__import" id="library-upload-btn">↑ Import</button>
         <button class="pt-modal__close" id="library-close">✕</button>
       </div>
       <div class="pt-modal__tabs">
@@ -102,8 +104,6 @@ import Admin from '../../../layouts/Admin.astro';
       <div class="pt-modal__toolbar">
         <input class="pt-modal__search" type="text" id="library-search" placeholder="Search…" />
         <button class="pt-modal__shuffle" id="library-shuffle" style="display:none">↻ Shuffle</button>
-        <input type="file" accept="image/*" id="library-upload-file" style="display:none" />
-        <button class="pt-modal__upload" id="library-upload-btn">↑ Upload</button>
       </div>
       <div class="pt-modal__grid" id="library-grid">
         <div class="pt-modal__loading loading-dots">Loading</div>
@@ -705,20 +705,21 @@ import Admin from '../../../layouts/Admin.astro';
     border-color: var(--color-accent, #fff);
   }
 
-  .pt-modal__upload {
-    flex-shrink: 0;
-    padding: 5px 10px;
-    font-size: 0.85rem;
-    background: var(--color-surface, #111);
+  .pt-modal__import {
+    margin-left: auto;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    background: none;
     color: var(--color-muted, #888);
-    border: 1px solid var(--color-border, #333);
+    border: 1px solid #555;
     border-radius: 3px;
     cursor: pointer;
     white-space: nowrap;
+    font-family: var(--font-mono);
   }
-  .pt-modal__upload:hover {
-    color: var(--color-text, #ccc);
-    border-color: var(--color-accent, #fff);
+  .pt-modal__import:hover {
+    color: #fff;
+    border-color: #aaa;
   }
 
   .pt-modal__grid {
