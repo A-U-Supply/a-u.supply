@@ -2864,6 +2864,641 @@ import Admin from '../../../layouts/Admin.astro';
       if (p['soap-power-exp'] != null) { (document.getElementById('soap-power-exp') as HTMLInputElement).value = String(p['soap-power-exp']); document.getElementById('soap-power-exp-val')!.textContent = parseFloat(p['soap-power-exp']).toFixed(1); }
     }
 
+    // ─── Halation Edge ────────────────────────────────────────────────────────
+
+    function makeHalationMask(img: HTMLImageElement, W: number, H: number, params: Record<string, any>): OffscreenCanvas {
+      const width: number = params['he-width'] ?? 10;
+      const freq: number  = params['he-freq']  ?? 6;
+      const angle: number = params['he-angle'] ?? 45;
+      const { bias, contrast, invert } = getStencilParams();
+      const tmp = new OffscreenCanvas(W, H);
+      tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+      const raw = tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+      // Grayscale + bias/contrast → binary pixels
+      const maskPx = new Uint8ClampedArray(W * H * 4);
+      const gray = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) {
+        const g = 0.299*raw[i*4] + 0.587*raw[i*4+1] + 0.114*raw[i*4+2];
+        gray[i] = Math.max(0, Math.min(255, 128 + (g - 128) * contrast + bias));
+        const v = gray[i] >= 128 ? 255 : 0;
+        maskPx[i*4] = maskPx[i*4+1] = maskPx[i*4+2] = v; maskPx[i*4+3] = 255;
+      }
+      // Soft blur of binary mask — approximates dilate+erode edge zone
+      const blurred = applyBlur(maskPx, W, H, width);
+      // Halftone noise pattern
+      const rad = angle * Math.PI / 180;
+      const cosA = Math.cos(rad), sinA = Math.sin(rad);
+      const noise = new Float32Array(W * H);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const xr = x*cosA + y*sinA, yr = -x*sinA + y*cosA;
+        const pattern = (Math.cos(2*Math.PI*xr/freq) * Math.cos(2*Math.PI*yr/freq) + 1) / 2;
+        noise[y*W+x] = Math.min(1, pattern + Math.random()*0.08);
+      }
+      // Blend noise into edge zone
+      const oc = new OffscreenCanvas(W, H);
+      const od = oc.getContext('2d')!.createImageData(W, H);
+      for (let i = 0; i < W * H; i++) {
+        const softVal = blurred[i*4] / 255;
+        const origBin = gray[i] >= 128 ? 1 : 0;
+        const edgeStr = Math.min(softVal, 1 - softVal) * 2;
+        const mixed = origBin*(1-edgeStr) + noise[i]*edgeStr;
+        let v = mixed >= 0.5 ? 255 : 0;
+        if (invert) v = 255 - v;
+        od.data[i*4] = od.data[i*4+1] = od.data[i*4+2] = v; od.data[i*4+3] = 255;
+      }
+      oc.getContext('2d')!.putImageData(od, 0, 0);
+      return oc;
+    }
+
+    function renderHalationEdge(imgs: (HTMLImageElement | null)[], params: Record<string, any>, _rng: () => number): Output[] {
+      if (!imgs[0] || !imgs[1] || !imgs[2]) return [];
+      const W = imgs[0].naturalWidth, H = imgs[0].naturalHeight;
+      const masks = (imgs as HTMLImageElement[]).map(img => makeHalationMask(img, W, H, params));
+      const pixelData = (imgs as HTMLImageElement[]).map(img => {
+        const tmp = new OffscreenCanvas(W, H); tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+        return tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+      });
+      const out: Output[] = [];
+      for (const [s, a, b] of STENCIL_PERMS) {
+        const sd = masks[s].getContext('2d')!.getImageData(0, 0, W, H).data;
+        const ad = pixelData[a], bd = pixelData[b];
+        const oc = new OffscreenCanvas(W, H);
+        const od = oc.getContext('2d')!.createImageData(W, H);
+        for (let i = 0; i < W * H; i++) {
+          const src = sd[i*4] >= 128 ? ad : bd;
+          od.data[i*4]=src[i*4]; od.data[i*4+1]=src[i*4+1]; od.data[i*4+2]=src[i*4+2]; od.data[i*4+3]=255;
+        }
+        oc.getContext('2d')!.putImageData(od, 0, 0);
+        out.push({ canvas: ocToCanvas(oc), label: `S${s+1} ${a+1}/${b+1}`, mimeType: 'image/jpeg' });
+      }
+      ['A','B','C'].forEach((lbl, i) => out.push({ canvas: ocToCanvas(masks[i]), label: `Mask ${lbl}`, mimeType: 'image/png' }));
+      return out;
+    }
+
+    function buildHalationEdgeParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="he-width">Width <span class="pt-val" id="he-width-val">10</span></label>
+          <input class="pt-range" type="range" id="he-width" min="2" max="40" step="1" value="10" />
+          <div class="pt-range-hints"><span>2</span><span>40</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="he-freq">Frequency <span class="pt-val" id="he-freq-val">6</span></label>
+          <input class="pt-range" type="range" id="he-freq" min="2" max="20" step="1" value="6" />
+          <div class="pt-range-hints"><span>2</span><span>20</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="he-angle">Angle <span class="pt-val" id="he-angle-val">45°</span></label>
+          <input class="pt-range" type="range" id="he-angle" min="0" max="180" step="5" value="45" />
+          <div class="pt-range-hints"><span>0°</span><span>180°</span></div>
+        </div>`;
+      enhanceSliders();
+      const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+      const dRender = debounce(() => doRender(), 200);
+      document.getElementById('he-width')!.addEventListener('input', (e) => { document.getElementById('he-width-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+      document.getElementById('he-freq')!.addEventListener('input', (e) => { document.getElementById('he-freq-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+      document.getElementById('he-angle')!.addEventListener('input', (e) => { document.getElementById('he-angle-val')!.textContent = (e.target as HTMLInputElement).value + '°'; dRender(); });
+    }
+    function getHalationEdgeParams(): Record<string, any> {
+      return {
+        'he-width': parseInt((document.getElementById('he-width') as HTMLInputElement).value, 10),
+        'he-freq':  parseInt((document.getElementById('he-freq')  as HTMLInputElement).value, 10),
+        'he-angle': parseFloat((document.getElementById('he-angle') as HTMLInputElement).value),
+      };
+    }
+    function setHalationEdgeParams(p: Record<string, any>) {
+      if (p['he-width'] != null) { (document.getElementById('he-width') as HTMLInputElement).value = String(p['he-width']); document.getElementById('he-width-val')!.textContent = String(p['he-width']); }
+      if (p['he-freq']  != null) { (document.getElementById('he-freq')  as HTMLInputElement).value = String(p['he-freq']);  document.getElementById('he-freq-val')!.textContent  = String(p['he-freq']); }
+      if (p['he-angle'] != null) { (document.getElementById('he-angle') as HTMLInputElement).value = String(p['he-angle']); document.getElementById('he-angle-val')!.textContent = p['he-angle'] + '°'; }
+    }
+
+    // ─── Curvy Line Screen ────────────────────────────────────────────────────
+
+    function makeCurvyLinescreenMask(img: HTMLImageElement, W: number, H: number, params: Record<string, any>): OffscreenCanvas {
+      const freq: number         = params['clv-freq']  ?? 30;
+      const defaultAngle: number = params['clv-angle'] ?? 45;
+      const MIN_LINE = 0.10;
+      const sCurveIn  = [0, 64, 128, 192, 255];
+      const sCurveOut = [0, 25, 128, 230, 255];
+      const { bias, contrast, invert } = getStencilParams();
+      const tmp = new OffscreenCanvas(W, H);
+      tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+      const raw = tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+      // Grayscale + S-curve
+      const grayPx = new Uint8ClampedArray(W * H * 4);
+      for (let i = 0; i < W * H; i++) {
+        const g = 0.299*raw[i*4] + 0.587*raw[i*4+1] + 0.114*raw[i*4+2];
+        const v = Math.round(piecewiseLerp(sCurveIn, sCurveOut, g));
+        grayPx[i*4]=grayPx[i*4+1]=grayPx[i*4+2]=v; grayPx[i*4+3]=255;
+      }
+      // Blur for gradients
+      const blurredPx = applyBlur(grayPx, W, H, 2.0);
+      const { gx, gy, mag } = sobelGradients(blurredPx, W, H);
+      // Line angle perpendicular to gradient
+      const lineAngle = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) lineAngle[i] = Math.atan2(gy[i], gx[i]) + Math.PI/2;
+      // Double-angle smoothing
+      const cos2 = new Float32Array(W * H), sin2 = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) { cos2[i]=Math.cos(2*lineAngle[i]); sin2[i]=Math.sin(2*lineAngle[i]); }
+      const bcos = blurFloat(cos2, W, H, 50), bsin = blurFloat(sin2, W, H, 50);
+      const smoothAngle = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) smoothAngle[i] = Math.atan2(bsin[i], bcos[i]) / 2;
+      // Edge weight
+      const magArr = Array.from(mag).sort((a, b) => a - b);
+      const mag85 = magArr[Math.floor(magArr.length * 0.85)] + 1e-6;
+      const ewRaw = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) ewRaw[i] = Math.min(mag[i] / mag85, 1);
+      const ewBlur = blurFloat(ewRaw, W, H, 30);
+      // Final angle: blend toward default in flat regions
+      const defRad = defaultAngle * Math.PI / 180;
+      const finalAngle = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) {
+        const e = Math.min(1, ewBlur[i] * 3);
+        finalAngle[i] = Math.atan2(e*Math.sin(smoothAngle[i])+(1-e)*Math.sin(defRad), e*Math.cos(smoothAngle[i])+(1-e)*Math.cos(defRad));
+      }
+      // Tone map
+      const toneBlur = applyBlur(grayPx, W, H, 1.5);
+      const oc = new OffscreenCanvas(W, H);
+      const od = oc.getContext('2d')!.createImageData(W, H);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = y*W+x;
+        const phase = x*Math.cos(finalAngle[i]) + y*Math.sin(finalAngle[i]);
+        const screen = (((phase % freq) + freq) % freq) / freq;
+        const gAdj = Math.max(0, Math.min(255, 128 + (toneBlur[i*4] - 128) * contrast + bias));
+        const g01 = Math.max(MIN_LINE, Math.min(1-MIN_LINE, gAdj/255));
+        const lit = g01 > screen;
+        const v = invert ? (lit ? 0 : 255) : (lit ? 255 : 0);
+        od.data[i*4]=od.data[i*4+1]=od.data[i*4+2]=v; od.data[i*4+3]=255;
+      }
+      oc.getContext('2d')!.putImageData(od, 0, 0);
+      return oc;
+    }
+
+    function renderCurvyLines(imgs: (HTMLImageElement | null)[], params: Record<string, any>, _rng: () => number): Output[] {
+      if (!imgs[0] || !imgs[1] || !imgs[2]) return [];
+      const W = imgs[0].naturalWidth, H = imgs[0].naturalHeight;
+      const masks = (imgs as HTMLImageElement[]).map(img => makeCurvyLinescreenMask(img, W, H, params));
+      const pixelData = (imgs as HTMLImageElement[]).map(img => {
+        const tmp = new OffscreenCanvas(W, H); tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+        return tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+      });
+      const out: Output[] = [];
+      for (const [s, a, b] of STENCIL_PERMS) {
+        const sd = masks[s].getContext('2d')!.getImageData(0, 0, W, H).data;
+        const ad = pixelData[a], bd = pixelData[b];
+        const oc = new OffscreenCanvas(W, H);
+        const od = oc.getContext('2d')!.createImageData(W, H);
+        for (let i = 0; i < W * H; i++) {
+          const src = sd[i*4] >= 128 ? ad : bd;
+          od.data[i*4]=src[i*4]; od.data[i*4+1]=src[i*4+1]; od.data[i*4+2]=src[i*4+2]; od.data[i*4+3]=255;
+        }
+        oc.getContext('2d')!.putImageData(od, 0, 0);
+        out.push({ canvas: ocToCanvas(oc), label: `S${s+1} ${a+1}/${b+1}`, mimeType: 'image/jpeg' });
+      }
+      ['A','B','C'].forEach((lbl, i) => out.push({ canvas: ocToCanvas(masks[i]), label: `Mask ${lbl}`, mimeType: 'image/png' }));
+      return out;
+    }
+
+    function buildCurvyLinesParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="clv-freq">Frequency <span class="pt-val" id="clv-freq-val">30</span></label>
+          <input class="pt-range" type="range" id="clv-freq" min="10" max="80" step="1" value="30" />
+          <div class="pt-range-hints"><span>10</span><span>80</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="clv-angle">Flat Angle <span class="pt-val" id="clv-angle-val">45°</span></label>
+          <input class="pt-range" type="range" id="clv-angle" min="0" max="180" step="5" value="45" />
+          <div class="pt-range-hints"><span>0°</span><span>180°</span></div>
+        </div>`;
+      enhanceSliders();
+      const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+      const dRender = debounce(() => doRender(), 200);
+      document.getElementById('clv-freq')!.addEventListener('input', (e) => { document.getElementById('clv-freq-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+      document.getElementById('clv-angle')!.addEventListener('input', (e) => { document.getElementById('clv-angle-val')!.textContent = (e.target as HTMLInputElement).value + '°'; dRender(); });
+    }
+    function getCurvyLinesParams(): Record<string, any> {
+      return {
+        'clv-freq':  parseInt((document.getElementById('clv-freq')  as HTMLInputElement).value, 10),
+        'clv-angle': parseFloat((document.getElementById('clv-angle') as HTMLInputElement).value),
+      };
+    }
+    function setCurvyLinesParams(p: Record<string, any>) {
+      if (p['clv-freq']  != null) { (document.getElementById('clv-freq')  as HTMLInputElement).value = String(p['clv-freq']);  document.getElementById('clv-freq-val')!.textContent  = String(p['clv-freq']); }
+      if (p['clv-angle'] != null) { (document.getElementById('clv-angle') as HTMLInputElement).value = String(p['clv-angle']); document.getElementById('clv-angle-val')!.textContent = p['clv-angle'] + '°'; }
+    }
+
+    // ─── Spiral Screen ────────────────────────────────────────────────────────
+
+    function makeSpiralScreenMask(img: HTMLImageElement, W: number, H: number, params: Record<string, any>): OffscreenCanvas {
+      const freq: number    = params['ss-freq'] ?? 80;
+      const warpStr: number = params['ss-warp'] ?? 0.3;
+      const MIN_LINE = 0.10;
+      const sCurveIn  = [0, 64, 128, 192, 255];
+      const sCurveOut = [0, 25, 128, 230, 255];
+      const { bias, contrast, invert } = getStencilParams();
+      const tmp = new OffscreenCanvas(W, H);
+      tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+      const raw = tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+      const grayPx = new Uint8ClampedArray(W * H * 4);
+      for (let i = 0; i < W * H; i++) {
+        const g = 0.299*raw[i*4] + 0.587*raw[i*4+1] + 0.114*raw[i*4+2];
+        const v = Math.round(piecewiseLerp(sCurveIn, sCurveOut, g));
+        grayPx[i*4]=grayPx[i*4+1]=grayPx[i*4+2]=v; grayPx[i*4+3]=255;
+      }
+      const blurredPx = applyBlur(grayPx, W, H, 2.0);
+      const { gx, gy, mag } = sobelGradients(blurredPx, W, H);
+      const lineAngle = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) lineAngle[i] = Math.atan2(gy[i], gx[i]) + Math.PI/2;
+      const cos2 = new Float32Array(W * H), sin2 = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) { cos2[i]=Math.cos(2*lineAngle[i]); sin2[i]=Math.sin(2*lineAngle[i]); }
+      const bcos = blurFloat(cos2, W, H, 50), bsin = blurFloat(sin2, W, H, 50);
+      const smoothAngle = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) smoothAngle[i] = Math.atan2(bsin[i], bcos[i]) / 2;
+      const magArr = Array.from(mag).sort((a, b) => a - b);
+      const mag85 = magArr[Math.floor(magArr.length * 0.85)] + 1e-6;
+      const ewRaw = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) ewRaw[i] = Math.min(mag[i] / mag85, 1);
+      const ewBlur = blurFloat(ewRaw, W, H, 30);
+      const ew = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) ew[i] = Math.min(1, ewBlur[i] * 3);
+      const toneBlur = applyBlur(grayPx, W, H, 1.5);
+      const warpPx = freq * warpStr;
+      const cx = W / 2, cy = H / 2;
+      const oc = new OffscreenCanvas(W, H);
+      const od = oc.getContext('2d')!.createImageData(W, H);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = y*W+x;
+        const xw = x + ew[i]*warpPx*Math.cos(smoothAngle[i]);
+        const yw = y + ew[i]*warpPx*Math.sin(smoothAngle[i]);
+        const dx = xw-cx, dy = yw-cy;
+        const r = Math.sqrt(dx*dx+dy*dy);
+        const theta = Math.atan2(dy, dx);
+        const sc = r - (freq/(2*Math.PI))*theta;
+        const screen = (((sc % freq) + freq) % freq) / freq;
+        const gAdj = Math.max(0, Math.min(255, 128 + (toneBlur[i*4] - 128) * contrast + bias));
+        const g01 = Math.max(MIN_LINE, Math.min(1-MIN_LINE, gAdj/255));
+        const lit = g01 > screen;
+        const v = invert ? (lit ? 0 : 255) : (lit ? 255 : 0);
+        od.data[i*4]=od.data[i*4+1]=od.data[i*4+2]=v; od.data[i*4+3]=255;
+      }
+      oc.getContext('2d')!.putImageData(od, 0, 0);
+      return oc;
+    }
+
+    function renderSpiralScreen(imgs: (HTMLImageElement | null)[], params: Record<string, any>, _rng: () => number): Output[] {
+      if (!imgs[0] || !imgs[1] || !imgs[2]) return [];
+      const W = imgs[0].naturalWidth, H = imgs[0].naturalHeight;
+      const masks = (imgs as HTMLImageElement[]).map(img => makeSpiralScreenMask(img, W, H, params));
+      const pixelData = (imgs as HTMLImageElement[]).map(img => {
+        const tmp = new OffscreenCanvas(W, H); tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+        return tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+      });
+      const out: Output[] = [];
+      for (const [s, a, b] of STENCIL_PERMS) {
+        const sd = masks[s].getContext('2d')!.getImageData(0, 0, W, H).data;
+        const ad = pixelData[a], bd = pixelData[b];
+        const oc = new OffscreenCanvas(W, H);
+        const od = oc.getContext('2d')!.createImageData(W, H);
+        for (let i = 0; i < W * H; i++) {
+          const src = sd[i*4] >= 128 ? ad : bd;
+          od.data[i*4]=src[i*4]; od.data[i*4+1]=src[i*4+1]; od.data[i*4+2]=src[i*4+2]; od.data[i*4+3]=255;
+        }
+        oc.getContext('2d')!.putImageData(od, 0, 0);
+        out.push({ canvas: ocToCanvas(oc), label: `S${s+1} ${a+1}/${b+1}`, mimeType: 'image/jpeg' });
+      }
+      ['A','B','C'].forEach((lbl, i) => out.push({ canvas: ocToCanvas(masks[i]), label: `Mask ${lbl}`, mimeType: 'image/png' }));
+      return out;
+    }
+
+    function buildSpiralScreenParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="ss-freq">Frequency <span class="pt-val" id="ss-freq-val">80</span></label>
+          <input class="pt-range" type="range" id="ss-freq" min="30" max="150" step="5" value="80" />
+          <div class="pt-range-hints"><span>30</span><span>150</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ss-warp">Warp <span class="pt-val" id="ss-warp-val">0.30</span></label>
+          <input class="pt-range" type="range" id="ss-warp" min="0" max="1" step="0.05" value="0.3" />
+          <div class="pt-range-hints"><span>0</span><span>1</span></div>
+        </div>`;
+      enhanceSliders();
+      const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+      const dRender = debounce(() => doRender(), 200);
+      document.getElementById('ss-freq')!.addEventListener('input', (e) => { document.getElementById('ss-freq-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+      document.getElementById('ss-warp')!.addEventListener('input', (e) => { document.getElementById('ss-warp-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(2); dRender(); });
+    }
+    function getSpiralScreenParams(): Record<string, any> {
+      return {
+        'ss-freq': parseInt((document.getElementById('ss-freq') as HTMLInputElement).value, 10),
+        'ss-warp': parseFloat((document.getElementById('ss-warp') as HTMLInputElement).value),
+      };
+    }
+    function setSpiralScreenParams(p: Record<string, any>) {
+      if (p['ss-freq'] != null) { (document.getElementById('ss-freq') as HTMLInputElement).value = String(p['ss-freq']); document.getElementById('ss-freq-val')!.textContent = String(p['ss-freq']); }
+      if (p['ss-warp'] != null) { (document.getElementById('ss-warp') as HTMLInputElement).value = String(p['ss-warp']); document.getElementById('ss-warp-val')!.textContent = parseFloat(p['ss-warp']).toFixed(2); }
+    }
+
+    // ─── Sine Warp ────────────────────────────────────────────────────────────
+
+    function renderSineWarp(imgs: (HTMLImageElement | null)[], params: Record<string, any>, _rng: () => number): Output[] {
+      const freq: number = params['sw-freq'] ?? 1.0;
+      const tile: boolean = params['sw-tile'] ?? false;
+      return [imgs[0], imgs[1], imgs[2]].map((img, idx) => {
+        if (!img) return null;
+        const W = img.naturalWidth, H = img.naturalHeight;
+        const tmp = new OffscreenCanvas(W, H);
+        tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+        const srcData = tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+        const cx = W/2, cy = H/2;
+        const scale = Math.min(W, H) / (2*Math.PI);
+        const oc = new OffscreenCanvas(W, H);
+        const od = oc.getContext('2d')!.createImageData(W, H);
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+          const zr = (x-cx)/scale*freq, zi = (y-cy)/scale*freq;
+          const sr = Math.sin(zr)*Math.cosh(zi), si = Math.cos(zr)*Math.sinh(zi);
+          const xIn = cx + sr*scale/freq, yIn = cy + si*scale/freq;
+          const [rv,gv,bv] = bilinearSample(srcData, W, H, xIn, yIn, tile);
+          const i = (y*W+x)*4;
+          od.data[i]=rv; od.data[i+1]=gv; od.data[i+2]=bv; od.data[i+3]=255;
+        }
+        oc.getContext('2d')!.putImageData(od, 0, 0);
+        return { canvas: ocToCanvas(oc), label: `Image ${idx+1}`, mimeType: 'image/jpeg' as const };
+      }).filter(Boolean) as Output[];
+    }
+
+    function buildSineWarpParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="sw-freq">Frequency <span class="pt-val" id="sw-freq-val">1.0</span></label>
+          <input class="pt-range" type="range" id="sw-freq" min="0.3" max="3" step="0.1" value="1" />
+          <div class="pt-range-hints"><span>0.3</span><span>3</span></div>
+        </div>
+        <div class="pt-check-field">
+          <label class="pt-label"><input type="checkbox" id="sw-tile" /> Tile</label>
+        </div>`;
+      enhanceSliders();
+      const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+      const dRender = debounce(() => doRender(), 200);
+      document.getElementById('sw-freq')!.addEventListener('input', (e) => { document.getElementById('sw-freq-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(1); dRender(); });
+      document.getElementById('sw-tile')!.addEventListener('change', () => doRender());
+    }
+    function getSineWarpParams(): Record<string, any> {
+      return {
+        'sw-freq': parseFloat((document.getElementById('sw-freq') as HTMLInputElement).value),
+        'sw-tile': (document.getElementById('sw-tile') as HTMLInputElement).checked,
+      };
+    }
+    function setSineWarpParams(p: Record<string, any>) {
+      if (p['sw-freq'] != null) { (document.getElementById('sw-freq') as HTMLInputElement).value = String(p['sw-freq']); document.getElementById('sw-freq-val')!.textContent = parseFloat(p['sw-freq']).toFixed(1); }
+      if (p['sw-tile'] != null) { (document.getElementById('sw-tile') as HTMLInputElement).checked = !!p['sw-tile']; }
+    }
+
+    // ─── Sine Phase ───────────────────────────────────────────────────────────
+
+    function renderSinePhase(imgs: (HTMLImageElement | null)[], params: Record<string, any>, _rng: () => number): Output[] {
+      const freq: number   = params['sp-freq']    ?? 1.0;
+      const phaseR: number = params['sp-phase-r'] ?? Math.PI/2;
+      const phaseI: number = params['sp-phase-i'] ?? 0.5;
+      const tile: boolean  = params['sp-tile']    ?? false;
+      return [imgs[0], imgs[1], imgs[2]].map((img, idx) => {
+        if (!img) return null;
+        const W = img.naturalWidth, H = img.naturalHeight;
+        const tmp = new OffscreenCanvas(W, H);
+        tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+        const srcData = tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+        const cx = W/2, cy = H/2;
+        const scale = Math.min(W, H) / (2*Math.PI);
+        const oc = new OffscreenCanvas(W, H);
+        const od = oc.getContext('2d')!.createImageData(W, H);
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+          const zr = (x-cx)/scale*freq + phaseR, zi = (y-cy)/scale*freq + phaseI;
+          const sr = Math.sin(zr)*Math.cosh(zi), si = Math.cos(zr)*Math.sinh(zi);
+          const xIn = cx + sr*scale/freq, yIn = cy + si*scale/freq;
+          const [rv,gv,bv] = bilinearSample(srcData, W, H, xIn, yIn, tile);
+          const i = (y*W+x)*4;
+          od.data[i]=rv; od.data[i+1]=gv; od.data[i+2]=bv; od.data[i+3]=255;
+        }
+        oc.getContext('2d')!.putImageData(od, 0, 0);
+        return { canvas: ocToCanvas(oc), label: `Image ${idx+1}`, mimeType: 'image/jpeg' as const };
+      }).filter(Boolean) as Output[];
+    }
+
+    function buildSinePhaseParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="sp-freq">Frequency <span class="pt-val" id="sp-freq-val">1.0</span></label>
+          <input class="pt-range" type="range" id="sp-freq" min="0.3" max="3" step="0.1" value="1" />
+          <div class="pt-range-hints"><span>0.3</span><span>3</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sp-phase-r">Phase R <span class="pt-val" id="sp-phase-r-val">1.57</span></label>
+          <input class="pt-range" type="range" id="sp-phase-r" min="0" max="3.14" step="0.1" value="1.57" />
+          <div class="pt-range-hints"><span>0</span><span>π</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sp-phase-i">Phase I <span class="pt-val" id="sp-phase-i-val">0.50</span></label>
+          <input class="pt-range" type="range" id="sp-phase-i" min="-2" max="2" step="0.1" value="0.5" />
+          <div class="pt-range-hints"><span>-2</span><span>2</span></div>
+        </div>
+        <div class="pt-check-field">
+          <label class="pt-label"><input type="checkbox" id="sp-tile" /> Tile</label>
+        </div>`;
+      enhanceSliders();
+      const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+      const dRender = debounce(() => doRender(), 200);
+      document.getElementById('sp-freq')!.addEventListener('input', (e) => { document.getElementById('sp-freq-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(1); dRender(); });
+      document.getElementById('sp-phase-r')!.addEventListener('input', (e) => { document.getElementById('sp-phase-r-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(2); dRender(); });
+      document.getElementById('sp-phase-i')!.addEventListener('input', (e) => { document.getElementById('sp-phase-i-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(2); dRender(); });
+      document.getElementById('sp-tile')!.addEventListener('change', () => doRender());
+    }
+    function getSinePhaseParams(): Record<string, any> {
+      return {
+        'sp-freq':    parseFloat((document.getElementById('sp-freq')    as HTMLInputElement).value),
+        'sp-phase-r': parseFloat((document.getElementById('sp-phase-r') as HTMLInputElement).value),
+        'sp-phase-i': parseFloat((document.getElementById('sp-phase-i') as HTMLInputElement).value),
+        'sp-tile':    (document.getElementById('sp-tile') as HTMLInputElement).checked,
+      };
+    }
+    function setSinePhaseParams(p: Record<string, any>) {
+      if (p['sp-freq']    != null) { (document.getElementById('sp-freq')    as HTMLInputElement).value = String(p['sp-freq']);    document.getElementById('sp-freq-val')!.textContent    = parseFloat(p['sp-freq']).toFixed(1); }
+      if (p['sp-phase-r'] != null) { (document.getElementById('sp-phase-r') as HTMLInputElement).value = String(p['sp-phase-r']); document.getElementById('sp-phase-r-val')!.textContent = parseFloat(p['sp-phase-r']).toFixed(2); }
+      if (p['sp-phase-i'] != null) { (document.getElementById('sp-phase-i') as HTMLInputElement).value = String(p['sp-phase-i']); document.getElementById('sp-phase-i-val')!.textContent = parseFloat(p['sp-phase-i']).toFixed(2); }
+      if (p['sp-tile']    != null) { (document.getElementById('sp-tile')    as HTMLInputElement).checked = !!p['sp-tile']; }
+    }
+
+    // ─── Circle Limit ─────────────────────────────────────────────────────────
+
+    function renderCircleLimit(imgs: (HTMLImageElement | null)[], params: Record<string, any>, _rng: () => number): Output[] {
+      const radius: number = params['circ-radius'] ?? 0.95;
+      const zoom: number   = params['circ-zoom']   ?? 6.0;
+      const tile: boolean  = params['circ-tile']   ?? true;
+      return [imgs[0], imgs[1], imgs[2]].map((img, idx) => {
+        if (!img) return null;
+        const W = img.naturalWidth, H = img.naturalHeight;
+        const tmp = new OffscreenCanvas(W, H);
+        tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+        const srcData = tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+        const cx = W/2, cy = H/2;
+        const norm = Math.min(W, H) / 2;
+        const r2Bound = radius*radius;
+        const oc = new OffscreenCanvas(W, H);
+        const od = oc.getContext('2d')!.createImageData(W, H);
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+          let zr = (x-cx)/norm, zi = (y-cy)/norm;
+          const r2 = zr*zr + zi*zi;
+          if (r2 > r2Bound) { const inv = r2Bound/r2; zr *= inv; zi *= inv; }
+          const rEff = Math.sqrt(zr*zr + zi*zi);
+          const rClamped = Math.min(rEff, radius*(1-1e-7));
+          const rSafe = Math.max(rClamped, 1e-10);
+          const hypR = 2 * Math.atanh(rClamped/radius);
+          const factor = hypR/rSafe * (norm/(2*Math.PI)*zoom);
+          const xIn = cx + factor*zr, yIn = cy + factor*zi;
+          const [rv,gv,bv] = bilinearSample(srcData, W, H, xIn, yIn, tile);
+          const i = (y*W+x)*4;
+          od.data[i]=rv; od.data[i+1]=gv; od.data[i+2]=bv; od.data[i+3]=255;
+        }
+        oc.getContext('2d')!.putImageData(od, 0, 0);
+        return { canvas: ocToCanvas(oc), label: `Image ${idx+1}`, mimeType: 'image/jpeg' as const };
+      }).filter(Boolean) as Output[];
+    }
+
+    function buildCircleLimitParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="circ-radius">Radius <span class="pt-val" id="circ-radius-val">0.95</span></label>
+          <input class="pt-range" type="range" id="circ-radius" min="0.5" max="0.99" step="0.01" value="0.95" />
+          <div class="pt-range-hints"><span>0.5</span><span>0.99</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="circ-zoom">Zoom <span class="pt-val" id="circ-zoom-val">6.0</span></label>
+          <input class="pt-range" type="range" id="circ-zoom" min="1" max="15" step="0.5" value="6" />
+          <div class="pt-range-hints"><span>1</span><span>15</span></div>
+        </div>
+        <div class="pt-check-field">
+          <label class="pt-label"><input type="checkbox" id="circ-tile" checked /> Tile</label>
+        </div>`;
+      enhanceSliders();
+      const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+      const dRender = debounce(() => doRender(), 200);
+      document.getElementById('circ-radius')!.addEventListener('input', (e) => { document.getElementById('circ-radius-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(2); dRender(); });
+      document.getElementById('circ-zoom')!.addEventListener('input', (e) => { document.getElementById('circ-zoom-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(1); dRender(); });
+      document.getElementById('circ-tile')!.addEventListener('change', () => doRender());
+    }
+    function getCircleLimitParams(): Record<string, any> {
+      return {
+        'circ-radius': parseFloat((document.getElementById('circ-radius') as HTMLInputElement).value),
+        'circ-zoom':   parseFloat((document.getElementById('circ-zoom')   as HTMLInputElement).value),
+        'circ-tile':   (document.getElementById('circ-tile') as HTMLInputElement).checked,
+      };
+    }
+    function setCircleLimitParams(p: Record<string, any>) {
+      if (p['circ-radius'] != null) { (document.getElementById('circ-radius') as HTMLInputElement).value = String(p['circ-radius']); document.getElementById('circ-radius-val')!.textContent = parseFloat(p['circ-radius']).toFixed(2); }
+      if (p['circ-zoom']   != null) { (document.getElementById('circ-zoom')   as HTMLInputElement).value = String(p['circ-zoom']);   document.getElementById('circ-zoom-val')!.textContent   = parseFloat(p['circ-zoom']).toFixed(1); }
+      if (p['circ-tile']   != null) { (document.getElementById('circ-tile')   as HTMLInputElement).checked = !!p['circ-tile']; }
+    }
+
+    // ─── Curl Noise ───────────────────────────────────────────────────────────
+
+    function renderCurlNoise(imgs: (HTMLImageElement | null)[], params: Record<string, any>, rng: () => number): Output[] {
+      const strength: number = params['cn-strength'] ?? 120;
+      const scale: number    = params['cn-scale']    ?? 0.20;
+      const octaves: number  = params['cn-octaves']  ?? 4;
+      const tile: boolean    = params['cn-tile']     ?? false;
+      return [imgs[0], imgs[1], imgs[2]].map((img, idx) => {
+        if (!img) return null;
+        const W = img.naturalWidth, H = img.naturalHeight;
+        // Build fBm potential
+        const potential = new Float32Array(W * H);
+        let totalAmp = 0;
+        for (let oct = 0; oct < octaves; oct++) {
+          const amp = Math.pow(0.5, oct);
+          const sigma = Math.max(1, scale * Math.min(W, H) * Math.pow(0.5, oct));
+          totalAmp += amp;
+          const noiseRaw = new Uint8ClampedArray(W * H * 4);
+          for (let i = 0; i < W * H; i++) {
+            const u1 = Math.max(rng(), 1e-10), u2 = rng();
+            const g = Math.sqrt(-2*Math.log(u1)) * Math.cos(2*Math.PI*u2);
+            const v = Math.max(0, Math.min(255, Math.round(g*40+128)));
+            noiseRaw[i*4]=noiseRaw[i*4+1]=noiseRaw[i*4+2]=v; noiseRaw[i*4+3]=255;
+          }
+          const blurNoise = applyBlur(noiseRaw, W, H, sigma);
+          for (let i = 0; i < W * H; i++) potential[i] += amp * (blurNoise[i*4]/128 - 1);
+        }
+        for (let i = 0; i < W * H; i++) potential[i] /= totalAmp;
+        // 2D curl: vx = ∂φ/∂y, vy = -∂φ/∂x
+        const vx = new Float32Array(W * H), vy = new Float32Array(W * H);
+        for (let y = 1; y < H-1; y++) for (let x = 1; x < W-1; x++) {
+          const i = y*W+x;
+          vx[i] = (potential[(y+1)*W+x] - potential[(y-1)*W+x]) / 2;
+          vy[i] = -(potential[y*W+(x+1)] - potential[y*W+(x-1)]) / 2;
+        }
+        // Normalize by p99 magnitude
+        const mag = new Float32Array(W * H);
+        for (let i = 0; i < W * H; i++) mag[i] = Math.sqrt(vx[i]*vx[i]+vy[i]*vy[i]);
+        const magSorted = Array.from(mag).sort((a,b)=>a-b);
+        const p99 = magSorted[Math.floor(magSorted.length*0.99)] + 1e-6;
+        for (let i = 0; i < W * H; i++) { vx[i] = vx[i]/p99*strength; vy[i] = vy[i]/p99*strength; }
+        // Backward map
+        const tmp = new OffscreenCanvas(W, H);
+        tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+        const srcData = tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+        const oc = new OffscreenCanvas(W, H);
+        const od = oc.getContext('2d')!.createImageData(W, H);
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+          const i = y*W+x;
+          const [rv,gv,bv] = bilinearSample(srcData, W, H, x-vx[i], y-vy[i], tile);
+          od.data[i*4]=rv; od.data[i*4+1]=gv; od.data[i*4+2]=bv; od.data[i*4+3]=255;
+        }
+        oc.getContext('2d')!.putImageData(od, 0, 0);
+        return { canvas: ocToCanvas(oc), label: `Image ${idx+1}`, mimeType: 'image/jpeg' as const };
+      }).filter(Boolean) as Output[];
+    }
+
+    function buildCurlNoiseParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="cn-strength">Strength <span class="pt-val" id="cn-strength-val">120</span></label>
+          <input class="pt-range" type="range" id="cn-strength" min="10" max="300" step="10" value="120" />
+          <div class="pt-range-hints"><span>10</span><span>300</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cn-scale">Scale <span class="pt-val" id="cn-scale-val">0.20</span></label>
+          <input class="pt-range" type="range" id="cn-scale" min="0.05" max="0.5" step="0.05" value="0.2" />
+          <div class="pt-range-hints"><span>0.05</span><span>0.5</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cn-octaves">Octaves <span class="pt-val" id="cn-octaves-val">4</span></label>
+          <input class="pt-range" type="range" id="cn-octaves" min="1" max="6" step="1" value="4" />
+          <div class="pt-range-hints"><span>1</span><span>6</span></div>
+        </div>
+        <div class="pt-check-field">
+          <label class="pt-label"><input type="checkbox" id="cn-tile" /> Tile</label>
+        </div>`;
+      enhanceSliders();
+      const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+      const dReroll = debounce(() => doReroll(), 200);
+      document.getElementById('cn-strength')!.addEventListener('input', (e) => { document.getElementById('cn-strength-val')!.textContent = (e.target as HTMLInputElement).value; dReroll(); });
+      document.getElementById('cn-scale')!.addEventListener('input', (e) => { document.getElementById('cn-scale-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(2); dReroll(); });
+      document.getElementById('cn-octaves')!.addEventListener('input', (e) => { document.getElementById('cn-octaves-val')!.textContent = (e.target as HTMLInputElement).value; dReroll(); });
+      document.getElementById('cn-tile')!.addEventListener('change', () => doReroll());
+    }
+    function getCurlNoiseParams(): Record<string, any> {
+      return {
+        'cn-strength': parseInt((document.getElementById('cn-strength') as HTMLInputElement).value, 10),
+        'cn-scale':    parseFloat((document.getElementById('cn-scale')   as HTMLInputElement).value),
+        'cn-octaves':  parseInt((document.getElementById('cn-octaves')  as HTMLInputElement).value, 10),
+        'cn-tile':     (document.getElementById('cn-tile') as HTMLInputElement).checked,
+      };
+    }
+    function setCurlNoiseParams(p: Record<string, any>) {
+      if (p['cn-strength'] != null) { (document.getElementById('cn-strength') as HTMLInputElement).value = String(p['cn-strength']); document.getElementById('cn-strength-val')!.textContent = String(p['cn-strength']); }
+      if (p['cn-scale']    != null) { (document.getElementById('cn-scale')    as HTMLInputElement).value = String(p['cn-scale']);    document.getElementById('cn-scale-val')!.textContent    = parseFloat(p['cn-scale']).toFixed(2); }
+      if (p['cn-octaves']  != null) { (document.getElementById('cn-octaves')  as HTMLInputElement).value = String(p['cn-octaves']);  document.getElementById('cn-octaves-val')!.textContent  = String(p['cn-octaves']); }
+      if (p['cn-tile']     != null) { (document.getElementById('cn-tile')     as HTMLInputElement).checked = !!p['cn-tile']; }
+    }
+
     // ─── Bot config registry ───────────────────────────────────────────────────
 
     type BotDef = {
@@ -3014,6 +3649,48 @@ import Admin from '../../../layouts/Admin.astro';
         inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
         render: renderSoapySpiral,
         buildParams: buildSoapySpiralParams, getParams: getSoapySpiralParams, setParams: setSoapySpiralParams,
+      },
+      halationedge: {
+        label: 'Halation Edge', desc: 'Grainy halftone noise blended into stencil edges — worn intaglio look',
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false, isStencil: true,
+        render: renderHalationEdge,
+        buildParams: buildHalationEdgeParams, getParams: getHalationEdgeParams, setParams: setHalationEdgeParams,
+      },
+      curvylines: {
+        label: 'Curvy Lines', desc: 'Line screen where lines curve to follow image contours',
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false, isStencil: true,
+        render: renderCurvyLines,
+        buildParams: buildCurvyLinesParams, getParams: getCurvyLinesParams, setParams: setCurvyLinesParams,
+      },
+      spiralscreen: {
+        label: 'Spiral Screen', desc: 'Archimedean spiral screen warped to follow image edges',
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false, isStencil: true,
+        render: renderSpiralScreen,
+        buildParams: buildSpiralScreenParams, getParams: getSpiralScreenParams, setParams: setSpiralScreenParams,
+      },
+      sinewarp: {
+        label: 'Sine Warp', desc: 'Complex sine conformal warp — periodic sinuous distortion',
+        inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false,
+        render: renderSineWarp,
+        buildParams: buildSineWarpParams, getParams: getSineWarpParams, setParams: setSineWarpParams,
+      },
+      sinephase: {
+        label: 'Sine Phase', desc: 'Complex sine warp with phase offset — asymmetric fan patterns',
+        inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false,
+        render: renderSinePhase,
+        buildParams: buildSinePhaseParams, getParams: getSinePhaseParams, setParams: setSinePhaseParams,
+      },
+      circlelimit: {
+        label: 'Circle Limit', desc: 'Poincaré disk hyperbolic warp — Escher "Circle Limit" geometry',
+        inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false,
+        render: renderCircleLimit,
+        buildParams: buildCircleLimitParams, getParams: getCircleLimitParams, setParams: setCircleLimitParams,
+      },
+      curlnoise: {
+        label: 'Curl Noise', desc: 'Divergence-free fBm displacement — fluid-like swirling warp',
+        inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: renderCurlNoise,
+        buildParams: buildCurlNoiseParams, getParams: getCurlNoiseParams, setParams: setCurlNoiseParams,
       },
     };
 
