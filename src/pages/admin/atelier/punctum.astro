@@ -66,6 +66,10 @@ import Admin from '../../../layouts/Admin.astro';
     </div>
   </div>
 
+  <div class="pt-tabs" id="pt-tabs">
+    <button class="pt-tab-add" id="pt-tab-add" title="New tab">+</button>
+  </div>
+
   <div class="pt-shell">
     <div class="pt-left">
       <!-- Output stage -->
@@ -75,6 +79,7 @@ import Admin from '../../../layouts/Admin.astro';
           <div class="pt-empty__icon">⬡</div>
           <div id="pt-empty-text">Load an image to begin</div>
         </div>
+        <button class="pt-chain-btn" id="pt-chain-btn" style="display:none" title="Send active output to a new tab">⊕ Chain</button>
       </div>
 
       <!-- Thumbnail strip (multi-output bots) -->
@@ -156,7 +161,53 @@ import Admin from '../../../layouts/Admin.astro';
     gap: var(--space-md);
   }
 
+  .pt-tabs {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    padding: 0 0 var(--space-sm);
+    flex-wrap: wrap;
+  }
+  .pt-tab {
+    background: #2a2a2a;
+    color: #888;
+    border: 1px solid #444;
+    border-radius: 3px 3px 0 0;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .pt-tab--active { background: #3a3a3a; color: #fff; border-color: #666; }
+  .pt-tab__close {
+    background: none;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.7rem;
+    line-height: 1;
+  }
+  .pt-tab__close:hover { color: #ff6b6b; }
+  .pt-tab-add {
+    background: none;
+    border: 1px solid #444;
+    border-radius: 3px;
+    color: #888;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .pt-tab-add:hover { border-color: #888; color: #fff; }
+
   .pt-stage {
+    position: relative;
     background: var(--color-surface, #111);
     border: 1px solid var(--color-border, #333);
     border-radius: 4px;
@@ -166,6 +217,20 @@ import Admin from '../../../layouts/Admin.astro';
     justify-content: center;
     overflow: hidden;
   }
+  .pt-chain-btn {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background: rgba(0,0,0,0.7);
+    color: #e07b54;
+    border: 1px solid #e07b54;
+    border-radius: 3px;
+    padding: 4px 10px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    z-index: 2;
+  }
+  .pt-chain-btn:hover { background: rgba(224,123,84,0.2); }
 
   #pt-canvas {
     max-width: 100%;
@@ -3694,6 +3759,28 @@ import Admin from '../../../layouts/Admin.astro';
       },
     };
 
+    // ─── Tab state ─────────────────────────────────────────────────────────────
+
+    interface TabState {
+      id: number;
+      currentBot: string;
+      sourceImgs: (HTMLImageElement | null)[];
+      sourceIds: (string | null)[];
+      slotTransforms: { rot: number; flip: boolean; aspect?: number }[];
+      slotLocked: boolean[];
+      effectiveImgs: (HTMLImageElement | null)[];
+      effectiveBlobUrls: (string | null)[];
+      currentSeed: number;
+      rng: () => number;
+      outputs: Output[];
+      activeOutputIdx: number;
+      botParams: Record<string, any>;
+      stencilParams: { bias: number; contrast: number; invert: boolean };
+    }
+    let tabs: TabState[] = [];
+    let activeTabIdx = 0;
+    let nextTabId = 1;
+
     // ─── State ─────────────────────────────────────────────────────────────────
 
     let currentBot = 'bullethole';
@@ -4022,7 +4109,7 @@ import Admin from '../../../layouts/Admin.astro';
       slotsEl.innerHTML = bot.inputLabels.map((label, i) => `
         <div class="pt-slot" id="slot-card-${i}" data-slot="${i}">
           <div class="pt-slot__header">
-            <span class="pt-slot__label"><span class="pt-slot__label-slot">SLOT ${i + 1}:</span> ${label}</span>
+            <span class="pt-slot__label"><span class="pt-slot__label-slot">T${tabs[activeTabIdx]?.id ?? 1}·${i + 1}:</span> ${label}</span>
             <button class="pt-slot__lock-btn" data-slot-lock="${i}"
               data-tooltip="Keep this image when switching bots">
               <span class="pt-slot__lock-icon">🔓</span>
@@ -4306,34 +4393,38 @@ import Admin from '../../../layouts/Admin.astro';
       saveBtn.disabled     = !on;
       saveAllBtn.disabled  = !on;
       savePngBtn.disabled  = !on;
+      const chainBtn = document.getElementById('pt-chain-btn');
+      if (chainBtn) chainBtn.style.display = on ? 'block' : 'none';
     }
 
     // ─── Switch bot ────────────────────────────────────────────────────────────
 
-    function switchBot(id: string) {
+    function switchBot(id: string, { skipClear = false }: { skipClear?: boolean } = {}) {
       currentBot = id;
       const bot = BOTS[id];
 
       const descEl = document.getElementById('pt-bot-desc');
       if (descEl) descEl.textContent = bot?.desc ?? '';
 
-      // Reset state — preserve locked slots
-      for (let i = 0; i < 4; i++) {
-        if (!slotLocked[i]) {
-          sourceImgs[i] = null;
-          sourceIds[i] = null;
-          slotTransforms[i] = { rot: 0, flip: false };
-          effectiveImgs[i] = null;
-          if (effectiveBlobUrls[i]) { URL.revokeObjectURL(effectiveBlobUrls[i]!); effectiveBlobUrls[i] = null; }
+      if (!skipClear) {
+        // Reset state — preserve locked slots
+        for (let i = 0; i < 4; i++) {
+          if (!slotLocked[i]) {
+            sourceImgs[i] = null;
+            sourceIds[i] = null;
+            slotTransforms[i] = { rot: 0, flip: false };
+            effectiveImgs[i] = null;
+            if (effectiveBlobUrls[i]) { URL.revokeObjectURL(effectiveBlobUrls[i]!); effectiveBlobUrls[i] = null; }
+          }
         }
+        outputs = [];
+        activeOutputIdx = 0;
+        stageCanvas.style.display = 'none';
+        emptyEl.style.display = '';
+        emptyText.textContent = `Load ${bot.inputs > 1 ? bot.inputs + ' images' : 'an image'} to begin`;
+        stripEl.style.display = 'none';
+        enableActions(false);
       }
-      outputs = [];
-      activeOutputIdx = 0;
-      stageCanvas.style.display = 'none';
-      emptyEl.style.display = '';
-      emptyText.textContent = `Load ${bot.inputs > 1 ? bot.inputs + ' images' : 'an image'} to begin`;
-      stripEl.style.display = 'none';
-      enableActions(false);
 
       buildSlots(bot);
 
@@ -4729,6 +4820,147 @@ import Admin from '../../../layouts/Admin.astro';
     });
     document.getElementById('st-invert')?.addEventListener('change', () => doRender());
 
+    // ─── Tab management ────────────────────────────────────────────────────────
+
+    function makeEmptyTabState(): TabState {
+      return {
+        id: nextTabId++,
+        currentBot: botSelect.value || 'bullethole',
+        sourceImgs: [null, null, null, null],
+        sourceIds: [null, null, null, null],
+        slotTransforms: [{rot:0,flip:false},{rot:0,flip:false},{rot:0,flip:false},{rot:0,flip:false}],
+        slotLocked: [false, false, false, false],
+        effectiveImgs: [null, null, null, null],
+        effectiveBlobUrls: [null, null, null, null],
+        currentSeed: 0,
+        rng: Math.random.bind(Math),
+        outputs: [],
+        activeOutputIdx: 0,
+        botParams: {},
+        stencilParams: { bias: 0, contrast: 1, invert: false },
+      };
+    }
+
+    function saveCurrentTabState() {
+      if (!tabs[activeTabIdx]) return;
+      const tab = tabs[activeTabIdx];
+      tab.currentBot      = currentBot;
+      tab.sourceImgs      = [...sourceImgs];
+      tab.sourceIds       = [...sourceIds];
+      tab.slotTransforms  = slotTransforms.map(t => ({...t}));
+      tab.slotLocked      = [...slotLocked];
+      tab.effectiveImgs   = [...effectiveImgs];
+      tab.effectiveBlobUrls = [...effectiveBlobUrls];
+      tab.currentSeed     = currentSeed;
+      tab.rng             = rng;
+      tab.outputs         = [...outputs];
+      tab.activeOutputIdx = activeOutputIdx;
+      tab.botParams       = BOTS[currentBot].getParams?.() ?? {};
+      tab.stencilParams   = getStencilParams();
+    }
+
+    function restoreTabState(tab: TabState) {
+      // Set globals BEFORE switchBot so buildSlots sees the restored images/locks
+      currentBot        = tab.currentBot;
+      sourceImgs        = [...tab.sourceImgs];
+      sourceIds         = [...tab.sourceIds];
+      slotTransforms    = tab.slotTransforms.map(t => ({...t}));
+      slotLocked        = [...tab.slotLocked];
+      effectiveImgs     = [...tab.effectiveImgs];
+      effectiveBlobUrls = [...tab.effectiveBlobUrls];
+      currentSeed       = tab.currentSeed;
+      rng               = tab.rng;
+      outputs           = [...tab.outputs];
+      activeOutputIdx   = tab.activeOutputIdx;
+
+      botSelect.value = tab.currentBot;
+      switchBot(tab.currentBot, { skipClear: true });
+      BOTS[tab.currentBot].setParams?.(tab.botParams);
+
+      // Restore stencil params
+      const biasEl = document.getElementById('st-bias')     as HTMLInputElement;
+      const contEl = document.getElementById('st-contrast') as HTMLInputElement;
+      const invEl  = document.getElementById('st-invert')   as HTMLInputElement;
+      if (biasEl) { biasEl.value = String(tab.stencilParams.bias);     document.getElementById('st-bias-val')!.textContent     = String(tab.stencilParams.bias); }
+      if (contEl) { contEl.value = String(tab.stencilParams.contrast); document.getElementById('st-contrast-val')!.textContent = tab.stencilParams.contrast.toFixed(2); }
+      if (invEl)  invEl.checked  = tab.stencilParams.invert;
+
+      if (currentSeed > 0) seedInput.value = String(currentSeed);
+
+      const bot = BOTS[tab.currentBot];
+      if (outputs.length > 0) {
+        renderStrip();
+        setActiveOutput(activeOutputIdx < outputs.length ? activeOutputIdx : 0);
+        enableActions(true);
+        rerollBtn.disabled = !bot.hasRandomness;
+      } else {
+        stageCanvas.style.display = 'none';
+        emptyEl.style.display = '';
+        emptyText.textContent = `Load ${bot.inputs > 1 ? bot.inputs + ' images' : 'an image'} to begin`;
+        stripEl.style.display = 'none';
+        enableActions(false);
+        rerollBtn.disabled = true;
+      }
+    }
+
+    function renderTabBar() {
+      const tabsEl = document.getElementById('pt-tabs')!;
+      tabsEl.querySelectorAll('.pt-tab').forEach(el => el.remove());
+      const addBtn = document.getElementById('pt-tab-add')!;
+      tabs.forEach((tab, idx) => {
+        const btn = document.createElement('button');
+        btn.className = `pt-tab${idx === activeTabIdx ? ' pt-tab--active' : ''}`;
+        btn.title = BOTS[tab.currentBot]?.label ?? tab.currentBot;
+        const lbl = document.createElement('span');
+        lbl.textContent = `T${tab.id}`;
+        btn.appendChild(lbl);
+        if (tabs.length > 1) {
+          const x = document.createElement('button');
+          x.className = 'pt-tab__close';
+          x.textContent = '×';
+          x.title = 'Close tab';
+          x.addEventListener('click', e => { e.stopPropagation(); closeTab(idx); });
+          btn.appendChild(x);
+        }
+        btn.addEventListener('click', () => switchToTab(idx));
+        tabsEl.insertBefore(btn, addBtn);
+      });
+    }
+
+    function switchToTab(idx: number) {
+      if (idx === activeTabIdx) return;
+      saveCurrentTabState();
+      activeTabIdx = idx;
+      restoreTabState(tabs[activeTabIdx]);
+      renderTabBar();
+    }
+
+    function newTab(chainCanvas?: HTMLCanvasElement) {
+      saveCurrentTabState();
+      const tab = makeEmptyTabState();
+      tabs.push(tab);
+      activeTabIdx = tabs.length - 1;
+      restoreTabState(tab);
+      if (chainCanvas) loadSlotFromCanvas(0, chainCanvas);
+      renderTabBar();
+    }
+
+    function closeTab(idx: number) {
+      if (tabs.length <= 1) return;
+      tabs[idx].effectiveBlobUrls.forEach(url => { if (url) URL.revokeObjectURL(url); });
+      tabs.splice(idx, 1);
+      if (activeTabIdx >= tabs.length) activeTabIdx = tabs.length - 1;
+      else if (activeTabIdx > idx) activeTabIdx--;
+      restoreTabState(tabs[activeTabIdx]);
+      renderTabBar();
+    }
+
+    document.getElementById('pt-chain-btn')?.addEventListener('click', () => {
+      if (outputs.length === 0) return;
+      newTab(outputs[activeOutputIdx].canvas);
+    });
+    document.getElementById('pt-tab-add')?.addEventListener('click', () => newTab());
+
     // ─── Bot selector ──────────────────────────────────────────────────────────
 
     botSelect.addEventListener('change', () => switchBot(botSelect.value));
@@ -4744,8 +4976,13 @@ import Admin from '../../../layouts/Admin.astro';
       botSelect.value = botParam;
     }
 
-    // Initialize with correct bot (builds slots + params)
+    // Initialize first tab and build slots + params
+    const _firstTab = makeEmptyTabState();
+    _firstTab.currentBot = botSelect.value;
+    tabs.push(_firstTab);
+    activeTabIdx = 0;
     switchBot(botSelect.value);
+    renderTabBar();
 
     if (autoExport) {
       // Restore params before loading images
