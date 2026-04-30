@@ -3704,6 +3704,7 @@ import Admin from '../../../layouts/Admin.astro';
     ];
     let slotLocked: boolean[] = [false, false, false, false];
     let effectiveImgs: (HTMLImageElement | null)[] = [null, null, null, null];
+    let effectiveBlobUrls: (string | null)[] = [null, null, null, null];
     let currentSeed = 0;
     let rng: () => number = Math.random.bind(Math);
     let outputs: Output[] = [];
@@ -3924,11 +3925,16 @@ import Admin from '../../../layouts/Admin.astro';
       const img = sourceImgs[slotIdx];
       if (!img) { effectiveImgs[slotIdx] = null; return; }
 
+      // Snapshot source so stale async callbacks can detect superseded calls
+      const sourceSnap = img;
+
       const { rot, flip, aspect } = slotTransforms[slotIdx];
 
       let canvas: HTMLCanvasElement;
 
       if (rot === 0 && !flip && !aspect) {
+        // No transform — clear any previously tracked transform blob URL for this slot
+        if (effectiveBlobUrls[slotIdx]) { URL.revokeObjectURL(effectiveBlobUrls[slotIdx]!); effectiveBlobUrls[slotIdx] = null; }
         effectiveImgs[slotIdx] = img;
         const thumb = document.getElementById(`slot-thumb-${slotIdx}`) as HTMLImageElement | null;
         const empty = document.getElementById(`slot-empty-${slotIdx}`);
@@ -3971,12 +3977,23 @@ import Admin from '../../../layouts/Admin.astro';
 
       await new Promise<void>(resolve => {
         canvas.toBlob(blob => {
+          // Revoke the previous transform blob URL for this slot before creating a new one
+          if (effectiveBlobUrls[slotIdx]) { URL.revokeObjectURL(effectiveBlobUrls[slotIdx]!); effectiveBlobUrls[slotIdx] = null; }
           const url = URL.createObjectURL(blob!);
           const result = new Image();
-          result.onload = () => { effectiveImgs[slotIdx] = result; resolve(); };
+          result.onload = () => {
+            // Bail if a newer image was loaded into this slot while we were async
+            if (sourceImgs[slotIdx] !== sourceSnap) { URL.revokeObjectURL(url); resolve(); return; }
+            effectiveBlobUrls[slotIdx] = url;
+            effectiveImgs[slotIdx] = result;
+            resolve();
+          };
           result.src = url;
         });
       });
+
+      // Bail on stale async before touching the DOM
+      if (sourceImgs[slotIdx] !== sourceSnap) return;
 
       const thumb = document.getElementById(`slot-thumb-${slotIdx}`) as HTMLImageElement | null;
       const empty = document.getElementById(`slot-empty-${slotIdx}`);
@@ -4307,6 +4324,7 @@ import Admin from '../../../layouts/Admin.astro';
           sourceIds[i] = null;
           slotTransforms[i] = { rot: 0, flip: false };
           effectiveImgs[i] = null;
+          if (effectiveBlobUrls[i]) { URL.revokeObjectURL(effectiveBlobUrls[i]!); effectiveBlobUrls[i] = null; }
         }
       }
       outputs = [];
