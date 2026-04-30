@@ -2866,7 +2866,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     // ─── Halation Edge ────────────────────────────────────────────────────────
 
-    function makeHalationMask(img: HTMLImageElement, W: number, H: number, params: Record<string, any>): OffscreenCanvas {
+    function makeHalationMask(img: HTMLImageElement, W: number, H: number, params: Record<string, any>, rng: () => number): OffscreenCanvas {
       const width: number = params['he-width'] ?? 10;
       const freq: number  = params['he-freq']  ?? 6;
       const angle: number = params['he-angle'] ?? 45;
@@ -2892,7 +2892,7 @@ import Admin from '../../../layouts/Admin.astro';
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         const xr = x*cosA + y*sinA, yr = -x*sinA + y*cosA;
         const pattern = (Math.cos(2*Math.PI*xr/freq) * Math.cos(2*Math.PI*yr/freq) + 1) / 2;
-        noise[y*W+x] = Math.min(1, pattern + Math.random()*0.08);
+        noise[y*W+x] = Math.min(1, pattern + rng()*0.08);
       }
       // Blend noise into edge zone
       const oc = new OffscreenCanvas(W, H);
@@ -2910,10 +2910,10 @@ import Admin from '../../../layouts/Admin.astro';
       return oc;
     }
 
-    function renderHalationEdge(imgs: (HTMLImageElement | null)[], params: Record<string, any>, _rng: () => number): Output[] {
+    function renderHalationEdge(imgs: (HTMLImageElement | null)[], params: Record<string, any>, rng: () => number): Output[] {
       if (!imgs[0] || !imgs[1] || !imgs[2]) return [];
       const W = imgs[0].naturalWidth, H = imgs[0].naturalHeight;
-      const masks = (imgs as HTMLImageElement[]).map(img => makeHalationMask(img, W, H, params));
+      const masks = (imgs as HTMLImageElement[]).map(img => makeHalationMask(img, W, H, params, rng));
       const pixelData = (imgs as HTMLImageElement[]).map(img => {
         const tmp = new OffscreenCanvas(W, H); tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
         return tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
@@ -3652,7 +3652,7 @@ import Admin from '../../../layouts/Admin.astro';
       },
       halationedge: {
         label: 'Halation Edge', desc: 'Grainy halftone noise blended into stencil edges — worn intaglio look',
-        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false, isStencil: true,
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: true, isStencil: true,
         render: renderHalationEdge,
         buildParams: buildHalationEdgeParams, getParams: getHalationEdgeParams, setParams: setHalationEdgeParams,
       },
@@ -4381,11 +4381,12 @@ import Admin from '../../../layouts/Admin.astro';
     function loadSlotFromBlob(slotIdx: number, blob: Blob) {
       sourceIds[slotIdx] = null;
       const url = URL.createObjectURL(blob);
+      // Keep blob URL alive — revoking it before all async thumbnail restores
+      // complete causes drawImage failures and blank thumbnails on bot switch.
       const img = new Image();
       img.onload = () => {
         sourceImgs[slotIdx] = img;
         onSlotLoaded(slotIdx);
-        URL.revokeObjectURL(url);
       };
       img.src = url;
     }
@@ -4407,10 +4408,10 @@ import Admin from '../../../layouts/Admin.astro';
       canvas.toBlob((blob) => {
         if (!blob) return;
         const url = URL.createObjectURL(blob);
+        // Keep blob URL alive — same reason as loadSlotFromBlob.
         sourceIds[slotIdx] = null;
         const img = new Image();
         img.onload = () => {
-          URL.revokeObjectURL(url);
           sourceImgs[slotIdx] = img;
           onSlotLoaded(slotIdx);
         };
