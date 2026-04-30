@@ -221,6 +221,9 @@ import Admin from '../../../layouts/Admin.astro';
     letter-spacing: 0.08em;
     color: var(--color-muted, #888);
   }
+  .pt-slot__label-slot {
+    color: #aaa;
+  }
 
   /* ── Lock button ── */
   .pt-slot__lock-btn {
@@ -3312,7 +3315,7 @@ import Admin from '../../../layouts/Admin.astro';
       slotsEl.innerHTML = bot.inputLabels.map((label, i) => `
         <div class="pt-slot" id="slot-card-${i}" data-slot="${i}">
           <div class="pt-slot__header">
-            <span class="pt-slot__label">${label}</span>
+            <span class="pt-slot__label"><span class="pt-slot__label-slot">SLOT ${i + 1}:</span> ${label}</span>
             <button class="pt-slot__lock-btn" data-slot-lock="${i}"
               data-tooltip="Keep this image when switching bots">
               <span class="pt-slot__lock-icon">🔓</span>
