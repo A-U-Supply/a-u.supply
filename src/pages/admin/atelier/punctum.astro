@@ -1036,6 +1036,17 @@ import Admin from '../../../layouts/Admin.astro';
       flex-wrap: wrap;
       gap: var(--space-sm);
     }
+
+    /* Picker: snap to viewport edges instead of anchoring to trigger button */
+    .pt-bot-picker {
+      position: fixed;
+      top: auto;
+      left: 8px;
+      right: 8px;
+      width: auto;
+      max-width: none;
+      max-height: 70vh;
+    }
   }
 </style>
 
@@ -4977,15 +4988,19 @@ import Admin from '../../../layouts/Admin.astro';
       });
       if (!jobRes.ok) throw new Error(await jobRes.text());
       const { id: jobId } = await jobRes.json();
-      // Poll until done (2 s interval, 5-min timeout)
-      const deadline = Date.now() + 5 * 60 * 1000;
+      // Poll until done — 16-min deadline matches server timeout_seconds=900
+      const deadline = Date.now() + 16 * 60 * 1000;
+      let timedOut = true;
       while (Date.now() < deadline) {
         await new Promise(r => setTimeout(r, 2000));
         const job = await (await fetch(`/api/jobs/${jobId}`, { credentials: 'include' })).json();
-        if (job.status === 'completed') break;
-        if (job.status === 'failed') throw new Error('Job failed: ' + (job.error ?? 'unknown'));
+        if (job.status === 'completed') { timedOut = false; break; }
+        if (job.status === 'failed')    throw new Error(job.error_message ?? 'Job failed');
+        if (job.status === 'cancelled') throw new Error('Job was cancelled');
       }
+      if (timedOut) throw new Error('Job timed out after 16 minutes');
       const outs: any[] = await (await fetch(`/api/jobs/${jobId}/outputs`, { credentials: 'include' })).json();
+      if (!outs.length) throw new Error('Job completed but produced no outputs');
       return Promise.all(outs.map(async (out, i) => {
         const blob = await (await fetch(`/api/jobs/${jobId}/outputs/${out.id}/download`, { credentials: 'include' })).blob();
         const url = URL.createObjectURL(blob);
