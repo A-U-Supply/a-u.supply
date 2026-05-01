@@ -7,8 +7,9 @@ import Admin from '../../../layouts/Admin.astro';
     <div class="pt-header-row">
       <h1>Punctum</h1>
       <div class="pt-bot-wrap">
-        <label class="pt-bot-label" for="bot-select">Bot</label>
-        <select class="pt-bot-select" id="bot-select">
+        <span class="pt-bot-label">Bot</span>
+        <button class="pt-bot-trigger" id="bot-trigger">Bullet Hole ▾</button>
+        <select id="bot-select" style="display:none" aria-hidden="true">
           <option value="bullethole">Bullet Hole</option>
           <option value="stencil">Stencil</option>
           <option value="bw">BW</option>
@@ -43,6 +44,10 @@ import Admin from '../../../layouts/Admin.astro';
           <option value="paletteswap">Palette Swap</option>
           <option value="reactiondiffusion">Reaction Diffusion</option>
         </select>
+        <div class="pt-bot-picker" id="bot-picker" style="display:none">
+          <input class="pt-picker-search" id="bot-picker-search" type="text" placeholder="Search bots…" autocomplete="off" spellcheck="false" />
+          <div class="pt-picker-body" id="bot-picker-body"></div>
+        </div>
       </div>
     </div>
     <p class="pt-bot-desc" id="pt-bot-desc">Circular crop rotations from random positions across the image</p>
@@ -162,13 +167,105 @@ import Admin from '../../../layouts/Admin.astro';
     color: var(--color-muted);
   }
 
-  .pt-bot-select {
+  .pt-bot-wrap { position: relative; }
+
+  .pt-bot-trigger {
     background: var(--color-surface);
     color: #fff;
     border: 1px solid var(--color-border);
     border-radius: 3px;
     padding: 5px 10px;
     font-size: var(--text-sm, 0.85rem);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .pt-bot-trigger:hover { border-color: #888; }
+  .pt-bot-trigger.open   { border-color: var(--color-accent); }
+
+  /* ── Bot picker popover ── */
+  .pt-bot-picker {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 200;
+    background: #181818;
+    border: 1px solid #484848;
+    border-radius: 4px;
+    width: 440px;
+    max-width: calc(100vw - 24px);
+    max-height: 62vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.7);
+  }
+  .pt-picker-search {
+    background: #111;
+    border: none;
+    border-bottom: 1px solid #333;
+    color: #ddd;
+    padding: 8px 12px;
+    font-size: 0.82rem;
+    width: 100%;
+    outline: none;
+    border-radius: 4px 4px 0 0;
+    box-sizing: border-box;
+  }
+  .pt-picker-search::placeholder { color: #555; }
+  .pt-picker-body {
+    overflow-y: auto;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .pt-picker-category { display: flex; flex-direction: column; gap: 5px; }
+  .pt-picker-cat-label {
+    font-size: 0.58rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #666;
+    padding: 0 2px;
+  }
+  .pt-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+  }
+  .pt-picker-card {
+    background: #222;
+    border: 1px solid #333;
+    border-radius: 3px;
+    padding: 7px 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.08s;
+  }
+  .pt-picker-card:hover { background: #2c2c2c; border-color: #666; }
+  .pt-picker-card--active { border-color: var(--color-accent) !important; }
+  .pt-picker-card--hidden { display: none; }
+  .pt-picker-card__name {
+    font-size: 0.73rem;
+    color: #ddd;
+    font-weight: 600;
+    margin-bottom: 3px;
+    line-height: 1.2;
+  }
+  .pt-picker-card--active .pt-picker-card__name { color: var(--color-accent); }
+  .pt-picker-card__desc {
+    font-size: 0.6rem;
+    color: #888;
+    line-height: 1.4;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .pt-picker-empty {
+    font-size: 0.75rem;
+    color: #555;
+    text-align: center;
+    padding: 20px 0;
+    display: none;
   }
 
   .pt-shell {
@@ -4821,7 +4918,11 @@ import Admin from '../../../layouts/Admin.astro';
 
     function switchBot(id: string, { skipClear = false }: { skipClear?: boolean } = {}) {
       currentBot = id;
+      botSelect.value = id;
       const bot = BOTS[id];
+
+      const triggerBtn = document.getElementById('bot-trigger');
+      if (triggerBtn) triggerBtn.textContent = (bot?.label ?? id) + ' ▾';
 
       const descEl = document.getElementById('pt-bot-desc');
       if (descEl) descEl.textContent = bot?.desc ?? '';
@@ -5436,9 +5537,111 @@ import Admin from '../../../layouts/Admin.astro';
     });
     document.getElementById('pt-tab-add')?.addEventListener('click', () => newTab());
 
-    // ─── Bot selector ──────────────────────────────────────────────────────────
+    // ─── Bot picker ────────────────────────────────────────────────────────────
 
-    botSelect.addEventListener('change', () => switchBot(botSelect.value));
+    const BOT_CATEGORIES: { label: string; bots: string[] }[] = [
+      { label: 'Circular / Radial',   bots: ['bullethole','wobbleeye','lathe','bullseye','sixshooter'] },
+      { label: 'Stencil / Threshold', bots: ['stencil','bw','cyanotype','monochrome','stencilburn'] },
+      { label: 'Screen / Pattern',    bots: ['halftone','linescreen','halationedge','curvylines','spiralscreen'] },
+      { label: 'Tiling / Geometric',  bots: ['zellij','zellij_medium','penrose','lattice','kaleidoscope'] },
+      { label: 'Conformal Warp',      bots: ['joukowski','sinewarp','sinephase','circlelimit','curlnoise'] },
+      { label: 'Generative',          bots: ['oilspiral','soapyspiral','reactiondiffusion'] },
+      { label: 'Color / Tone',        bots: ['silver','quad','displacement','chromaticab','paletteswap'] },
+    ];
+
+    const pickerEl    = document.getElementById('bot-picker')!;
+    const pickerBody  = document.getElementById('bot-picker-body')!;
+    const pickerSearch = document.getElementById('bot-picker-search') as HTMLInputElement;
+    const triggerBtn  = document.getElementById('bot-trigger')!;
+
+    function buildPickerCards() {
+      pickerBody.innerHTML = '';
+      const emptyMsg = document.createElement('div');
+      emptyMsg.className = 'pt-picker-empty';
+      emptyMsg.id = 'picker-empty';
+      emptyMsg.textContent = 'No bots match';
+      pickerBody.appendChild(emptyMsg);
+
+      for (const cat of BOT_CATEGORIES) {
+        const section = document.createElement('div');
+        section.className = 'pt-picker-category';
+        section.dataset.cat = cat.label;
+
+        const catLabel = document.createElement('div');
+        catLabel.className = 'pt-picker-cat-label';
+        catLabel.textContent = cat.label;
+        section.appendChild(catLabel);
+
+        const grid = document.createElement('div');
+        grid.className = 'pt-picker-grid';
+
+        for (const id of cat.bots) {
+          const bot = BOTS[id];
+          if (!bot) continue;
+          const card = document.createElement('button');
+          card.className = 'pt-picker-card' + (id === currentBot ? ' pt-picker-card--active' : '');
+          card.dataset.botId = id;
+          card.innerHTML = `<div class="pt-picker-card__name">${bot.label}</div><div class="pt-picker-card__desc">${bot.desc}</div>`;
+          card.addEventListener('click', () => {
+            switchBot(id);
+            closePicker();
+            if (allSlotsReady()) doReroll();
+          });
+          grid.appendChild(card);
+        }
+        section.appendChild(grid);
+        pickerBody.insertBefore(section, emptyMsg);
+      }
+    }
+
+    function filterPicker(query: string) {
+      const q = query.toLowerCase().trim();
+      let anyVisible = false;
+      pickerBody.querySelectorAll<HTMLElement>('.pt-picker-card').forEach(card => {
+        const id  = card.dataset.botId!;
+        const bot = BOTS[id];
+        const match = !q || bot.label.toLowerCase().includes(q) || bot.desc.toLowerCase().includes(q);
+        card.classList.toggle('pt-picker-card--hidden', !match);
+        if (match) anyVisible = true;
+      });
+      // Hide empty category sections
+      pickerBody.querySelectorAll<HTMLElement>('.pt-picker-category').forEach(sec => {
+        const hasVisible = Array.from(sec.querySelectorAll('.pt-picker-card')).some(c => !c.classList.contains('pt-picker-card--hidden'));
+        (sec as HTMLElement).style.display = hasVisible ? '' : 'none';
+      });
+      const emptyMsg = document.getElementById('picker-empty')!;
+      emptyMsg.style.display = anyVisible ? 'none' : 'block';
+    }
+
+    function openPicker() {
+      buildPickerCards();
+      pickerEl.style.display = 'flex';
+      triggerBtn.classList.add('open');
+      pickerSearch.value = '';
+      pickerSearch.focus();
+      // Scroll active card into view
+      const active = pickerBody.querySelector('.pt-picker-card--active');
+      active?.scrollIntoView({ block: 'nearest' });
+    }
+
+    function closePicker() {
+      pickerEl.style.display = 'none';
+      triggerBtn.classList.remove('open');
+    }
+
+    triggerBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      pickerEl.style.display === 'none' ? openPicker() : closePicker();
+    });
+
+    pickerSearch.addEventListener('input', () => filterPicker(pickerSearch.value));
+    pickerSearch.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { closePicker(); triggerBtn.focus(); }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!pickerEl.contains(e.target as Node) && e.target !== triggerBtn) closePicker();
+    });
 
     // ─── URL param auto-export ─────────────────────────────────────────────────
 
