@@ -3697,102 +3697,95 @@ import Admin from '../../../layouts/Admin.astro';
     // ─── Palette Swap ─────────────────────────────────────────────────────────
 
     function renderPaletteSwap(imgs: (HTMLImageElement | null)[], params: Record<string, any>, rng: () => number): Output[] {
-      const paletteImg = imgs[0]; const targetImg = imgs[1];
-      if (!paletteImg || !targetImg) return [];
+      const imgA = imgs[0]; const imgB = imgs[1];
+      if (!imgA || !imgB) return [];
 
-      const PW = paletteImg.naturalWidth, PH = paletteImg.naturalHeight;
-      const TW = targetImg.naturalWidth,  TH = targetImg.naturalHeight;
-
-      const palSrc = document.createElement('canvas'); palSrc.width = PW; palSrc.height = PH;
-      palSrc.getContext('2d')!.drawImage(paletteImg, 0, 0);
-      const palData = palSrc.getContext('2d')!.getImageData(0, 0, PW, PH).data;
-
-      const tgtSrc = document.createElement('canvas'); tgtSrc.width = TW; tgtSrc.height = TH;
-      tgtSrc.getContext('2d')!.drawImage(targetImg, 0, 0);
-      const tgtData = tgtSrc.getContext('2d')!.getImageData(0, 0, TW, TH).data;
-
-      const N: number    = params['ps-n']      ?? 8;
+      const N: number       = params['ps-n']      ?? 8;
       const dither: boolean = !!(params['ps-dither'] ?? false);
 
-      // Sample ~1000 pixels from palette image for k-means
-      const sampleCount = Math.min(1000, PW * PH);
-      const step = Math.max(1, Math.floor(PW * PH / sampleCount));
-      const samples: [number, number, number][] = [];
-      for (let i = 0; i < PW * PH; i += step) {
-        const pi = i * 4;
-        if (palData[pi + 3] < 128) continue;
-        samples.push([palData[pi], palData[pi+1], palData[pi+2]]);
+      function getPixelData(img: HTMLImageElement): Uint8ClampedArray {
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth; c.height = img.naturalHeight;
+        c.getContext('2d')!.drawImage(img, 0, 0);
+        return c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
       }
 
-      // K-means init: pick N random samples as centroids
-      let centroids: [number, number, number][] = [];
-      const used = new Set<number>();
-      while (centroids.length < N && centroids.length < samples.length) {
-        const idx = Math.floor(rng() * samples.length);
-        if (!used.has(idx)) { used.add(idx); centroids.push([...samples[idx]] as [number, number, number]); }
-      }
-
-      // K-means iterations
-      for (let iter = 0; iter < 20; iter++) {
-        const sums: [number, number, number, number][] = centroids.map(() => [0, 0, 0, 0]);
-        for (const [r, g, b] of samples) {
-          let best = 0, bestDist = Infinity;
-          for (let k = 0; k < centroids.length; k++) {
-            const dr = r - centroids[k][0], dg = g - centroids[k][1], db = b - centroids[k][2];
-            const dist = dr*dr + dg*dg + db*db;
-            if (dist < bestDist) { bestDist = dist; best = k; }
-          }
-          sums[best][0] += r; sums[best][1] += g; sums[best][2] += b; sums[best][3]++;
+      function extractPalette(data: Uint8ClampedArray, pixels: number): [number, number, number][] {
+        const step = Math.max(1, Math.floor(pixels / Math.min(1000, pixels)));
+        const samples: [number, number, number][] = [];
+        for (let i = 0; i < pixels; i += step) {
+          if (data[i * 4 + 3] < 128) continue;
+          samples.push([data[i*4], data[i*4+1], data[i*4+2]]);
         }
-        for (let k = 0; k < centroids.length; k++) {
-          if (sums[k][3] > 0) centroids[k] = [sums[k][0]/sums[k][3], sums[k][1]/sums[k][3], sums[k][2]/sums[k][3]];
+        let centroids: [number, number, number][] = [];
+        const used = new Set<number>();
+        while (centroids.length < N && centroids.length < samples.length) {
+          const idx = Math.floor(rng() * samples.length);
+          if (!used.has(idx)) { used.add(idx); centroids.push([...samples[idx]] as [number, number, number]); }
         }
-      }
-
-      // Map target pixels to nearest centroid
-      const dst = document.createElement('canvas'); dst.width = TW; dst.height = TH;
-      const ctx = dst.getContext('2d')!;
-      const out = ctx.createImageData(TW, TH);
-      const d   = new Float32Array(TW * TH * 3); // working buffer for dithering
-
-      for (let i = 0; i < TW * TH; i++) {
-        d[i*3]   = tgtData[i*4];
-        d[i*3+1] = tgtData[i*4+1];
-        d[i*3+2] = tgtData[i*4+2];
-      }
-
-      for (let y = 0; y < TH; y++) {
-        for (let x = 0; x < TW; x++) {
-          const i = y * TW + x;
-          const pr = d[i*3], pg = d[i*3+1], pb = d[i*3+2];
-          let best = 0, bestDist = Infinity;
-          for (let k = 0; k < centroids.length; k++) {
-            const dr = pr - centroids[k][0], dg = pg - centroids[k][1], db = pb - centroids[k][2];
-            const dist = dr*dr + dg*dg + db*db;
-            if (dist < bestDist) { bestDist = dist; best = k; }
+        for (let iter = 0; iter < 20; iter++) {
+          const sums: [number, number, number, number][] = centroids.map(() => [0, 0, 0, 0]);
+          for (const [r, g, b] of samples) {
+            let best = 0, bestDist = Infinity;
+            for (let k = 0; k < centroids.length; k++) {
+              const dr = r - centroids[k][0], dg = g - centroids[k][1], db = b - centroids[k][2];
+              const dist = dr*dr + dg*dg + db*db;
+              if (dist < bestDist) { bestDist = dist; best = k; }
+            }
+            sums[best][0] += r; sums[best][1] += g; sums[best][2] += b; sums[best][3]++;
           }
-          const [cr, cg, cb] = centroids[best];
-          const pi = i * 4;
-          out.data[pi]   = Math.round(cr);
-          out.data[pi+1] = Math.round(cg);
-          out.data[pi+2] = Math.round(cb);
-          out.data[pi+3] = tgtData[pi+3];
+          for (let k = 0; k < centroids.length; k++) {
+            if (sums[k][3] > 0) centroids[k] = [sums[k][0]/sums[k][3], sums[k][1]/sums[k][3], sums[k][2]/sums[k][3]];
+          }
+        }
+        return centroids;
+      }
 
-          if (dither) {
-            const er = pr - cr, eg = pg - cg, eb = pb - cb;
-            const spread: [number, number, number][] = [[x+1,y,7/16],[x-1,y+1,3/16],[x,y+1,5/16],[x+1,y+1,1/16]];
-            for (const [nx, ny, w] of spread) {
-              if (nx < 0 || nx >= TW || ny >= TH) continue;
-              const ni = ny * TW + nx;
-              d[ni*3]   += er * w;
-              d[ni*3+1] += eg * w;
-              d[ni*3+2] += eb * w;
+      function applyPalette(srcData: Uint8ClampedArray, W: number, H: number, centroids: [number,number,number][]): HTMLCanvasElement {
+        const dst = document.createElement('canvas'); dst.width = W; dst.height = H;
+        const ctx = dst.getContext('2d')!;
+        const out = ctx.createImageData(W, H);
+        const d   = new Float32Array(W * H * 3);
+        for (let i = 0; i < W * H; i++) {
+          d[i*3] = srcData[i*4]; d[i*3+1] = srcData[i*4+1]; d[i*3+2] = srcData[i*4+2];
+        }
+        for (let y = 0; y < H; y++) {
+          for (let x = 0; x < W; x++) {
+            const i = y * W + x;
+            const pr = d[i*3], pg = d[i*3+1], pb = d[i*3+2];
+            let best = 0, bestDist = Infinity;
+            for (let k = 0; k < centroids.length; k++) {
+              const dr = pr - centroids[k][0], dg = pg - centroids[k][1], db = pb - centroids[k][2];
+              const dist = dr*dr + dg*dg + db*db;
+              if (dist < bestDist) { bestDist = dist; best = k; }
+            }
+            const [cr, cg, cb] = centroids[best];
+            const pi = i * 4;
+            out.data[pi] = Math.round(cr); out.data[pi+1] = Math.round(cg);
+            out.data[pi+2] = Math.round(cb); out.data[pi+3] = srcData[pi+3];
+            if (dither) {
+              const er = pr - cr, eg = pg - cg, eb = pb - cb;
+              for (const [nx, ny, w] of [[x+1,y,7/16],[x-1,y+1,3/16],[x,y+1,5/16],[x+1,y+1,1/16]] as [number,number,number][]) {
+                if (nx < 0 || nx >= W || ny >= H) continue;
+                const ni = ny * W + nx;
+                d[ni*3] += er*w; d[ni*3+1] += eg*w; d[ni*3+2] += eb*w;
+              }
             }
           }
         }
+        ctx.putImageData(out, 0, 0);
+        return dst;
       }
-      ctx.putImageData(out, 0, 0);
-      return [{ canvas: dst, label: 'Palette Swap' }];
+
+      const dataA = getPixelData(imgA);
+      const dataB = getPixelData(imgB);
+      const palA  = extractPalette(dataA, imgA.naturalWidth * imgA.naturalHeight);
+      const palB  = extractPalette(dataB, imgB.naturalWidth * imgB.naturalHeight);
+
+      return [
+        { canvas: applyPalette(dataB, imgB.naturalWidth, imgB.naturalHeight, palA), label: 'B → A palette' },
+        { canvas: applyPalette(dataA, imgA.naturalWidth, imgA.naturalHeight, palB), label: 'A → B palette' },
+      ];
     }
 
     function buildPaletteSwapParams() {
@@ -4157,8 +4150,8 @@ import Admin from '../../../layouts/Admin.astro';
         buildParams: buildChromaticAbParams, getParams: getChromaticAbParams, setParams: setChromaticAbParams,
       },
       paletteswap: {
-        label: 'Palette Swap', desc: 'Extract N-color palette from one image, remap another to it',
-        inputs: 2, inputLabels: ['Palette Source', 'Target Image'], hasRandomness: true,
+        label: 'Palette Swap', desc: 'Cross-swap N-color palettes between two images — produces two outputs',
+        inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: true,
         render: renderPaletteSwap,
         buildParams: buildPaletteSwapParams, getParams: getPaletteSwapParams, setParams: setPaletteSwapParams,
       },
