@@ -45,6 +45,11 @@ import Admin from '../../../layouts/Admin.astro';
           <option value="reactiondiffusion">Reaction Diffusion</option>
         </select>
         <div class="pt-bot-picker" id="bot-picker" style="display:none">
+          <div class="pt-picker-tabs" id="bot-picker-tabs">
+            <button class="pt-picker-tab active" data-tab="0">Collage Bot</button>
+            <button class="pt-picker-tab" data-tab="1">Protease Bots</button>
+            <button class="pt-picker-tab" data-tab="2">Sparagmos</button>
+          </div>
           <input class="pt-picker-search" id="bot-picker-search" type="text" placeholder="Search bots…" autocomplete="off" spellcheck="false" />
           <div class="pt-picker-body" id="bot-picker-body"></div>
         </div>
@@ -218,13 +223,29 @@ import Admin from '../../../layouts/Admin.astro';
     flex-direction: column;
     gap: 14px;
   }
-  .pt-picker-category { display: flex; flex-direction: column; gap: 5px; }
-  .pt-picker-cat-label {
-    font-size: 0.58rem;
+  .pt-picker-tabs {
+    display: flex;
+    border-bottom: 1px solid #484848;
+    flex-shrink: 0;
+  }
+  .pt-picker-tab {
+    flex: 1;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #aaa;
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    padding: 8px 4px;
+    cursor: pointer;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: #666;
-    padding: 0 2px;
+    letter-spacing: 0.5pt;
+    transition: color 0.15s;
+  }
+  .pt-picker-tab:hover { color: #ddd; }
+  .pt-picker-tab.active {
+    color: var(--color-accent);
+    border-bottom-color: var(--color-accent);
   }
   .pt-picker-grid {
     display: grid;
@@ -5539,85 +5560,84 @@ import Admin from '../../../layouts/Admin.astro';
 
     // ─── Bot picker ────────────────────────────────────────────────────────────
 
-    const BOT_CATEGORIES: { label: string; bots: string[] }[] = [
-      { label: 'Circular / Radial',   bots: ['bullethole','wobbleeye','lathe','bullseye','sixshooter'] },
-      { label: 'Stencil / Threshold', bots: ['stencil','bw','cyanotype','monochrome','stencilburn'] },
-      { label: 'Screen / Pattern',    bots: ['halftone','linescreen','halationedge','curvylines','spiralscreen'] },
-      { label: 'Tiling / Geometric',  bots: ['zellij','zellij_medium','penrose','lattice','kaleidoscope'] },
-      { label: 'Conformal Warp',      bots: ['joukowski','sinewarp','sinephase','circlelimit','curlnoise'] },
-      { label: 'Generative',          bots: ['oilspiral','soapyspiral','reactiondiffusion'] },
-      { label: 'Color / Tone',        bots: ['silver','quad','displacement','chromaticab','paletteswap'] },
+    const BOT_ORIGINS: { label: string; bots: string[] }[] = [
+      {
+        label: 'Collage Bot',
+        bots: ['bullethole','stencil','bw','cyanotype','wobbleeye','lathe','bullseye',
+               'sixshooter','lattice','stencilburn','zellij','zellij_medium','halftone',
+               'linescreen','penrose','monochrome','silver','quad','kaleidoscope',
+               'displacement','oilspiral','soapyspiral','halationedge','curvylines'],
+      },
+      {
+        label: 'Protease Bots',
+        bots: ['joukowski','spiralscreen','sinewarp','sinephase','circlelimit','curlnoise'],
+      },
+      {
+        label: 'Sparagmos',
+        bots: ['chromaticab','paletteswap','reactiondiffusion'],
+      },
     ];
+
+    let activePickerTab = 0;
 
     const pickerEl    = document.getElementById('bot-picker')!;
     const pickerBody  = document.getElementById('bot-picker-body')!;
     const pickerSearch = document.getElementById('bot-picker-search') as HTMLInputElement;
     const triggerBtn  = document.getElementById('bot-trigger')!;
 
-    function buildPickerCards() {
-      pickerBody.innerHTML = '';
-      const emptyMsg = document.createElement('div');
-      emptyMsg.className = 'pt-picker-empty';
-      emptyMsg.id = 'picker-empty';
-      emptyMsg.textContent = 'No bots match';
-      pickerBody.appendChild(emptyMsg);
+    function buildPickerCards(searchTerm = '') {
+      const q = searchTerm.toLowerCase().trim();
+      // When searching, scan all origins; when browsing, show active tab only
+      const candidates = q
+        ? BOT_ORIGINS.flatMap(o => o.bots)
+        : BOT_ORIGINS[activePickerTab].bots;
 
-      for (const cat of BOT_CATEGORIES) {
-        const section = document.createElement('div');
-        section.className = 'pt-picker-category';
-        section.dataset.cat = cat.label;
+      const filtered = candidates.filter(id => {
+        const bot = BOTS[id];
+        if (!bot) return false;
+        if (!q) return true;
+        return bot.label.toLowerCase().includes(q) || (bot.desc ?? '').toLowerCase().includes(q);
+      });
 
-        const catLabel = document.createElement('div');
-        catLabel.className = 'pt-picker-cat-label';
-        catLabel.textContent = cat.label;
-        section.appendChild(catLabel);
-
-        const grid = document.createElement('div');
-        grid.className = 'pt-picker-grid';
-
-        for (const id of cat.bots) {
-          const bot = BOTS[id];
-          if (!bot) continue;
-          const card = document.createElement('button');
-          card.className = 'pt-picker-card' + (id === currentBot ? ' pt-picker-card--active' : '');
-          card.dataset.botId = id;
-          card.innerHTML = `<div class="pt-picker-card__name">${bot.label}</div><div class="pt-picker-card__desc">${bot.desc}</div>`;
-          card.addEventListener('click', () => {
-            switchBot(id);
-            closePicker();
-            if (allSlotsReady()) doReroll();
-          });
-          grid.appendChild(card);
-        }
-        section.appendChild(grid);
-        pickerBody.insertBefore(section, emptyMsg);
+      if (filtered.length === 0) {
+        pickerBody.innerHTML = '<div class="pt-picker-empty" style="display:block">No bots match</div>';
+        return;
       }
+
+      const grid = document.createElement('div');
+      grid.className = 'pt-picker-grid';
+      for (const id of filtered) {
+        const bot = BOTS[id];
+        const card = document.createElement('button');
+        card.className = 'pt-picker-card' + (id === currentBot ? ' pt-picker-card--active' : '');
+        card.dataset.botId = id;
+        card.innerHTML = `<div class="pt-picker-card__name">${bot.label}</div><div class="pt-picker-card__desc">${bot.desc ?? ''}</div>`;
+        card.addEventListener('click', () => {
+          switchBot(id);
+          closePicker();
+          if (allSlotsReady()) doReroll();
+        });
+        grid.appendChild(card);
+      }
+      pickerBody.innerHTML = '';
+      pickerBody.appendChild(grid);
     }
 
-    function filterPicker(query: string) {
-      const q = query.toLowerCase().trim();
-      let anyVisible = false;
-      pickerBody.querySelectorAll<HTMLElement>('.pt-picker-card').forEach(card => {
-        const id  = card.dataset.botId!;
-        const bot = BOTS[id];
-        const match = !q || bot.label.toLowerCase().includes(q) || bot.desc.toLowerCase().includes(q);
-        card.classList.toggle('pt-picker-card--hidden', !match);
-        if (match) anyVisible = true;
-      });
-      // Hide empty category sections
-      pickerBody.querySelectorAll<HTMLElement>('.pt-picker-category').forEach(sec => {
-        const hasVisible = Array.from(sec.querySelectorAll('.pt-picker-card')).some(c => !c.classList.contains('pt-picker-card--hidden'));
-        (sec as HTMLElement).style.display = hasVisible ? '' : 'none';
-      });
-      const emptyMsg = document.getElementById('picker-empty')!;
-      emptyMsg.style.display = anyVisible ? 'none' : 'block';
+    function setPickerTab(idx: number) {
+      activePickerTab = idx;
+      document.querySelectorAll('.pt-picker-tab').forEach((t, i) =>
+        t.classList.toggle('active', i === idx)
+      );
     }
 
     function openPicker() {
+      // Jump to the tab that contains the currently-active bot
+      const tabIdx = BOT_ORIGINS.findIndex(o => o.bots.includes(currentBot));
+      if (tabIdx >= 0) setPickerTab(tabIdx);
+      pickerSearch.value = '';
       buildPickerCards();
       pickerEl.style.display = 'flex';
       triggerBtn.classList.add('open');
-      pickerSearch.value = '';
       pickerSearch.focus();
       // Scroll active card into view
       const active = pickerBody.querySelector('.pt-picker-card--active');
@@ -5634,7 +5654,15 @@ import Admin from '../../../layouts/Admin.astro';
       pickerEl.style.display === 'none' ? openPicker() : closePicker();
     });
 
-    pickerSearch.addEventListener('input', () => filterPicker(pickerSearch.value));
+    pickerSearch.addEventListener('input', () => buildPickerCards(pickerSearch.value));
+
+    document.getElementById('bot-picker-tabs')?.addEventListener('click', (e) => {
+      const tab = (e.target as HTMLElement).closest('[data-tab]') as HTMLElement | null;
+      if (!tab) return;
+      setPickerTab(parseInt(tab.dataset.tab!));
+      pickerSearch.value = '';
+      buildPickerCards();
+    });
     pickerSearch.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { closePicker(); triggerBtn.focus(); }
     });
