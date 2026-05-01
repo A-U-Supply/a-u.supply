@@ -46,11 +46,13 @@ import Admin from '../../../layouts/Admin.astro';
       </div>
     </div>
     <p class="pt-bot-desc" id="pt-bot-desc">Circular crop rotations from random positions across the image</p>
-    <div id="pt-params-wrap">
-      <button class="pt-params-toggle" id="pt-params-toggle">▲ Params</button>
+    <div id="pt-bot-params-wrap">
+      <button class="pt-params-toggle" id="pt-bot-params-toggle">▲ Bot Parameters</button>
       <div id="pt-params"></div>
+    </div>
+    <div id="pt-stencil-params-wrap">
+      <button class="pt-params-toggle" id="pt-stencil-params-toggle">▲ Stencil Parameters</button>
       <div id="pt-stencil-params">
-        <div class="pt-stencil-divider">Stencil</div>
         <div class="pt-field pt-stencil-field">
           <label class="pt-label" for="st-bias">Threshold Bias <span class="pt-val" id="st-bias-val">0</span></label>
           <input class="pt-range" type="range" id="st-bias" min="-64" max="64" step="1" value="0" />
@@ -226,9 +228,10 @@ import Admin from '../../../layouts/Admin.astro';
     letter-spacing: 0.05em;
   }
   .pt-params-toggle:hover { color: #aaa; }
-  #pt-params-wrap.collapsed .pt-params-toggle { padding-bottom: 2px; }
-  #pt-params-wrap.collapsed #pt-params,
-  #pt-params-wrap.collapsed #pt-stencil-params { display: none !important; }
+  #pt-bot-params-wrap.collapsed .pt-params-toggle,
+  #pt-stencil-params-wrap.collapsed .pt-params-toggle { padding-bottom: 2px; }
+  #pt-bot-params-wrap.collapsed #pt-params { display: none !important; }
+  #pt-stencil-params-wrap.collapsed #pt-stencil-params { display: none !important; }
 
   .pt-stage {
     position: relative;
@@ -5276,12 +5279,16 @@ import Admin from '../../../layouts/Admin.astro';
     document.getElementById('st-invert')?.addEventListener('change', () => doRender());
 
     // ─── Params collapse ───────────────────────────────────────────────────────
-    document.getElementById('pt-params-toggle')?.addEventListener('click', () => {
-      const wrap = document.getElementById('pt-params-wrap');
-      const btn  = document.getElementById('pt-params-toggle')!;
-      const collapsed = wrap?.classList.toggle('collapsed');
-      btn.textContent = collapsed ? '▼ Params' : '▲ Params';
-    });
+    function wireParamsToggle(wrapId: string, btnId: string, label: string) {
+      document.getElementById(btnId)?.addEventListener('click', () => {
+        const wrap = document.getElementById(wrapId);
+        const btn  = document.getElementById(btnId)!;
+        const collapsed = wrap?.classList.toggle('collapsed');
+        btn.textContent = (collapsed ? '▼ ' : '▲ ') + label;
+      });
+    }
+    wireParamsToggle('pt-bot-params-wrap',     'pt-bot-params-toggle',     'Bot Parameters');
+    wireParamsToggle('pt-stencil-params-wrap', 'pt-stencil-params-toggle', 'Stencil Parameters');
 
     // ─── Tab management ────────────────────────────────────────────────────────
 
