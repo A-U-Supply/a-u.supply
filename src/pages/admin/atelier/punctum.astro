@@ -56,12 +56,12 @@ import Admin from '../../../layouts/Admin.astro';
       </div>
     </div>
     <p class="pt-bot-desc" id="pt-bot-desc">Circular crop rotations from random positions across the image</p>
-    <div id="pt-bot-params-wrap">
-      <button class="pt-params-toggle" id="pt-bot-params-toggle">▲ Bot Parameters</button>
+    <div id="pt-bot-params-wrap" class="collapsed">
+      <button class="pt-params-toggle" id="pt-bot-params-toggle">▼ Bot Parameters</button>
       <div id="pt-params"></div>
     </div>
-    <div id="pt-stencil-params-wrap">
-      <button class="pt-params-toggle" id="pt-stencil-params-toggle">▲ Stencil Parameters</button>
+    <div id="pt-stencil-params-wrap" class="collapsed">
+      <button class="pt-params-toggle" id="pt-stencil-params-toggle">▼ Stencil Parameters</button>
       <div id="pt-stencil-params">
         <div class="pt-field pt-stencil-field">
           <label class="pt-label" for="st-bias">Threshold Bias <span class="pt-val" id="st-bias-val">0</span></label>
