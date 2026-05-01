@@ -1040,7 +1040,6 @@ import Admin from '../../../layouts/Admin.astro';
     /* Picker: snap to viewport edges instead of anchoring to trigger button */
     .pt-bot-picker {
       position: fixed;
-      top: auto;
       left: 8px;
       right: 8px;
       width: auto;
@@ -5938,6 +5937,9 @@ import Admin from '../../../layouts/Admin.astro';
       if (tabIdx >= 0) setPickerTab(tabIdx);
       pickerSearch.value = '';
       buildPickerCards();
+      // On mobile the picker is position:fixed — set top from trigger's viewport position
+      const triggerRect = triggerBtn.getBoundingClientRect();
+      pickerEl.style.top = (triggerRect.bottom + 4) + 'px';
       pickerEl.style.display = 'flex';
       triggerBtn.classList.add('open');
       pickerSearch.focus();
