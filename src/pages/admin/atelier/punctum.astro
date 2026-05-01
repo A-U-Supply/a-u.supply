@@ -102,7 +102,8 @@ import Admin from '../../../layouts/Admin.astro';
       <div class="pt-stage" id="pt-stage">
         <canvas id="pt-canvas" style="display:none"></canvas>
         <div class="pt-processing" id="pt-processing" style="display:none">
-          <span class="loading-dots">Processing</span>
+          <span id="pt-processing-status" class="loading-dots">Processing</span>
+          <button id="pt-processing-cancel" class="pt-processing-cancel">✕ Cancel</button>
         </div>
         <div class="pt-empty" id="pt-empty">
           <div class="pt-empty__icon">⬡</div>
@@ -406,14 +407,28 @@ import Admin from '../../../layouts/Admin.astro';
     position: absolute;
     inset: 0;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 16px;
     background: rgba(0,0,0,0.6);
     color: #ddd;
     font-size: var(--text-lg);
     letter-spacing: 2pt;
     z-index: 10;
   }
+  .pt-processing-cancel {
+    background: none;
+    border: 1px solid #666;
+    color: #999;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm, 0.8rem);
+    padding: 4px 14px;
+    border-radius: 3px;
+    cursor: pointer;
+    letter-spacing: 0.5pt;
+  }
+  .pt-processing-cancel:hover { border-color: #ddd; color: #ddd; }
 
   .pt-empty {
     text-align: center;
@@ -1082,8 +1097,11 @@ import Admin from '../../../layouts/Admin.astro';
     const slotsEl     = document.getElementById('pt-slots') as HTMLDivElement;
     const paramsEl        = document.getElementById('pt-params') as HTMLDivElement;
     const stencilParamsEl = document.getElementById('pt-stencil-params') as HTMLDivElement;
-    const processingEl    = document.getElementById('pt-processing') as HTMLDivElement;
-    const runBtn          = document.getElementById('run-btn') as HTMLButtonElement;
+    const processingEl       = document.getElementById('pt-processing') as HTMLDivElement;
+    const processingStatusEl = document.getElementById('pt-processing-status') as HTMLSpanElement;
+    const processingCancelEl = document.getElementById('pt-processing-cancel') as HTMLButtonElement;
+    const runBtn             = document.getElementById('run-btn') as HTMLButtonElement;
+    let cancelCurrentJob: (() => Promise<void>) | null = null;
     const stripEl     = document.getElementById('pt-strip') as HTMLDivElement;
     const rerollBtn   = document.getElementById('reroll-btn') as HTMLButtonElement;
     const seedInput   = document.getElementById('seed-input') as HTMLInputElement;
@@ -4982,7 +5000,13 @@ import Admin from '../../../layouts/Admin.astro';
     function setAsyncLoading(loading: boolean) {
       processingEl.style.display = loading ? 'flex' : 'none';
       stageCanvas.style.display = loading ? 'block' : stageCanvas.style.display;
-      if (loading) { emptyEl.style.display = 'none'; }
+      if (loading) {
+        emptyEl.style.display = 'none';
+      } else {
+        cancelCurrentJob = null;
+        processingStatusEl.textContent = 'Processing';
+        processingStatusEl.classList.add('loading-dots');
+      }
       runBtn.disabled = loading;
     }
 
@@ -4999,7 +5023,13 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     async function runSparagmosRecipe(recipe: string, imgs: (HTMLImageElement | null)[], seed?: number): Promise<Output[]> {
+      // Phase 1: upload
+      processingStatusEl.classList.add('loading-dots');
+      processingStatusEl.textContent = 'Uploading';
       const ids = await Promise.all(imgs.filter(Boolean).map(img => uploadImgToLibrary(img!)));
+
+      // Phase 2: submit job
+      processingStatusEl.textContent = 'Submitting';
       const jobParams: Record<string, any> = { processing_mode: 'recipe', recipe };
       if (seed !== undefined) jobParams.seed = seed;
       const jobRes = await fetch('/api/jobs', {
@@ -5009,17 +5039,30 @@ import Admin from '../../../layouts/Admin.astro';
       });
       if (!jobRes.ok) throw new Error(await jobRes.text());
       const { id: jobId } = await jobRes.json();
-      // Poll until done — 16-min deadline matches server timeout_seconds=900
+
+      // Wire cancel button to this job
+      let cancelled = false;
+      cancelCurrentJob = async () => {
+        cancelled = true;
+        await fetch(`/api/jobs/${jobId}/cancel`, { method: 'POST', credentials: 'include' });
+      };
+
+      // Phase 3: poll — 16-min deadline matches server timeout_seconds=900
+      processingStatusEl.textContent = 'Queued';
       const deadline = Date.now() + 16 * 60 * 1000;
       let timedOut = true;
       while (Date.now() < deadline) {
+        if (cancelled) throw new Error('Job was cancelled');
         await new Promise(r => setTimeout(r, 2000));
         const job = await (await fetch(`/api/jobs/${jobId}`, { credentials: 'include' })).json();
         if (job.status === 'completed') { timedOut = false; break; }
         if (job.status === 'failed')    throw new Error(job.error_message ?? 'Job failed');
         if (job.status === 'cancelled') throw new Error('Job was cancelled');
+        processingStatusEl.textContent = job.started_at ? 'Running' : 'Queued';
       }
       if (timedOut) throw new Error('Job timed out after 16 minutes');
+
+      cancelCurrentJob = null;
       const outs: any[] = await (await fetch(`/api/jobs/${jobId}/outputs`, { credentials: 'include' })).json();
       if (!outs.length) throw new Error('Job completed but produced no outputs');
       return Promise.all(outs.map(async (out, i) => {
@@ -5401,6 +5444,9 @@ import Admin from '../../../layouts/Admin.astro';
 
     rerollBtn.addEventListener('click', () => doReroll());
     runBtn.addEventListener('click', () => doReroll());
+    processingCancelEl.addEventListener('click', async () => {
+      if (cancelCurrentJob) await cancelCurrentJob();
+    });
     seedInput.addEventListener('change', () => {
       const v = parseInt(seedInput.value);
       if (v >= 1) doReroll(v);
