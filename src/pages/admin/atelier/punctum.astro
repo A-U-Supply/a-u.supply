@@ -83,12 +83,12 @@ import Admin from '../../../layouts/Admin.astro';
       <div class="pt-reroll-wrap">
         <button class="btn btn--secondary" id="reroll-btn" disabled>⟳<span class="pt-reroll-label"> RE-ROLL</span></button>
         <button class="btn btn--secondary" id="run-btn" style="display:none" disabled>▶ RUN</button>
-        <input type="number" id="seed-input" class="pt-seed-input" style="display:none" placeholder="seed" min="1" max="2147483647" step="1" />
       </div>
       <button class="btn btn--secondary" id="download-btn" disabled>↓ Download</button>
       <button class="btn btn--primary"   id="save-btn"     disabled>☁ Save</button>
       <button class="btn btn--secondary" id="save-all-btn" disabled>☁ All</button>
       <button class="btn btn--secondary" id="save-png-btn" disabled>☁ HD PNG</button>
+      <input type="number" id="seed-input" class="pt-seed-input" style="display:none" placeholder="seed" min="1" max="2147483647" step="1" />
     </div>
   </div>
 
@@ -842,7 +842,6 @@ import Admin from '../../../layouts/Admin.astro';
 
   .pt-reroll-wrap {
     display: flex;
-    flex-direction: column;
     align-items: center;
     gap: 4px;
   }
@@ -850,7 +849,8 @@ import Admin from '../../../layouts/Admin.astro';
   #reroll-btn:not([disabled]):hover .pt-reroll-label { display: inline; }
 
   .pt-seed-input {
-    width: 90px;
+    flex-basis: 100%;   /* always wraps to its own row */
+    width: 120px;
     background: var(--color-surface);
     color: #fff;
     border: 1px solid var(--color-border);
