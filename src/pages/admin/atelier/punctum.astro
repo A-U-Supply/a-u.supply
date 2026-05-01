@@ -848,6 +848,28 @@ import Admin from '../../../layouts/Admin.astro';
   .pt-reroll-label { display: none; }
   #reroll-btn:not([disabled]):hover .pt-reroll-label { display: inline; }
 
+  #run-btn {
+    background: var(--color-accent);
+    color: #111;
+    border: none;
+    font-weight: bold;
+    letter-spacing: 1pt;
+    padding: 6px 14px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm, 0.85rem);
+    opacity: 0.45;
+    transition: opacity 0.15s, box-shadow 0.15s;
+  }
+  #run-btn:not([disabled]) {
+    opacity: 1;
+    box-shadow: 0 0 8px rgba(224, 123, 84, 0.5);
+  }
+  #run-btn:not([disabled]):hover {
+    box-shadow: 0 0 14px rgba(224, 123, 84, 0.75);
+  }
+
   .pt-seed-input {
     flex-basis: 100%;   /* always wraps to its own row */
     width: 120px;
