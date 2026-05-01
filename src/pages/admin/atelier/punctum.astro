@@ -32,26 +32,39 @@ import Admin from '../../../layouts/Admin.astro';
           <option value="joukowski">Joukowski</option>
           <option value="oilspiral">Oil Spiral</option>
           <option value="soapyspiral">Soapy Spiral</option>
+          <option value="halationedge">Halation Edge</option>
+          <option value="curvylines">Curvy Lines</option>
+          <option value="spiralscreen">Spiral Screen</option>
+          <option value="sinewarp">Sine Warp</option>
+          <option value="sinephase">Sine Phase</option>
+          <option value="circlelimit">Circle Limit</option>
+          <option value="curlnoise">Curl Noise</option>
+          <option value="chromaticab">Chromatic Aberration</option>
+          <option value="paletteswap">Palette Swap</option>
+          <option value="reactiondiffusion">Reaction Diffusion</option>
         </select>
       </div>
     </div>
     <p class="pt-bot-desc" id="pt-bot-desc">Circular crop rotations from random positions across the image</p>
-    <div id="pt-params"></div>
-    <div id="pt-stencil-params">
-      <div class="pt-stencil-divider">Stencil</div>
-      <div class="pt-field pt-stencil-field">
-        <label class="pt-label" for="st-bias">Threshold Bias <span class="pt-val" id="st-bias-val">0</span></label>
-        <input class="pt-range" type="range" id="st-bias" min="-64" max="64" step="1" value="0" />
-      </div>
-      <div class="pt-field pt-stencil-field">
-        <label class="pt-label" for="st-contrast">Contrast <span class="pt-val" id="st-contrast-val">1.00</span></label>
-        <input class="pt-range" type="range" id="st-contrast" min="0.25" max="3" step="0.05" value="1" />
-      </div>
-      <div class="pt-field pt-stencil-field pt-check-field">
-        <label class="pt-check-label">
-          <input type="checkbox" id="st-invert" />
-          Invert
-        </label>
+    <div id="pt-params-wrap">
+      <button class="pt-params-toggle" id="pt-params-toggle">▲ Params</button>
+      <div id="pt-params"></div>
+      <div id="pt-stencil-params">
+        <div class="pt-stencil-divider">Stencil</div>
+        <div class="pt-field pt-stencil-field">
+          <label class="pt-label" for="st-bias">Threshold Bias <span class="pt-val" id="st-bias-val">0</span></label>
+          <input class="pt-range" type="range" id="st-bias" min="-64" max="64" step="1" value="0" />
+        </div>
+        <div class="pt-field pt-stencil-field">
+          <label class="pt-label" for="st-contrast">Contrast <span class="pt-val" id="st-contrast-val">1.00</span></label>
+          <input class="pt-range" type="range" id="st-contrast" min="0.25" max="3" step="0.05" value="1" />
+        </div>
+        <div class="pt-field pt-stencil-field pt-check-field">
+          <label class="pt-check-label">
+            <input type="checkbox" id="st-invert" />
+            Invert
+          </label>
+        </div>
       </div>
     </div>
     <div class="pt-actions">
@@ -205,6 +218,17 @@ import Admin from '../../../layouts/Admin.astro';
     justify-content: center;
   }
   .pt-tab-add:hover { border-color: #888; color: #fff; }
+
+  .pt-params-toggle {
+    background: none; border: none; color: #666;
+    font-size: 0.7rem; cursor: pointer; padding: 2px 0 6px;
+    display: block; width: 100%; text-align: left;
+    letter-spacing: 0.05em;
+  }
+  .pt-params-toggle:hover { color: #aaa; }
+  #pt-params-wrap.collapsed .pt-params-toggle { padding-bottom: 2px; }
+  #pt-params-wrap.collapsed #pt-params,
+  #pt-params-wrap.collapsed #pt-stencil-params { display: none !important; }
 
   .pt-stage {
     position: relative;
@@ -440,6 +464,10 @@ import Admin from '../../../layouts/Admin.astro';
   /* ── RATIO button active state ── */
   .pt-slot__btn--fit.ratio-active {
     color: #e07b54;
+  }
+  /* ── BACK button active state ── */
+  .pt-slot__btn--back:not([disabled]) {
+    color: #7bbce0;
   }
 
   /* ── Mobile: full-width stacked slots ── */
@@ -3564,6 +3592,359 @@ import Admin from '../../../layouts/Admin.astro';
       if (p['cn-tile']     != null) { (document.getElementById('cn-tile')     as HTMLInputElement).checked = !!p['cn-tile']; }
     }
 
+    // ─── Chromatic Aberration ─────────────────────────────────────────────────
+
+    function renderChromaticAb(imgs: (HTMLImageElement | null)[], params: Record<string, any>, _rng: () => number): Output[] {
+      const img = imgs[0]; if (!img) return [];
+      const W = img.naturalWidth, H = img.naturalHeight;
+      const src = document.createElement('canvas'); src.width = W; src.height = H;
+      src.getContext('2d')!.drawImage(img, 0, 0);
+      const srcData = src.getContext('2d')!.getImageData(0, 0, W, H).data;
+
+      const strength: number = params['ca-strength'] ?? 16;
+      const angle: number    = (params['ca-angle']   ?? 0) * Math.PI / 180;
+      const mode: string     = params['ca-mode']     ?? 'linear';
+
+      const dst = document.createElement('canvas'); dst.width = W; dst.height = H;
+      const ctx = dst.getContext('2d')!;
+      const out = ctx.createImageData(W, H);
+      const d   = out.data;
+
+      const cxF = (W - 1) / 2, cyF = (H - 1) / 2;
+
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          let rdx: number, rdy: number, bdx: number, bdy: number;
+          if (mode === 'radial') {
+            const dx = (x - cxF) / Math.max(W, H);
+            const dy = (y - cyF) / Math.max(W, H);
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const s = dist * strength * 2;
+            rdx = dx * s; rdy = dy * s;
+            bdx = -rdx;   bdy = -rdy;
+          } else {
+            rdx = Math.cos(angle) * strength;
+            rdy = Math.sin(angle) * strength;
+            bdx = -rdx; bdy = -rdy;
+          }
+
+          const [r] = bilinearSample(srcData, W, H, x + rdx, y + rdy);
+          const [, g] = bilinearSample(srcData, W, H, x, y);
+          const [,, b] = bilinearSample(srcData, W, H, x + bdx, y + bdy);
+          const pi = (y * W + x) * 4;
+          const alpha = srcData[(y * W + x) * 4 + 3];
+          d[pi] = r; d[pi+1] = g; d[pi+2] = b; d[pi+3] = alpha;
+        }
+      }
+      ctx.putImageData(out, 0, 0);
+      return [{ canvas: dst, label: 'Chromatic Aberration' }];
+    }
+
+    function buildChromaticAbParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="ca-strength">Strength <span class="pt-val" id="ca-strength-val">16</span></label>
+          <input class="pt-range" type="range" id="ca-strength" min="1" max="80" step="1" value="16" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ca-angle">Angle <span class="pt-val" id="ca-angle-val">0</span>°</label>
+          <input class="pt-range" type="range" id="ca-angle" min="0" max="360" step="1" value="0" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ca-mode">Mode</label>
+          <select class="pt-select" id="ca-mode">
+            <option value="linear">Linear</option>
+            <option value="radial">Radial</option>
+          </select>
+        </div>
+      `;
+      let caDebounce: ReturnType<typeof setTimeout>;
+      document.getElementById('ca-strength')!.addEventListener('input', (e) => {
+        document.getElementById('ca-strength-val')!.textContent = (e.target as HTMLInputElement).value;
+        clearTimeout(caDebounce); caDebounce = setTimeout(doRender, 100);
+      });
+      document.getElementById('ca-angle')!.addEventListener('input', (e) => {
+        document.getElementById('ca-angle-val')!.textContent = (e.target as HTMLInputElement).value;
+        clearTimeout(caDebounce); caDebounce = setTimeout(doRender, 100);
+      });
+      document.getElementById('ca-mode')!.addEventListener('change', () => doRender());
+    }
+    function getChromaticAbParams(): Record<string, any> {
+      return {
+        'ca-strength': parseInt((document.getElementById('ca-strength') as HTMLInputElement).value, 10),
+        'ca-angle':    parseInt((document.getElementById('ca-angle')    as HTMLInputElement).value, 10),
+        'ca-mode':     (document.getElementById('ca-mode') as HTMLSelectElement).value,
+      };
+    }
+    function setChromaticAbParams(p: Record<string, any>) {
+      if (p['ca-strength'] != null) { (document.getElementById('ca-strength') as HTMLInputElement).value = String(p['ca-strength']); document.getElementById('ca-strength-val')!.textContent = String(p['ca-strength']); }
+      if (p['ca-angle']    != null) { (document.getElementById('ca-angle')    as HTMLInputElement).value = String(p['ca-angle']);    document.getElementById('ca-angle-val')!.textContent    = String(p['ca-angle']); }
+      if (p['ca-mode']     != null) { (document.getElementById('ca-mode') as HTMLSelectElement).value = p['ca-mode']; }
+    }
+
+    // ─── Palette Swap ─────────────────────────────────────────────────────────
+
+    function renderPaletteSwap(imgs: (HTMLImageElement | null)[], params: Record<string, any>, rng: () => number): Output[] {
+      const paletteImg = imgs[0]; const targetImg = imgs[1];
+      if (!paletteImg || !targetImg) return [];
+
+      const PW = paletteImg.naturalWidth, PH = paletteImg.naturalHeight;
+      const TW = targetImg.naturalWidth,  TH = targetImg.naturalHeight;
+
+      const palSrc = document.createElement('canvas'); palSrc.width = PW; palSrc.height = PH;
+      palSrc.getContext('2d')!.drawImage(paletteImg, 0, 0);
+      const palData = palSrc.getContext('2d')!.getImageData(0, 0, PW, PH).data;
+
+      const tgtSrc = document.createElement('canvas'); tgtSrc.width = TW; tgtSrc.height = TH;
+      tgtSrc.getContext('2d')!.drawImage(targetImg, 0, 0);
+      const tgtData = tgtSrc.getContext('2d')!.getImageData(0, 0, TW, TH).data;
+
+      const N: number    = params['ps-n']      ?? 8;
+      const dither: boolean = !!(params['ps-dither'] ?? false);
+
+      // Sample ~1000 pixels from palette image for k-means
+      const sampleCount = Math.min(1000, PW * PH);
+      const step = Math.max(1, Math.floor(PW * PH / sampleCount));
+      const samples: [number, number, number][] = [];
+      for (let i = 0; i < PW * PH; i += step) {
+        const pi = i * 4;
+        if (palData[pi + 3] < 128) continue;
+        samples.push([palData[pi], palData[pi+1], palData[pi+2]]);
+      }
+
+      // K-means init: pick N random samples as centroids
+      let centroids: [number, number, number][] = [];
+      const used = new Set<number>();
+      while (centroids.length < N && centroids.length < samples.length) {
+        const idx = Math.floor(rng() * samples.length);
+        if (!used.has(idx)) { used.add(idx); centroids.push([...samples[idx]] as [number, number, number]); }
+      }
+
+      // K-means iterations
+      for (let iter = 0; iter < 20; iter++) {
+        const sums: [number, number, number, number][] = centroids.map(() => [0, 0, 0, 0]);
+        for (const [r, g, b] of samples) {
+          let best = 0, bestDist = Infinity;
+          for (let k = 0; k < centroids.length; k++) {
+            const dr = r - centroids[k][0], dg = g - centroids[k][1], db = b - centroids[k][2];
+            const dist = dr*dr + dg*dg + db*db;
+            if (dist < bestDist) { bestDist = dist; best = k; }
+          }
+          sums[best][0] += r; sums[best][1] += g; sums[best][2] += b; sums[best][3]++;
+        }
+        for (let k = 0; k < centroids.length; k++) {
+          if (sums[k][3] > 0) centroids[k] = [sums[k][0]/sums[k][3], sums[k][1]/sums[k][3], sums[k][2]/sums[k][3]];
+        }
+      }
+
+      // Map target pixels to nearest centroid
+      const dst = document.createElement('canvas'); dst.width = TW; dst.height = TH;
+      const ctx = dst.getContext('2d')!;
+      const out = ctx.createImageData(TW, TH);
+      const d   = new Float32Array(TW * TH * 3); // working buffer for dithering
+
+      for (let i = 0; i < TW * TH; i++) {
+        d[i*3]   = tgtData[i*4];
+        d[i*3+1] = tgtData[i*4+1];
+        d[i*3+2] = tgtData[i*4+2];
+      }
+
+      for (let y = 0; y < TH; y++) {
+        for (let x = 0; x < TW; x++) {
+          const i = y * TW + x;
+          const pr = d[i*3], pg = d[i*3+1], pb = d[i*3+2];
+          let best = 0, bestDist = Infinity;
+          for (let k = 0; k < centroids.length; k++) {
+            const dr = pr - centroids[k][0], dg = pg - centroids[k][1], db = pb - centroids[k][2];
+            const dist = dr*dr + dg*dg + db*db;
+            if (dist < bestDist) { bestDist = dist; best = k; }
+          }
+          const [cr, cg, cb] = centroids[best];
+          const pi = i * 4;
+          out.data[pi]   = Math.round(cr);
+          out.data[pi+1] = Math.round(cg);
+          out.data[pi+2] = Math.round(cb);
+          out.data[pi+3] = tgtData[pi+3];
+
+          if (dither) {
+            const er = pr - cr, eg = pg - cg, eb = pb - cb;
+            const spread: [number, number, number][] = [[x+1,y,7/16],[x-1,y+1,3/16],[x,y+1,5/16],[x+1,y+1,1/16]];
+            for (const [nx, ny, w] of spread) {
+              if (nx < 0 || nx >= TW || ny >= TH) continue;
+              const ni = ny * TW + nx;
+              d[ni*3]   += er * w;
+              d[ni*3+1] += eg * w;
+              d[ni*3+2] += eb * w;
+            }
+          }
+        }
+      }
+      ctx.putImageData(out, 0, 0);
+      return [{ canvas: dst, label: 'Palette Swap' }];
+    }
+
+    function buildPaletteSwapParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="ps-n">Colors <span class="pt-val" id="ps-n-val">8</span></label>
+          <input class="pt-range" type="range" id="ps-n" min="2" max="16" step="1" value="8" />
+        </div>
+        <div class="pt-field pt-check-field">
+          <label class="pt-check-label">
+            <input type="checkbox" id="ps-dither" />
+            Floyd-Steinberg Dither
+          </label>
+        </div>
+      `;
+      document.getElementById('ps-n')!.addEventListener('input', (e) => {
+        document.getElementById('ps-n-val')!.textContent = (e.target as HTMLInputElement).value;
+        doReroll();
+      });
+      document.getElementById('ps-dither')!.addEventListener('change', () => doReroll());
+    }
+    function getPaletteSwapParams(): Record<string, any> {
+      return {
+        'ps-n':      parseInt((document.getElementById('ps-n') as HTMLInputElement).value, 10),
+        'ps-dither': (document.getElementById('ps-dither') as HTMLInputElement).checked,
+      };
+    }
+    function setPaletteSwapParams(p: Record<string, any>) {
+      if (p['ps-n']      != null) { (document.getElementById('ps-n') as HTMLInputElement).value = String(p['ps-n']); document.getElementById('ps-n-val')!.textContent = String(p['ps-n']); }
+      if (p['ps-dither'] != null) { (document.getElementById('ps-dither') as HTMLInputElement).checked = !!p['ps-dither']; }
+    }
+
+    // ─── Reaction Diffusion ────────────────────────────────────────────────────
+
+    function renderReactionDiffusion(imgs: (HTMLImageElement | null)[], params: Record<string, any>, rng: () => number): Output[] {
+      const img = imgs[0]; if (!img) return [];
+      const W = img.naturalWidth, H = img.naturalHeight;
+
+      const f: number    = params['rd-f']    ?? 0.055;
+      const k: number    = params['rd-k']    ?? 0.062;
+      const iters: number = params['rd-iter'] ?? 500;
+      const res: number  = params['rd-res']  ?? 128;
+
+      // Scale working resolution
+      const aspect = W / H;
+      const RW = aspect >= 1 ? res : Math.round(res * aspect);
+      const RH = aspect >= 1 ? Math.round(res / aspect) : res;
+
+      // Sample image brightness to seed B field
+      const seedSrc = document.createElement('canvas'); seedSrc.width = RW; seedSrc.height = RH;
+      seedSrc.getContext('2d')!.drawImage(img, 0, 0, RW, RH);
+      const seedData = seedSrc.getContext('2d')!.getImageData(0, 0, RW, RH).data;
+
+      // Gray-Scott fields: A (activator), B (inhibitor)
+      let A = new Float32Array(RW * RH);
+      let B = new Float32Array(RW * RH);
+      let nA = new Float32Array(RW * RH);
+      let nB = new Float32Array(RW * RH);
+
+      // Initialize: A=1 everywhere, seed B from bright pixels
+      for (let i = 0; i < RW * RH; i++) {
+        A[i] = 1.0;
+        const pi = i * 4;
+        const bright = (seedData[pi] * 0.299 + seedData[pi+1] * 0.587 + seedData[pi+2] * 0.114) / 255;
+        B[i] = bright > 0.5 ? 1.0 : 0.0;
+        // Also seed random spots
+        if (rng() < 0.002) B[i] = 1.0;
+      }
+
+      const dA = 1.0, dB = 0.5;
+
+      for (let iter = 0; iter < iters; iter++) {
+        for (let y = 0; y < RH; y++) {
+          for (let x = 0; x < RW; x++) {
+            const i = y * RW + x;
+            const xp = (x + 1) % RW, xm = (x - 1 + RW) % RW;
+            const yp = (y + 1) % RH, ym = (y - 1 + RH) % RH;
+            const lapA = A[y*RW+xp] + A[y*RW+xm] + A[yp*RW+x] + A[ym*RW+x] - 4*A[i];
+            const lapB = B[y*RW+xp] + B[y*RW+xm] + B[yp*RW+x] + B[ym*RW+x] - 4*B[i];
+            const a = A[i], b = B[i];
+            const abb = a * b * b;
+            nA[i] = Math.max(0, Math.min(1, a + dA * lapA - abb + f * (1 - a)));
+            nB[i] = Math.max(0, Math.min(1, b + dB * lapB + abb - (k + f) * b));
+          }
+        }
+        [A, nA] = [nA, A];
+        [B, nB] = [nB, B];
+      }
+
+      // Render: A-B → grayscale, scale up to original size
+      const dst = document.createElement('canvas'); dst.width = W; dst.height = H;
+      const ctx = dst.getContext('2d')!;
+      const small = document.createElement('canvas'); small.width = RW; small.height = RH;
+      const sCtx = small.getContext('2d')!;
+      const sOut = sCtx.createImageData(RW, RH);
+      for (let i = 0; i < RW * RH; i++) {
+        const v = Math.max(0, Math.min(255, Math.round((A[i] - B[i]) * 255)));
+        sOut.data[i*4]   = v;
+        sOut.data[i*4+1] = v;
+        sOut.data[i*4+2] = v;
+        sOut.data[i*4+3] = 255;
+      }
+      sCtx.putImageData(sOut, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(small, 0, 0, W, H);
+      return [{ canvas: dst, label: 'Reaction Diffusion' }];
+    }
+
+    function buildReactionDiffusionParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="rd-f">Feed Rate <span class="pt-val" id="rd-f-val">0.0550</span></label>
+          <input class="pt-range" type="range" id="rd-f" min="0.010" max="0.100" step="0.001" value="0.055" />
+          <div class="pt-range-hints"><span>slow feed</span><span>fast feed</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="rd-k">Kill Rate <span class="pt-val" id="rd-k-val">0.0620</span></label>
+          <input class="pt-range" type="range" id="rd-k" min="0.040" max="0.080" step="0.001" value="0.062" />
+          <div class="pt-range-hints"><span>survive</span><span>kill</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="rd-iter">Iterations <span class="pt-val" id="rd-iter-val">500</span></label>
+          <input class="pt-range" type="range" id="rd-iter" min="100" max="2000" step="50" value="500" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="rd-res">Resolution</label>
+          <select class="pt-select" id="rd-res">
+            <option value="64">64px (fast)</option>
+            <option value="128" selected>128px</option>
+            <option value="256">256px (slow)</option>
+          </select>
+        </div>
+      `;
+      let rdDebounce: ReturnType<typeof setTimeout>;
+      document.getElementById('rd-f')!.addEventListener('input', (e) => {
+        document.getElementById('rd-f-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(4);
+        clearTimeout(rdDebounce); rdDebounce = setTimeout(doReroll, 300);
+      });
+      document.getElementById('rd-k')!.addEventListener('input', (e) => {
+        document.getElementById('rd-k-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(4);
+        clearTimeout(rdDebounce); rdDebounce = setTimeout(doReroll, 300);
+      });
+      document.getElementById('rd-iter')!.addEventListener('input', (e) => {
+        document.getElementById('rd-iter-val')!.textContent = (e.target as HTMLInputElement).value;
+        clearTimeout(rdDebounce); rdDebounce = setTimeout(doReroll, 300);
+      });
+      document.getElementById('rd-res')!.addEventListener('change', () => doReroll());
+    }
+    function getReactionDiffusionParams(): Record<string, any> {
+      return {
+        'rd-f':    parseFloat((document.getElementById('rd-f') as HTMLInputElement).value),
+        'rd-k':    parseFloat((document.getElementById('rd-k') as HTMLInputElement).value),
+        'rd-iter': parseInt((document.getElementById('rd-iter') as HTMLInputElement).value, 10),
+        'rd-res':  parseInt((document.getElementById('rd-res') as HTMLSelectElement).value, 10),
+      };
+    }
+    function setReactionDiffusionParams(p: Record<string, any>) {
+      if (p['rd-f']    != null) { (document.getElementById('rd-f')    as HTMLInputElement).value = String(p['rd-f']);    document.getElementById('rd-f-val')!.textContent    = parseFloat(p['rd-f']).toFixed(4); }
+      if (p['rd-k']    != null) { (document.getElementById('rd-k')    as HTMLInputElement).value = String(p['rd-k']);    document.getElementById('rd-k-val')!.textContent    = parseFloat(p['rd-k']).toFixed(4); }
+      if (p['rd-iter'] != null) { (document.getElementById('rd-iter') as HTMLInputElement).value = String(p['rd-iter']); document.getElementById('rd-iter-val')!.textContent = String(p['rd-iter']); }
+      if (p['rd-res']  != null) { (document.getElementById('rd-res') as HTMLSelectElement).value = String(p['rd-res']); }
+    }
+
     // ─── Bot config registry ───────────────────────────────────────────────────
 
     type BotDef = {
@@ -3757,9 +4138,33 @@ import Admin from '../../../layouts/Admin.astro';
         render: renderCurlNoise,
         buildParams: buildCurlNoiseParams, getParams: getCurlNoiseParams, setParams: setCurlNoiseParams,
       },
+      chromaticab: {
+        label: 'Chromatic Aberration', desc: 'Split RGB channels apart — linear or radial lens-fringe effect',
+        inputs: 1, inputLabels: ['Image'], hasRandomness: false,
+        render: renderChromaticAb,
+        buildParams: buildChromaticAbParams, getParams: getChromaticAbParams, setParams: setChromaticAbParams,
+      },
+      paletteswap: {
+        label: 'Palette Swap', desc: 'Extract N-color palette from one image, remap another to it',
+        inputs: 2, inputLabels: ['Palette Source', 'Target Image'], hasRandomness: true,
+        render: renderPaletteSwap,
+        buildParams: buildPaletteSwapParams, getParams: getPaletteSwapParams, setParams: setPaletteSwapParams,
+      },
+      reactiondiffusion: {
+        label: 'Reaction Diffusion', desc: 'Gray-Scott reaction-diffusion seeded from image brightness',
+        inputs: 1, inputLabels: ['Seed Image'], hasRandomness: true,
+        render: renderReactionDiffusion,
+        buildParams: buildReactionDiffusionParams, getParams: getReactionDiffusionParams, setParams: setReactionDiffusionParams,
+      },
     };
 
     // ─── Tab state ─────────────────────────────────────────────────────────────
+
+    interface SlotHistoryEntry {
+      img: HTMLImageElement;
+      id: string | null;
+      transform: { rot: number; flip: boolean; aspect?: number };
+    }
 
     interface TabState {
       id: number;
@@ -3776,6 +4181,7 @@ import Admin from '../../../layouts/Admin.astro';
       activeOutputIdx: number;
       botParams: Record<string, any>;
       stencilParams: { bias: number; contrast: number; invert: boolean };
+      slotHistory: SlotHistoryEntry[][];
     }
     let tabs: TabState[] = [];
     let activeTabIdx = 0;
@@ -3792,6 +4198,7 @@ import Admin from '../../../layouts/Admin.astro';
     let slotLocked: boolean[] = [false, false, false, false];
     let effectiveImgs: (HTMLImageElement | null)[] = [null, null, null, null];
     let effectiveBlobUrls: (string | null)[] = [null, null, null, null];
+    let slotHistory: SlotHistoryEntry[][] = [[], [], [], []];
     let currentSeed = 0;
     let rng: () => number = Math.random.bind(Math);
     let outputs: Output[] = [];
@@ -4123,6 +4530,11 @@ import Admin from '../../../layouts/Admin.astro';
             <div class="pt-slot__kept-badge" id="slot-kept-badge-${i}" style="display:none">KEPT</div>
           </div>
           <div class="pt-slot__controls" id="slot-controls-${i}">
+            <button class="pt-slot__btn pt-slot__btn--back" data-slot-back="${i}" disabled
+              data-tooltip="Go back to previous image">
+              <span class="pt-slot__btn-icon">←</span>
+              <span class="pt-slot__btn-lbl">BACK</span>
+            </button>
             <button class="pt-slot__btn" data-slot-lib="${i}"
               data-tooltip="Load from library">
               <span class="pt-slot__btn-icon">⊞</span>
@@ -4177,6 +4589,9 @@ import Admin from '../../../layouts/Admin.astro';
         });
 
         const slotIdx = i;
+        const backBtn = slotsEl.querySelector(`[data-slot-back="${i}"]`) as HTMLButtonElement;
+        backBtn.addEventListener('click', () => goSlotBack(slotIdx));
+        updateSlotBackBtn(slotIdx);
         libBtn.addEventListener('click', () => openLibrary(slotIdx));
 
         slotsEl.querySelectorAll(`[data-slot-xform="${i}"]`).forEach(btn => {
@@ -4415,6 +4830,7 @@ import Admin from '../../../layouts/Admin.astro';
             slotTransforms[i] = { rot: 0, flip: false };
             effectiveImgs[i] = null;
             if (effectiveBlobUrls[i]) { URL.revokeObjectURL(effectiveBlobUrls[i]!); effectiveBlobUrls[i] = null; }
+            slotHistory[i] = [];
           }
         }
         outputs = [];
@@ -4487,7 +4903,44 @@ import Admin from '../../../layouts/Admin.astro';
       });
     }
 
+    function pushSlotHistory(slotIdx: number) {
+      const prev = sourceImgs[slotIdx];
+      if (!prev) return;
+      slotHistory[slotIdx].push({
+        img: prev,
+        id: sourceIds[slotIdx],
+        transform: { ...slotTransforms[slotIdx] },
+      });
+      if (slotHistory[slotIdx].length > 20) slotHistory[slotIdx].shift();
+      updateSlotBackBtn(slotIdx);
+    }
+
+    function updateSlotBackBtn(slotIdx: number) {
+      const btn = slotsEl.querySelector(`[data-slot-back="${slotIdx}"]`) as HTMLButtonElement | null;
+      if (btn) btn.disabled = slotHistory[slotIdx].length === 0;
+    }
+
+    function goSlotBack(slotIdx: number) {
+      const entry = slotHistory[slotIdx].pop();
+      if (!entry) return;
+      sourceImgs[slotIdx] = entry.img;
+      sourceIds[slotIdx] = entry.id;
+      slotTransforms[slotIdx] = entry.transform;
+      const fitBtn = slotsEl.querySelector(`[data-slot-fit="${slotIdx}"]`) as HTMLButtonElement | null;
+      if (fitBtn) {
+        const isRatioActive = !!entry.transform.aspect;
+        fitBtn.classList.toggle('ratio-active', isRatioActive);
+        fitBtn.querySelector('.pt-slot__btn-lbl')!.textContent = isRatioActive ? 'RATIO·ON' : 'RATIO';
+      }
+      applyTransformAndUpdate(slotIdx).then(() => {
+        updateXformButtons(slotIdx);
+        updateSlotBackBtn(slotIdx);
+        if (allSlotsReady()) doReroll();
+      });
+    }
+
     function loadSlotFromBlob(slotIdx: number, blob: Blob) {
+      pushSlotHistory(slotIdx);
       sourceIds[slotIdx] = null;
       const url = URL.createObjectURL(blob);
       // Keep blob URL alive — revoking it before all async thumbnail restores
@@ -4501,6 +4954,7 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     function loadSlotFromUrl(slotIdx: number, url: string, sourceId: string | null, onReady?: () => void) {
+      pushSlotHistory(slotIdx);
       sourceIds[slotIdx] = sourceId;
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -4514,6 +4968,7 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     function loadSlotFromCanvas(slotIdx: number, canvas: HTMLCanvasElement) {
+      pushSlotHistory(slotIdx);
       canvas.toBlob((blob) => {
         if (!blob) return;
         const url = URL.createObjectURL(blob);
@@ -4820,6 +5275,14 @@ import Admin from '../../../layouts/Admin.astro';
     });
     document.getElementById('st-invert')?.addEventListener('change', () => doRender());
 
+    // ─── Params collapse ───────────────────────────────────────────────────────
+    document.getElementById('pt-params-toggle')?.addEventListener('click', () => {
+      const wrap = document.getElementById('pt-params-wrap');
+      const btn  = document.getElementById('pt-params-toggle')!;
+      const collapsed = wrap?.classList.toggle('collapsed');
+      btn.textContent = collapsed ? '▼ Params' : '▲ Params';
+    });
+
     // ─── Tab management ────────────────────────────────────────────────────────
 
     function makeEmptyTabState(): TabState {
@@ -4838,6 +5301,7 @@ import Admin from '../../../layouts/Admin.astro';
         activeOutputIdx: 0,
         botParams: {},
         stencilParams: { bias: 0, contrast: 1, invert: false },
+        slotHistory: [[], [], [], []],
       };
     }
 
@@ -4857,6 +5321,7 @@ import Admin from '../../../layouts/Admin.astro';
       tab.activeOutputIdx = activeOutputIdx;
       tab.botParams       = BOTS[currentBot].getParams?.() ?? {};
       tab.stencilParams   = getStencilParams();
+      tab.slotHistory     = slotHistory.map(h => [...h]);
     }
 
     function restoreTabState(tab: TabState) {
@@ -4872,6 +5337,7 @@ import Admin from '../../../layouts/Admin.astro';
       rng               = tab.rng;
       outputs           = [...tab.outputs];
       activeOutputIdx   = tab.activeOutputIdx;
+      slotHistory       = tab.slotHistory.map(h => [...h]);
 
       botSelect.value = tab.currentBot;
       switchBot(tab.currentBot, { skipClear: true });
