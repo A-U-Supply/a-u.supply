@@ -82,6 +82,7 @@ import Admin from '../../../layouts/Admin.astro';
     <div class="pt-actions">
       <div class="pt-reroll-wrap">
         <button class="btn btn--secondary" id="reroll-btn" disabled>⟳<span class="pt-reroll-label"> RE-ROLL</span></button>
+        <button class="btn btn--secondary" id="run-btn" style="display:none" disabled>▶ RUN</button>
         <input type="number" id="seed-input" class="pt-seed-input" style="display:none" placeholder="seed" min="1" max="2147483647" step="1" />
       </div>
       <button class="btn btn--secondary" id="download-btn" disabled>↓ Download</button>
@@ -100,6 +101,9 @@ import Admin from '../../../layouts/Admin.astro';
       <!-- Output stage -->
       <div class="pt-stage" id="pt-stage">
         <canvas id="pt-canvas" style="display:none"></canvas>
+        <div class="pt-processing" id="pt-processing" style="display:none">
+          <span class="loading-dots">Processing</span>
+        </div>
         <div class="pt-empty" id="pt-empty">
           <div class="pt-empty__icon">⬡</div>
           <div id="pt-empty-text">Load an image to begin</div>
@@ -288,6 +292,14 @@ import Admin from '../../../layouts/Admin.astro';
     padding: 20px 0;
     display: none;
   }
+  .pt-picker-section-label {
+    font-size: 0.55rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #666;
+    padding: 8px 2px 2px;
+    margin-top: 4px;
+  }
 
   .pt-shell {
     display: grid;
@@ -388,6 +400,19 @@ import Admin from '../../../layouts/Admin.astro';
   #pt-canvas {
     max-width: 100%;
     max-height: 65vh;
+  }
+
+  .pt-processing {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.6);
+    color: #ddd;
+    font-size: var(--text-lg);
+    letter-spacing: 2pt;
+    z-index: 10;
   }
 
   .pt-empty {
@@ -1025,6 +1050,8 @@ import Admin from '../../../layouts/Admin.astro';
     const slotsEl     = document.getElementById('pt-slots') as HTMLDivElement;
     const paramsEl        = document.getElementById('pt-params') as HTMLDivElement;
     const stencilParamsEl = document.getElementById('pt-stencil-params') as HTMLDivElement;
+    const processingEl    = document.getElementById('pt-processing') as HTMLDivElement;
+    const runBtn          = document.getElementById('run-btn') as HTMLButtonElement;
     const stripEl     = document.getElementById('pt-strip') as HTMLDivElement;
     const rerollBtn   = document.getElementById('reroll-btn') as HTMLButtonElement;
     const seedInput   = document.getElementById('seed-input') as HTMLInputElement;
@@ -4078,7 +4105,8 @@ import Admin from '../../../layouts/Admin.astro';
       hasRandomness: boolean;
       isStencil?: boolean;
       hasNativeBW?: boolean;
-      render: (imgs: (HTMLImageElement | null)[], params: Record<string, any>, rng: () => number) => Output[];
+      render?: (imgs: (HTMLImageElement | null)[], params: Record<string, any>, rng: () => number) => Output[];
+      renderAsync?: (imgs: (HTMLImageElement | null)[], params: Record<string, any>) => Promise<Output[]>;
       buildParams?: () => void;
       getParams?: () => Record<string, any>;
       setParams?: (p: Record<string, any>) => void;
@@ -4279,6 +4307,103 @@ import Admin from '../../../layouts/Admin.astro';
         render: renderReactionDiffusion,
         buildParams: buildReactionDiffusionParams, getParams: getReactionDiffusionParams, setParams: setReactionDiffusionParams,
       },
+
+      // ── Sparagmos recipes (2 images) ────────────────────────────────────────
+      'dream-dissolve': { label: 'Dream Dissolve', desc: 'Two images each sent through deep neural hallucination — the network finds eyes and feathers in everything, turning surfaces into living architectures', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('dream-dissolve', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'double-exposure': { label: 'Double Exposure', desc: 'Two images burned onto the same film. Screen blending lets the light accumulate, multiply adds depth in the shadows. The double-exposed image is sonified.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('double-exposure', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'feedback-loop': { label: 'Feedback Loop', desc: 'Compose, destroy, re-compose the wreckage, destroy again. Two images blended, distorted, fragmented back together with originals.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('feedback-loop', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'ghost-overlay': { label: 'Ghost Overlay', desc: "A haunting: A's edges become a soft veil cast over B with high feathering. Screen blending then adds A's full luminance as a second ghost layer.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('ghost-overlay', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'phantom-limb': { label: 'Phantom Limb', desc: "One image's edge structure is cut out and laid over another — not the image itself, only its outline, its ghost. The screen blend lets the haunting show.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('phantom-limb', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'simple-cutout': { label: 'Simple Cutout', desc: "The most direct use of masking: A's edge skeleton is cut clean into B. Wherever A has strong edges, B shows through; everywhere else, A holds.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('simple-cutout', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'spectral-merge': { label: 'Spectral Merge', desc: 'Two signals in frequency space, destructively interfered. Each image is spectrally filtered to different ranges. Difference blending cancels shared frequencies.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('spectral-merge', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'two-face': { label: 'Two Face', desc: "A luminance mask splits image A at its median brightness — the bright half stays A, the dark half becomes B. Auto-normalization means threshold=128 always hits the median.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('two-face', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'x-ray-composite': { label: 'X-Ray Composite', desc: "One image is decomposed to its principal components — stripped to structural essentials. Its edge skeleton is then masked over the second image.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('x-ray-composite', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+
+      // ── Sparagmos recipes (3 images) ────────────────────────────────────────
+      'dream-cutout': { label: 'Dream Cutout', desc: "Image A is deepdreamed heavily. The dreamed A's edge skeleton then cuts into B: the neural hallucination becomes a stencil.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('dream-cutout', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'dream-halftone': { label: 'Dream Halftone', desc: 'Three images deepdreamed until dense with neural hallucinations, then composited through AM halftone dot screens.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('dream-halftone', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'dream-within-dream': { label: 'Dream Within Dream', desc: "Recursive hallucination in three passes. A is deepdreamed until the network's preferred forms fully colonize its surface.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('dream-within-dream', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'neural-chimera': { label: 'Neural Chimera', desc: 'Three images deepdreamed at different neural layers then Voronoi-fragmented together. Style transfer re-hallucinates the composite.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('neural-chimera', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'voronoi-chimera': { label: 'Voronoi Chimera', desc: 'Faces and forms fused at Voronoi cell boundaries. Each image gets a different neural/glitch treatment before being fragmented together.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('voronoi-chimera', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'wax-museum': { label: 'Wax Museum', desc: 'Three images each passed through style transfer — their surfaces repainted in the manner of some other image, some other logic.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('wax-museum', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'acid-wash': { label: 'Acid Wash', desc: 'Three images run through spectral transformation — their frequencies scrambled and redistributed — before being multiplied together.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('acid-wash', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'broadcast-static': { label: 'Broadcast Static', desc: 'Three images converted to sound and back — each through a different acoustic treatment, each emerging distorted in its own frequency range.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('broadcast-static', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'data-rot': { label: 'Data Rot', desc: 'Three images subjected to byte-level corruption before any composition — the damage is baked in from the start, not applied as finish.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('data-rot', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'edge-ghosts': { label: 'Edge Ghosts', desc: 'Phantom outlines from one image haunting another. Edge detection extracts the structural skeleton of each source. Two rounds of edge-masking create layered hauntings.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('edge-ghosts', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'exquisite-corpse': { label: 'Exquisite Corpse', desc: 'The surrealist parlor game. Three images divided into horizontal strips. Each source gets different pre-processing to heighten the disjunction. Seam carving warps the fault lines.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('exquisite-corpse', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'fossil-record': { label: 'Fossil Record', desc: 'Geological strata. Each image PCA-decomposed to different component counts. Opacity-blended as layers like sedimentary rock. Dithering creates stone textures.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('fossil-record', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'holographic-interference': { label: 'Holographic Interference', desc: 'Three images processed through spectral decomposition and channel aberration, then stacked via difference and screen blending to simulate holographic interference.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('holographic-interference', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'mask-and-glitch': { label: 'Mask and Glitch', desc: "Image A is edge-masked onto B, producing a clean structural composite. That composite is then run through CRT/VHS processing — scan lines, color bleed.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('mask-and-glitch', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'sediment-core': { label: 'Sediment Core', desc: 'Three images arranged as horizontal strata — the slow accumulation of time rendered as a geological cross-section pulled from the earth. Seam carving warps the layers.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('sediment-core', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'signal-bleed': { label: 'Signal Bleed', desc: 'Three VHS signals bleeding into each other on a bad splitter. Each source gets its own flavor of analog decay. Vertical strip collage interleaves the damaged feeds.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('signal-bleed', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'sorted-mask': { label: 'Sorted Mask', desc: "Image A is pixel-sorted by brightness, generating long streaks. A luminance mask then uses the sorted A's own brightness to composite against B.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('sorted-mask', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'spectral-stencil': { label: 'Spectral Stencil', desc: 'Image A is bandpass-filtered in frequency space, stripping its low and high frequencies to leave only the mid-range structure — a ghost of the original used as stencil.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('spectral-stencil', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'triple-mask': { label: 'Triple Mask', desc: "Three images, two mask operations. First A's edges cut into B, producing a composite. Then that composite's own edges cut into C.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('triple-mask', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'bullseye-cyanotype': { label: 'Bullseye Cyanotype', desc: 'Two images bullseyed — concentric rings cut and independently rotated — then all three composited through cyanotype stencil. The ring patterns get prussian blue toning.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('bullseye-cyanotype', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'curvy-corruption': { label: 'Curvy Corruption', desc: 'Three images composited through edge-following curvy line screens, then the result is byte-corrupted and CRT/VHS filtered.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('curvy-corruption', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'cyanotype-corruption': { label: 'Cyanotype Corruption', desc: 'Three images composited through cyanotype stencil — prussian blue toning with highlight bloom — then the composite is byte-corrupted and channel-shifted.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('cyanotype-corruption', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'reducedscreen-datamosh': { label: 'Reduced Screen Datamosh', desc: 'Three images composited through adaptive-frequency line screens — finer lines in detail regions, coarser in flat areas — then datamoshed.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('reducedscreen-datamosh', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'shifted-linescreen': { label: 'Shifted Line Screen', desc: 'Three images channel-shifted until their color registers separate, then composited through parallel line screen stencils. The misregistered colors show through.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('shifted-linescreen', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'sixshooter-linescreen': { label: 'Six Shooter Line Screen', desc: 'Two images six-shootered — six circular regions cut, shuffled, and rotated — then composited through parallel line screen stencil. The scattered circular displacements show through.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('sixshooter-linescreen', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'sorted-displacement': { label: 'Sorted Displacement', desc: 'Two images pixel-sorted to extreme thresholds — their surfaces sheared into vertical streaks — then displacement-stenciled against a third.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('sorted-displacement', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'spectral-silver': { label: 'Spectral Silver', desc: 'Three images bandpass-filtered in frequency space — stripped to their mid-range structure, ghostly spectral remnants — then composited through silver gelatin stencil.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('spectral-silver', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'vhs-halation': { label: 'VHS Halation', desc: 'Three images CRT/VHS filtered — scan lines, color bleed, tracking errors — then composited through halation edge stencil. The organic grain boundary glows.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('vhs-halation', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'bullethole-silver': { label: 'Bullet Hole Silver', desc: 'Two images riddled with circular punch holes at high chaos — perforated surfaces — then composited through silver gelatin stencil.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('bullethole-silver', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'bullseye-wobble-displacement': { label: 'Bullseye Wobble Displacement', desc: "Double concentric destruction: one image bullseyed into clean rings, another wobble-eyed into drifting off-axis rings. The third image's gradient field displaces the composite.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('bullseye-wobble-displacement', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'halftone-curvyscreen': { label: 'Halftone Curvy Screen', desc: 'Two-pass screen compositing: first halftone dot screen composites two images, then the result and a third image are composited through curvy line screen.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('halftone-curvyscreen', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'kaleidoscope-halftone': { label: 'Kaleidoscope Halftone', desc: "Two images kaleidoscoped into mandala patterns — radial symmetry folding their surfaces into repeating wedges — then a third image's halftone dot screen composites them.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('kaleidoscope-halftone', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'lathe-displacement': { label: 'Lathe Displacement', desc: 'Two images lathe-turned — dozens of thin concentric rings each independently rotated into agate-like surfaces — then displacement-stenciled against a third.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('lathe-displacement', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'lathe-kaleidoscope-stencil': { label: 'Lathe Kaleidoscope Stencil', desc: 'Double geometric destruction: one image lathe-turned into agate rings, another kaleidoscoped into mandala symmetry, a third wobble-eyed into drifting rings.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('lathe-kaleidoscope-stencil', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'wobble-halation': { label: 'Wobble Halation', desc: 'Two images wobble-eyed — off-axis concentric rings drifting from center — then composited through halation edge stencil. The organic grain boundary meets the drifting rings.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('wobble-halation', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+
+      // ── Sparagmos recipes (4 images) ────────────────────────────────────────
+      'dream-erosion': { label: 'Dream Erosion', desc: 'A is deepdreamed heavily, colonized by neural hallucinations. That dreamed surface is seam-carved into B, and the seam-carved composite edge-masked against C and D.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('dream-erosion', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'dream-mask': { label: 'Dream Mask', desc: "Image A is deepdreamed heavily. The dreamed A's edge skeleton becomes a stencil cutting into B. The dream-mask composite is then collaged against C and D.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('dream-mask', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'dream-mask-dream': { label: 'Dream Mask Dream', desc: 'A triple dream-mask cycle. First A is deepdreamed, dreamed-A edges cut into B, producing a composite which is itself deepdreamed again.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('dream-mask-dream', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'dream-quad': { label: 'Dream Quad', desc: "Four images deepdreamed to varying intensities, then composited through three-level stencil. The stencil image's brightness bands fill with different dreamed sources.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('dream-quad', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'dream-stencil': { label: 'Dream Stencil', desc: "A is deepdreamed at high intensity until its surface is dense with hallucinated forms. That dreamed surface is used as a hard luminance mask over B, C, and D.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('dream-stencil', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'kaleidoscope-dream-displacement': { label: 'Kaleidoscope Dream Displacement', desc: "Four images: two kaleidoscoped into mandala symmetry, one deepdreamed. The fourth image's gradient displacement tears the dreamed kaleidoscope surface.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('kaleidoscope-dream-displacement', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'neural-mask-cascade': { label: 'Neural Mask Cascade', desc: 'Four images each deepdreamed independently, then chained through a cascade of dream-as-mask operations. Each dreamed surface cuts into the next.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('neural-mask-cascade', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'noise-cathedral': { label: 'Noise Cathedral', desc: 'Three noise masks at escalating thresholds cut random windows between four images, building layered stochastic revelation. Each mask threshold is higher than the last.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('noise-cathedral', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'phantom-dream': { label: 'Phantom Dream', desc: 'A and B are both deepdreamed independently. Those two dreamed surfaces are screen-blended together, and the dreamed composite edge-masks against C and D.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('phantom-dream', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'silver-displacement-dream': { label: 'Silver Displacement Dream', desc: 'Four images: one deepdreamed heavily, silver-stenciled with two others. The silver-toned hallucinated surface is then displacement-warped against the fourth.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('silver-displacement-dream', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'tectonic-overlap': { label: 'Tectonic Overlap', desc: 'Continental plates of image data, shifted and overlapping. Four images shattered into irregular polygons, scatter-collaged with rotation. Seam carving warps the fault lines.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('tectonic-overlap', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'binary-archaeology': { label: 'Binary Archaeology', desc: 'Each of the four images is dithered to a different binary palette — different dithering algorithms reducing each to its own distinct pattern of black and white.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('binary-archaeology', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'collage-mask-collage': { label: 'Collage Mask Collage', desc: "Two images collaged into a mosaic grid, then a third used as an edge stencil to cut through the grid — the mosaic surfaces revealed only where C's structure allows.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('collage-mask-collage', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'collage-surgery': { label: 'Collage Surgery', desc: 'Four images cut into strips and edge-masked three times in alternating rounds — each pass strips away context to reveal what lies beneath the surface.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('collage-surgery', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'collage-through-glass': { label: 'Collage Through Glass', desc: "Three images are mosaiced into a composite grid. Image D, PCA-reduced to a single structural component, provides a ghostly lens over the mosaic surface.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('collage-through-glass', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'contrast-surgery': { label: 'Contrast Surgery', desc: 'Image A undergoes extreme channel surgery — massive RGB offsets pull its color registers apart until the content nearly dissolves into chromatic aberration.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('contrast-surgery', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'cyanotype-bullethole-mask': { label: 'Cyanotype Bullet Hole Mask', desc: 'Four images: two riddled with bullet holes, then cyanotype-stenciled. The result is edge-masked against a fourth image — the bullet-punched cyanotype filtered through structure.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('cyanotype-bullethole-mask', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'displacement-blend-spectral': { label: 'Displacement Blend Spectral', desc: 'Four images: displacement-stenciled, then screen-blended with a fourth. The blended surface is spectral-filtered to strip frequencies. Warped stencil meets spectral void.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('displacement-blend-spectral', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'dissolve-cascade': { label: 'Dissolve Cascade', desc: 'Four images dissolved in waves: screen blend accumulates the light, gradient masking carves the excess, multiply blend deepens the shadows, luminance masking cuts the final form.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('dissolve-cascade', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'double-masked-collage': { label: 'Double Masked Collage', desc: 'A double masking sandwich: fragment, edge-mask, scatter-collage, luminance-mask again. Images A and B are Voronoi-fragmented — broken into organic cells.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('double-masked-collage', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'fracture-and-mask': { label: 'Fracture and Mask', desc: 'A shatter-fragment sandwich with edge and luminance masking on either side. Images A and B are shatter-fragmented together — broken into irregular shards.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('fracture-and-mask', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'gradient-reveal': { label: 'Gradient Reveal', desc: 'A three-stage revelation where each step peels back a different layer. Images A and B are blended at overlay mode, their tonal geometries multiplied together.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('gradient-reveal', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'interference-mask': { label: 'Interference Mask', desc: 'Images A and B are blended at difference mode — each pixel becomes the absolute distance between the two images, a map of where they diverge. That divergence becomes a mask.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('interference-mask', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'layered-cutwork': { label: 'Layered Cutwork', desc: "Three sequential rounds of mask then collage then mask: the image accumulates wounds with each pass. First, A's luminance cuts into B — bright areas reveal B beneath A.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('layered-cutwork', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'letterpress': { label: 'Letterpress', desc: 'Image A is dithered with Atkinson, which creates the tight, typographic dot-and-space pattern that letterpress printing once left in paper. The dither stencil cuts into B.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('letterpress', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'luminance-layers': { label: 'Luminance Layers', desc: 'Four images revealed through four different luminance thresholds of the same reference source. Image A is processed and used as the mask for all four revelations.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('luminance-layers', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'mask-cascade': { label: 'Mask Cascade', desc: 'Four images layered through four successive mask operations, each using a different mask source — luminance, then edges, then noise, then a gradient — in cascading passes.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('mask-cascade', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'mask-erosion': { label: 'Mask Erosion', desc: 'Three sequential edge masks with increasing feather — a progressive erosion where each pass softens the structural cuts further and further.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('mask-erosion', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'negative-space': { label: 'Negative Space', desc: "Two masking operations, each using the opposite of what the other reveals. Image A's dark regions cut out shapes and fill them with B: the negative space becomes positive content.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('negative-space', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'palimpsest': { label: 'Palimpsest', desc: 'A manuscript overwritten and overwritten again. Each layer bleeds through based on luminance. Four images layered through progressively lower thresholds — each layer more revealed.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('palimpsest', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'photogram': { label: 'Photogram', desc: "In the darkroom, a photogram is made by placing objects directly on light-sensitive paper. The object's silhouette burns into the emulsion. Here that process is simulated digitally.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('photogram', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'silhouette-collage': { label: 'Silhouette Collage', desc: "Image A is PCA-decomposed to 2 principal components — stripped to the barest structural silhouette. That silhouette is imposed over a collage of the remaining images.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('silhouette-collage', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'sixshooter-halation-corrupt': { label: 'Six Shooter Halation Corrupt', desc: 'Four images: two six-shootered into scattered circular displacements, halation-edge composited through the third. The organic grain boundary dissolves into byte corruption.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('sixshooter-halation-corrupt', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'spectral-mask': { label: 'Spectral Mask', desc: 'Four images processed spectrally and then masked in pairs. Image A is spectrally shifted to emphasize its mid-range structure. The shifted and raw versions mask against each other.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('spectral-mask', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'stencil-burn': { label: 'Stencil Burn', desc: 'Image A is dithered to a near-binary stencil — its shapes reduced to stark positive and negative space. That stencil is used as a hard luminance mask cutting into B, C, and D.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('stencil-burn', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'stratum-shift': { label: 'Stratum Shift', desc: 'Four images built into geological strata through strip collage, then seam-carved to warp the fault lines. Luminance masking cuts the first geological layer.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('stratum-shift', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'structural-echo': { label: 'Structural Echo', desc: "Image A's edge structure is applied three times to create a progressive echo effect. Each application uses a wider feather, creating a ghost that softens with each pass.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('structural-echo', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'surveillance-decay': { label: 'Surveillance Decay', desc: 'Four feeds arranged in the classic CCTV quad-view. Each feed has already been corrupted by its own accumulation of errors — byte corruption, CRT noise, VHS bleed.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('surveillance-decay', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'text-ghost': { label: 'Text Ghost', desc: "Image A is PCA-decomposed to just 1-2 principal components — its texture and color stripped away until only the structural ghost remains. That ghost is screened over a collage.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('text-ghost', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'threshold-cascade': { label: 'Threshold Cascade', desc: 'Four mask_composite operations at four ascending threshold bands — 40, 80, 150, and 200 — each cutting a different pair of images at a different tonal level.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('threshold-cascade', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'torn-collage': { label: 'Torn Collage', desc: 'Four images shattered like a mirror dropped on concrete. Each fragment gets the sickly hum of magnetic tape artifacts before being scattered into a loosely tiled mosaic.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('torn-collage', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'wobble-curvyscreen-dither': { label: 'Wobble Curvy Screen Dither', desc: 'Four images: two wobble-eyed into drifting off-axis rings, then curvy-line-screened against a third. The fourth image provides an edge mask over the result.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('wobble-curvyscreen-dither', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'pca-quad': { label: 'PCA Quad', desc: 'Four images PCA-decomposed to varying depths — stripped to structural ghosts — then composited through three-level stencil. The brightness bands fill with different ghost images.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('pca-quad', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'quad-sort-destroy': { label: 'Quad Sort Destroy', desc: 'Four images three-level stenciled — brightness bands filling with different sources — then the composite is pixel-sorted and byte-corrupted. Three-source stencil meets total annihilation.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('quad-sort-destroy', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'stencil-into-displacement': { label: 'Stencil Into Displacement', desc: 'Four images in two stages: first, Otsu stencil composites images A and B using C as the mask. Then the stencil composite is displacement-warped against the fourth.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('stencil-into-displacement', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'kaleidoscope-cyanotype-pca': { label: 'Kaleidoscope Cyanotype PCA', desc: 'Four images: two kaleidoscoped into mandala patterns, PCA-decomposed to structural ghosts, then cyanotype-stenciled. The kaleidoscope symmetry dissolves into prussian blue.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('kaleidoscope-cyanotype-pca', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'lathe-silver-sonify': { label: 'Lathe Silver Sonify', desc: 'Four images: two lathe-turned into agate ring surfaces, silver-stenciled through a third. The silver-toned lathe composite is sonified — converted to audio and back.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs) => runSparagmosRecipe('lathe-silver-sonify', imgs), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
     };
 
     // ─── Tab state ─────────────────────────────────────────────────────────────
@@ -4820,6 +4945,57 @@ import Admin from '../../../layouts/Admin.astro';
       }
     }
 
+    // ─── Async (sparagmos) helpers ─────────────────────────────────────────────
+
+    function setAsyncLoading(loading: boolean) {
+      processingEl.style.display = loading ? 'flex' : 'none';
+      stageCanvas.style.display = loading ? 'block' : stageCanvas.style.display;
+      if (loading) { emptyEl.style.display = 'none'; }
+      runBtn.disabled = loading;
+    }
+
+    async function uploadImgToLibrary(img: HTMLImageElement): Promise<string> {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      c.getContext('2d')!.drawImage(img, 0, 0);
+      const blob = await new Promise<Blob>(res => c.toBlob(b => res(b!), 'image/png'));
+      const fd = new FormData();
+      fd.append('file', blob, 'punctum-slot.png');
+      const res = await fetch('/api/media/upload', { method: 'POST', credentials: 'include', body: fd });
+      if (!res.ok) throw new Error('Upload failed: ' + await res.text());
+      return (await res.json()).id as string;
+    }
+
+    async function runSparagmosRecipe(recipe: string, imgs: (HTMLImageElement | null)[]): Promise<Output[]> {
+      const ids = await Promise.all(imgs.filter(Boolean).map(img => uploadImgToLibrary(img!)));
+      const jobRes = await fetch('/api/jobs', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ app_name: 'sparagmos', media_item_ids: ids, params: { processing_mode: 'recipe', recipe } }),
+      });
+      if (!jobRes.ok) throw new Error(await jobRes.text());
+      const { id: jobId } = await jobRes.json();
+      // Poll until done (2 s interval, 5-min timeout)
+      const deadline = Date.now() + 5 * 60 * 1000;
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 2000));
+        const job = await (await fetch(`/api/jobs/${jobId}`, { credentials: 'include' })).json();
+        if (job.status === 'completed') break;
+        if (job.status === 'failed') throw new Error('Job failed: ' + (job.error ?? 'unknown'));
+      }
+      const outs: any[] = await (await fetch(`/api/jobs/${jobId}/outputs`, { credentials: 'include' })).json();
+      return Promise.all(outs.map(async (out, i) => {
+        const blob = await (await fetch(`/api/jobs/${jobId}/outputs/${out.id}/download`, { credentials: 'include' })).blob();
+        const url = URL.createObjectURL(blob);
+        const img = await new Promise<HTMLImageElement>(res => { const el = new Image(); el.onload = () => res(el); el.src = url; });
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+        canvas.getContext('2d')!.drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        return { canvas, label: outs.length > 1 ? `Output ${i + 1}` : recipe, mimeType: 'image/png' } as Output;
+      }));
+    }
+
     // ─── Core flow ─────────────────────────────────────────────────────────────
 
     function allSlotsReady(): boolean {
@@ -4827,17 +5003,38 @@ import Admin from '../../../layouts/Admin.astro';
       return effectiveImgs.slice(0, n).every(img => img !== null);
     }
 
-    function doReroll(seed?: number) {
+    function maybeAutoRun() {
+      if (!allSlotsReady()) return;
+      if (BOTS[currentBot].renderAsync) {
+        runBtn.disabled = false;
+      } else {
+        doReroll();
+      }
+    }
+
+    async function doReroll(seed?: number) {
       if (!allSlotsReady()) return;
       const bot = BOTS[currentBot];
-      if (bot.hasRandomness) {
-        currentSeed = seed !== undefined ? seed : (Math.random() * 2**31 | 0) || 1;
-        rng = mulberry32(currentSeed);
-        seedInput.value = String(currentSeed);
+      if (bot.renderAsync) {
+        setAsyncLoading(true);
+        try {
+          outputs = await bot.renderAsync(effectiveImgs.slice(0, bot.inputs), bot.getParams?.() ?? {});
+        } catch (e: any) {
+          setAsyncLoading(false);
+          (window as any).toast?.error('Sparagmos job failed: ' + (e?.message ?? String(e)));
+          return;
+        }
+        setAsyncLoading(false);
+      } else {
+        if (bot.hasRandomness) {
+          currentSeed = seed !== undefined ? seed : (Math.random() * 2**31 | 0) || 1;
+          rng = mulberry32(currentSeed);
+          seedInput.value = String(currentSeed);
+        }
+        const params = bot.getParams?.() ?? {};
+        outputs = bot.render!(effectiveImgs, params, rng);
+        appendStencilOutputs();
       }
-      const params = bot.getParams?.() ?? {};
-      outputs = bot.render(effectiveImgs, params, rng);
-      appendStencilOutputs();
       activeOutputIdx = 0;
       renderStrip();
       setActiveOutput(0);
@@ -4847,10 +5044,10 @@ import Admin from '../../../layouts/Admin.astro';
     function doRender() {
       if (!allSlotsReady()) return;
       const bot = BOTS[currentBot];
-      // Re-render with same seed (only changes that don't affect layout, e.g. effect)
+      if (bot.renderAsync) return; // async bots don't re-render on param change
       if (bot.hasRandomness) rng = mulberry32(currentSeed);
       const params = bot.getParams?.() ?? {};
-      outputs = bot.render(effectiveImgs, params, rng);
+      outputs = bot.render!(effectiveImgs, params, rng);
       appendStencilOutputs();
       renderStrip();
       setActiveOutput(activeOutputIdx < outputs.length ? activeOutputIdx : 0);
@@ -4926,7 +5123,9 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     function enableActions(on: boolean) {
-      rerollBtn.disabled   = !on || !BOTS[currentBot].hasRandomness;
+      const bot = BOTS[currentBot];
+      rerollBtn.disabled   = !on || !bot.hasRandomness;
+      runBtn.disabled      = !on && !bot.renderAsync;
       downloadBtn.disabled = !on;
       saveBtn.disabled     = !on;
       saveAllBtn.disabled  = !on;
@@ -4975,11 +5174,14 @@ import Admin from '../../../layouts/Admin.astro';
       bot.buildParams?.();
       enhanceSliders();
 
-      stencilParamsEl.style.display = 'flex';
+      stencilParamsEl.style.display = bot.renderAsync ? 'none' : 'flex';
       seedInput.style.display = bot.hasRandomness ? '' : 'none';
 
-      // re-roll only makes sense for randomness bots
+      // Async bots use Run button; sync bots use Re-roll
+      rerollBtn.style.display = bot.renderAsync ? 'none' : '';
+      runBtn.style.display    = bot.renderAsync ? '' : 'none';
       rerollBtn.disabled = !bot.hasRandomness;
+      runBtn.disabled    = true; // enabled once slots are ready
     }
 
     // ─── Slider number-input enhancement ──────────────────────────────────────
@@ -5026,7 +5228,7 @@ import Admin from '../../../layouts/Admin.astro';
       }
       applyTransformAndUpdate(slotIdx).then(() => {
         updateXformButtons(slotIdx);
-        if (allSlotsReady()) doReroll();
+        maybeAutoRun();
       });
     }
 
@@ -5062,7 +5264,7 @@ import Admin from '../../../layouts/Admin.astro';
       applyTransformAndUpdate(slotIdx).then(() => {
         updateXformButtons(slotIdx);
         updateSlotBackBtn(slotIdx);
-        if (allSlotsReady()) doReroll();
+        maybeAutoRun();
       });
     }
 
@@ -5157,6 +5359,7 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     rerollBtn.addEventListener('click', () => doReroll());
+    runBtn.addEventListener('click', () => doReroll());
     seedInput.addEventListener('change', () => {
       const v = parseInt(seedInput.value);
       if (v >= 1) doReroll(v);
@@ -5560,7 +5763,11 @@ import Admin from '../../../layouts/Admin.astro';
 
     // ─── Bot picker ────────────────────────────────────────────────────────────
 
-    const BOT_ORIGINS: { label: string; bots: string[] }[] = [
+    type BotOriginFlat = { label: string; bots: string[] };
+    type BotOriginCategorized = { label: string; categories: { label: string; bots: string[] }[] };
+    type BotOrigin = BotOriginFlat | BotOriginCategorized;
+
+    const BOT_ORIGINS: BotOrigin[] = [
       {
         label: 'Collage Bot',
         bots: ['bullethole','stencil','bw','cyanotype','wobbleeye','lathe','bullseye',
@@ -5574,9 +5781,53 @@ import Admin from '../../../layouts/Admin.astro';
       },
       {
         label: 'Sparagmos',
-        bots: ['chromaticab','paletteswap','reactiondiffusion'],
+        categories: [
+          {
+            label: '2 Images',
+            bots: ['dream-dissolve','double-exposure','feedback-loop','ghost-overlay',
+                   'phantom-limb','simple-cutout','spectral-merge','two-face','x-ray-composite'],
+          },
+          {
+            label: '3 Images',
+            bots: ['dream-cutout','dream-halftone','dream-within-dream','neural-chimera',
+                   'voronoi-chimera','wax-museum','acid-wash','broadcast-static','data-rot',
+                   'edge-ghosts','exquisite-corpse','fossil-record','holographic-interference',
+                   'mask-and-glitch','sediment-core','signal-bleed','sorted-mask',
+                   'spectral-stencil','triple-mask','bullseye-cyanotype','curvy-corruption',
+                   'cyanotype-corruption','reducedscreen-datamosh','shifted-linescreen',
+                   'sixshooter-linescreen','sorted-displacement','spectral-silver',
+                   'vhs-halation','bullethole-silver','bullseye-wobble-displacement',
+                   'halftone-curvyscreen','kaleidoscope-halftone','lathe-displacement',
+                   'lathe-kaleidoscope-stencil','wobble-halation'],
+          },
+          {
+            label: '4 Images',
+            bots: ['dream-erosion','dream-mask','dream-mask-dream','dream-quad','dream-stencil',
+                   'kaleidoscope-dream-displacement','neural-mask-cascade','noise-cathedral',
+                   'phantom-dream','silver-displacement-dream','tectonic-overlap',
+                   'binary-archaeology','collage-mask-collage','collage-surgery',
+                   'collage-through-glass','contrast-surgery','datum-shift',
+                   'displacement-blend-spectral','dissolve-cascade','double-masked-collage',
+                   'fracture-and-mask','gradient-reveal','interference-mask','layered-cutwork',
+                   'letterpress','luminance-layers','mask-cascade','mask-erosion',
+                   'negative-space','palimpsest','photogram','silhouette-collage',
+                   'signal-reconstruction','spectral-mask','stencil-burn','stratum-shift',
+                   'structural-echo','surveillance-decay','text-ghost','threshold-cascade',
+                   'torn-collage','wobble-curvyscreen-dither','pca-quad','quad-sort-destroy',
+                   'stencil-into-displacement'],
+          },
+          {
+            label: 'Native',
+            bots: ['chromaticab','paletteswap','reactiondiffusion'],
+          },
+        ],
       },
     ];
+
+    function originAllBots(o: BotOrigin): string[] {
+      if ('bots' in o) return o.bots;
+      return o.categories.flatMap(c => c.bots);
+    }
 
     let activePickerTab = 0;
 
@@ -5585,42 +5836,73 @@ import Admin from '../../../layouts/Admin.astro';
     const pickerSearch = document.getElementById('bot-picker-search') as HTMLInputElement;
     const triggerBtn  = document.getElementById('bot-trigger')!;
 
+    function makePickerCard(id: string): HTMLButtonElement {
+      const bot = BOTS[id];
+      const card = document.createElement('button');
+      card.className = 'pt-picker-card' + (id === currentBot ? ' pt-picker-card--active' : '');
+      card.dataset.botId = id;
+      card.innerHTML = `<div class="pt-picker-card__name">${bot.label}</div><div class="pt-picker-card__desc">${bot.desc ?? ''}</div>`;
+      card.addEventListener('click', () => {
+        switchBot(id);
+        closePicker();
+        if (allSlotsReady()) {
+          if (BOTS[id].renderAsync) runBtn.disabled = false;
+          else doReroll();
+        }
+      });
+      return card;
+    }
+
     function buildPickerCards(searchTerm = '') {
       const q = searchTerm.toLowerCase().trim();
-      // When searching, scan all origins; when browsing, show active tab only
-      const candidates = q
-        ? BOT_ORIGINS.flatMap(o => o.bots)
-        : BOT_ORIGINS[activePickerTab].bots;
+      pickerBody.innerHTML = '';
 
-      const filtered = candidates.filter(id => {
-        const bot = BOTS[id];
-        if (!bot) return false;
-        if (!q) return true;
-        return bot.label.toLowerCase().includes(q) || (bot.desc ?? '').toLowerCase().includes(q);
-      });
-
-      if (filtered.length === 0) {
-        pickerBody.innerHTML = '<div class="pt-picker-empty" style="display:block">No bots match</div>';
+      if (q) {
+        // When searching, scan all origins flat
+        const candidates = BOT_ORIGINS.flatMap(o => originAllBots(o));
+        const filtered = candidates.filter(id => {
+          const bot = BOTS[id];
+          if (!bot) return false;
+          return bot.label.toLowerCase().includes(q) || (bot.desc ?? '').toLowerCase().includes(q);
+        });
+        if (filtered.length === 0) {
+          pickerBody.innerHTML = '<div class="pt-picker-empty" style="display:block">No bots match</div>';
+          return;
+        }
+        const grid = document.createElement('div');
+        grid.className = 'pt-picker-grid';
+        for (const id of filtered) grid.appendChild(makePickerCard(id));
+        pickerBody.appendChild(grid);
         return;
       }
 
-      const grid = document.createElement('div');
-      grid.className = 'pt-picker-grid';
-      for (const id of filtered) {
-        const bot = BOTS[id];
-        const card = document.createElement('button');
-        card.className = 'pt-picker-card' + (id === currentBot ? ' pt-picker-card--active' : '');
-        card.dataset.botId = id;
-        card.innerHTML = `<div class="pt-picker-card__name">${bot.label}</div><div class="pt-picker-card__desc">${bot.desc ?? ''}</div>`;
-        card.addEventListener('click', () => {
-          switchBot(id);
-          closePicker();
-          if (allSlotsReady()) doReroll();
-        });
-        grid.appendChild(card);
+      // Browsing mode: show active tab, with optional sub-categories
+      const origin = BOT_ORIGINS[activePickerTab];
+      if ('bots' in origin) {
+        if (origin.bots.length === 0) {
+          pickerBody.innerHTML = '<div class="pt-picker-empty" style="display:block">No bots</div>';
+          return;
+        }
+        const grid = document.createElement('div');
+        grid.className = 'pt-picker-grid';
+        for (const id of origin.bots) {
+          if (BOTS[id]) grid.appendChild(makePickerCard(id));
+        }
+        pickerBody.appendChild(grid);
+      } else {
+        for (const cat of origin.categories) {
+          const label = document.createElement('div');
+          label.className = 'pt-picker-section-label';
+          label.textContent = cat.label;
+          pickerBody.appendChild(label);
+          const grid = document.createElement('div');
+          grid.className = 'pt-picker-grid';
+          for (const id of cat.bots) {
+            if (BOTS[id]) grid.appendChild(makePickerCard(id));
+          }
+          pickerBody.appendChild(grid);
+        }
       }
-      pickerBody.innerHTML = '';
-      pickerBody.appendChild(grid);
     }
 
     function setPickerTab(idx: number) {
@@ -5632,7 +5914,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     function openPicker() {
       // Jump to the tab that contains the currently-active bot
-      const tabIdx = BOT_ORIGINS.findIndex(o => o.bots.includes(currentBot));
+      const tabIdx = BOT_ORIGINS.findIndex(o => originAllBots(o).includes(currentBot));
       if (tabIdx >= 0) setPickerTab(tabIdx);
       pickerSearch.value = '';
       buildPickerCards();
@@ -5677,17 +5959,18 @@ import Admin from '../../../layouts/Admin.astro';
     const botParam  = urlParams.get('bot');
     const autoExport = urlParams.get('autoexport');
 
-    // Set bot from URL
-    if (botParam && BOTS[botParam]) {
+    // Set bot from URL — recipe bots (e.g. 'dream-dissolve') have no <option> in the
+    // hidden select, so bypass botSelect for those and store the ID directly.
+    if (botParam && BOTS[botParam] && botSelect.querySelector(`option[value="${botParam}"]`)) {
       botSelect.value = botParam;
     }
 
     // Initialize first tab and build slots + params
     const _firstTab = makeEmptyTabState();
-    _firstTab.currentBot = botSelect.value;
+    _firstTab.currentBot = (botParam && BOTS[botParam]) ? botParam : botSelect.value;
     tabs.push(_firstTab);
     activeTabIdx = 0;
-    switchBot(botSelect.value);
+    switchBot(_firstTab.currentBot);
     renderTabBar();
 
     if (autoExport) {
