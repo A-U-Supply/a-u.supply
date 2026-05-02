@@ -49,6 +49,7 @@ import Admin from '../../../layouts/Admin.astro';
             <button class="pt-picker-tab active" data-tab="0">Collage Bot</button>
             <button class="pt-picker-tab" data-tab="1">Protease Bots</button>
             <button class="pt-picker-tab" data-tab="2">Sparagmos</button>
+            <button class="pt-picker-tab" data-tab="3">Server</button>
           </div>
           <input class="pt-picker-search" id="bot-picker-search" type="text" placeholder="Search bots…" autocomplete="off" spellcheck="false" />
           <div class="pt-picker-body" id="bot-picker-body"></div>
@@ -10932,13 +10933,12 @@ import Admin from '../../../layouts/Admin.astro';
         categories: [
           {
             label: '2 Images',
-            bots: ['dream-dissolve','double-exposure','feedback-loop','ghost-overlay',
+            bots: ['double-exposure','feedback-loop','ghost-overlay',
                    'phantom-limb','simple-cutout','spectral-merge','two-face','x-ray-composite'],
           },
           {
             label: '3 Images',
-            bots: ['dream-cutout','dream-halftone','dream-within-dream','neural-chimera',
-                   'voronoi-chimera','wax-museum','acid-wash','broadcast-static','data-rot',
+            bots: ['acid-wash','broadcast-static','data-rot',
                    'edge-ghosts','exquisite-corpse','fossil-record','holographic-interference',
                    'mask-and-glitch','sediment-core','signal-bleed','sorted-mask',
                    'spectral-stencil','triple-mask','bullseye-cyanotype','curvy-corruption',
@@ -10950,9 +10950,7 @@ import Admin from '../../../layouts/Admin.astro';
           },
           {
             label: '4 Images',
-            bots: ['dream-erosion','dream-mask','dream-mask-dream','dream-quad','dream-stencil',
-                   'kaleidoscope-dream-displacement','neural-mask-cascade','noise-cathedral',
-                   'phantom-dream','silver-displacement-dream','tectonic-overlap',
+            bots: ['noise-cathedral','tectonic-overlap',
                    'binary-archaeology','collage-mask-collage','collage-surgery',
                    'collage-through-glass','contrast-surgery','datum-shift',
                    'displacement-blend-spectral','dissolve-cascade','double-masked-collage',
@@ -10961,12 +10959,33 @@ import Admin from '../../../layouts/Admin.astro';
                    'negative-space','palimpsest','photogram','silhouette-collage',
                    'signal-reconstruction','spectral-mask','stencil-burn','stratum-shift',
                    'structural-echo','surveillance-decay','text-ghost','threshold-cascade',
-                   'torn-collage','wobble-curvyscreen-dither','pca-quad','quad-sort-destroy',
+                   'torn-collage','wobble-curvyscreen-dither','quad-sort-destroy',
                    'stencil-into-displacement'],
           },
           {
             label: 'Native',
             bots: ['chromaticab','paletteswap','reactiondiffusion'],
+          },
+        ],
+      },
+      {
+        label: 'Server',
+        categories: [
+          {
+            label: '2 Images',
+            bots: ['dream-dissolve'],
+          },
+          {
+            label: '3 Images',
+            bots: ['dream-cutout','dream-halftone','dream-within-dream','neural-chimera',
+                   'voronoi-chimera','wax-museum'],
+          },
+          {
+            label: '4 Images',
+            bots: ['dream-erosion','dream-mask','dream-mask-dream','dream-quad','dream-stencil',
+                   'kaleidoscope-dream-displacement','neural-mask-cascade',
+                   'phantom-dream','silver-displacement-dream','pca-quad',
+                   'kaleidoscope-cyanotype-pca','lathe-silver-sonify'],
           },
         ],
       },
@@ -11026,6 +11045,13 @@ import Admin from '../../../layouts/Admin.astro';
 
       // Browsing mode: show active tab, with optional sub-categories
       const origin = BOT_ORIGINS[activePickerTab];
+      if (origin.label === 'Server') {
+        const note = document.createElement('div');
+        note.className = 'pt-picker-section-label';
+        note.style.cssText = 'color:#a08040;font-style:italic;margin-bottom:4px;';
+        note.textContent = 'Requires server processing — uses RUN button, not RE-ROLL';
+        pickerBody.appendChild(note);
+      }
       if ('bots' in origin) {
         if (origin.bots.length === 0) {
           pickerBody.innerHTML = '<div class="pt-picker-empty" style="display:block">No bots</div>';
