@@ -4721,7 +4721,24 @@ import Admin from '../../../layouts/Admin.astro';
           d = channelShift(d, w, h, params.shift_r ?? 25, params.shift_b ?? -20);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildTripleMaskParams, getParams: getTripleMaskParams, setParams: setTripleMaskParams, onReroll: onRerollTripleMask },
-      'bullseye-cyanotype': { label: 'Bullseye Cyanotype', desc: 'Two images bullseyed — concentric rings cut and independently rotated — then all three composited through cyanotype stencil. The ring patterns get prussian blue toning.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('bullseye-cyanotype', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'bullseye-cyanotype': { label: 'Bullseye Cyanotype', desc: 'Two images bullseyed — concentric rings cut and independently rotated — then all three composited through cyanotype stencil. The ring patterns get prussian blue toning.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const rings = Math.round(params.rings ?? 12);
+          const rot = params.rotate ?? 0.5;
+          // Bullseye both A and B with independent per-ring rotations
+          const bA = ringRotate(dA, w, h, rings, 0, rot, 0, rng);
+          const bB = ringRotate(dB, w, h, rings, 0, rot * 0.7, 0, rng);
+          // Edge-stencil A into B, then C overlay
+          let d = edgeMaskComposite(bA, bB, w, h, 90, 8, false);
+          d = blendPixels(d, dC, w, h, 'screen', 0.35);
+          // Prussian blue toning
+          const prussian = solidColor(w, h, 10, 36, 106);
+          d = blendPixels(d, prussian, w, h, 'screen', params.blue_str ?? 0.55);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildBullseyeCyanotypeParams, getParams: getBullseyeCyanotypeParams, setParams: setBullseyeCyanotypeParams, onReroll: onRerollBullseyeCyanotype },
       'curvy-corruption': { label: 'Curvy Corruption', desc: 'Three images composited through edge-following curvy line screens, then the result is byte-corrupted and CRT/VHS filtered.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('curvy-corruption', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'cyanotype-corruption': { label: 'Cyanotype Corruption', desc: 'Three images composited through cyanotype stencil — prussian blue toning with highlight bloom — then the composite is byte-corrupted and channel-shifted.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
         render: (imgs, params, _rng) => {
@@ -4768,7 +4785,31 @@ import Admin from '../../../layouts/Admin.astro';
           const d = blendPixels(out, dA, w, h, 'screen', ss);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildShiftedLinescreenParams, getParams: getShiftedLinescreenParams, setParams: setShiftedLinescreenParams, onReroll: onRerollShiftedLinescreen },
-      'sixshooter-linescreen': { label: 'Six Shooter Line Screen', desc: 'Two images six-shootered — six circular regions cut, shuffled, and rotated — then composited through parallel line screen stencil. The scattered circular displacements show through.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('sixshooter-linescreen', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'sixshooter-linescreen': { label: 'Six Shooter Line Screen', desc: 'Two images six-shootered — six circular regions cut, shuffled, and rotated — then composited through parallel line screen stencil. The scattered circular displacements show through.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const rad = params.radius ?? 0.18;
+          const sh = Math.round(params.shift ?? 20);
+          // Six-shooter: punch 6 circles of B into A, then 6 circles of A into B
+          let sA = circlePunch(dA, dB, w, h, 6, rad, rng);
+          let sB = circlePunch(dB, dA, w, h, 6, rad, rng);
+          // Channel-shift each scattered version
+          sA = channelShift(sA, w, h,  sh,              -Math.round(sh * 0.6));
+          sB = channelShift(sB, w, h, -Math.round(sh * 0.7), Math.round(sh * 0.5));
+          // Line screen: horizontal strip interleave of A, B, C
+          const out = new Uint8ClampedArray(w * h * 4);
+          for (let y = 0; y < h; y++) {
+            const src = y % 3 === 0 ? sA : y % 3 === 1 ? sB : dC;
+            for (let x = 0; x < w; x++) {
+              const i = (y * w + x) * 4;
+              out[i] = src[i]; out[i+1] = src[i+1]; out[i+2] = src[i+2]; out[i+3] = 255;
+            }
+          }
+          const d = blendPixels(out, dC, w, h, 'screen', params.screen_str ?? 0.40);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildSixshooterLinescreenParams, getParams: getSixshooterLinescreenParams, setParams: setSixshooterLinescreenParams, onReroll: onRerollSixshooterLinescreen },
       'sorted-displacement': { label: 'Sorted Displacement', desc: 'Two images pixel-sorted to extreme thresholds — their surfaces sheared into vertical streaks — then displacement-stenciled against a third.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -4827,13 +4868,80 @@ import Admin from '../../../layouts/Admin.astro';
           d = scanLines(d, w, h, sp, so * 0.4);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildVhsHalationParams, getParams: getVhsHalationParams, setParams: setVhsHalationParams, onReroll: onRerollVhsHalation },
-      'bullethole-silver': { label: 'Bullet Hole Silver', desc: 'Two images riddled with circular punch holes at high chaos — perforated surfaces — then composited through silver gelatin stencil.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('bullethole-silver', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'bullseye-wobble-displacement': { label: 'Bullseye Wobble Displacement', desc: "Double concentric destruction: one image bullseyed into clean rings, another wobble-eyed into drifting off-axis rings. The third image's gradient field displaces the composite.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('bullseye-wobble-displacement', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'bullethole-silver': { label: 'Bullet Hole Silver', desc: 'Two images riddled with circular punch holes at high chaos — perforated surfaces — then composited through silver gelatin stencil.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const holes = Math.round(params.holes ?? 20);
+          const rad = params.radius ?? 0.08;
+          // Riddle both at high chaos (more holes per image)
+          const pA = circlePunch(dA, dB, w, h, holes, rad, rng);
+          const pB = circlePunch(dB, dA, w, h, holes, rad, rng);
+          // Silver gelatin: screen both perforated surfaces
+          let d = blendPixels(pA, pB, w, h, 'screen', 0.65);
+          // Silver toning via light gray (192, 192, 200)
+          const silver = solidColor(w, h, 192, 192, 200);
+          d = blendPixels(d, silver, w, h, 'screen', params.silver_str ?? 0.50);
+          // Edge stencil vs C for gelatin structure
+          d = edgeMaskComposite(dA, d, w, h, 80, params.feather ?? 10, true);
+          d = blendPixels(d, dC, w, h, 'screen', 0.30);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildBulletholesSilverParams, getParams: getBulletholesSilverParams, setParams: setBulletholesSilverParams, onReroll: onRerollBulletholesSilver },
+      'bullseye-wobble-displacement': { label: 'Bullseye Wobble Displacement', desc: "Double concentric destruction: one image bullseyed into clean rings, another wobble-eyed into drifting off-axis rings. The third image's gradient field displaces the composite.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const rings = Math.round(params.rings ?? 10);
+          const rot = params.rotate ?? 0.6;
+          const wob = params.wobble ?? 20;
+          // A: clean bullseye; B: wobbled rings (off-axis centres)
+          const bA = ringRotate(dA, w, h, rings, 0, rot, 0,   rng);
+          const bB = ringRotate(dB, w, h, rings, 0, rot, wob, rng);
+          // Screen the two together, then swirl-displace vs C
+          let d = blendPixels(bA, bB, w, h, 'screen', 0.65);
+          d = swirlDistort(d, w, h, params.swirl ?? 0.8);
+          d = blendPixels(d, dC, w, h, 'overlay', 0.35);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildBullseyeWobbleDisplacementParams, getParams: getBullseyeWobbleDisplacementParams, setParams: setBullseyeWobbleDisplacementParams, onReroll: onRerollBullseyeWobbleDisplacement },
       'halftone-curvyscreen': { label: 'Halftone Curvy Screen', desc: 'Two-pass screen compositing: first halftone dot screen composites two images, then the result and a third image are composited through curvy line screen.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('halftone-curvyscreen', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'kaleidoscope-halftone': { label: 'Kaleidoscope Halftone', desc: "Two images kaleidoscoped into mandala patterns — radial symmetry folding their surfaces into repeating wedges — then a third image's halftone dot screen composites them.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('kaleidoscope-halftone', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'lathe-displacement': { label: 'Lathe Displacement', desc: 'Two images lathe-turned — dozens of thin concentric rings each independently rotated into agate-like surfaces — then displacement-stenciled against a third.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('lathe-displacement', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'lathe-displacement': { label: 'Lathe Displacement', desc: 'Two images lathe-turned — dozens of thin concentric rings each independently rotated into agate-like surfaces — then displacement-stenciled against a third.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const rings = Math.round(params.rings ?? 20);
+          const rot = params.rotate ?? 1.2;
+          // Lathe-turn both (many rings, high variance → agate surface)
+          const lA = ringRotate(dA, w, h, rings, 0, rot, 0, rng);
+          const lB = ringRotate(dB, w, h, rings, 0, rot * 0.9, 0, rng);
+          // Screen both lathe surfaces together
+          let d = blendPixels(lA, lB, w, h, 'screen', 0.6);
+          // Swirl-displace against C
+          d = swirlDistort(d, w, h, params.swirl ?? 1.0);
+          d = edgeMaskComposite(d, dC, w, h, 80, 10, false);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildLatheDisplacementParams, getParams: getLatheDisplacementParams, setParams: setLatheDisplacementParams, onReroll: onRerollLatheDisplacement },
       'lathe-kaleidoscope-stencil': { label: 'Lathe Kaleidoscope Stencil', desc: 'Double geometric destruction: one image lathe-turned into agate rings, another kaleidoscoped into mandala symmetry, a third wobble-eyed into drifting rings.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('lathe-kaleidoscope-stencil', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'wobble-halation': { label: 'Wobble Halation', desc: 'Two images wobble-eyed — off-axis concentric rings drifting from center — then composited through halation edge stencil. The organic grain boundary meets the drifting rings.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('wobble-halation', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'wobble-halation': { label: 'Wobble Halation', desc: 'Two images wobble-eyed — off-axis concentric rings drifting from center — then composited through halation edge stencil. The organic grain boundary meets the drifting rings.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const rings = Math.round(params.rings ?? 10);
+          const rot = params.rotate ?? 0.4;
+          const wob = params.wobble ?? 25;
+          // Both images wobbled (rings drifting off-axis)
+          const wA = ringRotate(dA, w, h, rings, 0, rot, wob, rng);
+          const wB = ringRotate(dB, w, h, rings, 0, rot * 0.8, wob * 1.2, rng);
+          // Wide-feather halation edge composite → organic grain boundary
+          let d = edgeMaskComposite(wA, wB, w, h, 90, params.feather ?? 25, false);
+          // C as screen over for glow
+          d = blendPixels(d, dC, w, h, 'screen', 0.35);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildWobbleHalationParams, getParams: getWobbleHalationParams, setParams: setWobbleHalationParams, onReroll: onRerollWobbleHalation },
 
       // ── Sparagmos recipes (4 images) ────────────────────────────────────────
       'dream-erosion': { label: 'Dream Erosion', desc: 'A is deepdreamed heavily, colonized by neural hallucinations. That dreamed surface is seam-carved into B, and the seam-carved composite edge-masked against C and D.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('dream-erosion', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
@@ -4969,7 +5077,27 @@ import Admin from '../../../layouts/Admin.astro';
           d = blendPixels(d, surgeryA, w, h, 'screen', params.screen_str ?? 0.45);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildContrastSurgeryParams, getParams: getContrastSurgeryParams, setParams: setContrastSurgeryParams, onReroll: onRerollContrastSurgery },
-      'cyanotype-bullethole-mask': { label: 'Cyanotype Bullet Hole Mask', desc: 'Four images: two riddled with bullet holes, then cyanotype-stenciled. The result is edge-masked against a fourth image — the bullet-punched cyanotype filtered through structure.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('cyanotype-bullethole-mask', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'cyanotype-bullethole-mask': { label: 'Cyanotype Bullet Hole Mask', desc: 'Four images: two riddled with bullet holes, then cyanotype-stenciled. The result is edge-masked against a fourth image — the bullet-punched cyanotype filtered through structure.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const holes = Math.round(params.holes ?? 20);
+          const rad = params.radius ?? 0.08;
+          // Riddle A and B with bullet holes (each filled with the other)
+          const pA = circlePunch(dA, dB, w, h, holes, rad, rng);
+          const pB = circlePunch(dB, dA, w, h, holes, rad, rng);
+          // Cyanotype stencil: edge composite pA→pB → prussian blue toning
+          let d = edgeMaskComposite(pA, pB, w, h, 90, params.feather ?? 10, false);
+          const prussian = solidColor(w, h, 10, 36, 106);
+          d = blendPixels(d, prussian, w, h, 'screen', params.blue_str ?? 0.60);
+          // Screen C for additional structure
+          d = blendPixels(d, dC, w, h, 'overlay', 0.30);
+          // Edge-mask against D
+          d = edgeMaskComposite(d, dD, w, h, 80, params.feather ?? 10, false);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildCyanotypeBulletholeParams, getParams: getCyanotypeBulletholeParams, setParams: setCyanotypeBulletholeParams, onReroll: onRerollCyanotypeBullethole },
       'displacement-blend-spectral': { label: 'Displacement Blend Spectral', desc: 'Four images: displacement-stenciled, then screen-blended with a fourth. The blended surface is spectral-filtered to strip frequencies. Warped stencil meets spectral void.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -5209,7 +5337,25 @@ import Admin from '../../../layouts/Admin.astro';
           const d = lumaComposite(silhouette, bg, dA, w, h, 128, params.feather ?? 8, false);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildSilhouetteCollageParams, getParams: getSilhouetteCollageParams, setParams: setSilhouetteCollageParams, onReroll: onRerollSilhouetteCollage },
-      'sixshooter-halation-corrupt': { label: 'Six Shooter Halation Corrupt', desc: 'Four images: two six-shootered into scattered circular displacements, halation-edge composited through the third. The organic grain boundary dissolves into byte corruption.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('sixshooter-halation-corrupt', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'sixshooter-halation-corrupt': { label: 'Six Shooter Halation Corrupt', desc: 'Four images: two six-shootered into scattered circular displacements, halation-edge composited through the third. The organic grain boundary dissolves into byte corruption.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const rad = params.radius ?? 0.18;
+          // Six-shoot A and B
+          const sA = circlePunch(dA, dB, w, h, 6, rad, rng);
+          const sB = circlePunch(dB, dA, w, h, 6, rad, rng);
+          // Wide-feather halation edge composite
+          let d = edgeMaskComposite(sA, sB, w, h, 80, params.feather ?? 20, false);
+          // Screen C for third-image presence
+          d = blendPixels(d, dC, w, h, 'screen', 0.35);
+          // D as overlay
+          d = blendPixels(d, dD, w, h, 'overlay', 0.25);
+          // JPEG corruption
+          return [{ canvas: jpegDestroy(pixelsToCanvas(d, w, h), params.quality ?? 4, 4), mimeType: 'image/jpeg' }];
+        }, buildParams: buildSixshooterHalationCorruptParams, getParams: getSixshooterHalationCorruptParams, setParams: setSixshooterHalationCorruptParams, onReroll: onRerollSixshooterHalationCorrupt },
       'spectral-mask': { label: 'Spectral Mask', desc: 'Four images processed spectrally and then masked in pairs. Image A is spectrally shifted to emphasize its mid-range structure. The shifted and raw versions mask against each other.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('spectral-mask', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'stencil-burn': { label: 'Stencil Burn', desc: 'Image A is dithered to a near-binary stencil — its shapes reduced to stark positive and negative space. That stencil is used as a hard luminance mask cutting into B, C, and D.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
         render: (imgs, params, _rng) => {
@@ -8237,6 +8383,348 @@ import Admin from '../../../layouts/Admin.astro';
       setBinaryArchaeologyParams({ threshold: Math.round(lerp(50, 210, rng())), blend_str: parseFloat(lerp(0.2, 0.9, rng()).toFixed(2)) });
     }
 
+    // ── bullseye-cyanotype params ────────────────────────────────────────────────
+    function buildBullseyeCyanotypeParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="bc-rings">Ring Count <span class="pt-val" id="bc-rings-val">12</span></label>
+          <input class="pt-range" type="range" id="bc-rings" min="4" max="30" step="1" value="12" />
+          <div class="pt-range-hints"><span>few</span><span>many</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="bc-rotate">Rotation Range <span class="pt-val" id="bc-rotate-val">0.50</span></label>
+          <input class="pt-range" type="range" id="bc-rotate" min="0" max="3.14" step="0.01" value="0.50" />
+          <div class="pt-range-hints"><span>none</span><span>full spin</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="bc-blue-str">Blue Toning <span class="pt-val" id="bc-blue-str-val">0.55</span></label>
+          <input class="pt-range" type="range" id="bc-blue-str" min="0" max="0.9" step="0.01" value="0.55" />
+          <div class="pt-range-hints"><span>none</span><span>prussian</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['bc-rings','bc-rotate','bc-blue-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getBullseyeCyanotypeParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { rings: get('bc-rings','12'), rotate: get('bc-rotate','0.50'), blue_str: get('bc-blue-str','0.55') };
+    }
+    function setBullseyeCyanotypeParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.rings    !== undefined) set('bc-rings',    p.rings);
+      if (p.rotate   !== undefined) set('bc-rotate',   p.rotate);
+      if (p.blue_str !== undefined) set('bc-blue-str', p.blue_str);
+    }
+    function onRerollBullseyeCyanotype(rng: () => number) {
+      setBullseyeCyanotypeParams({ rings: Math.round(lerp(4, 28, rng())), rotate: parseFloat(lerp(0.1, 2.8, rng()).toFixed(2)), blue_str: parseFloat(lerp(0.2, 0.85, rng()).toFixed(2)) });
+    }
+
+    // ── bullseye-wobble-displacement params ──────────────────────────────────────
+    function buildBullseyeWobbleDisplacementParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="bwd-rings">Ring Count <span class="pt-val" id="bwd-rings-val">10</span></label>
+          <input class="pt-range" type="range" id="bwd-rings" min="4" max="30" step="1" value="10" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="bwd-rotate">Rotation Range <span class="pt-val" id="bwd-rotate-val">0.60</span></label>
+          <input class="pt-range" type="range" id="bwd-rotate" min="0" max="3.14" step="0.01" value="0.60" />
+          <div class="pt-range-hints"><span>none</span><span>full spin</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="bwd-wobble">Wobble <span class="pt-val" id="bwd-wobble-val">20</span></label>
+          <input class="pt-range" type="range" id="bwd-wobble" min="0" max="60" step="1" value="20" />
+          <div class="pt-range-hints"><span>none</span><span>extreme</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="bwd-swirl">Swirl <span class="pt-val" id="bwd-swirl-val">0.80</span></label>
+          <input class="pt-range" type="range" id="bwd-swirl" min="0" max="3" step="0.05" value="0.80" />
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['bwd-rings','bwd-rotate','bwd-wobble','bwd-swirl'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getBullseyeWobbleDisplacementParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { rings: get('bwd-rings','10'), rotate: get('bwd-rotate','0.60'), wobble: get('bwd-wobble','20'), swirl: get('bwd-swirl','0.80') };
+    }
+    function setBullseyeWobbleDisplacementParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.rings  !== undefined) set('bwd-rings',  p.rings);
+      if (p.rotate !== undefined) set('bwd-rotate', p.rotate);
+      if (p.wobble !== undefined) set('bwd-wobble', p.wobble);
+      if (p.swirl  !== undefined) set('bwd-swirl',  p.swirl);
+    }
+    function onRerollBullseyeWobbleDisplacement(rng: () => number) {
+      setBullseyeWobbleDisplacementParams({ rings: Math.round(lerp(4, 28, rng())), rotate: parseFloat(lerp(0.1, 2.8, rng()).toFixed(2)), wobble: Math.round(lerp(0, 55, rng())), swirl: parseFloat(lerp(0.1, 2.5, rng()).toFixed(2)) });
+    }
+
+    // ── wobble-halation params ────────────────────────────────────────────────────
+    function buildWobbleHalationParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="wh-rings">Ring Count <span class="pt-val" id="wh-rings-val">10</span></label>
+          <input class="pt-range" type="range" id="wh-rings" min="4" max="30" step="1" value="10" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="wh-rotate">Rotation Range <span class="pt-val" id="wh-rotate-val">0.40</span></label>
+          <input class="pt-range" type="range" id="wh-rotate" min="0" max="3.14" step="0.01" value="0.40" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="wh-wobble">Wobble <span class="pt-val" id="wh-wobble-val">25</span></label>
+          <input class="pt-range" type="range" id="wh-wobble" min="0" max="70" step="1" value="25" />
+          <div class="pt-range-hints"><span>none</span><span>extreme</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="wh-feather">Halation Feather <span class="pt-val" id="wh-feather-val">25</span></label>
+          <input class="pt-range" type="range" id="wh-feather" min="4" max="60" step="1" value="25" />
+          <div class="pt-range-hints"><span>tight</span><span>wide bloom</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['wh-rings','wh-rotate','wh-wobble','wh-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getWobbleHalationParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { rings: get('wh-rings','10'), rotate: get('wh-rotate','0.40'), wobble: get('wh-wobble','25'), feather: get('wh-feather','25') };
+    }
+    function setWobbleHalationParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.rings   !== undefined) set('wh-rings',   p.rings);
+      if (p.rotate  !== undefined) set('wh-rotate',  p.rotate);
+      if (p.wobble  !== undefined) set('wh-wobble',  p.wobble);
+      if (p.feather !== undefined) set('wh-feather', p.feather);
+    }
+    function onRerollWobbleHalation(rng: () => number) {
+      setWobbleHalationParams({ rings: Math.round(lerp(4, 28, rng())), rotate: parseFloat(lerp(0.1, 2.5, rng()).toFixed(2)), wobble: Math.round(lerp(5, 65, rng())), feather: Math.round(lerp(8, 55, rng())) });
+    }
+
+    // ── lathe-displacement params ─────────────────────────────────────────────────
+    function buildLatheDisplacementParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="ld-rings">Ring Count <span class="pt-val" id="ld-rings-val">20</span></label>
+          <input class="pt-range" type="range" id="ld-rings" min="8" max="50" step="1" value="20" />
+          <div class="pt-range-hints"><span>few</span><span>many (agate)</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ld-rotate">Rotation per Ring <span class="pt-val" id="ld-rotate-val">1.20</span></label>
+          <input class="pt-range" type="range" id="ld-rotate" min="0" max="6.28" step="0.05" value="1.20" />
+          <div class="pt-range-hints"><span>none</span><span>max twist</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ld-swirl">Displacement Swirl <span class="pt-val" id="ld-swirl-val">1.00</span></label>
+          <input class="pt-range" type="range" id="ld-swirl" min="0" max="4" step="0.05" value="1.00" />
+          <div class="pt-range-hints"><span>none</span><span>extreme</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['ld-rings','ld-rotate','ld-swirl'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getLatheDisplacementParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { rings: get('ld-rings','20'), rotate: get('ld-rotate','1.20'), swirl: get('ld-swirl','1.00') };
+    }
+    function setLatheDisplacementParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.rings  !== undefined) set('ld-rings',  p.rings);
+      if (p.rotate !== undefined) set('ld-rotate', p.rotate);
+      if (p.swirl  !== undefined) set('ld-swirl',  p.swirl);
+    }
+    function onRerollLatheDisplacement(rng: () => number) {
+      setLatheDisplacementParams({ rings: Math.round(lerp(8, 48, rng())), rotate: parseFloat(lerp(0.2, 6.0, rng()).toFixed(2)), swirl: parseFloat(lerp(0.2, 3.5, rng()).toFixed(2)) });
+    }
+
+    // ── sixshooter-linescreen params ─────────────────────────────────────────────
+    function buildSixshooterLinescreenParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="sl2-radius">Punch Radius <span class="pt-val" id="sl2-radius-val">0.18</span></label>
+          <input class="pt-range" type="range" id="sl2-radius" min="0.05" max="0.40" step="0.01" value="0.18" />
+          <div class="pt-range-hints"><span>small</span><span>large</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sl2-shift">Channel Shift <span class="pt-val" id="sl2-shift-val">20</span></label>
+          <input class="pt-range" type="range" id="sl2-shift" min="0" max="60" step="1" value="20" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sl2-screen-str">Screen Strength <span class="pt-val" id="sl2-screen-str-val">0.40</span></label>
+          <input class="pt-range" type="range" id="sl2-screen-str" min="0" max="0.9" step="0.01" value="0.40" />
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['sl2-radius','sl2-shift','sl2-screen-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getSixshooterLinescreenParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { radius: get('sl2-radius','0.18'), shift: get('sl2-shift','20'), screen_str: get('sl2-screen-str','0.40') };
+    }
+    function setSixshooterLinescreenParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.radius     !== undefined) set('sl2-radius',     p.radius);
+      if (p.shift      !== undefined) set('sl2-shift',      p.shift);
+      if (p.screen_str !== undefined) set('sl2-screen-str', p.screen_str);
+    }
+    function onRerollSixshooterLinescreen(rng: () => number) {
+      setSixshooterLinescreenParams({ radius: parseFloat(lerp(0.05, 0.35, rng()).toFixed(2)), shift: Math.round(lerp(5, 55, rng())), screen_str: parseFloat(lerp(0.15, 0.8, rng()).toFixed(2)) });
+    }
+
+    // ── sixshooter-halation-corrupt params ───────────────────────────────────────
+    function buildSixshooterHalationCorruptParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="shc-radius">Punch Radius <span class="pt-val" id="shc-radius-val">0.18</span></label>
+          <input class="pt-range" type="range" id="shc-radius" min="0.05" max="0.40" step="0.01" value="0.18" />
+          <div class="pt-range-hints"><span>small</span><span>large</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="shc-feather">Halation Feather <span class="pt-val" id="shc-feather-val">20</span></label>
+          <input class="pt-range" type="range" id="shc-feather" min="4" max="60" step="1" value="20" />
+          <div class="pt-range-hints"><span>tight</span><span>wide bloom</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="shc-quality">JPEG Quality <span class="pt-val" id="shc-quality-val">4</span></label>
+          <input class="pt-range" type="range" id="shc-quality" min="1" max="20" step="1" value="4" />
+          <div class="pt-range-hints"><span>destroyed</span><span>cleaner</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['shc-radius','shc-feather','shc-quality'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getSixshooterHalationCorruptParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { radius: get('shc-radius','0.18'), feather: get('shc-feather','20'), quality: get('shc-quality','4') };
+    }
+    function setSixshooterHalationCorruptParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.radius  !== undefined) set('shc-radius',  p.radius);
+      if (p.feather !== undefined) set('shc-feather', p.feather);
+      if (p.quality !== undefined) set('shc-quality', p.quality);
+    }
+    function onRerollSixshooterHalationCorrupt(rng: () => number) {
+      setSixshooterHalationCorruptParams({ radius: parseFloat(lerp(0.05, 0.35, rng()).toFixed(2)), feather: Math.round(lerp(8, 55, rng())), quality: Math.round(lerp(1, 14, rng())) });
+    }
+
+    // ── cyanotype-bullethole-mask params ─────────────────────────────────────────
+    function buildCyanotypeBulletholeParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="cbm-holes">Hole Count <span class="pt-val" id="cbm-holes-val">20</span></label>
+          <input class="pt-range" type="range" id="cbm-holes" min="5" max="60" step="1" value="20" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cbm-radius">Hole Radius <span class="pt-val" id="cbm-radius-val">0.08</span></label>
+          <input class="pt-range" type="range" id="cbm-radius" min="0.02" max="0.25" step="0.01" value="0.08" />
+          <div class="pt-range-hints"><span>tiny</span><span>large</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cbm-blue-str">Blue Toning <span class="pt-val" id="cbm-blue-str-val">0.60</span></label>
+          <input class="pt-range" type="range" id="cbm-blue-str" min="0" max="0.9" step="0.01" value="0.60" />
+          <div class="pt-range-hints"><span>none</span><span>prussian</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cbm-feather">Edge Feather <span class="pt-val" id="cbm-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="cbm-feather" min="0" max="30" step="1" value="10" />
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['cbm-holes','cbm-radius','cbm-blue-str','cbm-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getCyanotypeBulletholeParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { holes: get('cbm-holes','20'), radius: get('cbm-radius','0.08'), blue_str: get('cbm-blue-str','0.60'), feather: get('cbm-feather','10') };
+    }
+    function setCyanotypeBulletholeParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.holes    !== undefined) set('cbm-holes',    p.holes);
+      if (p.radius   !== undefined) set('cbm-radius',   p.radius);
+      if (p.blue_str !== undefined) set('cbm-blue-str', p.blue_str);
+      if (p.feather  !== undefined) set('cbm-feather',  p.feather);
+    }
+    function onRerollCyanotypeBullethole(rng: () => number) {
+      setCyanotypeBulletholeParams({ holes: Math.round(lerp(5, 55, rng())), radius: parseFloat(lerp(0.02, 0.22, rng()).toFixed(2)), blue_str: parseFloat(lerp(0.2, 0.85, rng()).toFixed(2)), feather: Math.round(lerp(4, 24, rng())) });
+    }
+
+    // ── bullethole-silver params ──────────────────────────────────────────────────
+    function buildBulletholesSilverParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="bhs-holes">Hole Count <span class="pt-val" id="bhs-holes-val">20</span></label>
+          <input class="pt-range" type="range" id="bhs-holes" min="5" max="60" step="1" value="20" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="bhs-radius">Hole Radius <span class="pt-val" id="bhs-radius-val">0.08</span></label>
+          <input class="pt-range" type="range" id="bhs-radius" min="0.02" max="0.25" step="0.01" value="0.08" />
+          <div class="pt-range-hints"><span>tiny</span><span>large</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="bhs-silver-str">Silver Toning <span class="pt-val" id="bhs-silver-str-val">0.50</span></label>
+          <input class="pt-range" type="range" id="bhs-silver-str" min="0" max="0.9" step="0.01" value="0.50" />
+          <div class="pt-range-hints"><span>none</span><span>full silver</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="bhs-feather">Edge Feather <span class="pt-val" id="bhs-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="bhs-feather" min="0" max="30" step="1" value="10" />
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['bhs-holes','bhs-radius','bhs-silver-str','bhs-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getBulletholesSilverParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { holes: get('bhs-holes','20'), radius: get('bhs-radius','0.08'), silver_str: get('bhs-silver-str','0.50'), feather: get('bhs-feather','10') };
+    }
+    function setBulletholesSilverParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.holes      !== undefined) set('bhs-holes',      p.holes);
+      if (p.radius     !== undefined) set('bhs-radius',     p.radius);
+      if (p.silver_str !== undefined) set('bhs-silver-str', p.silver_str);
+      if (p.feather    !== undefined) set('bhs-feather',    p.feather);
+    }
+    function onRerollBulletholesSilver(rng: () => number) {
+      setBulletholesSilverParams({ holes: Math.round(lerp(5, 55, rng())), radius: parseFloat(lerp(0.02, 0.22, rng()).toFixed(2)), silver_str: parseFloat(lerp(0.2, 0.85, rng()).toFixed(2)), feather: Math.round(lerp(4, 24, rng())) });
+    }
+
     // ── sediment-core params ────────────────────────────────────────────────────
     function buildSedimentCoreParams() {
       paramsEl.innerHTML = `
@@ -8902,6 +9390,74 @@ import Admin from '../../../layouts/Admin.astro';
           out[i]   = Math.round(out[i]   * fade);
           out[i + 1] = Math.round(out[i + 1] * fade);
           out[i + 2] = Math.round(out[i + 2] * fade);
+        }
+      }
+      return out;
+    }
+
+    // Bullseye / lathe ring cut: rotates pixels within each concentric ring band independently.
+    // rings: number of rings. rotatePerRing: radians to rotate ring i (i=0 innermost).
+    // wobble > 0 shifts ring centres by wobble pixels (pseudo-random per ring).
+    function ringRotate(
+      d: Uint8ClampedArray, w: number, h: number,
+      rings: number, baseRotate: number, rotateVariance: number,
+      wobble: number, rng: () => number,
+    ): Uint8ClampedArray {
+      const cx = w / 2, cy = h / 2;
+      const maxR = Math.sqrt(cx * cx + cy * cy);
+      const out = new Uint8ClampedArray(w * h * 4);
+      // Pre-compute per-ring rotation and wobble offsets
+      const rotations = Array.from({ length: rings }, (_, i) =>
+        baseRotate + (rng() - 0.5) * rotateVariance * 2
+      );
+      const wobbles = Array.from({ length: rings }, () => ({
+        dx: (rng() - 0.5) * wobble * 2,
+        dy: (rng() - 0.5) * wobble * 2,
+      }));
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const oi = (y * w + x) * 4;
+          const dx = x - cx, dy = y - cy;
+          const r = Math.sqrt(dx * dx + dy * dy);
+          const ring = Math.min(rings - 1, Math.floor((r / maxR) * rings));
+          const angle = rotations[ring];
+          const wx = wobbles[ring].dx, wy = wobbles[ring].dy;
+          // Rotate (x, y) around the (possibly wobbled) ring centre
+          const ox = x - cx - wx, oy = y - cy - wy;
+          const cos = Math.cos(angle), sin = Math.sin(angle);
+          const sx = Math.round(cos * ox - sin * oy + cx + wx);
+          const sy = Math.round(sin * ox + cos * oy + cy + wy);
+          if (sx >= 0 && sx < w && sy >= 0 && sy < h) {
+            const si = (sy * w + sx) * 4;
+            out[oi] = d[si]; out[oi+1] = d[si+1]; out[oi+2] = d[si+2]; out[oi+3] = 255;
+          } else {
+            out[oi] = d[oi]; out[oi+1] = d[oi+1]; out[oi+2] = d[oi+2]; out[oi+3] = 255;
+          }
+        }
+      }
+      return out;
+    }
+
+    // Circular punch holes: punches nHoles circular regions; each hole replaced by dB pixels.
+    // radius controls hole size as fraction of min(w,h).
+    function circlePunch(
+      dA: Uint8ClampedArray, dB: Uint8ClampedArray,
+      w: number, h: number,
+      nHoles: number, radiusFrac: number, rng: () => number,
+    ): Uint8ClampedArray {
+      const out = new Uint8ClampedArray(dA);
+      const rad = Math.round(Math.min(w, h) * radiusFrac);
+      for (let n = 0; n < nHoles; n++) {
+        const cx = Math.round(rng() * w);
+        const cy = Math.round(rng() * h);
+        for (let dy = -rad; dy <= rad; dy++) {
+          for (let dx = -rad; dx <= rad; dx++) {
+            if (dx * dx + dy * dy > rad * rad) continue;
+            const px = cx + dx, py = cy + dy;
+            if (px < 0 || px >= w || py < 0 || py >= h) continue;
+            const i = (py * w + px) * 4;
+            out[i] = dB[i]; out[i+1] = dB[i+1]; out[i+2] = dB[i+2]; out[i+3] = 255;
+          }
         }
       }
       return out;
