@@ -5262,7 +5262,7 @@ import Admin from '../../../layouts/Admin.astro';
           // Fragment A and B (simulates Voronoi-like cell fragmentation)
           let d = gridFragment(dA, dA, dB, w, h, pieces, mr, rng);
           // Edge-mask the fragment vs C
-          d = edgeMaskComposite(dA, dC, w, h, params.thresh ?? 110, f, false);
+          d = edgeMaskComposite(d, dC, w, h, params.thresh ?? 110, f, false);
           // Scatter-collage the result with C
           d = gridFragment(d, d, dC, w, h, pieces, mr * 0.7, rng);
           // Second masking: luma-mask vs D
@@ -5280,8 +5280,8 @@ import Admin from '../../../layouts/Admin.astro';
           const f = params.feather ?? 10;
           // Fragment A and B together into a shattered composite
           let d = gridFragment(dA, dA, dB, w, h, pieces, mr, rng);
-          // Edge mask the fragment using A's structure → reveal C
-          d = edgeMaskComposite(dA, dC, w, h, params.thresh ?? 110, f, false);
+          // Edge mask the fragment using its own structure → reveal C
+          d = edgeMaskComposite(d, dC, w, h, params.thresh ?? 110, f, false);
           // Luma mask the result against D for the second masking layer
           d = lumaComposite(dA, d, dD, w, h, params.thresh ?? 110, f * 1.5, false);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
@@ -5372,8 +5372,8 @@ import Admin from '../../../layouts/Admin.astro';
           const f = params.feather ?? 10;
           // Pass 1: luminance — A's luma → A or B
           let d = lumaComposite(dA, dA, dB, w, h, params.luma_thresh ?? 120, f, false);
-          // Pass 2: edges — A's edges cut in C
-          d     = edgeMaskComposite(dA, dC, w, h, params.edge_thresh ?? 110, f, false);
+          // Pass 2: edges — result's edges cut in C
+          d     = edgeMaskComposite(d, dC, w, h, params.edge_thresh ?? 110, f, false);
           // Pass 3: noise mask → D fills random regions
           const noise = noisePixels(w, h, rng);
           d     = lumaComposite(noise, d, dD, w, h, params.noise_thresh ?? 128, f, false);
@@ -5393,8 +5393,8 @@ import Admin from '../../../layouts/Admin.astro';
           const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
           const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
           let d = edgeMaskComposite(dA, dB, w, h, params.thresh ?? 110, params.feather1 ?? 5,  false);
-          d     = edgeMaskComposite(dA, dC, w, h, params.thresh ?? 110, params.feather2 ?? 14, false);
-          d     = edgeMaskComposite(dA, dD, w, h, params.thresh ?? 110, params.feather3 ?? 28, false);
+          d     = edgeMaskComposite(d,  dC, w, h, params.thresh ?? 110, params.feather2 ?? 14, false);
+          d     = edgeMaskComposite(d,  dD, w, h, params.thresh ?? 110, params.feather3 ?? 28, false);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildMaskErosionParams, getParams: getMaskErosionParams, setParams: setMaskErosionParams, onReroll: onRerollMaskErosion },
       'negative-space': { label: 'Negative Space', desc: "Two masking operations, each using the opposite of what the other reveals. Image A's dark regions cut out shapes and fill them with B: the negative space becomes positive content.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
@@ -5550,8 +5550,8 @@ import Admin from '../../../layouts/Admin.astro';
           const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
           // Start with B; A's edges progressively reveal C then D with widening feather
           let d = edgeMaskComposite(dA, dB, w, h, params.thresh ?? 110, params.feather1 ?? 4,  false);
-          d     = edgeMaskComposite(dA, dC, d,  w, h, params.thresh ?? 110, params.feather2 ?? 14, false);
-          d     = edgeMaskComposite(dA, dD, d,  w, h, params.thresh ?? 110, params.feather3 ?? 30, false);
+          d     = edgeMaskComposite(dA, dC, w, h, params.thresh ?? 110, params.feather2 ?? 14, false);
+          d     = edgeMaskComposite(dA, dD, w, h, params.thresh ?? 110, params.feather3 ?? 30, false);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildStructuralEchoParams, getParams: getStructuralEchoParams, setParams: setStructuralEchoParams, onReroll: onRerollStructuralEcho },
       'surveillance-decay': { label: 'Surveillance Decay', desc: 'Four feeds arranged in the classic CCTV quad-view. Each feed has already been corrupted by its own accumulation of errors — byte corruption, CRT noise, VHS bleed.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
