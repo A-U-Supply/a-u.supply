@@ -6466,6 +6466,10 @@ import Admin from '../../../layouts/Admin.astro';
         const mimeType = autoExport === 'png' ? 'image/png' : 'image/jpeg';
         const filename  = autoExport === 'png' ? `${currentBot}.png` : `${currentBot}.jpg`;
         doReroll(seed);
+        // Re-apply explicitly saved params — onReroll inside doReroll may have
+        // overwritten manually-adjusted slider values with seed-derived values.
+        BOTS[currentBot].setParams?.(Object.fromEntries(urlParams.entries()));
+        doRender();
         // doReroll resets activeOutputIdx to 0; restore the saved index
         if (outputIdx > 0 && outputIdx < outputs.length) {
           setActiveOutput(outputIdx);
