@@ -4462,7 +4462,26 @@ import Admin from '../../../layouts/Admin.astro';
       'wax-museum': { label: 'Wax Museum', desc: 'Three images each passed through style transfer — their surfaces repainted in the manner of some other image, some other logic.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('wax-museum', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'acid-wash': { label: 'Acid Wash', desc: 'Three images run through spectral transformation — their frequencies scrambled and redistributed — before being multiplied together.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('acid-wash', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'broadcast-static': { label: 'Broadcast Static', desc: 'Three images converted to sound and back — each through a different acoustic treatment, each emerging distorted in its own frequency range.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('broadcast-static', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'data-rot': { label: 'Data Rot', desc: 'Three images subjected to byte-level corruption before any composition — the damage is baked in from the start, not applied as finish.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('data-rot', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'data-rot': { label: 'Data Rot', desc: 'Three images subjected to byte-level corruption before any composition — the damage is baked in from the start, not applied as finish.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const q = params.quality ?? 3;
+          const it = Math.round(params.iterations ?? 6);
+          const sh = Math.round(params.shift ?? 20);
+          // Corrupt each source at slightly different quality levels baked in from the start
+          const rA = jpegDestroy(pixelsToCanvas(channelShift(dA, w, h,  sh,           -Math.round(sh*0.6)), w, h), q,     it);
+          const rB = jpegDestroy(pixelsToCanvas(channelShift(dB, w, h, -Math.round(sh*0.7), Math.round(sh*0.5)), w, h), Math.max(1, q-1), Math.round(it*0.8));
+          const rC = jpegDestroy(pixelsToCanvas(channelShift(dC, w, h,  Math.round(sh*0.4), -sh),            w, h), Math.min(20, q+2), Math.round(it*1.2));
+          // Compose: screen A over B, then difference with C to amplify damage artifacts
+          const pA = getPixels(rA); const pB = getPixels(rB); const pC = getPixels(rC);
+          const dBr = resizeToMatch(pB.d, pB.w, pB.h, pA.w, pA.h);
+          const dCr = resizeToMatch(pC.d, pC.w, pC.h, pA.w, pA.h);
+          let d = blendPixels(pA.d, dBr, pA.w, pA.h, 'screen', 0.6);
+          d = blendPixels(d, dCr, pA.w, pA.h, 'difference', 0.4);
+          return [{ canvas: pixelsToCanvas(d, pA.w, pA.h), mimeType: 'image/jpeg' }];
+        }, buildParams: buildDataRotParams, getParams: getDataRotParams, setParams: setDataRotParams, onReroll: onRerollDataRot },
       'edge-ghosts': { label: 'Edge Ghosts', desc: 'Phantom outlines from one image haunting another. Edge detection extracts the structural skeleton of each source. Two rounds of edge-masking create layered hauntings.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -4513,7 +4532,26 @@ import Admin from '../../../layouts/Admin.astro';
           return [{ canvas: pixelsToCanvas(out, w, h), mimeType: 'image/png' }];
         }, buildParams: buildExquisiteCorpseParams, getParams: getExquisiteCorpseParams, setParams: setExquisiteCorpseParams, onReroll: onRerollExquisiteCorpse },
       'fossil-record': { label: 'Fossil Record', desc: 'Geological strata. Each image PCA-decomposed to different component counts. Opacity-blended as layers like sedimentary rock. Dithering creates stone textures.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('fossil-record', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'holographic-interference': { label: 'Holographic Interference', desc: 'Three images processed through spectral decomposition and channel aberration, then stacked via difference and screen blending to simulate holographic interference.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('holographic-interference', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'holographic-interference': { label: 'Holographic Interference', desc: 'Three images processed through spectral decomposition and channel aberration, then stacked via difference and screen blending to simulate holographic interference.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const r = Math.round(params.hp_radius ?? 5);
+          const sh = Math.round(params.shift ?? 25);
+          // Highpass each at slightly different radii (spectral decomp)
+          const hpA = highpassRGB(dA, w, h, r);
+          const hpB = highpassRGB(dB, w, h, r + 2);
+          const hpC = highpassRGB(dC, w, h, Math.max(1, r - 2));
+          // Channel aberration: each source shifted in opposite directions
+          const abA = channelShift(hpA, w, h,  sh,              -Math.round(sh * 0.5));
+          const abB = channelShift(hpB, w, h, -Math.round(sh * 0.7), Math.round(sh * 0.8));
+          const abC = channelShift(hpC, w, h,  Math.round(sh * 0.4), -Math.round(sh * 0.6));
+          // Stack: difference A+B for interference fringe, then screen C over it
+          let d = blendPixels(abA, abB, w, h, 'difference', 0.75);
+          d = blendPixels(d, abC, w, h, 'screen', params.screen_str ?? 0.55);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildHolographicInterferenceParams, getParams: getHolographicInterferenceParams, setParams: setHolographicInterferenceParams, onReroll: onRerollHolographicInterference },
       'mask-and-glitch': { label: 'Mask and Glitch', desc: "Image A is edge-masked onto B, producing a clean structural composite. That composite is then run through CRT/VHS processing — scan lines, color bleed.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -4725,8 +4763,60 @@ import Admin from '../../../layouts/Admin.astro';
         }, buildParams: buildNoiseCathedralParams, getParams: getNoiseCathedralParams, setParams: setNoiseCathedralParams, onReroll: onRerollNoiseCathedral },
       'phantom-dream': { label: 'Phantom Dream', desc: 'A and B are both deepdreamed independently. Those two dreamed surfaces are screen-blended together, and the dreamed composite edge-masks against C and D.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('phantom-dream', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'silver-displacement-dream': { label: 'Silver Displacement Dream', desc: 'Four images: one deepdreamed heavily, silver-stenciled with two others. The silver-toned hallucinated surface is then displacement-warped against the fourth.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('silver-displacement-dream', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'tectonic-overlap': { label: 'Tectonic Overlap', desc: 'Continental plates of image data, shifted and overlapping. Four images shattered into irregular polygons, scatter-collaged with rotation. Seam carving warps the fault lines.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('tectonic-overlap', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'binary-archaeology': { label: 'Binary Archaeology', desc: 'Each of the four images is dithered to a different binary palette — different dithering algorithms reducing each to its own distinct pattern of black and white.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('binary-archaeology', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'tectonic-overlap': { label: 'Tectonic Overlap', desc: 'Continental plates of image data, shifted and overlapping. Four images shattered into irregular polygons, scatter-collaged with rotation. Seam carving warps the fault lines.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const pieces = Math.round(params.pieces ?? 25);
+          const mr = params.mix_ratio ?? 0.50;
+          const sh = Math.round(params.shift ?? 25);
+          // Progressive tectonic fragmentation: each layer shears into the next
+          let d = gridFragment(dA, dA, dB, w, h, pieces, mr, rng);
+          d = gridFragment(d, d, dC, w, h, pieces, mr * 0.8, rng);
+          d = gridFragment(d, d, dD, w, h, pieces, mr * 0.6, rng);
+          // Channel shift to simulate fault line aberration
+          d = channelShift(d, w, h, sh, -Math.round(sh * 0.7));
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildTectonicOverlapParams, getParams: getTectonicOverlapParams, setParams: setTectonicOverlapParams, onReroll: onRerollTectonicOverlap },
+      'binary-archaeology': { label: 'Binary Archaeology', desc: 'Each of the four images is dithered to a different binary palette — different dithering algorithms reducing each to its own distinct pattern of black and white.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const base = params.threshold ?? 128;
+          const bs = params.blend_str ?? 0.55;
+          // Four Bayer matrices at different scales — each "algorithm" for the 4 layers
+          const bayer2 = [[0,2],[3,1]];
+          const bayer4 = [[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
+          const bayer8 = [[0,32,8,40,2,34,10,42],[48,16,56,24,50,18,58,26],[12,44,4,36,14,46,6,38],[60,28,52,20,62,30,54,22],[3,35,11,43,1,33,9,41],[51,19,59,27,49,17,57,25],[15,47,7,39,13,45,5,37],[63,31,55,23,61,29,53,21]];
+          function dither(d: Uint8ClampedArray, mat: number[][], size: number, thresh: number): Uint8ClampedArray {
+            const out = new Uint8ClampedArray(w * h * 4);
+            const scale = 255 / (size * size);
+            for (let y = 0; y < h; y++) {
+              for (let x = 0; x < w; x++) {
+                const i = (y * w + x) * 4;
+                const luma = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+                const bv = mat[y % size][x % size] * scale;
+                const v = luma + bv - 128 > thresh ? 255 : 0;
+                out[i] = out[i+1] = out[i+2] = v; out[i+3] = 255;
+              }
+            }
+            return out;
+          }
+          // Each image dithered with a different matrix/threshold offset
+          const dA2 = dither(dA, bayer2, 2, base);
+          const dB4 = dither(dB, bayer4, 4, base - 20);
+          const dC8 = dither(dC, bayer8, 8, base + 20);
+          const dD4 = dither(dD, bayer4, 4, base + 40);
+          // Layer them via screen/difference blends
+          let d = blendPixels(dA2, dB4, w, h, 'screen', bs);
+          d = blendPixels(d,   dC8, w, h, 'difference', bs * 0.7);
+          d = blendPixels(d,   dD4, w, h, 'screen', bs * 0.5);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildBinaryArchaeologyParams, getParams: getBinaryArchaeologyParams, setParams: setBinaryArchaeologyParams, onReroll: onRerollBinaryArchaeology },
       'collage-mask-collage': { label: 'Collage Mask Collage', desc: "Two images collaged into a mosaic grid, then a third used as an edge stencil to cut through the grid — the mosaic surfaces revealed only where C's structure allows.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
         render: (imgs, params, rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -4798,7 +4888,23 @@ import Admin from '../../../layouts/Admin.astro';
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildDissolveCascadeParams, getParams: getDissolveCascadeParams, setParams: setDissolveCascadeParams, onReroll: onRerollDissolveCascade },
       'double-masked-collage': { label: 'Double Masked Collage', desc: 'A double masking sandwich: fragment, edge-mask, scatter-collage, luminance-mask again. Images A and B are Voronoi-fragmented — broken into organic cells.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('double-masked-collage', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'fracture-and-mask': { label: 'Fracture and Mask', desc: 'A shatter-fragment sandwich with edge and luminance masking on either side. Images A and B are shatter-fragmented together — broken into irregular shards.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('fracture-and-mask', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'fracture-and-mask': { label: 'Fracture and Mask', desc: 'A shatter-fragment sandwich with edge and luminance masking on either side. Images A and B are shatter-fragmented together — broken into irregular shards.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const pieces = Math.round(params.pieces ?? 36);
+          const mr = params.mix_ratio ?? 0.55;
+          const f = params.feather ?? 10;
+          // Fragment A and B together into a shattered composite
+          let d = gridFragment(dA, dA, dB, w, h, pieces, mr, rng);
+          // Edge mask the fragment using A's structure → reveal C
+          d = edgeMaskComposite(dA, dC, w, h, params.thresh ?? 110, f, false);
+          // Luma mask the result against D for the second masking layer
+          d = lumaComposite(dA, d, dD, w, h, params.thresh ?? 110, f * 1.5, false);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildFractureAndMaskParams, getParams: getFractureAndMaskParams, setParams: setFractureAndMaskParams, onReroll: onRerollFractureAndMask },
       'gradient-reveal': { label: 'Gradient Reveal', desc: 'A three-stage revelation where each step peels back a different layer. Images A and B are blended at overlay mode, their tonal geometries multiplied together.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -4837,7 +4943,32 @@ import Admin from '../../../layouts/Admin.astro';
           d     = lumaComposite(dA, dD, d, w, h, params.t2 ?? 80, f, false);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildLayeredCutworkParams, getParams: getLayeredCutworkParams, setParams: setLayeredCutworkParams, onReroll: onRerollLayeredCutwork },
-      'letterpress': { label: 'Letterpress', desc: 'Image A is dithered with Atkinson, which creates the tight, typographic dot-and-space pattern that letterpress printing once left in paper. The dither stencil cuts into B.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('letterpress', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'letterpress': { label: 'Letterpress', desc: 'Image A is dithered with Atkinson, which creates the tight, typographic dot-and-space pattern that letterpress printing once left in paper. The dither stencil cuts into B.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const thresh = params.threshold ?? 128;
+          // Bayer 4x4 ordered dither — simulates letterpress dot pattern
+          const bayer = [[ 0, 8, 2,10],[ 12,4,14, 6],[ 3,11, 1, 9],[15, 7,13, 5]];
+          const dithered = new Uint8ClampedArray(w * h * 4);
+          for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+              const i = (y * w + x) * 4;
+              const luma = 0.299 * dA[i] + 0.587 * dA[i+1] + 0.114 * dA[i+2];
+              const bv = (bayer[y % 4][x % 4] / 16) * 255;
+              const v = luma + bv - 128 > thresh ? 255 : 0;
+              dithered[i] = dithered[i+1] = dithered[i+2] = v; dithered[i+3] = 255;
+            }
+          }
+          // The dither stencil (dark = 0) cuts A into B: dark areas of dithered → show B
+          let d = lumaMask(dithered, dB, w, h, 128, params.feather ?? 3, true);
+          // C and D provide background depth: screen C lightly, multiply D
+          d = blendPixels(d, dC, w, h, 'screen', params.screen_str ?? 0.35);
+          d = blendPixels(d, dD, w, h, 'multiply', 0.25);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildLetterpressParams, getParams: getLetterpressParams, setParams: setLetterpressParams, onReroll: onRerollLetterpress },
       'luminance-layers': { label: 'Luminance Layers', desc: 'Four images revealed through four different luminance thresholds of the same reference source. Image A is processed and used as the mask for all four revelations.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -5037,7 +5168,27 @@ import Admin from '../../../layouts/Admin.astro';
           d     = edgeMaskComposite(dA, d, w, h, params.edge_thresh ?? 120, f, false);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildThresholdCascadeParams, getParams: getThresholdCascadeParams, setParams: setThresholdCascadeParams, onReroll: onRerollThresholdCascade },
-      'torn-collage': { label: 'Torn Collage', desc: 'Four images shattered like a mirror dropped on concrete. Each fragment gets the sickly hum of magnetic tape artifacts before being scattered into a loosely tiled mosaic.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('torn-collage', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'torn-collage': { label: 'Torn Collage', desc: 'Four images shattered like a mirror dropped on concrete. Each fragment gets the sickly hum of magnetic tape artifacts before being scattered into a loosely tiled mosaic.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const pieces = Math.round(params.pieces ?? 30);
+          const mr = params.mix_ratio ?? 0.55;
+          const sh = Math.round(params.shift ?? 18);
+          const sp = params.scan_spacing ?? 4;
+          const so = params.scan_opacity ?? 0.35;
+          // Each source gets its own tape artifact treatment before fragmentation
+          const tA = channelShift(scanLines(dA, w, h, sp,   so),       w, h,  sh,              -Math.round(sh * 0.6));
+          const tB = channelShift(scanLines(dB, w, h, sp+1, so * 0.9), w, h, -Math.round(sh * 0.8), Math.round(sh * 0.5));
+          const tC = channelShift(scanLines(dC, w, h, sp,   so * 1.1), w, h,  Math.round(sh * 0.4), -sh);
+          const tD = channelShift(scanLines(dD, w, h, sp-1, so * 0.8), w, h, -Math.round(sh * 0.5), Math.round(sh * 0.7));
+          // Scatter all four into a shattered mosaic
+          let d = gridFragment(tA, tA, tB, w, h, pieces, mr, rng);
+          d = gridFragment(d, tC, tD, w, h, pieces, mr * 0.75, rng);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildTornCollageParams, getParams: getTornCollageParams, setParams: setTornCollageParams, onReroll: onRerollTornCollage },
       'wobble-curvyscreen-dither': { label: 'Wobble Curvy Screen Dither', desc: 'Four images: two wobble-eyed into drifting off-axis rings, then curvy-line-screened against a third. The fourth image provides an edge mask over the result.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('wobble-curvyscreen-dither', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'pca-quad': { label: 'PCA Quad', desc: 'Four images PCA-decomposed to varying depths — stripped to structural ghosts — then composited through three-level stencil. The brightness bands fill with different ghost images.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('pca-quad', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'quad-sort-destroy': { label: 'Quad Sort Destroy', desc: 'Four images three-level stenciled — brightness bands filling with different sources — then the composite is pixel-sorted and byte-corrupted. Three-source stencil meets total annihilation.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
@@ -5055,7 +5206,19 @@ import Admin from '../../../layouts/Admin.astro';
           d     = channelShift(d, w, h, sr, -Math.round(sr * 0.7));
           return [{ canvas: jpegDestroy(pixelsToCanvas(d, w, h), params.quality ?? 4, 3), mimeType: 'image/jpeg' }];
         }, buildParams: buildQuadSortDestroyParams, getParams: getQuadSortDestroyParams, setParams: setQuadSortDestroyParams, onReroll: onRerollQuadSortDestroy },
-      'stencil-into-displacement': { label: 'Stencil Into Displacement', desc: 'Four images in two stages: first, Otsu stencil composites images A and B using C as the mask. Then the stencil composite is displacement-warped against the fourth.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('stencil-into-displacement', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'stencil-into-displacement': { label: 'Stencil Into Displacement', desc: 'Four images in two stages: first, Otsu stencil composites images A and B using C as the mask. Then the stencil composite is displacement-warped against the fourth.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          // Stage 1: C's luma stencil composites A and B
+          let d = lumaComposite(dC, dA, dB, w, h, params.thresh ?? 120, params.feather ?? 10, false);
+          // Stage 2: swirl-distort the composite, then blend with D
+          d = swirlDistort(d, w, h, params.swirl ?? 1.0);
+          d = blendPixels(d, dD, w, h, 'overlay', params.blend_str ?? 0.45);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildStencilIntoDisplacementParams, getParams: getStencilIntoDisplacementParams, setParams: setStencilIntoDisplacementParams, onReroll: onRerollStencilIntoDisplacement },
       'kaleidoscope-cyanotype-pca': { label: 'Kaleidoscope Cyanotype PCA', desc: 'Four images: two kaleidoscoped into mandala patterns, PCA-decomposed to structural ghosts, then cyanotype-stenciled. The kaleidoscope symmetry dissolves into prussian blue.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('kaleidoscope-cyanotype-pca', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'lathe-silver-sonify': { label: 'Lathe Silver Sonify', desc: 'Four images: two lathe-turned into agate ring surfaces, silver-stenciled through a third. The silver-toned lathe composite is sonified — converted to audio and back.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('lathe-silver-sonify', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
     };
@@ -7561,6 +7724,343 @@ import Admin from '../../../layouts/Admin.astro';
     }
     function onRerollShiftedLinescreen(rng: () => number) {
       setShiftedLinescreenParams({ shift: Math.round(lerp(5, 70, rng())), screen_str: parseFloat(lerp(0.15, 0.7, rng()).toFixed(2)) });
+    }
+
+    // ── data-rot params ─────────────────────────────────────────────────────────
+    function buildDataRotParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="dr-quality">JPEG Quality <span class="pt-val" id="dr-quality-val">3</span></label>
+          <input class="pt-range" type="range" id="dr-quality" min="1" max="20" step="1" value="3" />
+          <div class="pt-range-hints"><span>destroyed</span><span>cleaner</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="dr-iterations">Iterations <span class="pt-val" id="dr-iterations-val">6</span></label>
+          <input class="pt-range" type="range" id="dr-iterations" min="2" max="15" step="1" value="6" />
+          <div class="pt-range-hints"><span>light</span><span>deep rot</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="dr-shift">Channel Shift <span class="pt-val" id="dr-shift-val">20</span></label>
+          <input class="pt-range" type="range" id="dr-shift" min="0" max="60" step="1" value="20" />
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['dr-quality','dr-iterations','dr-shift'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getDataRotParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { quality: get('dr-quality','3'), iterations: get('dr-iterations','6'), shift: get('dr-shift','20') };
+    }
+    function setDataRotParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.quality    !== undefined) set('dr-quality',    p.quality);
+      if (p.iterations !== undefined) set('dr-iterations', p.iterations);
+      if (p.shift      !== undefined) set('dr-shift',      p.shift);
+    }
+    function onRerollDataRot(rng: () => number) {
+      setDataRotParams({ quality: Math.round(lerp(1, 12, rng())), iterations: Math.round(lerp(2, 14, rng())), shift: Math.round(lerp(5, 55, rng())) });
+    }
+
+    // ── holographic-interference params ─────────────────────────────────────────
+    function buildHolographicInterferenceParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="hi-hp-radius">Highpass Radius <span class="pt-val" id="hi-hp-radius-val">5</span></label>
+          <input class="pt-range" type="range" id="hi-hp-radius" min="1" max="14" step="1" value="5" />
+          <div class="pt-range-hints"><span>fine</span><span>coarse</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="hi-shift">Aberration Shift <span class="pt-val" id="hi-shift-val">25</span></label>
+          <input class="pt-range" type="range" id="hi-shift" min="2" max="60" step="1" value="25" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="hi-screen-str">Screen Strength <span class="pt-val" id="hi-screen-str-val">0.55</span></label>
+          <input class="pt-range" type="range" id="hi-screen-str" min="0" max="1" step="0.01" value="0.55" />
+          <div class="pt-range-hints"><span>off</span><span>full</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['hi-hp-radius','hi-shift','hi-screen-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getHolographicInterferenceParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { hp_radius: get('hi-hp-radius','5'), shift: get('hi-shift','25'), screen_str: get('hi-screen-str','0.55') };
+    }
+    function setHolographicInterferenceParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.hp_radius  !== undefined) set('hi-hp-radius',  p.hp_radius);
+      if (p.shift      !== undefined) set('hi-shift',      p.shift);
+      if (p.screen_str !== undefined) set('hi-screen-str', p.screen_str);
+    }
+    function onRerollHolographicInterference(rng: () => number) {
+      setHolographicInterferenceParams({ hp_radius: Math.round(lerp(2, 12, rng())), shift: Math.round(lerp(5, 55, rng())), screen_str: parseFloat(lerp(0.2, 0.85, rng()).toFixed(2)) });
+    }
+
+    // ── letterpress params ───────────────────────────────────────────────────────
+    function buildLetterpressParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="lp-threshold">Dither Threshold <span class="pt-val" id="lp-threshold-val">128</span></label>
+          <input class="pt-range" type="range" id="lp-threshold" min="40" max="220" step="1" value="128" />
+          <div class="pt-range-hints"><span>dark</span><span>light</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="lp-feather">Stencil Feather <span class="pt-val" id="lp-feather-val">3</span></label>
+          <input class="pt-range" type="range" id="lp-feather" min="0" max="20" step="1" value="3" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="lp-screen-str">Screen Strength <span class="pt-val" id="lp-screen-str-val">0.35</span></label>
+          <input class="pt-range" type="range" id="lp-screen-str" min="0" max="0.8" step="0.01" value="0.35" />
+          <div class="pt-range-hints"><span>off</span><span>full</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['lp-threshold','lp-feather','lp-screen-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getLetterpressParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { threshold: get('lp-threshold','128'), feather: get('lp-feather','3'), screen_str: get('lp-screen-str','0.35') };
+    }
+    function setLetterpressParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.threshold  !== undefined) set('lp-threshold',  p.threshold);
+      if (p.feather    !== undefined) set('lp-feather',    p.feather);
+      if (p.screen_str !== undefined) set('lp-screen-str', p.screen_str);
+    }
+    function onRerollLetterpress(rng: () => number) {
+      setLetterpressParams({ threshold: Math.round(lerp(60, 200, rng())), feather: Math.round(lerp(0, 16, rng())), screen_str: parseFloat(lerp(0.1, 0.7, rng()).toFixed(2)) });
+    }
+
+    // ── stencil-into-displacement params ────────────────────────────────────────
+    function buildStencilIntoDisplacementParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="sid-thresh">Stencil Threshold <span class="pt-val" id="sid-thresh-val">120</span></label>
+          <input class="pt-range" type="range" id="sid-thresh" min="40" max="220" step="1" value="120" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sid-feather">Feather <span class="pt-val" id="sid-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="sid-feather" min="0" max="30" step="1" value="10" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sid-swirl">Swirl Angle <span class="pt-val" id="sid-swirl-val">1.00</span></label>
+          <input class="pt-range" type="range" id="sid-swirl" min="0" max="4" step="0.05" value="1.00" />
+          <div class="pt-range-hints"><span>none</span><span>extreme</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sid-blend-str">D Blend <span class="pt-val" id="sid-blend-str-val">0.45</span></label>
+          <input class="pt-range" type="range" id="sid-blend-str" min="0" max="1" step="0.01" value="0.45" />
+          <div class="pt-range-hints"><span>off</span><span>full</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['sid-thresh','sid-feather','sid-swirl','sid-blend-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getStencilIntoDisplacementParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { thresh: get('sid-thresh','120'), feather: get('sid-feather','10'), swirl: get('sid-swirl','1.00'), blend_str: get('sid-blend-str','0.45') };
+    }
+    function setStencilIntoDisplacementParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.thresh    !== undefined) set('sid-thresh',    p.thresh);
+      if (p.feather   !== undefined) set('sid-feather',   p.feather);
+      if (p.swirl     !== undefined) set('sid-swirl',     p.swirl);
+      if (p.blend_str !== undefined) set('sid-blend-str', p.blend_str);
+    }
+    function onRerollStencilIntoDisplacement(rng: () => number) {
+      setStencilIntoDisplacementParams({ thresh: Math.round(lerp(50, 200, rng())), feather: Math.round(lerp(4, 24, rng())), swirl: parseFloat(lerp(0.2, 3.5, rng()).toFixed(2)), blend_str: parseFloat(lerp(0.2, 0.8, rng()).toFixed(2)) });
+    }
+
+    // ── fracture-and-mask params ─────────────────────────────────────────────────
+    function buildFractureAndMaskParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="fm-pieces">Fragment Count <span class="pt-val" id="fm-pieces-val">36</span></label>
+          <input class="pt-range" type="range" id="fm-pieces" min="9" max="100" step="1" value="36" />
+          <div class="pt-range-hints"><span>coarse</span><span>fine</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="fm-mix-ratio">Mix Ratio <span class="pt-val" id="fm-mix-ratio-val">0.55</span></label>
+          <input class="pt-range" type="range" id="fm-mix-ratio" min="0.1" max="0.9" step="0.01" value="0.55" />
+          <div class="pt-range-hints"><span>sparse</span><span>dense</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="fm-thresh">Mask Threshold <span class="pt-val" id="fm-thresh-val">110</span></label>
+          <input class="pt-range" type="range" id="fm-thresh" min="30" max="220" step="1" value="110" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="fm-feather">Feather <span class="pt-val" id="fm-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="fm-feather" min="0" max="30" step="1" value="10" />
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['fm-pieces','fm-mix-ratio','fm-thresh','fm-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getFractureAndMaskParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { pieces: get('fm-pieces','36'), mix_ratio: get('fm-mix-ratio','0.55'), thresh: get('fm-thresh','110'), feather: get('fm-feather','10') };
+    }
+    function setFractureAndMaskParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.pieces    !== undefined) set('fm-pieces',    p.pieces);
+      if (p.mix_ratio !== undefined) set('fm-mix-ratio', p.mix_ratio);
+      if (p.thresh    !== undefined) set('fm-thresh',    p.thresh);
+      if (p.feather   !== undefined) set('fm-feather',   p.feather);
+    }
+    function onRerollFractureAndMask(rng: () => number) {
+      setFractureAndMaskParams({ pieces: Math.round(lerp(9, 100, rng())), mix_ratio: parseFloat(lerp(0.2, 0.85, rng()).toFixed(2)), thresh: Math.round(lerp(50, 200, rng())), feather: Math.round(lerp(4, 24, rng())) });
+    }
+
+    // ── tectonic-overlap params ──────────────────────────────────────────────────
+    function buildTectonicOverlapParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="to-pieces">Fragment Count <span class="pt-val" id="to-pieces-val">25</span></label>
+          <input class="pt-range" type="range" id="to-pieces" min="9" max="81" step="1" value="25" />
+          <div class="pt-range-hints"><span>coarse</span><span>fine</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="to-mix-ratio">Mix Ratio <span class="pt-val" id="to-mix-ratio-val">0.50</span></label>
+          <input class="pt-range" type="range" id="to-mix-ratio" min="0.1" max="0.9" step="0.01" value="0.50" />
+          <div class="pt-range-hints"><span>sparse</span><span>dense</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="to-shift">Fault Shift <span class="pt-val" id="to-shift-val">25</span></label>
+          <input class="pt-range" type="range" id="to-shift" min="0" max="60" step="1" value="25" />
+          <div class="pt-range-hints"><span>none</span><span>extreme</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['to-pieces','to-mix-ratio','to-shift'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getTectonicOverlapParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { pieces: get('to-pieces','25'), mix_ratio: get('to-mix-ratio','0.50'), shift: get('to-shift','25') };
+    }
+    function setTectonicOverlapParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.pieces    !== undefined) set('to-pieces',    p.pieces);
+      if (p.mix_ratio !== undefined) set('to-mix-ratio', p.mix_ratio);
+      if (p.shift     !== undefined) set('to-shift',     p.shift);
+    }
+    function onRerollTectonicOverlap(rng: () => number) {
+      setTectonicOverlapParams({ pieces: Math.round(lerp(9, 81, rng())), mix_ratio: parseFloat(lerp(0.2, 0.8, rng()).toFixed(2)), shift: Math.round(lerp(5, 55, rng())) });
+    }
+
+    // ── torn-collage params ──────────────────────────────────────────────────────
+    function buildTornCollageParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="tc-pieces">Fragment Count <span class="pt-val" id="tc-pieces-val">30</span></label>
+          <input class="pt-range" type="range" id="tc-pieces" min="9" max="64" step="1" value="30" />
+          <div class="pt-range-hints"><span>coarse</span><span>fine</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="tc-mix-ratio">Mix Ratio <span class="pt-val" id="tc-mix-ratio-val">0.55</span></label>
+          <input class="pt-range" type="range" id="tc-mix-ratio" min="0.1" max="0.9" step="0.01" value="0.55" />
+          <div class="pt-range-hints"><span>sparse</span><span>dense</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="tc-shift">Tape Shift <span class="pt-val" id="tc-shift-val">18</span></label>
+          <input class="pt-range" type="range" id="tc-shift" min="0" max="50" step="1" value="18" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="tc-scan-spacing">Scan Spacing <span class="pt-val" id="tc-scan-spacing-val">4</span></label>
+          <input class="pt-range" type="range" id="tc-scan-spacing" min="2" max="10" step="1" value="4" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="tc-scan-opacity">Scan Opacity <span class="pt-val" id="tc-scan-opacity-val">0.35</span></label>
+          <input class="pt-range" type="range" id="tc-scan-opacity" min="0" max="0.7" step="0.01" value="0.35" />
+          <div class="pt-range-hints"><span>off</span><span>heavy</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['tc-pieces','tc-mix-ratio','tc-shift','tc-scan-spacing','tc-scan-opacity'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getTornCollageParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { pieces: get('tc-pieces','30'), mix_ratio: get('tc-mix-ratio','0.55'), shift: get('tc-shift','18'), scan_spacing: get('tc-scan-spacing','4'), scan_opacity: get('tc-scan-opacity','0.35') };
+    }
+    function setTornCollageParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.pieces      !== undefined) set('tc-pieces',      p.pieces);
+      if (p.mix_ratio   !== undefined) set('tc-mix-ratio',   p.mix_ratio);
+      if (p.shift       !== undefined) set('tc-shift',       p.shift);
+      if (p.scan_spacing !== undefined) set('tc-scan-spacing', p.scan_spacing);
+      if (p.scan_opacity !== undefined) set('tc-scan-opacity', p.scan_opacity);
+    }
+    function onRerollTornCollage(rng: () => number) {
+      setTornCollageParams({ pieces: Math.round(lerp(9, 60, rng())), mix_ratio: parseFloat(lerp(0.2, 0.85, rng()).toFixed(2)), shift: Math.round(lerp(5, 45, rng())), scan_spacing: Math.round(lerp(2, 9, rng())), scan_opacity: parseFloat(lerp(0.1, 0.65, rng()).toFixed(2)) });
+    }
+
+    // ── binary-archaeology params ────────────────────────────────────────────────
+    function buildBinaryArchaeologyParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="ba-threshold">Base Threshold <span class="pt-val" id="ba-threshold-val">128</span></label>
+          <input class="pt-range" type="range" id="ba-threshold" min="40" max="220" step="1" value="128" />
+          <div class="pt-range-hints"><span>dark</span><span>light</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ba-blend-str">Blend Strength <span class="pt-val" id="ba-blend-str-val">0.55</span></label>
+          <input class="pt-range" type="range" id="ba-blend-str" min="0" max="1" step="0.01" value="0.55" />
+          <div class="pt-range-hints"><span>off</span><span>full</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['ba-threshold','ba-blend-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getBinaryArchaeologyParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { threshold: get('ba-threshold','128'), blend_str: get('ba-blend-str','0.55') };
+    }
+    function setBinaryArchaeologyParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.threshold !== undefined) set('ba-threshold', p.threshold);
+      if (p.blend_str !== undefined) set('ba-blend-str', p.blend_str);
+    }
+    function onRerollBinaryArchaeology(rng: () => number) {
+      setBinaryArchaeologyParams({ threshold: Math.round(lerp(50, 210, rng())), blend_str: parseFloat(lerp(0.2, 0.9, rng()).toFixed(2)) });
     }
 
     // ─── Native canvas effect helpers ──────────────────────────────────────────
