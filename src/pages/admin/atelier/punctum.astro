@@ -4422,7 +4422,17 @@ import Admin from '../../../layouts/Admin.astro';
           d = channelShift(d, w, h, params.shift_r ?? 35, params.shift_b ?? -30);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildSimpleCutoutParams, getParams: getSimpleCutoutParams, setParams: setSimpleCutoutParams, onReroll: onRerollSimpleCutout },
-      'spectral-merge': { label: 'Spectral Merge', desc: 'Two signals in frequency space, destructively interfered. Each image is spectrally filtered to different ranges. Difference blending cancels shared frequencies.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('spectral-merge', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'spectral-merge': { label: 'Spectral Merge', desc: 'Two signals in frequency space, destructively interfered. Each image is spectrally filtered to different ranges. Difference blending cancels shared frequencies.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!);
+          const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const hpA = highpassRGB(dA, w, h, params.hp_r_a ?? 4);
+          const hpB = highpassRGB(dB, w, h, params.hp_r_b ?? 8);
+          let d = blendPixels(hpA, hpB, w, h, 'difference', params.strength ?? 0.8);
+          d = lumaMask(d, dA, w, h, params.luma_thresh ?? 128, params.feather ?? 10, false);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildSpectralMergeParams, getParams: getSpectralMergeParams, setParams: setSpectralMergeParams, onReroll: onRerollSpectralMerge },
       'two-face': { label: 'Two Face', desc: "A luminance mask splits image A at its median brightness — the bright half stays A, the dark half becomes B. Auto-normalization means threshold=128 always hits the median.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -4453,25 +4463,236 @@ import Admin from '../../../layouts/Admin.astro';
       'acid-wash': { label: 'Acid Wash', desc: 'Three images run through spectral transformation — their frequencies scrambled and redistributed — before being multiplied together.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('acid-wash', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'broadcast-static': { label: 'Broadcast Static', desc: 'Three images converted to sound and back — each through a different acoustic treatment, each emerging distorted in its own frequency range.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('broadcast-static', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'data-rot': { label: 'Data Rot', desc: 'Three images subjected to byte-level corruption before any composition — the damage is baked in from the start, not applied as finish.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('data-rot', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'edge-ghosts': { label: 'Edge Ghosts', desc: 'Phantom outlines from one image haunting another. Edge detection extracts the structural skeleton of each source. Two rounds of edge-masking create layered hauntings.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('edge-ghosts', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'exquisite-corpse': { label: 'Exquisite Corpse', desc: 'The surrealist parlor game. Three images divided into horizontal strips. Each source gets different pre-processing to heighten the disjunction. Seam carving warps the fault lines.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('exquisite-corpse', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'edge-ghosts': { label: 'Edge Ghosts', desc: 'Phantom outlines from one image haunting another. Edge detection extracts the structural skeleton of each source. Two rounds of edge-masking create layered hauntings.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!);
+          const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!);
+          const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const hpA = highpassRGB(dA, w, h, params.hp_radius ?? 4);
+          let d = edgeMaskComposite(hpA, dB, w, h, params.thresh1 ?? 120, params.feather ?? 12, false);
+          const shiftedC = channelShift(dC, w, h, params.shift_r ?? 25, params.shift_b ?? -20);
+          d = edgeMaskComposite(d, shiftedC, w, h, params.thresh2 ?? 100, params.feather ?? 12, true);
+          d = channelShift(d, w, h, Math.round((params.shift_r ?? 25) * 0.5), Math.round((params.shift_b ?? -20) * 0.5));
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildEdgeGhostsParams, getParams: getEdgeGhostsParams, setParams: setEdgeGhostsParams, onReroll: onRerollEdgeGhosts },
+      'exquisite-corpse': { label: 'Exquisite Corpse', desc: 'The surrealist parlor game. Three images divided into horizontal strips. Each source gets different pre-processing to heighten the disjunction. Seam carving warps the fault lines.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!);
+          const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!);
+          const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          // Pre-process each source differently
+          const pA = pixelSort(dA, w, h, params.sort_thresh ?? 70, 'up');
+          const shiftAmt = Math.round(params.shift ?? 20);
+          const pB = channelShift(dB, w, h, shiftAmt, -shiftAmt);
+          const pC = highpassRGB(dC, w, h, 5);
+          // Assign horizontal strips to sources via rng-shuffled order
+          const pieces = Math.max(3, Math.round(params.pieces ?? 9));
+          const stripH = Math.max(1, Math.floor(h / pieces));
+          const sources = [pA, pB, pC];
+          // Shuffle source assignment per strip
+          const out = new Uint8ClampedArray(w * h * 4);
+          for (let strip = 0; strip < pieces; strip++) {
+            const srcIdx = Math.floor(rng() * 3);
+            const src = sources[srcIdx];
+            const yStart = strip * stripH;
+            const yEnd = strip === pieces - 1 ? h : Math.min(h, yStart + stripH);
+            for (let y = yStart; y < yEnd; y++) {
+              for (let x = 0; x < w; x++) {
+                const i = (y * w + x) * 4;
+                out[i]   = src[i];
+                out[i+1] = src[i+1];
+                out[i+2] = src[i+2];
+                out[i+3] = 255;
+              }
+            }
+          }
+          return [{ canvas: pixelsToCanvas(out, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildExquisiteCorpseParams, getParams: getExquisiteCorpseParams, setParams: setExquisiteCorpseParams, onReroll: onRerollExquisiteCorpse },
       'fossil-record': { label: 'Fossil Record', desc: 'Geological strata. Each image PCA-decomposed to different component counts. Opacity-blended as layers like sedimentary rock. Dithering creates stone textures.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('fossil-record', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'holographic-interference': { label: 'Holographic Interference', desc: 'Three images processed through spectral decomposition and channel aberration, then stacked via difference and screen blending to simulate holographic interference.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('holographic-interference', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'mask-and-glitch': { label: 'Mask and Glitch', desc: "Image A is edge-masked onto B, producing a clean structural composite. That composite is then run through CRT/VHS processing — scan lines, color bleed.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('mask-and-glitch', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'mask-and-glitch': { label: 'Mask and Glitch', desc: "Image A is edge-masked onto B, producing a clean structural composite. That composite is then run through CRT/VHS processing — scan lines, color bleed.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!);
+          const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!);
+          const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          let d = edgeMaskComposite(dA, dB, w, h, params.thresh1 ?? 120, params.feather ?? 10, false);
+          d = scanLines(d, w, h, params.scan_spacing ?? 4, params.scan_opacity ?? 0.45);
+          d = channelShift(d, w, h, params.shift_r ?? 30, params.shift_b ?? -25);
+          d = edgeMaskComposite(d, dC, w, h, params.thresh2 ?? 110, params.feather ?? 10, true);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildMaskAndGlitchParams, getParams: getMaskAndGlitchParams, setParams: setMaskAndGlitchParams, onReroll: onRerollMaskAndGlitch },
       'sediment-core': { label: 'Sediment Core', desc: 'Three images arranged as horizontal strata — the slow accumulation of time rendered as a geological cross-section pulled from the earth. Seam carving warps the layers.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('sediment-core', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'signal-bleed': { label: 'Signal Bleed', desc: 'Three VHS signals bleeding into each other on a bad splitter. Each source gets its own flavor of analog decay. Vertical strip collage interleaves the damaged feeds.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('signal-bleed', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'sorted-mask': { label: 'Sorted Mask', desc: "Image A is pixel-sorted by brightness, generating long streaks. A luminance mask then uses the sorted A's own brightness to composite against B.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('sorted-mask', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'signal-bleed': { label: 'Signal Bleed', desc: 'Three VHS signals bleeding into each other on a bad splitter. Each source gets its own flavor of analog decay. Vertical strip collage interleaves the damaged feeds.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!);
+          const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!);
+          const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const ss = Math.round(params.shift_strength ?? 30);
+          // Each source gets its own analog decay
+          const pA = channelShift(scanLines(dA, w, h, 3, params.scan_opacity ?? 0.4), w, h, ss, -Math.round(ss * 0.7));
+          const pB = channelShift(scanLines(dB, w, h, 4, params.scan_opacity ?? 0.4), w, h, -Math.round(ss * 0.8), Math.round(ss * 0.6));
+          const pC = scanLines(channelShift(dC, w, h, Math.round(ss * 0.5), -Math.round(ss * 0.4)), w, h, 5, params.scan_opacity ?? 0.4);
+          // Vertical strip interleave with rng-determined widths
+          const strips = Math.max(4, Math.round(params.strip_count ?? 12));
+          const sources = [pA, pB, pC];
+          const stripW = Math.max(1, Math.floor(w / strips));
+          const out = new Uint8ClampedArray(w * h * 4);
+          for (let strip = 0; strip < strips; strip++) {
+            const srcIdx = Math.floor(rng() * 3);
+            const src = sources[srcIdx];
+            const xStart = strip * stripW;
+            const xEnd = strip === strips - 1 ? w : Math.min(w, xStart + stripW);
+            for (let y = 0; y < h; y++) {
+              for (let x = xStart; x < xEnd; x++) {
+                const i = (y * w + x) * 4;
+                out[i]   = src[i];
+                out[i+1] = src[i+1];
+                out[i+2] = src[i+2];
+                out[i+3] = 255;
+              }
+            }
+          }
+          const finalShift = Math.round(params.final_shift ?? 15);
+          const result = channelShift(out, w, h, finalShift, -finalShift);
+          return [{ canvas: pixelsToCanvas(result, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildSignalBleedParams, getParams: getSignalBleedParams, setParams: setSignalBleedParams, onReroll: onRerollSignalBleed },
+      'sorted-mask': { label: 'Sorted Mask', desc: "Image A is pixel-sorted by brightness, generating long streaks. A luminance mask then uses the sorted A's own brightness to composite against B.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!);
+          const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!);
+          const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const sortedA = pixelSort(dA, w, h, params.sort_thresh ?? 70, 'up');
+          // Luma mask: sorted A bright areas → show C; dark areas → show B
+          let d = lumaMask(sortedA, dB, w, h, params.luma_thresh ?? 110, 8, false);
+          // Rng-based column interleave with C
+          const colStep = Math.max(4, Math.round(w / 20));
+          for (let x = 0; x < w; x += colStep) {
+            if (rng() < 0.3) {
+              const xEnd = Math.min(w, x + colStep);
+              for (let y = 0; y < h; y++) {
+                for (let cx = x; cx < xEnd; cx++) {
+                  const i = (y * w + cx) * 4;
+                  d[i]   = dC[i];
+                  d[i+1] = dC[i+1];
+                  d[i+2] = dC[i+2];
+                }
+              }
+            }
+          }
+          // Edge mask final pass — A's edges reclaim some territory
+          d = edgeMaskComposite(dA, d, w, h, params.edge_thresh ?? 100, params.feather ?? 10, true);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildSortedMaskParams, getParams: getSortedMaskParams, setParams: setSortedMaskParams, onReroll: onRerollSortedMask },
       'spectral-stencil': { label: 'Spectral Stencil', desc: 'Image A is bandpass-filtered in frequency space, stripping its low and high frequencies to leave only the mid-range structure — a ghost of the original used as stencil.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('spectral-stencil', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'triple-mask': { label: 'Triple Mask', desc: "Three images, two mask operations. First A's edges cut into B, producing a composite. Then that composite's own edges cut into C.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('triple-mask', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'triple-mask': { label: 'Triple Mask', desc: "Three images, two mask operations. First A's edges cut into B, producing a composite. Then that composite's own edges cut into C.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!);
+          const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!);
+          const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          // First mask: A's edges → composite against B
+          let d = edgeMaskComposite(dA, dB, w, h, params.thresh1 ?? 125, params.feather ?? 10, false);
+          // Second mask: composite's own luma → composite against C
+          d = lumaMask(d, dC, w, h, params.thresh2 ?? 130, params.feather ?? 10, false);
+          d = channelShift(d, w, h, params.shift_r ?? 25, params.shift_b ?? -20);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildTripleMaskParams, getParams: getTripleMaskParams, setParams: setTripleMaskParams, onReroll: onRerollTripleMask },
       'bullseye-cyanotype': { label: 'Bullseye Cyanotype', desc: 'Two images bullseyed — concentric rings cut and independently rotated — then all three composited through cyanotype stencil. The ring patterns get prussian blue toning.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('bullseye-cyanotype', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'curvy-corruption': { label: 'Curvy Corruption', desc: 'Three images composited through edge-following curvy line screens, then the result is byte-corrupted and CRT/VHS filtered.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('curvy-corruption', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'cyanotype-corruption': { label: 'Cyanotype Corruption', desc: 'Three images composited through cyanotype stencil — prussian blue toning with highlight bloom — then the composite is byte-corrupted and channel-shifted.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('cyanotype-corruption', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'cyanotype-corruption': { label: 'Cyanotype Corruption', desc: 'Three images composited through cyanotype stencil — prussian blue toning with highlight bloom — then the composite is byte-corrupted and channel-shifted.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const bs = params.blue_str ?? 0.65;
+          // Step 1: edge-stencil A → B (dark areas of A reveal B)
+          let d = edgeMaskComposite(dA, dB, w, h, params.thresh ?? 110, params.feather ?? 10, false);
+          // Step 2: prussian blue toning — blend toward (10, 36, 106) prussian blue
+          const prussian = solidColor(w, h, 10, 36, 106);
+          d = blendPixels(d, prussian, w, h, 'screen', bs * 0.5);
+          // Step 3: overlay C for highlight bloom (C brightens the highlights)
+          d = blendPixels(d, dC, w, h, 'overlay', 0.35);
+          // Step 4: channelShift for corruption
+          const sr = Math.round(params.shift_r ?? 25);
+          d = channelShift(d, w, h, sr, -Math.round(sr * 0.6));
+          // Step 5: jpegDestroy for cyanotype grain texture
+          const q = params.quality ?? 5;
+          return [{ canvas: jpegDestroy(pixelsToCanvas(d, w, h), q, 3), mimeType: 'image/jpeg' }];
+        }, buildParams: buildCyanotypeCorruptionParams, getParams: getCyanotypeCorruptionParams, setParams: setCyanotypeCorruptionParams, onReroll: onRerollCyanotypeCorruption },
       'reducedscreen-datamosh': { label: 'Reduced Screen Datamosh', desc: 'Three images composited through adaptive-frequency line screens — finer lines in detail regions, coarser in flat areas — then datamoshed.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('reducedscreen-datamosh', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'shifted-linescreen': { label: 'Shifted Line Screen', desc: 'Three images channel-shifted until their color registers separate, then composited through parallel line screen stencils. The misregistered colors show through.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('shifted-linescreen', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'shifted-linescreen': { label: 'Shifted Line Screen', desc: 'Three images channel-shifted until their color registers separate, then composited through parallel line screen stencils. The misregistered colors show through.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const sh = Math.round(params.shift ?? 30);
+          // Each source gets a distinct misregistration
+          const pA = channelShift(dA, w, h,  sh,              -Math.round(sh * 0.5));
+          const pB = channelShift(dB, w, h, -Math.round(sh * 0.7), Math.round(sh * 0.8));
+          const pC = channelShift(dC, w, h,  Math.round(sh * 0.4), -sh);
+          // 1px horizontal strip interleave across 3 sources
+          const out = new Uint8ClampedArray(w * h * 4);
+          for (let y = 0; y < h; y++) {
+            const src = y % 3 === 0 ? pA : y % 3 === 1 ? pB : pC;
+            for (let x = 0; x < w; x++) {
+              const i = (y * w + x) * 4;
+              out[i] = src[i]; out[i+1] = src[i+1]; out[i+2] = src[i+2]; out[i+3] = 255;
+            }
+          }
+          // Screen blend original A back to restore image density
+          const ss = params.screen_str ?? 0.40;
+          const d = blendPixels(out, dA, w, h, 'screen', ss);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildShiftedLinescreenParams, getParams: getShiftedLinescreenParams, setParams: setShiftedLinescreenParams, onReroll: onRerollShiftedLinescreen },
       'sixshooter-linescreen': { label: 'Six Shooter Line Screen', desc: 'Two images six-shootered — six circular regions cut, shuffled, and rotated — then composited through parallel line screen stencil. The scattered circular displacements show through.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('sixshooter-linescreen', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'sorted-displacement': { label: 'Sorted Displacement', desc: 'Two images pixel-sorted to extreme thresholds — their surfaces sheared into vertical streaks — then displacement-stenciled against a third.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('sorted-displacement', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'sorted-displacement': { label: 'Sorted Displacement', desc: 'Two images pixel-sorted to extreme thresholds — their surfaces sheared into vertical streaks — then displacement-stenciled against a third.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const st = params.sort_thresh ?? 40;
+          // Sort both sources
+          const sA = pixelSort(dA, w, h, st, false);
+          const sB = pixelSort(dB, w, h, Math.min(st + 20, 120), false);
+          // Screen the two sorted layers together
+          let d = blendPixels(sA, sB, w, h, 'screen', 0.6);
+          // Swirl the composite
+          d = swirlDistort(d, w, h, params.swirl ?? 1.2);
+          // Edge stencil: where the swirled composite has edges, show C; otherwise keep it
+          d = edgeMaskComposite(d, dC, w, h, params.thresh ?? 110, params.feather ?? 10, false);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildSortedDisplacementParams, getParams: getSortedDisplacementParams, setParams: setSortedDisplacementParams, onReroll: onRerollSortedDisplacement },
       'spectral-silver': { label: 'Spectral Silver', desc: 'Three images bandpass-filtered in frequency space — stripped to their mid-range structure, ghostly spectral remnants — then composited through silver gelatin stencil.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('spectral-silver', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'vhs-halation': { label: 'VHS Halation', desc: 'Three images CRT/VHS filtered — scan lines, color bleed, tracking errors — then composited through halation edge stencil. The organic grain boundary glows.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('vhs-halation', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'vhs-halation': { label: 'VHS Halation', desc: 'Three images CRT/VHS filtered — scan lines, color bleed, tracking errors — then composited through halation edge stencil. The organic grain boundary glows.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const sh = Math.round(params.shift ?? 20);
+          const sp = params.scan_spacing ?? 4;
+          const so = params.scan_opacity ?? 0.35;
+          const pA = channelShift(scanLines(dA, w, h, sp,   so),           w, h,  sh,            -Math.round(sh * 0.7));
+          const pB = channelShift(scanLines(dB, w, h, sp+1, so),           w, h, -Math.round(sh * 0.8), Math.round(sh * 0.6));
+          const pC = channelShift(scanLines(dC, w, h, sp+2, so * 0.8),     w, h,  Math.round(sh * 0.5), -Math.round(sh * 0.4));
+          // Wide-feather edge composite: where A has edges, show B; otherwise keep A
+          let d = edgeMaskComposite(pA, pB, w, h, params.thresh ?? 100, params.feather ?? 25, false);
+          // Screen C lightly over the composite for halation glow
+          d = blendPixels(d, pC, w, h, 'screen', 0.35);
+          // Final light scan line pass to unify
+          d = scanLines(d, w, h, sp, so * 0.4);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildVhsHalationParams, getParams: getVhsHalationParams, setParams: setVhsHalationParams, onReroll: onRerollVhsHalation },
       'bullethole-silver': { label: 'Bullet Hole Silver', desc: 'Two images riddled with circular punch holes at high chaos — perforated surfaces — then composited through silver gelatin stencil.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('bullethole-silver', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'bullseye-wobble-displacement': { label: 'Bullseye Wobble Displacement', desc: "Double concentric destruction: one image bullseyed into clean rings, another wobble-eyed into drifting off-axis rings. The third image's gradient field displaces the composite.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('bullseye-wobble-displacement', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'halftone-curvyscreen': { label: 'Halftone Curvy Screen', desc: 'Two-pass screen compositing: first halftone dot screen composites two images, then the result and a third image are composited through curvy line screen.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('halftone-curvyscreen', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
@@ -4488,43 +4709,352 @@ import Admin from '../../../layouts/Admin.astro';
       'dream-stencil': { label: 'Dream Stencil', desc: "A is deepdreamed at high intensity until its surface is dense with hallucinated forms. That dreamed surface is used as a hard luminance mask over B, C, and D.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('dream-stencil', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'kaleidoscope-dream-displacement': { label: 'Kaleidoscope Dream Displacement', desc: "Four images: two kaleidoscoped into mandala symmetry, one deepdreamed. The fourth image's gradient displacement tears the dreamed kaleidoscope surface.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('kaleidoscope-dream-displacement', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'neural-mask-cascade': { label: 'Neural Mask Cascade', desc: 'Four images each deepdreamed independently, then chained through a cascade of dream-as-mask operations. Each dreamed surface cuts into the next.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('neural-mask-cascade', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'noise-cathedral': { label: 'Noise Cathedral', desc: 'Three noise masks at escalating thresholds cut random windows between four images, building layered stochastic revelation. Each mask threshold is higher than the last.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('noise-cathedral', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'noise-cathedral': { label: 'Noise Cathedral', desc: 'Three noise masks at escalating thresholds cut random windows between four images, building layered stochastic revelation. Each mask threshold is higher than the last.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const noise = noisePixels(w, h, rng);
+          const feather = params.feather ?? 10;
+          // Band assignment: noise<64→A, 64-128→B, 128-192→C, >192→D
+          let d = lumaComposite(noise, dC, dD, w, h, 192, feather, false); // noise>192→C, else D
+          d = lumaComposite(noise, dB, d,  w, h, 128, feather, false);     // noise>128→B, else prev
+          d = lumaComposite(noise, dA, d,  w, h, 64,  feather, false);     // noise>64→A, else prev
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildNoiseCathedralParams, getParams: getNoiseCathedralParams, setParams: setNoiseCathedralParams, onReroll: onRerollNoiseCathedral },
       'phantom-dream': { label: 'Phantom Dream', desc: 'A and B are both deepdreamed independently. Those two dreamed surfaces are screen-blended together, and the dreamed composite edge-masks against C and D.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('phantom-dream', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'silver-displacement-dream': { label: 'Silver Displacement Dream', desc: 'Four images: one deepdreamed heavily, silver-stenciled with two others. The silver-toned hallucinated surface is then displacement-warped against the fourth.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('silver-displacement-dream', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'tectonic-overlap': { label: 'Tectonic Overlap', desc: 'Continental plates of image data, shifted and overlapping. Four images shattered into irregular polygons, scatter-collaged with rotation. Seam carving warps the fault lines.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('tectonic-overlap', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'binary-archaeology': { label: 'Binary Archaeology', desc: 'Each of the four images is dithered to a different binary palette — different dithering algorithms reducing each to its own distinct pattern of black and white.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('binary-archaeology', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'collage-mask-collage': { label: 'Collage Mask Collage', desc: "Two images collaged into a mosaic grid, then a third used as an edge stencil to cut through the grid — the mosaic surfaces revealed only where C's structure allows.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('collage-mask-collage', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'collage-surgery': { label: 'Collage Surgery', desc: 'Four images cut into strips and edge-masked three times in alternating rounds — each pass strips away context to reveal what lies beneath the surface.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('collage-surgery', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'collage-mask-collage': { label: 'Collage Mask Collage', desc: "Two images collaged into a mosaic grid, then a third used as an edge stencil to cut through the grid — the mosaic surfaces revealed only where C's structure allows.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          // A+B mosaic grid
+          const grid = gridFragment(dA, dA, dB, w, h, Math.round(params.pieces ?? 16), params.mix ?? 0.5, rng);
+          // C's edges as stencil: where C has edges → show grid; elsewhere → show D
+          const cEdges = edgeMap(dC, w, h, params.feather ?? 12);
+          const d = lumaComposite(cEdges, grid, dD, w, h, params.thresh ?? 80, 0, false);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildCollageMaskCollageParams, getParams: getCollageMaskCollageParams, setParams: setCollageMaskCollageParams, onReroll: onRerollCollageMaskCollage },
+      'collage-surgery': { label: 'Collage Surgery', desc: 'Four images cut into strips and edge-masked three times in alternating rounds — each pass strips away context to reveal what lies beneath the surface.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          // Horizontal strip collage: assign each strip round-robin A→B→C→D
+          const strips = Math.max(4, Math.round(params.strips ?? 12));
+          const stripH = Math.max(1, Math.floor(h / strips));
+          const sources = [dA, dB, dC, dD];
+          const collage  = new Uint8ClampedArray(w * h * 4);
+          for (let s = 0; s < strips; s++) {
+            const src  = sources[s % 4];
+            const yStart = s * stripH;
+            const yEnd   = s === strips - 1 ? h : Math.min(h, yStart + stripH);
+            for (let y = yStart; y < yEnd; y++) {
+              for (let x = 0; x < w; x++) {
+                const i = (y * w + x) * 4;
+                collage[i] = src[i]; collage[i+1] = src[i+1]; collage[i+2] = src[i+2]; collage[i+3] = 255;
+              }
+            }
+          }
+          const f = params.feather ?? 8;
+          const th = params.thresh ?? 110;
+          // Three alternating edge masks progressively cutting deeper
+          let d = edgeMaskComposite(dA, collage, w, h, th, f, false);
+          d     = edgeMaskComposite(dB, d,       w, h, th, f + 4, false);
+          d     = edgeMaskComposite(dC, d,       w, h, th, f + 8, false);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildCollageSurgeryParams, getParams: getCollageSurgeryParams, setParams: setCollageSurgeryParams, onReroll: onRerollCollageSurgery },
       'collage-through-glass': { label: 'Collage Through Glass', desc: "Three images are mosaiced into a composite grid. Image D, PCA-reduced to a single structural component, provides a ghostly lens over the mosaic surface.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('collage-through-glass', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'contrast-surgery': { label: 'Contrast Surgery', desc: 'Image A undergoes extreme channel surgery — massive RGB offsets pull its color registers apart until the content nearly dissolves into chromatic aberration.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('contrast-surgery', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'contrast-surgery': { label: 'Contrast Surgery', desc: 'Image A undergoes extreme channel surgery — massive RGB offsets pull its color registers apart until the content nearly dissolves into chromatic aberration.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const surgeryA = channelShift(dA, w, h, params.r_shift ?? 60, params.b_shift ?? -50);
+          const diverge  = blendPixels(surgeryA, dB, w, h, 'difference', 1.0);
+          let d = lumaComposite(diverge, dC, dD, w, h, params.thresh ?? 110, params.feather ?? 8, false);
+          d = blendPixels(d, surgeryA, w, h, 'screen', params.screen_str ?? 0.45);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildContrastSurgeryParams, getParams: getContrastSurgeryParams, setParams: setContrastSurgeryParams, onReroll: onRerollContrastSurgery },
       'cyanotype-bullethole-mask': { label: 'Cyanotype Bullet Hole Mask', desc: 'Four images: two riddled with bullet holes, then cyanotype-stenciled. The result is edge-masked against a fourth image — the bullet-punched cyanotype filtered through structure.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('cyanotype-bullethole-mask', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'displacement-blend-spectral': { label: 'Displacement Blend Spectral', desc: 'Four images: displacement-stenciled, then screen-blended with a fourth. The blended surface is spectral-filtered to strip frequencies. Warped stencil meets spectral void.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('displacement-blend-spectral', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'dissolve-cascade': { label: 'Dissolve Cascade', desc: 'Four images dissolved in waves: screen blend accumulates the light, gradient masking carves the excess, multiply blend deepens the shadows, luminance masking cuts the final form.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('dissolve-cascade', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'dissolve-cascade': { label: 'Dissolve Cascade', desc: 'Four images dissolved in waves: screen blend accumulates the light, gradient masking carves the excess, multiply blend deepens the shadows, luminance masking cuts the final form.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          let d = blendPixels(dA, dB, w, h, 'screen', 1.0);
+          d = lumaComposite(d, d, dC, w, h, params.thresh1 ?? 130, params.feather ?? 10, false);
+          d = blendPixels(d, dD, w, h, 'multiply', params.mult_str ?? 0.5);
+          d = lumaComposite(dA, d, dA, w, h, params.thresh2 ?? 100, params.feather ?? 10, false);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildDissolveCascadeParams, getParams: getDissolveCascadeParams, setParams: setDissolveCascadeParams, onReroll: onRerollDissolveCascade },
       'double-masked-collage': { label: 'Double Masked Collage', desc: 'A double masking sandwich: fragment, edge-mask, scatter-collage, luminance-mask again. Images A and B are Voronoi-fragmented — broken into organic cells.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('double-masked-collage', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'fracture-and-mask': { label: 'Fracture and Mask', desc: 'A shatter-fragment sandwich with edge and luminance masking on either side. Images A and B are shatter-fragmented together — broken into irregular shards.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('fracture-and-mask', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'gradient-reveal': { label: 'Gradient Reveal', desc: 'A three-stage revelation where each step peels back a different layer. Images A and B are blended at overlay mode, their tonal geometries multiplied together.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('gradient-reveal', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'interference-mask': { label: 'Interference Mask', desc: 'Images A and B are blended at difference mode — each pixel becomes the absolute distance between the two images, a map of where they diverge. That divergence becomes a mask.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('interference-mask', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'layered-cutwork': { label: 'Layered Cutwork', desc: "Three sequential rounds of mask then collage then mask: the image accumulates wounds with each pass. First, A's luminance cuts into B — bright areas reveal B beneath A.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('layered-cutwork', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'gradient-reveal': { label: 'Gradient Reveal', desc: 'A three-stage revelation where each step peels back a different layer. Images A and B are blended at overlay mode, their tonal geometries multiplied together.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          let d = blendPixels(dA, dB, w, h, 'overlay', 1.0);
+          d = lumaComposite(d, d, dC, w, h, params.thresh ?? 120, params.feather ?? 10, false);
+          d = blendPixels(d, dD, w, h, 'multiply', params.mult_str ?? 0.55);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildGradientRevealParams, getParams: getGradientRevealParams, setParams: setGradientRevealParams, onReroll: onRerollGradientReveal },
+      'interference-mask': { label: 'Interference Mask', desc: 'Images A and B are blended at difference mode — each pixel becomes the absolute distance between the two images, a map of where they diverge. That divergence becomes a mask.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const interfere = blendPixels(dA, dB, w, h, 'difference', 1.0);
+          // Where A and B diverge (bright interference) → show C; where they agree → show D
+          let d = lumaComposite(interfere, dC, dD, w, h, params.thresh ?? 100, params.feather ?? 12, false);
+          d = blendPixels(d, interfere, w, h, 'screen', params.screen_str ?? 0.4);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildInterferenceMaskParams, getParams: getInterferenceMaskParams, setParams: setInterferenceMaskParams, onReroll: onRerollInterferenceMask },
+      'layered-cutwork': { label: 'Layered Cutwork', desc: "Three sequential rounds of mask then collage then mask: the image accumulates wounds with each pass. First, A's luminance cuts into B — bright areas reveal B beneath A.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const f = params.feather ?? 10;
+          // Round 1: A's luma cuts into B (bright A → B shows through)
+          let d = lumaComposite(dA, dB, dA, w, h, params.t1 ?? 120, f, false);
+          // Round 2: edge mask the result vs C
+          d     = edgeMaskComposite(d, dC, w, h, params.thresh ?? 110, f, false);
+          // Round 3: A's luma again cuts into D (lower threshold → wider reveal)
+          d     = lumaComposite(dA, dD, d, w, h, params.t2 ?? 80, f, false);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildLayeredCutworkParams, getParams: getLayeredCutworkParams, setParams: setLayeredCutworkParams, onReroll: onRerollLayeredCutwork },
       'letterpress': { label: 'Letterpress', desc: 'Image A is dithered with Atkinson, which creates the tight, typographic dot-and-space pattern that letterpress printing once left in paper. The dither stencil cuts into B.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('letterpress', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'luminance-layers': { label: 'Luminance Layers', desc: 'Four images revealed through four different luminance thresholds of the same reference source. Image A is processed and used as the mask for all four revelations.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('luminance-layers', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'mask-cascade': { label: 'Mask Cascade', desc: 'Four images layered through four successive mask operations, each using a different mask source — luminance, then edges, then noise, then a gradient — in cascading passes.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('mask-cascade', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'mask-erosion': { label: 'Mask Erosion', desc: 'Three sequential edge masks with increasing feather — a progressive erosion where each pass softens the structural cuts further and further.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('mask-erosion', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'negative-space': { label: 'Negative Space', desc: "Two masking operations, each using the opposite of what the other reveals. Image A's dark regions cut out shapes and fill them with B: the negative space becomes positive content.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('negative-space', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'palimpsest': { label: 'Palimpsest', desc: 'A manuscript overwritten and overwritten again. Each layer bleeds through based on luminance. Four images layered through progressively lower thresholds — each layer more revealed.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('palimpsest', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'photogram': { label: 'Photogram', desc: "In the darkroom, a photogram is made by placing objects directly on light-sensitive paper. The object's silhouette burns into the emulsion. Here that process is simulated digitally.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('photogram', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'luminance-layers': { label: 'Luminance Layers', desc: 'Four images revealed through four different luminance thresholds of the same reference source. Image A is processed and used as the mask for all four revelations.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const f = params.feather ?? 10;
+          // A is reference mask only: luma<t1→B, t1-t2→C, >t2→D; then screen A back as 4th layer
+          let d = lumaComposite(dA, dC, dB, w, h, params.t1 ?? 80, f, false);  // >t1 → C
+          d     = lumaComposite(dA, dD, d,  w, h, params.t2 ?? 160, f, false); // >t2 → D
+          d     = blendPixels(d, dA, w, h, 'screen', params.screen_str ?? 0.35);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildLuminanceLayersParams, getParams: getLuminanceLayersParams, setParams: setLuminanceLayersParams, onReroll: onRerollLuminanceLayers },
+      'mask-cascade': { label: 'Mask Cascade', desc: 'Four images layered through four successive mask operations, each using a different mask source — luminance, then edges, then noise, then a gradient — in cascading passes.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const f = params.feather ?? 10;
+          // Pass 1: luminance — A's luma → A or B
+          let d = lumaComposite(dA, dA, dB, w, h, params.luma_thresh ?? 120, f, false);
+          // Pass 2: edges — A's edges cut in C
+          d     = edgeMaskComposite(dA, dC, w, h, params.edge_thresh ?? 110, f, false);
+          // Pass 3: noise mask → D fills random regions
+          const noise = noisePixels(w, h, rng);
+          d     = lumaComposite(noise, d, dD, w, h, params.noise_thresh ?? 128, f, false);
+          // Pass 4: top-to-bottom gradient tints the whole thing
+          const grad = new Uint8ClampedArray(w * h * 4);
+          for (let y = 0; y < h; y++) {
+            const v = Math.round(255 * (1 - y / h));
+            for (let x = 0; x < w; x++) { const i = (y*w+x)*4; grad[i]=grad[i+1]=grad[i+2]=v; grad[i+3]=255; }
+          }
+          d = blendPixels(d, grad, w, h, 'multiply', 0.25);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildMaskCascadeParams, getParams: getMaskCascadeParams, setParams: setMaskCascadeParams, onReroll: onRerollMaskCascade },
+      'mask-erosion': { label: 'Mask Erosion', desc: 'Three sequential edge masks with increasing feather — a progressive erosion where each pass softens the structural cuts further and further.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          let d = edgeMaskComposite(dA, dB, w, h, params.thresh ?? 110, params.feather1 ?? 5,  false);
+          d     = edgeMaskComposite(dA, dC, w, h, params.thresh ?? 110, params.feather2 ?? 14, false);
+          d     = edgeMaskComposite(dA, dD, w, h, params.thresh ?? 110, params.feather3 ?? 28, false);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildMaskErosionParams, getParams: getMaskErosionParams, setParams: setMaskErosionParams, onReroll: onRerollMaskErosion },
+      'negative-space': { label: 'Negative Space', desc: "Two masking operations, each using the opposite of what the other reveals. Image A's dark regions cut out shapes and fill them with B: the negative space becomes positive content.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          // Dark A → B (inverted: dark regions become positive content)
+          let d = lumaMask(dA, dB, w, h, params.thresh ?? 110, params.feather ?? 10, true);
+          // Then bright A reveals C over the result
+          d = lumaMask(dA, dC, d, w, h, params.thresh ?? 110, params.feather ?? 10, false);
+          d = blendPixels(d, dD, w, h, 'screen', params.screen_str ?? 0.45);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildNegativeSpaceParams, getParams: getNegativeSpaceParams, setParams: setNegativeSpaceParams, onReroll: onRerollNegativeSpace },
+      'palimpsest': { label: 'Palimpsest', desc: 'A manuscript overwritten and overwritten again. Each layer bleeds through based on luminance. Four images layered through progressively lower thresholds — each layer more revealed.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const f = params.feather ?? 10;
+          // Layer from bottom up: luma<t1→D, t1-t2→C, t2-t3→B, >t3→A
+          let d = lumaComposite(dA, dC, dD, w, h, params.t1 ?? 50,  f, false); // >t1 → C
+          d     = lumaComposite(dA, dB, d,  w, h, params.t2 ?? 110, f, false); // >t2 → B
+          d     = lumaComposite(dA, dA, d,  w, h, params.t3 ?? 170, f, false); // >t3 → A itself
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildPalimpsestParams, getParams: getPalimpsestParams, setParams: setPalimpsestParams, onReroll: onRerollPalimpsest },
+      'photogram': { label: 'Photogram', desc: "In the darkroom, a photogram is made by placing objects directly on light-sensitive paper. The object's silhouette burns into the emulsion. Here that process is simulated digitally.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          // Bright A (exposed paper) → B; dark A (silhouette) → D
+          let d = lumaComposite(dA, dB, dD, w, h, params.thresh ?? 128, params.feather ?? 4, false);
+          // C bleeds at screen for paper grain / texture
+          d = blendPixels(d, dC, w, h, 'screen', params.screen_str ?? 0.35);
+          const sh = Math.round(params.shift ?? 15);
+          d = channelShift(d, w, h, sh, -Math.round(sh * 0.8));
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildPhotogramParams, getParams: getPhotogramParams, setParams: setPhotogramParams, onReroll: onRerollPhotogram },
       'silhouette-collage': { label: 'Silhouette Collage', desc: "Image A is PCA-decomposed to 2 principal components — stripped to the barest structural silhouette. That silhouette is imposed over a collage of the remaining images.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('silhouette-collage', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'sixshooter-halation-corrupt': { label: 'Six Shooter Halation Corrupt', desc: 'Four images: two six-shootered into scattered circular displacements, halation-edge composited through the third. The organic grain boundary dissolves into byte corruption.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('sixshooter-halation-corrupt', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'spectral-mask': { label: 'Spectral Mask', desc: 'Four images processed spectrally and then masked in pairs. Image A is spectrally shifted to emphasize its mid-range structure. The shifted and raw versions mask against each other.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('spectral-mask', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'stencil-burn': { label: 'Stencil Burn', desc: 'Image A is dithered to a near-binary stencil — its shapes reduced to stark positive and negative space. That stencil is used as a hard luminance mask cutting into B, C, and D.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('stencil-burn', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'stratum-shift': { label: 'Stratum Shift', desc: 'Four images built into geological strata through strip collage, then seam-carved to warp the fault lines. Luminance masking cuts the first geological layer.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('stratum-shift', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'structural-echo': { label: 'Structural Echo', desc: "Image A's edge structure is applied three times to create a progressive echo effect. Each application uses a wider feather, creating a ghost that softens with each pass.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('structural-echo', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'surveillance-decay': { label: 'Surveillance Decay', desc: 'Four feeds arranged in the classic CCTV quad-view. Each feed has already been corrupted by its own accumulation of errors — byte corruption, CRT noise, VHS bleed.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('surveillance-decay', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'stencil-burn': { label: 'Stencil Burn', desc: 'Image A is dithered to a near-binary stencil — its shapes reduced to stark positive and negative space. That stencil is used as a hard luminance mask cutting into B, C, and D.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const thresh = params.thresh ?? 128;
+          const f      = params.feather ?? 2;
+          // Low band → B; mid band → C; high band → D
+          let d = lumaComposite(dA, dC, dB, w, h, Math.round(thresh * 0.5), f, false);
+          d     = lumaComposite(dA, dD, d,  w, h, thresh, f, false);
+          // Burn A back via multiply for dark plate quality
+          d = blendPixels(d, dA, w, h, 'multiply', params.mult_str ?? 0.3);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildStencilBurnParams, getParams: getStencilBurnParams, setParams: setStencilBurnParams, onReroll: onRerollStencilBurn },
+      'stratum-shift': { label: 'Stratum Shift', desc: 'Four images built into geological strata through strip collage, then seam-carved to warp the fault lines. Luminance masking cuts the first geological layer.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          // Build 4 horizontal strata, each shifted by a different amount
+          const sources = [dA, dB, dC, dD];
+          const stripH  = Math.max(1, Math.floor(h / 4));
+          const maxShift = Math.round(params.shift ?? 40);
+          const strata  = new Uint8ClampedArray(w * h * 4);
+          for (let i = 0; i < 4; i++) {
+            const src    = sources[i];
+            const xShift = Math.round(lerp(-maxShift, maxShift, i / 3));
+            const yStart = i * stripH;
+            const yEnd   = i === 3 ? h : Math.min(h, yStart + stripH);
+            for (let y = yStart; y < yEnd; y++) {
+              for (let x = 0; x < w; x++) {
+                const srcX = Math.min(w - 1, Math.max(0, x + xShift));
+                const oi = (y * w + x) * 4;
+                const si = (y * w + srcX) * 4;
+                strata[oi]     = src[si];
+                strata[oi + 1] = src[si + 1];
+                strata[oi + 2] = src[si + 2];
+                strata[oi + 3] = 255;
+              }
+            }
+          }
+          // Luma mask using A to cut through strata
+          const d = lumaComposite(dA, strata, dB, w, h, params.luma_thresh ?? 110, params.feather ?? 10, false);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildStratumShiftParams, getParams: getStratumShiftParams, setParams: setStratumShiftParams, onReroll: onRerollStratumShift },
+      'structural-echo': { label: 'Structural Echo', desc: "Image A's edge structure is applied three times to create a progressive echo effect. Each application uses a wider feather, creating a ghost that softens with each pass.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          // Start with B; A's edges progressively reveal C then D with widening feather
+          let d = edgeMaskComposite(dA, dB, w, h, params.thresh ?? 110, params.feather1 ?? 4,  false);
+          d     = edgeMaskComposite(dA, dC, d,  w, h, params.thresh ?? 110, params.feather2 ?? 14, false);
+          d     = edgeMaskComposite(dA, dD, d,  w, h, params.thresh ?? 110, params.feather3 ?? 30, false);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildStructuralEchoParams, getParams: getStructuralEchoParams, setParams: setStructuralEchoParams, onReroll: onRerollStructuralEcho },
+      'surveillance-decay': { label: 'Surveillance Decay', desc: 'Four feeds arranged in the classic CCTV quad-view. Each feed has already been corrupted by its own accumulation of errors — byte corruption, CRT noise, VHS bleed.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          // Determine output size from first image
+          const { w: wA, h: hA } = getPixels(imgs[0]!);
+          const W = wA, H = hA;
+          const hw = Math.floor(W / 2), hh = Math.floor(H / 2);
+          const sp = params.scan_spacing ?? 3;
+          const so = params.scan_opacity ?? 0.40;
+          const sh = Math.round(params.shift ?? 15);
+          // Process each feed: scanLines + channelShift with slightly different params per quadrant
+          const feeds = imgs.map((img, i) => {
+            const px = getPixels(img!);
+            const d = resizeToMatch(px.d, px.w, px.h, hw, hh);
+            const offsets = [[sh, -Math.round(sh*0.6)], [-Math.round(sh*0.7), Math.round(sh*0.5)], [Math.round(sh*0.4), -sh], [-Math.round(sh*0.5), Math.round(sh*0.8)]];
+            const [oR, oB] = offsets[i % 4];
+            return channelShift(scanLines(d, hw, hh, sp + (i % 2), so + i * 0.05), hw, hh, oR, oB);
+          });
+          // Composite quad into full canvas
+          const out = new Uint8ClampedArray(W * H * 4);
+          const place = (src: Uint8ClampedArray, ox: number, oy: number) => {
+            for (let y = 0; y < hh; y++) {
+              for (let x = 0; x < hw; x++) {
+                const si = (y * hw + x) * 4;
+                const di = ((oy + y) * W + (ox + x)) * 4;
+                out[di] = src[si]; out[di+1] = src[si+1]; out[di+2] = src[si+2]; out[di+3] = 255;
+              }
+            }
+          };
+          place(feeds[0]!, 0,  0);
+          place(feeds[1]!, hw, 0);
+          place(feeds[2]!, 0,  hh);
+          place(feeds[3]!, hw, hh);
+          return [{ canvas: pixelsToCanvas(out, W, H), mimeType: 'image/png' }];
+        }, buildParams: buildSurveillanceDecayParams, getParams: getSurveillanceDecayParams, setParams: setSurveillanceDecayParams, onReroll: onRerollSurveillanceDecay },
       'text-ghost': { label: 'Text Ghost', desc: "Image A is PCA-decomposed to just 1-2 principal components — its texture and color stripped away until only the structural ghost remains. That ghost is screened over a collage.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('text-ghost', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'threshold-cascade': { label: 'Threshold Cascade', desc: 'Four mask_composite operations at four ascending threshold bands — 40, 80, 150, and 200 — each cutting a different pair of images at a different tonal level.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('threshold-cascade', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'threshold-cascade': { label: 'Threshold Cascade', desc: 'Four mask_composite operations at four ascending threshold bands — 40, 80, 150, and 200 — each cutting a different pair of images at a different tonal level.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const f = params.feather ?? 8;
+          // Each pass uses the NEXT image's luma as the mask — cascading structure
+          let d = lumaComposite(dA, dA, dB, w, h, params.t1 ?? 40,  f, false); // A's luma: bright→A, dark→B
+          d     = lumaComposite(dB, d,  dC, w, h, params.t2 ?? 80,  f, false); // B's luma: bright→prev, dark→C
+          d     = lumaComposite(dC, d,  dD, w, h, params.t3 ?? 150, f, false); // C's luma: bright→prev, dark→D
+          // Final edge crunch using A's structure
+          d     = edgeMaskComposite(dA, d, w, h, params.edge_thresh ?? 120, f, false);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildThresholdCascadeParams, getParams: getThresholdCascadeParams, setParams: setThresholdCascadeParams, onReroll: onRerollThresholdCascade },
       'torn-collage': { label: 'Torn Collage', desc: 'Four images shattered like a mirror dropped on concrete. Each fragment gets the sickly hum of magnetic tape artifacts before being scattered into a loosely tiled mosaic.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('torn-collage', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'wobble-curvyscreen-dither': { label: 'Wobble Curvy Screen Dither', desc: 'Four images: two wobble-eyed into drifting off-axis rings, then curvy-line-screened against a third. The fourth image provides an edge mask over the result.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('wobble-curvyscreen-dither', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'pca-quad': { label: 'PCA Quad', desc: 'Four images PCA-decomposed to varying depths — stripped to structural ghosts — then composited through three-level stencil. The brightness bands fill with different ghost images.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('pca-quad', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'quad-sort-destroy': { label: 'Quad Sort Destroy', desc: 'Four images three-level stenciled — brightness bands filling with different sources — then the composite is pixel-sorted and byte-corrupted. Three-source stencil meets total annihilation.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('quad-sort-destroy', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'quad-sort-destroy': { label: 'Quad Sort Destroy', desc: 'Four images three-level stenciled — brightness bands filling with different sources — then the composite is pixel-sorted and byte-corrupted. Three-source stencil meets total annihilation.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const f = params.feather ?? 6;
+          // 3-level stencil using A as reference: luma<t1→D, t1-t2→C, >t2→B
+          let d = lumaComposite(dA, dC, dD, w, h, params.t1 ?? 80,  f, false);
+          d     = lumaComposite(dA, dB, d,  w, h, params.t2 ?? 160, f, false);
+          d     = pixelSort(d, w, h, params.sort_thresh ?? 80, 'up');
+          const sr = Math.round(params.shift_r ?? 30);
+          d     = channelShift(d, w, h, sr, -Math.round(sr * 0.7));
+          return [{ canvas: jpegDestroy(pixelsToCanvas(d, w, h), params.quality ?? 4, 3), mimeType: 'image/jpeg' }];
+        }, buildParams: buildQuadSortDestroyParams, getParams: getQuadSortDestroyParams, setParams: setQuadSortDestroyParams, onReroll: onRerollQuadSortDestroy },
       'stencil-into-displacement': { label: 'Stencil Into Displacement', desc: 'Four images in two stages: first, Otsu stencil composites images A and B using C as the mask. Then the stencil composite is displacement-warped against the fourth.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('stencil-into-displacement', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'kaleidoscope-cyanotype-pca': { label: 'Kaleidoscope Cyanotype PCA', desc: 'Four images: two kaleidoscoped into mandala patterns, PCA-decomposed to structural ghosts, then cyanotype-stenciled. The kaleidoscope symmetry dissolves into prussian blue.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('kaleidoscope-cyanotype-pca', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'lathe-silver-sonify': { label: 'Lathe Silver Sonify', desc: 'Four images: two lathe-turned into agate ring surfaces, silver-stenciled through a third. The silver-toned lathe composite is sonified — converted to audio and back.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('lathe-silver-sonify', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
@@ -5490,6 +6020,1549 @@ import Admin from '../../../layouts/Admin.astro';
       });
     }
 
+    // ─── Spectral Merge params ────────────────────────────────────────────────
+
+    function buildSpectralMergeParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="sm-hp-r-a">A Detail Scale <span class="pt-val" id="sm-hp-r-a-val">4</span></label>
+          <input class="pt-range" type="range" id="sm-hp-r-a" min="1" max="20" step="1" value="4" />
+          <div class="pt-range-hints"><span>fine</span><span>broad</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sm-hp-r-b">B Detail Scale <span class="pt-val" id="sm-hp-r-b-val">12</span></label>
+          <input class="pt-range" type="range" id="sm-hp-r-b" min="1" max="20" step="1" value="12" />
+          <div class="pt-range-hints"><span>fine</span><span>broad</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sm-strength">Interference <span class="pt-val" id="sm-strength-val">0.85</span></label>
+          <input class="pt-range" type="range" id="sm-strength" min="0" max="1" step="0.01" value="0.85" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sm-luma-thresh">Luma Threshold <span class="pt-val" id="sm-luma-thresh-val">120</span></label>
+          <input class="pt-range" type="range" id="sm-luma-thresh" min="30" max="220" step="1" value="120" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sm-feather">Feather <span class="pt-val" id="sm-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="sm-feather" min="0" max="25" step="1" value="10" />
+        </div>`;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['sm-hp-r-a', 'sm-hp-r-b', 'sm-luma-thresh', 'sm-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+      const strEl = document.getElementById('sm-strength') as HTMLInputElement;
+      const strVl = document.getElementById('sm-strength-val') as HTMLSpanElement;
+      strEl?.addEventListener('input', () => { strVl.textContent = parseFloat(strEl.value).toFixed(2); fire(); });
+    }
+    function getSpectralMergeParams(): Record<string, any> {
+      return {
+        hp_r_a:      parseFloat((document.getElementById('sm-hp-r-a')      as HTMLInputElement)?.value ?? '4'),
+        hp_r_b:      parseFloat((document.getElementById('sm-hp-r-b')      as HTMLInputElement)?.value ?? '12'),
+        strength:    parseFloat((document.getElementById('sm-strength')     as HTMLInputElement)?.value ?? '0.85'),
+        luma_thresh: parseFloat((document.getElementById('sm-luma-thresh') as HTMLInputElement)?.value ?? '120'),
+        feather:     parseFloat((document.getElementById('sm-feather')     as HTMLInputElement)?.value ?? '10'),
+      };
+    }
+    function setSpectralMergeParams(p: Record<string, any>) {
+      const set = (id: string, v: any, fmt?: (n: number) => string) => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement | null;
+        if (el) el.value = String(v);
+        if (vl) vl.textContent = fmt ? fmt(parseFloat(String(v))) : String(v);
+      };
+      if (p.hp_r_a      !== undefined) set('sm-hp-r-a',      p.hp_r_a);
+      if (p.hp_r_b      !== undefined) set('sm-hp-r-b',      p.hp_r_b);
+      if (p.strength    !== undefined) set('sm-strength',     p.strength,    n => n.toFixed(2));
+      if (p.luma_thresh !== undefined) set('sm-luma-thresh', p.luma_thresh);
+      if (p.feather     !== undefined) set('sm-feather',     p.feather);
+    }
+    function onRerollSpectralMerge(rng: () => number) {
+      setSpectralMergeParams({
+        hp_r_a:      Math.round(lerp(1, 20, rng())),
+        hp_r_b:      Math.round(lerp(1, 20, rng())),
+        strength:    parseFloat(lerp(0, 1, rng()).toFixed(2)),
+        luma_thresh: Math.round(lerp(30, 220, rng())),
+        feather:     Math.round(lerp(0, 25, rng())),
+      });
+    }
+
+    // ─── Edge Ghosts params ───────────────────────────────────────────────────
+
+    function buildEdgeGhostsParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="eg-thresh1">Edge Threshold A→B <span class="pt-val" id="eg-thresh1-val">120</span></label>
+          <input class="pt-range" type="range" id="eg-thresh1" min="30" max="220" step="1" value="120" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="eg-thresh2">Edge Threshold →C <span class="pt-val" id="eg-thresh2-val">100</span></label>
+          <input class="pt-range" type="range" id="eg-thresh2" min="30" max="220" step="1" value="100" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="eg-feather">Feather <span class="pt-val" id="eg-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="eg-feather" min="0" max="20" step="1" value="10" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="eg-hp-radius">Highpass Radius <span class="pt-val" id="eg-hp-radius-val">5</span></label>
+          <input class="pt-range" type="range" id="eg-hp-radius" min="0" max="15" step="1" value="5" />
+          <div class="pt-range-hints"><span>off</span><span>strong</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="eg-shift-r">Red Shift <span class="pt-val" id="eg-shift-r-val">40</span></label>
+          <input class="pt-range" type="range" id="eg-shift-r" min="0" max="80" step="1" value="40" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="eg-shift-b">Blue Shift <span class="pt-val" id="eg-shift-b-val">-35</span></label>
+          <input class="pt-range" type="range" id="eg-shift-b" min="-70" max="0" step="1" value="-35" />
+        </div>`;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['eg-thresh1', 'eg-thresh2', 'eg-feather', 'eg-hp-radius', 'eg-shift-r', 'eg-shift-b'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getEdgeGhostsParams(): Record<string, any> {
+      return {
+        thresh1:   parseFloat((document.getElementById('eg-thresh1')   as HTMLInputElement)?.value ?? '120'),
+        thresh2:   parseFloat((document.getElementById('eg-thresh2')   as HTMLInputElement)?.value ?? '100'),
+        feather:   parseFloat((document.getElementById('eg-feather')   as HTMLInputElement)?.value ?? '10'),
+        hp_radius: parseFloat((document.getElementById('eg-hp-radius') as HTMLInputElement)?.value ?? '5'),
+        shift_r:   parseFloat((document.getElementById('eg-shift-r')   as HTMLInputElement)?.value ?? '40'),
+        shift_b:   parseFloat((document.getElementById('eg-shift-b')   as HTMLInputElement)?.value ?? '-35'),
+      };
+    }
+    function setEdgeGhostsParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement | null;
+        if (el) el.value = String(v);
+        if (vl) vl.textContent = String(v);
+      };
+      if (p.thresh1   !== undefined) set('eg-thresh1',   p.thresh1);
+      if (p.thresh2   !== undefined) set('eg-thresh2',   p.thresh2);
+      if (p.feather   !== undefined) set('eg-feather',   p.feather);
+      if (p.hp_radius !== undefined) set('eg-hp-radius', p.hp_radius);
+      if (p.shift_r   !== undefined) set('eg-shift-r',   p.shift_r);
+      if (p.shift_b   !== undefined) set('eg-shift-b',   p.shift_b);
+    }
+    function onRerollEdgeGhosts(rng: () => number) {
+      setEdgeGhostsParams({
+        thresh1:   Math.round(lerp(30, 220, rng())),
+        thresh2:   Math.round(lerp(30, 220, rng())),
+        feather:   Math.round(lerp(0, 20, rng())),
+        hp_radius: Math.round(lerp(0, 15, rng())),
+        shift_r:   Math.round(lerp(0, 80, rng())),
+        shift_b:   Math.round(lerp(-70, 0, rng())),
+      });
+    }
+
+    // ─── Triple Mask params ───────────────────────────────────────────────────
+
+    function buildTripleMaskParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="tm-thresh1">Edge Threshold A→B <span class="pt-val" id="tm-thresh1-val">125</span></label>
+          <input class="pt-range" type="range" id="tm-thresh1" min="30" max="220" step="1" value="125" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="tm-thresh2">Luma Threshold →C <span class="pt-val" id="tm-thresh2-val">130</span></label>
+          <input class="pt-range" type="range" id="tm-thresh2" min="50" max="200" step="1" value="130" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="tm-feather">Feather <span class="pt-val" id="tm-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="tm-feather" min="0" max="20" step="1" value="10" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="tm-shift-r">Red Shift <span class="pt-val" id="tm-shift-r-val">30</span></label>
+          <input class="pt-range" type="range" id="tm-shift-r" min="0" max="60" step="1" value="30" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="tm-shift-b">Blue Shift <span class="pt-val" id="tm-shift-b-val">-25</span></label>
+          <input class="pt-range" type="range" id="tm-shift-b" min="-50" max="0" step="1" value="-25" />
+        </div>`;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['tm-thresh1', 'tm-thresh2', 'tm-feather', 'tm-shift-r', 'tm-shift-b'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getTripleMaskParams(): Record<string, any> {
+      return {
+        thresh1: parseFloat((document.getElementById('tm-thresh1') as HTMLInputElement)?.value ?? '125'),
+        thresh2: parseFloat((document.getElementById('tm-thresh2') as HTMLInputElement)?.value ?? '130'),
+        feather: parseFloat((document.getElementById('tm-feather') as HTMLInputElement)?.value ?? '10'),
+        shift_r: parseFloat((document.getElementById('tm-shift-r') as HTMLInputElement)?.value ?? '30'),
+        shift_b: parseFloat((document.getElementById('tm-shift-b') as HTMLInputElement)?.value ?? '-25'),
+      };
+    }
+    function setTripleMaskParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement | null;
+        if (el) el.value = String(v);
+        if (vl) vl.textContent = String(v);
+      };
+      if (p.thresh1 !== undefined) set('tm-thresh1', p.thresh1);
+      if (p.thresh2 !== undefined) set('tm-thresh2', p.thresh2);
+      if (p.feather !== undefined) set('tm-feather', p.feather);
+      if (p.shift_r !== undefined) set('tm-shift-r', p.shift_r);
+      if (p.shift_b !== undefined) set('tm-shift-b', p.shift_b);
+    }
+    function onRerollTripleMask(rng: () => number) {
+      setTripleMaskParams({
+        thresh1: Math.round(lerp(30, 220, rng())),
+        thresh2: Math.round(lerp(50, 200, rng())),
+        feather: Math.round(lerp(0, 20, rng())),
+        shift_r: Math.round(lerp(0, 60, rng())),
+        shift_b: Math.round(lerp(-50, 0, rng())),
+      });
+    }
+
+    // ─── Sorted Mask params ───────────────────────────────────────────────────
+
+    function buildSortedMaskParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="sk-sort-thresh">Sort Threshold <span class="pt-val" id="sk-sort-thresh-val">70</span></label>
+          <input class="pt-range" type="range" id="sk-sort-thresh" min="20" max="150" step="1" value="70" />
+          <div class="pt-range-hints"><span>more streaks</span><span>fewer streaks</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sk-luma-thresh">Luma Threshold <span class="pt-val" id="sk-luma-thresh-val">135</span></label>
+          <input class="pt-range" type="range" id="sk-luma-thresh" min="50" max="200" step="1" value="135" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sk-edge-thresh">Edge Threshold <span class="pt-val" id="sk-edge-thresh-val">110</span></label>
+          <input class="pt-range" type="range" id="sk-edge-thresh" min="30" max="180" step="1" value="110" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sk-feather">Feather <span class="pt-val" id="sk-feather-val">8</span></label>
+          <input class="pt-range" type="range" id="sk-feather" min="0" max="20" step="1" value="8" />
+        </div>`;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['sk-sort-thresh', 'sk-luma-thresh', 'sk-edge-thresh', 'sk-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getSortedMaskParams(): Record<string, any> {
+      return {
+        sort_thresh: parseFloat((document.getElementById('sk-sort-thresh') as HTMLInputElement)?.value ?? '70'),
+        luma_thresh: parseFloat((document.getElementById('sk-luma-thresh') as HTMLInputElement)?.value ?? '135'),
+        edge_thresh: parseFloat((document.getElementById('sk-edge-thresh') as HTMLInputElement)?.value ?? '110'),
+        feather:     parseFloat((document.getElementById('sk-feather')     as HTMLInputElement)?.value ?? '8'),
+      };
+    }
+    function setSortedMaskParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement | null;
+        if (el) el.value = String(v);
+        if (vl) vl.textContent = String(v);
+      };
+      if (p.sort_thresh !== undefined) set('sk-sort-thresh', p.sort_thresh);
+      if (p.luma_thresh !== undefined) set('sk-luma-thresh', p.luma_thresh);
+      if (p.edge_thresh !== undefined) set('sk-edge-thresh', p.edge_thresh);
+      if (p.feather     !== undefined) set('sk-feather',     p.feather);
+    }
+    function onRerollSortedMask(rng: () => number) {
+      setSortedMaskParams({
+        sort_thresh: Math.round(lerp(20, 150, rng())),
+        luma_thresh: Math.round(lerp(50, 200, rng())),
+        edge_thresh: Math.round(lerp(30, 180, rng())),
+        feather:     Math.round(lerp(0, 20, rng())),
+      });
+    }
+
+    // ─── Exquisite Corpse params ──────────────────────────────────────────────
+
+    function buildExquisiteCorpseParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="ec-sort-thresh">Sort Threshold <span class="pt-val" id="ec-sort-thresh-val">70</span></label>
+          <input class="pt-range" type="range" id="ec-sort-thresh" min="20" max="150" step="1" value="70" />
+          <div class="pt-range-hints"><span>more streaks</span><span>fewer streaks</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ec-shift">Channel Shift <span class="pt-val" id="ec-shift-val">25</span></label>
+          <input class="pt-range" type="range" id="ec-shift" min="0" max="50" step="1" value="25" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ec-pieces">Strips <span class="pt-val" id="ec-pieces-val">3</span></label>
+          <input class="pt-range" type="range" id="ec-pieces" min="3" max="6" step="1" value="3" />
+        </div>`;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['ec-sort-thresh', 'ec-shift', 'ec-pieces'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getExquisiteCorpseParams(): Record<string, any> {
+      return {
+        sort_thresh: parseFloat((document.getElementById('ec-sort-thresh') as HTMLInputElement)?.value ?? '70'),
+        shift:       parseFloat((document.getElementById('ec-shift')       as HTMLInputElement)?.value ?? '25'),
+        pieces:      parseFloat((document.getElementById('ec-pieces')      as HTMLInputElement)?.value ?? '3'),
+      };
+    }
+    function setExquisiteCorpseParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement | null;
+        if (el) el.value = String(v);
+        if (vl) vl.textContent = String(v);
+      };
+      if (p.sort_thresh !== undefined) set('ec-sort-thresh', p.sort_thresh);
+      if (p.shift       !== undefined) set('ec-shift',       p.shift);
+      if (p.pieces      !== undefined) set('ec-pieces',      p.pieces);
+    }
+    function onRerollExquisiteCorpse(rng: () => number) {
+      setExquisiteCorpseParams({
+        sort_thresh: Math.round(lerp(20, 150, rng())),
+        shift:       Math.round(lerp(0, 50, rng())),
+        pieces:      Math.round(lerp(3, 6, rng())),
+      });
+    }
+
+    // ─── Mask and Glitch params ───────────────────────────────────────────────
+
+    function buildMaskAndGlitchParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="mg-thresh1">Edge Threshold A→B <span class="pt-val" id="mg-thresh1-val">120</span></label>
+          <input class="pt-range" type="range" id="mg-thresh1" min="30" max="220" step="1" value="120" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="mg-thresh2">Edge Threshold →C <span class="pt-val" id="mg-thresh2-val">110</span></label>
+          <input class="pt-range" type="range" id="mg-thresh2" min="30" max="220" step="1" value="110" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="mg-feather">Feather <span class="pt-val" id="mg-feather-val">8</span></label>
+          <input class="pt-range" type="range" id="mg-feather" min="0" max="20" step="1" value="8" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="mg-scan-spacing">Scan Spacing <span class="pt-val" id="mg-scan-spacing-val">3</span></label>
+          <input class="pt-range" type="range" id="mg-scan-spacing" min="2" max="6" step="1" value="3" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="mg-scan-opacity">Scan Opacity <span class="pt-val" id="mg-scan-opacity-val">0.50</span></label>
+          <input class="pt-range" type="range" id="mg-scan-opacity" min="0" max="0.8" step="0.01" value="0.50" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="mg-shift-r">Red Shift <span class="pt-val" id="mg-shift-r-val">25</span></label>
+          <input class="pt-range" type="range" id="mg-shift-r" min="0" max="60" step="1" value="25" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="mg-shift-b">Blue Shift <span class="pt-val" id="mg-shift-b-val">-20</span></label>
+          <input class="pt-range" type="range" id="mg-shift-b" min="-50" max="0" step="1" value="-20" />
+        </div>`;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['mg-thresh1', 'mg-thresh2', 'mg-feather', 'mg-scan-spacing', 'mg-shift-r', 'mg-shift-b'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+      const soEl = document.getElementById('mg-scan-opacity') as HTMLInputElement;
+      const soVl = document.getElementById('mg-scan-opacity-val') as HTMLSpanElement;
+      soEl?.addEventListener('input', () => { soVl.textContent = parseFloat(soEl.value).toFixed(2); fire(); });
+    }
+    function getMaskAndGlitchParams(): Record<string, any> {
+      return {
+        thresh1:      parseFloat((document.getElementById('mg-thresh1')      as HTMLInputElement)?.value ?? '120'),
+        thresh2:      parseFloat((document.getElementById('mg-thresh2')      as HTMLInputElement)?.value ?? '110'),
+        feather:      parseFloat((document.getElementById('mg-feather')      as HTMLInputElement)?.value ?? '8'),
+        scan_spacing: parseFloat((document.getElementById('mg-scan-spacing') as HTMLInputElement)?.value ?? '3'),
+        scan_opacity: parseFloat((document.getElementById('mg-scan-opacity') as HTMLInputElement)?.value ?? '0.5'),
+        shift_r:      parseFloat((document.getElementById('mg-shift-r')      as HTMLInputElement)?.value ?? '25'),
+        shift_b:      parseFloat((document.getElementById('mg-shift-b')      as HTMLInputElement)?.value ?? '-20'),
+      };
+    }
+    function setMaskAndGlitchParams(p: Record<string, any>) {
+      const set = (id: string, v: any, fmt?: (n: number) => string) => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement | null;
+        if (el) el.value = String(v);
+        if (vl) vl.textContent = fmt ? fmt(parseFloat(String(v))) : String(v);
+      };
+      if (p.thresh1      !== undefined) set('mg-thresh1',      p.thresh1);
+      if (p.thresh2      !== undefined) set('mg-thresh2',      p.thresh2);
+      if (p.feather      !== undefined) set('mg-feather',      p.feather);
+      if (p.scan_spacing !== undefined) set('mg-scan-spacing', p.scan_spacing);
+      if (p.scan_opacity !== undefined) set('mg-scan-opacity', p.scan_opacity, n => n.toFixed(2));
+      if (p.shift_r      !== undefined) set('mg-shift-r',      p.shift_r);
+      if (p.shift_b      !== undefined) set('mg-shift-b',      p.shift_b);
+    }
+    function onRerollMaskAndGlitch(rng: () => number) {
+      setMaskAndGlitchParams({
+        thresh1:      Math.round(lerp(30, 220, rng())),
+        thresh2:      Math.round(lerp(30, 220, rng())),
+        feather:      Math.round(lerp(0, 20, rng())),
+        scan_spacing: Math.round(lerp(2, 6, rng())),
+        scan_opacity: parseFloat(lerp(0, 0.8, rng()).toFixed(2)),
+        shift_r:      Math.round(lerp(0, 60, rng())),
+        shift_b:      Math.round(lerp(-50, 0, rng())),
+      });
+    }
+
+    // ─── Signal Bleed params ──────────────────────────────────────────────────
+
+    function buildSignalBleedParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="sb-shift-strength">Shift Strength <span class="pt-val" id="sb-shift-strength-val">30</span></label>
+          <input class="pt-range" type="range" id="sb-shift-strength" min="0" max="60" step="1" value="30" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sb-strip-count">Strip Count <span class="pt-val" id="sb-strip-count-val">6</span></label>
+          <input class="pt-range" type="range" id="sb-strip-count" min="3" max="9" step="1" value="6" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sb-scan-opacity">Scan Opacity <span class="pt-val" id="sb-scan-opacity-val">0.40</span></label>
+          <input class="pt-range" type="range" id="sb-scan-opacity" min="0" max="0.7" step="0.01" value="0.40" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sb-final-shift">Final Shift <span class="pt-val" id="sb-final-shift-val">35</span></label>
+          <input class="pt-range" type="range" id="sb-final-shift" min="0" max="60" step="1" value="35" />
+        </div>`;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['sb-shift-strength', 'sb-strip-count', 'sb-final-shift'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+      const soEl = document.getElementById('sb-scan-opacity') as HTMLInputElement;
+      const soVl = document.getElementById('sb-scan-opacity-val') as HTMLSpanElement;
+      soEl?.addEventListener('input', () => { soVl.textContent = parseFloat(soEl.value).toFixed(2); fire(); });
+    }
+    function getSignalBleedParams(): Record<string, any> {
+      return {
+        shift_strength: parseFloat((document.getElementById('sb-shift-strength') as HTMLInputElement)?.value ?? '30'),
+        strip_count:    parseFloat((document.getElementById('sb-strip-count')     as HTMLInputElement)?.value ?? '6'),
+        scan_opacity:   parseFloat((document.getElementById('sb-scan-opacity')    as HTMLInputElement)?.value ?? '0.40'),
+        final_shift:    parseFloat((document.getElementById('sb-final-shift')     as HTMLInputElement)?.value ?? '35'),
+      };
+    }
+    function setSignalBleedParams(p: Record<string, any>) {
+      const set = (id: string, v: any, fmt?: (n: number) => string) => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement | null;
+        if (el) el.value = String(v);
+        if (vl) vl.textContent = fmt ? fmt(parseFloat(String(v))) : String(v);
+      };
+      if (p.shift_strength !== undefined) set('sb-shift-strength', p.shift_strength);
+      if (p.strip_count    !== undefined) set('sb-strip-count',    p.strip_count);
+      if (p.scan_opacity   !== undefined) set('sb-scan-opacity',   p.scan_opacity, n => n.toFixed(2));
+      if (p.final_shift    !== undefined) set('sb-final-shift',    p.final_shift);
+    }
+    function onRerollSignalBleed(rng: () => number) {
+      setSignalBleedParams({
+        shift_strength: Math.round(lerp(0, 60, rng())),
+        strip_count:    Math.round(lerp(3, 9, rng())),
+        scan_opacity:   parseFloat(lerp(0, 0.7, rng()).toFixed(2)),
+        final_shift:    Math.round(lerp(0, 60, rng())),
+      });
+    }
+
+    // ── noise-cathedral params ──────────────────────────────────────────────────
+    function buildNoiseCathedralParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="nc-feather">Band Feather <span class="pt-val" id="nc-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="nc-feather" min="0" max="40" step="1" value="10" />
+          <div class="pt-range-hints"><span>hard bands</span><span>soft</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['nc-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getNoiseCathedralParams(): Record<string, any> {
+      const get = (id: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? '0');
+      return { feather: get('nc-feather') };
+    }
+    function setNoiseCathedralParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vEl = document.getElementById(id + '-val'); if (vEl) vEl.textContent = String(v); } };
+      if (p.feather !== undefined) set('nc-feather', p.feather);
+    }
+    function onRerollNoiseCathedral(_rng: () => number) {}
+
+    // ── dissolve-cascade params ─────────────────────────────────────────────────
+    function buildDissolveCascadeParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="dc-thresh1">Luma Threshold 1 <span class="pt-val" id="dc-thresh1-val">130</span></label>
+          <input class="pt-range" type="range" id="dc-thresh1" min="30" max="220" step="1" value="130" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="dc-thresh2">Luma Threshold 2 <span class="pt-val" id="dc-thresh2-val">100</span></label>
+          <input class="pt-range" type="range" id="dc-thresh2" min="30" max="220" step="1" value="100" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="dc-mult-str">Multiply Strength <span class="pt-val" id="dc-mult-str-val">0.50</span></label>
+          <input class="pt-range" type="range" id="dc-mult-str" min="0" max="1" step="0.01" value="0.50" />
+          <div class="pt-range-hints"><span>off</span><span>full</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="dc-feather">Feather <span class="pt-val" id="dc-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="dc-feather" min="0" max="40" step="1" value="10" />
+          <div class="pt-range-hints"><span>hard</span><span>soft</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['dc-thresh1', 'dc-thresh2', 'dc-mult-str', 'dc-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getDissolveCascadeParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { thresh1: get('dc-thresh1','130'), thresh2: get('dc-thresh2','100'), mult_str: get('dc-mult-str','0.50'), feather: get('dc-feather','10') };
+    }
+    function setDissolveCascadeParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vEl = document.getElementById(id + '-val'); if (vEl) vEl.textContent = String(v); } };
+      if (p.thresh1   !== undefined) set('dc-thresh1',   p.thresh1);
+      if (p.thresh2   !== undefined) set('dc-thresh2',   p.thresh2);
+      if (p.mult_str  !== undefined) set('dc-mult-str',  p.mult_str);
+      if (p.feather   !== undefined) set('dc-feather',   p.feather);
+    }
+    function onRerollDissolveCascade(rng: () => number) {
+      setDissolveCascadeParams({
+        thresh1:  Math.round(lerp(80, 180, rng())),
+        thresh2:  Math.round(lerp(60, 150, rng())),
+        mult_str: parseFloat(lerp(0.3, 0.8, rng()).toFixed(2)),
+        feather:  Math.round(lerp(4, 24, rng())),
+      });
+    }
+
+    // ── gradient-reveal params ──────────────────────────────────────────────────
+    function buildGradientRevealParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="gr-thresh">Luma Threshold <span class="pt-val" id="gr-thresh-val">120</span></label>
+          <input class="pt-range" type="range" id="gr-thresh" min="30" max="220" step="1" value="120" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="gr-mult-str">Multiply Strength <span class="pt-val" id="gr-mult-str-val">0.55</span></label>
+          <input class="pt-range" type="range" id="gr-mult-str" min="0" max="1" step="0.01" value="0.55" />
+          <div class="pt-range-hints"><span>off</span><span>full</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="gr-feather">Feather <span class="pt-val" id="gr-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="gr-feather" min="0" max="40" step="1" value="10" />
+          <div class="pt-range-hints"><span>hard</span><span>soft</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['gr-thresh', 'gr-mult-str', 'gr-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getGradientRevealParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { thresh: get('gr-thresh','120'), mult_str: get('gr-mult-str','0.55'), feather: get('gr-feather','10') };
+    }
+    function setGradientRevealParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vEl = document.getElementById(id + '-val'); if (vEl) vEl.textContent = String(v); } };
+      if (p.thresh    !== undefined) set('gr-thresh',    p.thresh);
+      if (p.mult_str  !== undefined) set('gr-mult-str',  p.mult_str);
+      if (p.feather   !== undefined) set('gr-feather',   p.feather);
+    }
+    function onRerollGradientReveal(rng: () => number) {
+      setGradientRevealParams({
+        thresh:   Math.round(lerp(70, 170, rng())),
+        mult_str: parseFloat(lerp(0.3, 0.8, rng()).toFixed(2)),
+        feather:  Math.round(lerp(4, 24, rng())),
+      });
+    }
+
+    // ── interference-mask params ────────────────────────────────────────────────
+    function buildInterferenceMaskParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="im-thresh">Interference Threshold <span class="pt-val" id="im-thresh-val">100</span></label>
+          <input class="pt-range" type="range" id="im-thresh" min="20" max="200" step="1" value="100" />
+          <div class="pt-range-hints"><span>low divergence</span><span>high</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="im-screen-str">Screen Strength <span class="pt-val" id="im-screen-str-val">0.40</span></label>
+          <input class="pt-range" type="range" id="im-screen-str" min="0" max="1" step="0.01" value="0.40" />
+          <div class="pt-range-hints"><span>off</span><span>full</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="im-feather">Feather <span class="pt-val" id="im-feather-val">12</span></label>
+          <input class="pt-range" type="range" id="im-feather" min="0" max="40" step="1" value="12" />
+          <div class="pt-range-hints"><span>hard</span><span>soft</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['im-thresh', 'im-screen-str', 'im-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getInterferenceMaskParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { thresh: get('im-thresh','100'), screen_str: get('im-screen-str','0.40'), feather: get('im-feather','12') };
+    }
+    function setInterferenceMaskParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vEl = document.getElementById(id + '-val'); if (vEl) vEl.textContent = String(v); } };
+      if (p.thresh     !== undefined) set('im-thresh',     p.thresh);
+      if (p.screen_str !== undefined) set('im-screen-str', p.screen_str);
+      if (p.feather    !== undefined) set('im-feather',    p.feather);
+    }
+    function onRerollInterferenceMask(rng: () => number) {
+      setInterferenceMaskParams({
+        thresh:     Math.round(lerp(50, 170, rng())),
+        screen_str: parseFloat(lerp(0.2, 0.7, rng()).toFixed(2)),
+        feather:    Math.round(lerp(4, 28, rng())),
+      });
+    }
+
+    // ── mask-erosion params ─────────────────────────────────────────────────────
+    function buildMaskErosionParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="me-thresh">Edge Threshold <span class="pt-val" id="me-thresh-val">110</span></label>
+          <input class="pt-range" type="range" id="me-thresh" min="30" max="220" step="1" value="110" />
+          <div class="pt-range-hints"><span>subtle</span><span>sharp</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="me-feather1">Feather Pass 1 <span class="pt-val" id="me-feather1-val">5</span></label>
+          <input class="pt-range" type="range" id="me-feather1" min="0" max="30" step="1" value="5" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="me-feather2">Feather Pass 2 <span class="pt-val" id="me-feather2-val">14</span></label>
+          <input class="pt-range" type="range" id="me-feather2" min="0" max="50" step="1" value="14" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="me-feather3">Feather Pass 3 <span class="pt-val" id="me-feather3-val">28</span></label>
+          <input class="pt-range" type="range" id="me-feather3" min="0" max="80" step="1" value="28" />
+          <div class="pt-range-hints"><span>tight</span><span>wide erosion</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['me-thresh', 'me-feather1', 'me-feather2', 'me-feather3'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getMaskErosionParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { thresh: get('me-thresh','110'), feather1: get('me-feather1','5'), feather2: get('me-feather2','14'), feather3: get('me-feather3','28') };
+    }
+    function setMaskErosionParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vEl = document.getElementById(id + '-val'); if (vEl) vEl.textContent = String(v); } };
+      if (p.thresh   !== undefined) set('me-thresh',   p.thresh);
+      if (p.feather1 !== undefined) set('me-feather1', p.feather1);
+      if (p.feather2 !== undefined) set('me-feather2', p.feather2);
+      if (p.feather3 !== undefined) set('me-feather3', p.feather3);
+    }
+    function onRerollMaskErosion(rng: () => number) {
+      const f1 = Math.round(lerp(2, 12, rng()));
+      setMaskErosionParams({
+        thresh:   Math.round(lerp(70, 170, rng())),
+        feather1: f1,
+        feather2: f1 + Math.round(lerp(6, 16, rng())),
+        feather3: f1 + Math.round(lerp(18, 40, rng())),
+      });
+    }
+
+    // ── negative-space params ───────────────────────────────────────────────────
+    function buildNegativeSpaceParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="ns-thresh">Luma Threshold <span class="pt-val" id="ns-thresh-val">110</span></label>
+          <input class="pt-range" type="range" id="ns-thresh" min="30" max="220" step="1" value="110" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ns-screen-str">Screen Strength <span class="pt-val" id="ns-screen-str-val">0.45</span></label>
+          <input class="pt-range" type="range" id="ns-screen-str" min="0" max="1" step="0.01" value="0.45" />
+          <div class="pt-range-hints"><span>off</span><span>full</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ns-feather">Feather <span class="pt-val" id="ns-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="ns-feather" min="0" max="40" step="1" value="10" />
+          <div class="pt-range-hints"><span>hard</span><span>soft</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['ns-thresh', 'ns-screen-str', 'ns-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getNegativeSpaceParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { thresh: get('ns-thresh','110'), screen_str: get('ns-screen-str','0.45'), feather: get('ns-feather','10') };
+    }
+    function setNegativeSpaceParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vEl = document.getElementById(id + '-val'); if (vEl) vEl.textContent = String(v); } };
+      if (p.thresh     !== undefined) set('ns-thresh',     p.thresh);
+      if (p.screen_str !== undefined) set('ns-screen-str', p.screen_str);
+      if (p.feather    !== undefined) set('ns-feather',    p.feather);
+    }
+    function onRerollNegativeSpace(rng: () => number) {
+      setNegativeSpaceParams({
+        thresh:     Math.round(lerp(70, 160, rng())),
+        screen_str: parseFloat(lerp(0.2, 0.7, rng()).toFixed(2)),
+        feather:    Math.round(lerp(4, 24, rng())),
+      });
+    }
+
+    // ── palimpsest params ───────────────────────────────────────────────────────
+    function buildPalimpsestParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="pp-t1">Band 1 Threshold (D→C) <span class="pt-val" id="pp-t1-val">50</span></label>
+          <input class="pt-range" type="range" id="pp-t1" min="10" max="120" step="1" value="50" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="pp-t2">Band 2 Threshold (C→B) <span class="pt-val" id="pp-t2-val">110</span></label>
+          <input class="pt-range" type="range" id="pp-t2" min="40" max="180" step="1" value="110" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="pp-t3">Band 3 Threshold (B→A) <span class="pt-val" id="pp-t3-val">170</span></label>
+          <input class="pt-range" type="range" id="pp-t3" min="80" max="230" step="1" value="170" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="pp-feather">Feather <span class="pt-val" id="pp-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="pp-feather" min="0" max="40" step="1" value="10" />
+          <div class="pt-range-hints"><span>hard bands</span><span>soft</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['pp-t1', 'pp-t2', 'pp-t3', 'pp-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getPalimpsestParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { t1: get('pp-t1','50'), t2: get('pp-t2','110'), t3: get('pp-t3','170'), feather: get('pp-feather','10') };
+    }
+    function setPalimpsestParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vEl = document.getElementById(id + '-val'); if (vEl) vEl.textContent = String(v); } };
+      if (p.t1      !== undefined) set('pp-t1',      p.t1);
+      if (p.t2      !== undefined) set('pp-t2',      p.t2);
+      if (p.t3      !== undefined) set('pp-t3',      p.t3);
+      if (p.feather !== undefined) set('pp-feather', p.feather);
+    }
+    function onRerollPalimpsest(rng: () => number) {
+      const t1 = Math.round(lerp(20, 80, rng()));
+      const t2 = t1 + Math.round(lerp(30, 70, rng()));
+      const t3 = t2 + Math.round(lerp(30, 70, rng()));
+      setPalimpsestParams({ t1, t2: Math.min(t2, 200), t3: Math.min(t3, 230), feather: Math.round(lerp(4, 20, rng())) });
+    }
+
+    // ── structural-echo params ──────────────────────────────────────────────────
+    function buildStructuralEchoParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="se-thresh">Edge Threshold <span class="pt-val" id="se-thresh-val">110</span></label>
+          <input class="pt-range" type="range" id="se-thresh" min="30" max="220" step="1" value="110" />
+          <div class="pt-range-hints"><span>subtle</span><span>sharp</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="se-feather1">Feather Echo 1 <span class="pt-val" id="se-feather1-val">4</span></label>
+          <input class="pt-range" type="range" id="se-feather1" min="0" max="30" step="1" value="4" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="se-feather2">Feather Echo 2 <span class="pt-val" id="se-feather2-val">14</span></label>
+          <input class="pt-range" type="range" id="se-feather2" min="0" max="50" step="1" value="14" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="se-feather3">Feather Echo 3 <span class="pt-val" id="se-feather3-val">30</span></label>
+          <input class="pt-range" type="range" id="se-feather3" min="0" max="80" step="1" value="30" />
+          <div class="pt-range-hints"><span>tight</span><span>wide ghost</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['se-thresh', 'se-feather1', 'se-feather2', 'se-feather3'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getStructuralEchoParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { thresh: get('se-thresh','110'), feather1: get('se-feather1','4'), feather2: get('se-feather2','14'), feather3: get('se-feather3','30') };
+    }
+    function setStructuralEchoParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vEl = document.getElementById(id + '-val'); if (vEl) vEl.textContent = String(v); } };
+      if (p.thresh   !== undefined) set('se-thresh',   p.thresh);
+      if (p.feather1 !== undefined) set('se-feather1', p.feather1);
+      if (p.feather2 !== undefined) set('se-feather2', p.feather2);
+      if (p.feather3 !== undefined) set('se-feather3', p.feather3);
+    }
+    function onRerollStructuralEcho(rng: () => number) {
+      const f1 = Math.round(lerp(1, 8, rng()));
+      setStructuralEchoParams({
+        thresh:   Math.round(lerp(60, 170, rng())),
+        feather1: f1,
+        feather2: f1 + Math.round(lerp(6, 18, rng())),
+        feather3: f1 + Math.round(lerp(22, 50, rng())),
+      });
+    }
+
+    // ── contrast-surgery params ─────────────────────────────────────────────────
+    function buildContrastSurgeryParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="cs-r-shift">Red Shift <span class="pt-val" id="cs-r-shift-val">60</span></label>
+          <input class="pt-range" type="range" id="cs-r-shift" min="0" max="120" step="1" value="60" />
+          <div class="pt-range-hints"><span>off</span><span>extreme</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cs-b-shift">Blue Shift <span class="pt-val" id="cs-b-shift-val">-50</span></label>
+          <input class="pt-range" type="range" id="cs-b-shift" min="-120" max="0" step="1" value="-50" />
+          <div class="pt-range-hints"><span>extreme</span><span>off</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cs-thresh">Edge Threshold <span class="pt-val" id="cs-thresh-val">110</span></label>
+          <input class="pt-range" type="range" id="cs-thresh" min="30" max="220" step="1" value="110" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cs-feather">Feather <span class="pt-val" id="cs-feather-val">8</span></label>
+          <input class="pt-range" type="range" id="cs-feather" min="0" max="30" step="1" value="8" />
+          <div class="pt-range-hints"><span>hard</span><span>soft</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cs-screen-str">Screen Strength <span class="pt-val" id="cs-screen-str-val">0.45</span></label>
+          <input class="pt-range" type="range" id="cs-screen-str" min="0" max="1" step="0.01" value="0.45" />
+          <div class="pt-range-hints"><span>off</span><span>full</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['cs-r-shift','cs-b-shift','cs-thresh','cs-feather','cs-screen-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getContrastSurgeryParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { r_shift: get('cs-r-shift','60'), b_shift: get('cs-b-shift','-50'), thresh: get('cs-thresh','110'), feather: get('cs-feather','8'), screen_str: get('cs-screen-str','0.45') };
+    }
+    function setContrastSurgeryParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.r_shift    !== undefined) set('cs-r-shift',    p.r_shift);
+      if (p.b_shift    !== undefined) set('cs-b-shift',    p.b_shift);
+      if (p.thresh     !== undefined) set('cs-thresh',     p.thresh);
+      if (p.feather    !== undefined) set('cs-feather',    p.feather);
+      if (p.screen_str !== undefined) set('cs-screen-str', p.screen_str);
+    }
+    function onRerollContrastSurgery(rng: () => number) {
+      setContrastSurgeryParams({
+        r_shift:    Math.round(lerp(20, 120, rng())),
+        b_shift:    Math.round(-lerp(20, 120, rng())),
+        thresh:     Math.round(lerp(60, 180, rng())),
+        feather:    Math.round(lerp(2, 20, rng())),
+        screen_str: parseFloat(lerp(0.2, 0.7, rng()).toFixed(2)),
+      });
+    }
+
+    // ── luminance-layers params ─────────────────────────────────────────────────
+    function buildLuminanceLayersParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="ll-t1">Band 1 Threshold (B→C) <span class="pt-val" id="ll-t1-val">80</span></label>
+          <input class="pt-range" type="range" id="ll-t1" min="10" max="150" step="1" value="80" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ll-t2">Band 2 Threshold (C→D) <span class="pt-val" id="ll-t2-val">160</span></label>
+          <input class="pt-range" type="range" id="ll-t2" min="50" max="230" step="1" value="160" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ll-feather">Feather <span class="pt-val" id="ll-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="ll-feather" min="0" max="40" step="1" value="10" />
+          <div class="pt-range-hints"><span>hard</span><span>soft</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ll-screen-str">A Screen Strength <span class="pt-val" id="ll-screen-str-val">0.35</span></label>
+          <input class="pt-range" type="range" id="ll-screen-str" min="0" max="1" step="0.01" value="0.35" />
+          <div class="pt-range-hints"><span>off</span><span>full</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['ll-t1','ll-t2','ll-feather','ll-screen-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getLuminanceLayersParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { t1: get('ll-t1','80'), t2: get('ll-t2','160'), feather: get('ll-feather','10'), screen_str: get('ll-screen-str','0.35') };
+    }
+    function setLuminanceLayersParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.t1         !== undefined) set('ll-t1',         p.t1);
+      if (p.t2         !== undefined) set('ll-t2',         p.t2);
+      if (p.feather    !== undefined) set('ll-feather',    p.feather);
+      if (p.screen_str !== undefined) set('ll-screen-str', p.screen_str);
+    }
+    function onRerollLuminanceLayers(rng: () => number) {
+      const t1 = Math.round(lerp(30, 120, rng()));
+      setLuminanceLayersParams({ t1, t2: t1 + Math.round(lerp(40, 100, rng())), feather: Math.round(lerp(4, 24, rng())), screen_str: parseFloat(lerp(0.1, 0.6, rng()).toFixed(2)) });
+    }
+
+    // ── photogram params ────────────────────────────────────────────────────────
+    function buildPhotogramParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="pg-thresh">Exposure Threshold <span class="pt-val" id="pg-thresh-val">128</span></label>
+          <input class="pt-range" type="range" id="pg-thresh" min="30" max="220" step="1" value="128" />
+          <div class="pt-range-hints"><span>overexposed</span><span>underexposed</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="pg-feather">Feather <span class="pt-val" id="pg-feather-val">4</span></label>
+          <input class="pt-range" type="range" id="pg-feather" min="0" max="20" step="1" value="4" />
+          <div class="pt-range-hints"><span>hard</span><span>soft</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="pg-screen-str">C Screen Strength <span class="pt-val" id="pg-screen-str-val">0.35</span></label>
+          <input class="pt-range" type="range" id="pg-screen-str" min="0" max="1" step="0.01" value="0.35" />
+          <div class="pt-range-hints"><span>off</span><span>full</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="pg-shift">Channel Shift <span class="pt-val" id="pg-shift-val">15</span></label>
+          <input class="pt-range" type="range" id="pg-shift" min="0" max="60" step="1" value="15" />
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['pg-thresh','pg-feather','pg-screen-str','pg-shift'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getPhotogramParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { thresh: get('pg-thresh','128'), feather: get('pg-feather','4'), screen_str: get('pg-screen-str','0.35'), shift: get('pg-shift','15') };
+    }
+    function setPhotogramParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.thresh     !== undefined) set('pg-thresh',     p.thresh);
+      if (p.feather    !== undefined) set('pg-feather',    p.feather);
+      if (p.screen_str !== undefined) set('pg-screen-str', p.screen_str);
+      if (p.shift      !== undefined) set('pg-shift',      p.shift);
+    }
+    function onRerollPhotogram(rng: () => number) {
+      setPhotogramParams({ thresh: Math.round(lerp(60, 180, rng())), feather: Math.round(lerp(0, 12, rng())), screen_str: parseFloat(lerp(0.1, 0.6, rng()).toFixed(2)), shift: Math.round(lerp(5, 45, rng())) });
+    }
+
+    // ── stencil-burn params ─────────────────────────────────────────────────────
+    function buildStencilBurnParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="stb-thresh">Stencil Threshold <span class="pt-val" id="stb-thresh-val">128</span></label>
+          <input class="pt-range" type="range" id="stb-thresh" min="30" max="220" step="1" value="128" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="stb-feather">Feather <span class="pt-val" id="stb-feather-val">2</span></label>
+          <input class="pt-range" type="range" id="stb-feather" min="0" max="20" step="1" value="2" />
+          <div class="pt-range-hints"><span>hard burn</span><span>soft</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="stb-mult-str">A Multiply Strength <span class="pt-val" id="stb-mult-str-val">0.30</span></label>
+          <input class="pt-range" type="range" id="stb-mult-str" min="0" max="1" step="0.01" value="0.30" />
+          <div class="pt-range-hints"><span>off</span><span>full burn</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['stb-thresh','stb-feather','stb-mult-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getStencilBurnParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { thresh: get('stb-thresh','128'), feather: get('stb-feather','2'), mult_str: get('stb-mult-str','0.30') };
+    }
+    function setStencilBurnParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.thresh   !== undefined) set('stb-thresh',   p.thresh);
+      if (p.feather  !== undefined) set('stb-feather',  p.feather);
+      if (p.mult_str !== undefined) set('stb-mult-str', p.mult_str);
+    }
+    function onRerollStencilBurn(rng: () => number) {
+      setStencilBurnParams({ thresh: Math.round(lerp(60, 190, rng())), feather: Math.round(lerp(0, 10, rng())), mult_str: parseFloat(lerp(0.1, 0.6, rng()).toFixed(2)) });
+    }
+
+    // ── threshold-cascade params ────────────────────────────────────────────────
+    function buildThresholdCascadeParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="tc-t1">Threshold 1 (A→B) <span class="pt-val" id="tc-t1-val">40</span></label>
+          <input class="pt-range" type="range" id="tc-t1" min="10" max="120" step="1" value="40" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="tc-t2">Threshold 2 (→C) <span class="pt-val" id="tc-t2-val">80</span></label>
+          <input class="pt-range" type="range" id="tc-t2" min="20" max="160" step="1" value="80" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="tc-t3">Threshold 3 (→D) <span class="pt-val" id="tc-t3-val">150</span></label>
+          <input class="pt-range" type="range" id="tc-t3" min="60" max="220" step="1" value="150" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="tc-feather">Feather <span class="pt-val" id="tc-feather-val">8</span></label>
+          <input class="pt-range" type="range" id="tc-feather" min="0" max="40" step="1" value="8" />
+          <div class="pt-range-hints"><span>hard</span><span>soft</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="tc-edge-thresh">Final Edge Threshold <span class="pt-val" id="tc-edge-thresh-val">120</span></label>
+          <input class="pt-range" type="range" id="tc-edge-thresh" min="30" max="220" step="1" value="120" />
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['tc-t1','tc-t2','tc-t3','tc-feather','tc-edge-thresh'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getThresholdCascadeParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { t1: get('tc-t1','40'), t2: get('tc-t2','80'), t3: get('tc-t3','150'), feather: get('tc-feather','8'), edge_thresh: get('tc-edge-thresh','120') };
+    }
+    function setThresholdCascadeParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.t1         !== undefined) set('tc-t1',         p.t1);
+      if (p.t2         !== undefined) set('tc-t2',         p.t2);
+      if (p.t3         !== undefined) set('tc-t3',         p.t3);
+      if (p.feather    !== undefined) set('tc-feather',    p.feather);
+      if (p.edge_thresh !== undefined) set('tc-edge-thresh', p.edge_thresh);
+    }
+    function onRerollThresholdCascade(rng: () => number) {
+      const t1 = Math.round(lerp(15, 70, rng()));
+      const t2 = t1 + Math.round(lerp(20, 60, rng()));
+      const t3 = t2 + Math.round(lerp(30, 80, rng()));
+      setThresholdCascadeParams({ t1, t2: Math.min(t2, 160), t3: Math.min(t3, 220), feather: Math.round(lerp(2, 20, rng())), edge_thresh: Math.round(lerp(60, 180, rng())) });
+    }
+
+    // ── quad-sort-destroy params ────────────────────────────────────────────────
+    function buildQuadSortDestroyParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="qsd-t1">Stencil Threshold 1 <span class="pt-val" id="qsd-t1-val">80</span></label>
+          <input class="pt-range" type="range" id="qsd-t1" min="20" max="150" step="1" value="80" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="qsd-t2">Stencil Threshold 2 <span class="pt-val" id="qsd-t2-val">160</span></label>
+          <input class="pt-range" type="range" id="qsd-t2" min="60" max="220" step="1" value="160" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="qsd-feather">Feather <span class="pt-val" id="qsd-feather-val">6</span></label>
+          <input class="pt-range" type="range" id="qsd-feather" min="0" max="30" step="1" value="6" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="qsd-sort-thresh">Sort Threshold <span class="pt-val" id="qsd-sort-thresh-val">80</span></label>
+          <input class="pt-range" type="range" id="qsd-sort-thresh" min="20" max="150" step="1" value="80" />
+          <div class="pt-range-hints"><span>all sorted</span><span>barely</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="qsd-shift-r">Channel Shift <span class="pt-val" id="qsd-shift-r-val">30</span></label>
+          <input class="pt-range" type="range" id="qsd-shift-r" min="0" max="80" step="1" value="30" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="qsd-quality">JPEG Quality <span class="pt-val" id="qsd-quality-val">4</span></label>
+          <input class="pt-range" type="range" id="qsd-quality" min="1" max="30" step="1" value="4" />
+          <div class="pt-range-hints"><span>destroyed</span><span>clean</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['qsd-t1','qsd-t2','qsd-feather','qsd-sort-thresh','qsd-shift-r','qsd-quality'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getQuadSortDestroyParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { t1: get('qsd-t1','80'), t2: get('qsd-t2','160'), feather: get('qsd-feather','6'), sort_thresh: get('qsd-sort-thresh','80'), shift_r: get('qsd-shift-r','30'), quality: get('qsd-quality','4') };
+    }
+    function setQuadSortDestroyParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.t1         !== undefined) set('qsd-t1',         p.t1);
+      if (p.t2         !== undefined) set('qsd-t2',         p.t2);
+      if (p.feather    !== undefined) set('qsd-feather',    p.feather);
+      if (p.sort_thresh !== undefined) set('qsd-sort-thresh', p.sort_thresh);
+      if (p.shift_r    !== undefined) set('qsd-shift-r',    p.shift_r);
+      if (p.quality    !== undefined) set('qsd-quality',    p.quality);
+    }
+    function onRerollQuadSortDestroy(rng: () => number) {
+      const t1 = Math.round(lerp(30, 110, rng()));
+      setQuadSortDestroyParams({ t1, t2: t1 + Math.round(lerp(40, 100, rng())), feather: Math.round(lerp(2, 18, rng())), sort_thresh: Math.round(lerp(30, 130, rng())), shift_r: Math.round(lerp(10, 70, rng())), quality: Math.round(lerp(1, 12, rng())) });
+    }
+
+    // ── stratum-shift params ────────────────────────────────────────────────────
+    function buildStratumShiftParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="ss2-shift">Horizontal Shift <span class="pt-val" id="ss2-shift-val">40</span></label>
+          <input class="pt-range" type="range" id="ss2-shift" min="0" max="120" step="1" value="40" />
+          <div class="pt-range-hints"><span>none</span><span>far</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ss2-luma-thresh">Luma Threshold <span class="pt-val" id="ss2-luma-thresh-val">110</span></label>
+          <input class="pt-range" type="range" id="ss2-luma-thresh" min="30" max="220" step="1" value="110" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ss2-feather">Feather <span class="pt-val" id="ss2-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="ss2-feather" min="0" max="40" step="1" value="10" />
+          <div class="pt-range-hints"><span>hard</span><span>soft</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['ss2-shift','ss2-luma-thresh','ss2-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getStratumShiftParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { shift: get('ss2-shift','40'), luma_thresh: get('ss2-luma-thresh','110'), feather: get('ss2-feather','10') };
+    }
+    function setStratumShiftParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.shift       !== undefined) set('ss2-shift',       p.shift);
+      if (p.luma_thresh !== undefined) set('ss2-luma-thresh', p.luma_thresh);
+      if (p.feather     !== undefined) set('ss2-feather',     p.feather);
+    }
+    function onRerollStratumShift(rng: () => number) {
+      setStratumShiftParams({ shift: Math.round(lerp(0, 100, rng())), luma_thresh: Math.round(lerp(60, 180, rng())), feather: Math.round(lerp(4, 24, rng())) });
+    }
+
+    // ── layered-cutwork params ──────────────────────────────────────────────────
+    function buildLayeredCutworkParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="lc-t1">Luma Threshold (A→B) <span class="pt-val" id="lc-t1-val">120</span></label>
+          <input class="pt-range" type="range" id="lc-t1" min="30" max="220" step="1" value="120" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="lc-thresh">Edge Threshold (→C) <span class="pt-val" id="lc-thresh-val">110</span></label>
+          <input class="pt-range" type="range" id="lc-thresh" min="30" max="220" step="1" value="110" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="lc-t2">Luma Threshold (→D) <span class="pt-val" id="lc-t2-val">80</span></label>
+          <input class="pt-range" type="range" id="lc-t2" min="20" max="200" step="1" value="80" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="lc-feather">Feather <span class="pt-val" id="lc-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="lc-feather" min="0" max="40" step="1" value="10" />
+          <div class="pt-range-hints"><span>hard</span><span>soft</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['lc-t1','lc-thresh','lc-t2','lc-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getLayeredCutworkParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { t1: get('lc-t1','120'), thresh: get('lc-thresh','110'), t2: get('lc-t2','80'), feather: get('lc-feather','10') };
+    }
+    function setLayeredCutworkParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.t1     !== undefined) set('lc-t1',     p.t1);
+      if (p.thresh !== undefined) set('lc-thresh', p.thresh);
+      if (p.t2     !== undefined) set('lc-t2',     p.t2);
+      if (p.feather !== undefined) set('lc-feather', p.feather);
+    }
+    function onRerollLayeredCutwork(rng: () => number) {
+      setLayeredCutworkParams({ t1: Math.round(lerp(60, 180, rng())), thresh: Math.round(lerp(60, 180, rng())), t2: Math.round(lerp(40, 140, rng())), feather: Math.round(lerp(4, 24, rng())) });
+    }
+
+    // ── collage-mask-collage params ─────────────────────────────────────────────
+    function buildCollageMaskCollageParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="cmc-pieces">Grid Pieces <span class="pt-val" id="cmc-pieces-val">16</span></label>
+          <input class="pt-range" type="range" id="cmc-pieces" min="4" max="64" step="1" value="16" />
+          <div class="pt-range-hints"><span>coarse</span><span>fine</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cmc-mix">A/B Mix <span class="pt-val" id="cmc-mix-val">0.50</span></label>
+          <input class="pt-range" type="range" id="cmc-mix" min="0" max="1" step="0.01" value="0.50" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cmc-thresh">Edge Threshold <span class="pt-val" id="cmc-thresh-val">80</span></label>
+          <input class="pt-range" type="range" id="cmc-thresh" min="20" max="200" step="1" value="80" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cmc-feather">Edge Feather <span class="pt-val" id="cmc-feather-val">12</span></label>
+          <input class="pt-range" type="range" id="cmc-feather" min="0" max="40" step="1" value="12" />
+          <div class="pt-range-hints"><span>hard</span><span>soft</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['cmc-pieces','cmc-mix','cmc-thresh','cmc-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getCollageMaskCollageParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { pieces: get('cmc-pieces','16'), mix: get('cmc-mix','0.50'), thresh: get('cmc-thresh','80'), feather: get('cmc-feather','12') };
+    }
+    function setCollageMaskCollageParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.pieces  !== undefined) set('cmc-pieces',  p.pieces);
+      if (p.mix     !== undefined) set('cmc-mix',     p.mix);
+      if (p.thresh  !== undefined) set('cmc-thresh',  p.thresh);
+      if (p.feather !== undefined) set('cmc-feather', p.feather);
+    }
+    function onRerollCollageMaskCollage(rng: () => number) {
+      setCollageMaskCollageParams({ pieces: Math.round(lerp(4, 48, rng())), mix: parseFloat(lerp(0.2, 0.8, rng()).toFixed(2)), thresh: Math.round(lerp(40, 160, rng())), feather: Math.round(lerp(4, 30, rng())) });
+    }
+
+    // ── collage-surgery params ──────────────────────────────────────────────────
+    function buildCollageSurgeryParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="csrg-strips">Strip Count <span class="pt-val" id="csrg-strips-val">12</span></label>
+          <input class="pt-range" type="range" id="csrg-strips" min="4" max="40" step="1" value="12" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="csrg-thresh">Edge Threshold <span class="pt-val" id="csrg-thresh-val">110</span></label>
+          <input class="pt-range" type="range" id="csrg-thresh" min="30" max="220" step="1" value="110" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="csrg-feather">Feather <span class="pt-val" id="csrg-feather-val">8</span></label>
+          <input class="pt-range" type="range" id="csrg-feather" min="0" max="30" step="1" value="8" />
+          <div class="pt-range-hints"><span>hard</span><span>soft</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['csrg-strips','csrg-thresh','csrg-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getCollageSurgeryParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { strips: get('csrg-strips','12'), thresh: get('csrg-thresh','110'), feather: get('csrg-feather','8') };
+    }
+    function setCollageSurgeryParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.strips  !== undefined) set('csrg-strips',  p.strips);
+      if (p.thresh  !== undefined) set('csrg-thresh',  p.thresh);
+      if (p.feather !== undefined) set('csrg-feather', p.feather);
+    }
+    function onRerollCollageSurgery(rng: () => number) {
+      setCollageSurgeryParams({ strips: Math.round(lerp(4, 32, rng())), thresh: Math.round(lerp(60, 180, rng())), feather: Math.round(lerp(2, 20, rng())) });
+    }
+
+    // ── mask-cascade params ─────────────────────────────────────────────────────
+    function buildMaskCascadeParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="mc-luma-thresh">Luma Threshold (→B) <span class="pt-val" id="mc-luma-thresh-val">120</span></label>
+          <input class="pt-range" type="range" id="mc-luma-thresh" min="30" max="220" step="1" value="120" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="mc-edge-thresh">Edge Threshold (→C) <span class="pt-val" id="mc-edge-thresh-val">110</span></label>
+          <input class="pt-range" type="range" id="mc-edge-thresh" min="30" max="220" step="1" value="110" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="mc-noise-thresh">Noise Threshold (→D) <span class="pt-val" id="mc-noise-thresh-val">128</span></label>
+          <input class="pt-range" type="range" id="mc-noise-thresh" min="30" max="220" step="1" value="128" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="mc-feather">Feather <span class="pt-val" id="mc-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="mc-feather" min="0" max="30" step="1" value="10" />
+          <div class="pt-range-hints"><span>hard</span><span>soft</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['mc-luma-thresh','mc-edge-thresh','mc-noise-thresh','mc-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getMaskCascadeParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { luma_thresh: get('mc-luma-thresh','120'), edge_thresh: get('mc-edge-thresh','110'), noise_thresh: get('mc-noise-thresh','128'), feather: get('mc-feather','10') };
+    }
+    function setMaskCascadeParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.luma_thresh  !== undefined) set('mc-luma-thresh',  p.luma_thresh);
+      if (p.edge_thresh  !== undefined) set('mc-edge-thresh',  p.edge_thresh);
+      if (p.noise_thresh !== undefined) set('mc-noise-thresh', p.noise_thresh);
+      if (p.feather      !== undefined) set('mc-feather',      p.feather);
+    }
+    function onRerollMaskCascade(rng: () => number) {
+      setMaskCascadeParams({ luma_thresh: Math.round(lerp(60, 180, rng())), edge_thresh: Math.round(lerp(60, 180, rng())), noise_thresh: Math.round(lerp(60, 180, rng())), feather: Math.round(lerp(4, 24, rng())) });
+    }
+
+    // ── vhs-halation params ─────────────────────────────────────────────────────
+    function buildVhsHalationParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="vh-thresh">Edge Threshold <span class="pt-val" id="vh-thresh-val">100</span></label>
+          <input class="pt-range" type="range" id="vh-thresh" min="20" max="200" step="1" value="100" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="vh-feather">Halation Feather <span class="pt-val" id="vh-feather-val">25</span></label>
+          <input class="pt-range" type="range" id="vh-feather" min="4" max="60" step="1" value="25" />
+          <div class="pt-range-hints"><span>tight halo</span><span>wide bloom</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="vh-shift">Channel Shift <span class="pt-val" id="vh-shift-val">20</span></label>
+          <input class="pt-range" type="range" id="vh-shift" min="0" max="60" step="1" value="20" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="vh-scan-spacing">Scan Spacing <span class="pt-val" id="vh-scan-spacing-val">4</span></label>
+          <input class="pt-range" type="range" id="vh-scan-spacing" min="2" max="10" step="1" value="4" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="vh-scan-opacity">Scan Opacity <span class="pt-val" id="vh-scan-opacity-val">0.35</span></label>
+          <input class="pt-range" type="range" id="vh-scan-opacity" min="0" max="0.8" step="0.01" value="0.35" />
+          <div class="pt-range-hints"><span>off</span><span>heavy</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['vh-thresh','vh-feather','vh-shift','vh-scan-spacing','vh-scan-opacity'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getVhsHalationParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { thresh: get('vh-thresh','100'), feather: get('vh-feather','25'), shift: get('vh-shift','20'), scan_spacing: get('vh-scan-spacing','4'), scan_opacity: get('vh-scan-opacity','0.35') };
+    }
+    function setVhsHalationParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.thresh       !== undefined) set('vh-thresh',       p.thresh);
+      if (p.feather      !== undefined) set('vh-feather',      p.feather);
+      if (p.shift        !== undefined) set('vh-shift',        p.shift);
+      if (p.scan_spacing !== undefined) set('vh-scan-spacing', p.scan_spacing);
+      if (p.scan_opacity !== undefined) set('vh-scan-opacity', p.scan_opacity);
+    }
+    function onRerollVhsHalation(rng: () => number) {
+      setVhsHalationParams({ thresh: Math.round(lerp(50, 160, rng())), feather: Math.round(lerp(10, 50, rng())), shift: Math.round(lerp(5, 50, rng())), scan_spacing: Math.round(lerp(2, 8, rng())), scan_opacity: parseFloat(lerp(0.1, 0.6, rng()).toFixed(2)) });
+    }
+
+    // ── surveillance-decay params ───────────────────────────────────────────────
+    function buildSurveillanceDecayParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="sd-shift">Channel Shift <span class="pt-val" id="sd-shift-val">15</span></label>
+          <input class="pt-range" type="range" id="sd-shift" min="0" max="50" step="1" value="15" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sd-scan-spacing">Scan Spacing <span class="pt-val" id="sd-scan-spacing-val">3</span></label>
+          <input class="pt-range" type="range" id="sd-scan-spacing" min="2" max="8" step="1" value="3" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sd-scan-opacity">Scan Opacity <span class="pt-val" id="sd-scan-opacity-val">0.40</span></label>
+          <input class="pt-range" type="range" id="sd-scan-opacity" min="0" max="0.8" step="0.01" value="0.40" />
+          <div class="pt-range-hints"><span>off</span><span>heavy CRT</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['sd-shift','sd-scan-spacing','sd-scan-opacity'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getSurveillanceDecayParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { shift: get('sd-shift','15'), scan_spacing: get('sd-scan-spacing','3'), scan_opacity: get('sd-scan-opacity','0.40') };
+    }
+    function setSurveillanceDecayParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.shift        !== undefined) set('sd-shift',        p.shift);
+      if (p.scan_spacing !== undefined) set('sd-scan-spacing', p.scan_spacing);
+      if (p.scan_opacity !== undefined) set('sd-scan-opacity', p.scan_opacity);
+    }
+    function onRerollSurveillanceDecay(rng: () => number) {
+      setSurveillanceDecayParams({ shift: Math.round(lerp(5, 40, rng())), scan_spacing: Math.round(lerp(2, 7, rng())), scan_opacity: parseFloat(lerp(0.15, 0.65, rng()).toFixed(2)) });
+    }
+
+    // ── sorted-displacement params ──────────────────────────────────────────────
+    function buildSortedDisplacementParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="sdp-sort-thresh">Sort Threshold <span class="pt-val" id="sdp-sort-thresh-val">40</span></label>
+          <input class="pt-range" type="range" id="sdp-sort-thresh" min="5" max="120" step="1" value="40" />
+          <div class="pt-range-hints"><span>all sorted</span><span>barely</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sdp-swirl">Swirl Angle <span class="pt-val" id="sdp-swirl-val">1.20</span></label>
+          <input class="pt-range" type="range" id="sdp-swirl" min="0" max="4" step="0.05" value="1.20" />
+          <div class="pt-range-hints"><span>none</span><span>extreme</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sdp-thresh">Stencil Threshold <span class="pt-val" id="sdp-thresh-val">110</span></label>
+          <input class="pt-range" type="range" id="sdp-thresh" min="30" max="220" step="1" value="110" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sdp-feather">Feather <span class="pt-val" id="sdp-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="sdp-feather" min="0" max="30" step="1" value="10" />
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['sdp-sort-thresh','sdp-swirl','sdp-thresh','sdp-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getSortedDisplacementParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { sort_thresh: get('sdp-sort-thresh','40'), swirl: get('sdp-swirl','1.20'), thresh: get('sdp-thresh','110'), feather: get('sdp-feather','10') };
+    }
+    function setSortedDisplacementParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.sort_thresh !== undefined) set('sdp-sort-thresh', p.sort_thresh);
+      if (p.swirl       !== undefined) set('sdp-swirl',       p.swirl);
+      if (p.thresh      !== undefined) set('sdp-thresh',      p.thresh);
+      if (p.feather     !== undefined) set('sdp-feather',     p.feather);
+    }
+    function onRerollSortedDisplacement(rng: () => number) {
+      setSortedDisplacementParams({ sort_thresh: Math.round(lerp(5, 90, rng())), swirl: parseFloat(lerp(0.3, 3.5, rng()).toFixed(2)), thresh: Math.round(lerp(60, 180, rng())), feather: Math.round(lerp(4, 24, rng())) });
+    }
+
+    // ── cyanotype-corruption params ─────────────────────────────────────────────
+    function buildCyanotypeCorruptionParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="cc2-blue-str">Blue Toning <span class="pt-val" id="cc2-blue-str-val">0.65</span></label>
+          <input class="pt-range" type="range" id="cc2-blue-str" min="0" max="1" step="0.01" value="0.65" />
+          <div class="pt-range-hints"><span>none</span><span>prussian</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cc2-thresh">Edge Threshold <span class="pt-val" id="cc2-thresh-val">110</span></label>
+          <input class="pt-range" type="range" id="cc2-thresh" min="30" max="220" step="1" value="110" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cc2-feather">Feather <span class="pt-val" id="cc2-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="cc2-feather" min="0" max="30" step="1" value="10" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cc2-shift-r">Red Shift <span class="pt-val" id="cc2-shift-r-val">25</span></label>
+          <input class="pt-range" type="range" id="cc2-shift-r" min="0" max="70" step="1" value="25" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cc2-quality">JPEG Quality <span class="pt-val" id="cc2-quality-val">5</span></label>
+          <input class="pt-range" type="range" id="cc2-quality" min="1" max="30" step="1" value="5" />
+          <div class="pt-range-hints"><span>destroyed</span><span>clean</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['cc2-blue-str','cc2-thresh','cc2-feather','cc2-shift-r','cc2-quality'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getCyanotypeCorruptionParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { blue_str: get('cc2-blue-str','0.65'), thresh: get('cc2-thresh','110'), feather: get('cc2-feather','10'), shift_r: get('cc2-shift-r','25'), quality: get('cc2-quality','5') };
+    }
+    function setCyanotypeCorruptionParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.blue_str !== undefined) set('cc2-blue-str', p.blue_str);
+      if (p.thresh   !== undefined) set('cc2-thresh',   p.thresh);
+      if (p.feather  !== undefined) set('cc2-feather',  p.feather);
+      if (p.shift_r  !== undefined) set('cc2-shift-r',  p.shift_r);
+      if (p.quality  !== undefined) set('cc2-quality',  p.quality);
+    }
+    function onRerollCyanotypeCorruption(rng: () => number) {
+      setCyanotypeCorruptionParams({ blue_str: parseFloat(lerp(0.3, 0.9, rng()).toFixed(2)), thresh: Math.round(lerp(60, 180, rng())), feather: Math.round(lerp(4, 24, rng())), shift_r: Math.round(lerp(5, 55, rng())), quality: Math.round(lerp(1, 12, rng())) });
+    }
+
+    // ── shifted-linescreen params ───────────────────────────────────────────────
+    function buildShiftedLinescreenParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="sl-shift">Misregistration Shift <span class="pt-val" id="sl-shift-val">30</span></label>
+          <input class="pt-range" type="range" id="sl-shift" min="0" max="80" step="1" value="30" />
+          <div class="pt-range-hints"><span>none</span><span>extreme</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sl-screen-str">Screen Strength <span class="pt-val" id="sl-screen-str-val">0.40</span></label>
+          <input class="pt-range" type="range" id="sl-screen-str" min="0" max="1" step="0.01" value="0.40" />
+          <div class="pt-range-hints"><span>off</span><span>full</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['sl-shift','sl-screen-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getShiftedLinescreenParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { shift: get('sl-shift','30'), screen_str: get('sl-screen-str','0.40') };
+    }
+    function setShiftedLinescreenParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.shift      !== undefined) set('sl-shift',      p.shift);
+      if (p.screen_str !== undefined) set('sl-screen-str', p.screen_str);
+    }
+    function onRerollShiftedLinescreen(rng: () => number) {
+      setShiftedLinescreenParams({ shift: Math.round(lerp(5, 70, rng())), screen_str: parseFloat(lerp(0.15, 0.7, rng()).toFixed(2)) });
+    }
+
     // ─── Native canvas effect helpers ──────────────────────────────────────────
 
     function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
@@ -5802,6 +7875,82 @@ import Admin from '../../../layouts/Admin.astro';
         out[si + 3] = 255;
       }
       return out;
+    }
+
+    // CRT scan lines: darkens every `spacing`-th row by `opacity` fraction.
+    function scanLines(
+      d: Uint8ClampedArray, w: number, h: number, spacing: number, opacity: number,
+    ): Uint8ClampedArray {
+      const out = new Uint8ClampedArray(d);
+      const sp = Math.max(2, Math.round(spacing));
+      const fade = 1 - Math.max(0, Math.min(1, opacity));
+      for (let y = 0; y < h; y++) {
+        if (y % sp !== 0) continue;
+        for (let x = 0; x < w; x++) {
+          const i = (y * w + x) * 4;
+          out[i]   = Math.round(out[i]   * fade);
+          out[i + 1] = Math.round(out[i + 1] * fade);
+          out[i + 2] = Math.round(out[i + 2] * fade);
+        }
+      }
+      return out;
+    }
+
+    // Like lumaMask but uses a separate mask array to drive alpha (mask luma → dA vs dB)
+    function lumaComposite(
+      mask: Uint8ClampedArray, dA: Uint8ClampedArray, dB: Uint8ClampedArray,
+      w: number, h: number, threshold: number, feather: number, invert: boolean,
+    ): Uint8ClampedArray {
+      const out = new Uint8ClampedArray(w * h * 4);
+      const half = feather / 2;
+      for (let i = 0; i < w * h; i++) {
+        const si = i * 4;
+        const luma = 0.299 * mask[si] + 0.587 * mask[si + 1] + 0.114 * mask[si + 2];
+        let alpha = feather <= 0
+          ? (luma >= threshold ? 1 : 0)
+          : Math.min(1, Math.max(0, (luma - (threshold - half)) / feather));
+        if (invert) alpha = 1 - alpha;
+        out[si]     = Math.round(dA[si]     * alpha + dB[si]     * (1 - alpha));
+        out[si + 1] = Math.round(dA[si + 1] * alpha + dB[si + 1] * (1 - alpha));
+        out[si + 2] = Math.round(dA[si + 2] * alpha + dB[si + 2] * (1 - alpha));
+        out[si + 3] = 255;
+      }
+      return out;
+    }
+
+    // Generate a flat noise image (grayscale) using provided rng
+    function noisePixels(w: number, h: number, rng: () => number): Uint8ClampedArray {
+      const d = new Uint8ClampedArray(w * h * 4);
+      for (let i = 0; i < w * h; i++) {
+        const v = Math.floor(rng() * 256);
+        d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v;
+        d[i * 4 + 3] = 255;
+      }
+      return d;
+    }
+
+    // Render edge magnitudes of d as a grayscale pixel array (for use as lumaComposite mask)
+    function edgeMap(
+      d: Uint8ClampedArray, w: number, h: number, feather: number,
+    ): Uint8ClampedArray {
+      const mag = sobelEdges(d, w, h);
+      const blurred = feather > 0 ? boxBlur1ch(mag, w, h, feather) : mag;
+      const out = new Uint8ClampedArray(w * h * 4);
+      for (let i = 0; i < w * h; i++) {
+        const v = Math.min(255, Math.max(0, Math.round(blurred[i])));
+        out[i * 4] = out[i * 4 + 1] = out[i * 4 + 2] = v;
+        out[i * 4 + 3] = 255;
+      }
+      return out;
+    }
+
+    // Flat solid-color pixel array
+    function solidColor(w: number, h: number, r: number, g: number, b: number): Uint8ClampedArray {
+      const d = new Uint8ClampedArray(w * h * 4);
+      for (let i = 0; i < w * h; i++) {
+        d[i * 4] = r; d[i * 4 + 1] = g; d[i * 4 + 2] = b; d[i * 4 + 3] = 255;
+      }
+      return d;
     }
 
     // ─── Sparagmos async helpers ─────────────────────────────────────────────────
