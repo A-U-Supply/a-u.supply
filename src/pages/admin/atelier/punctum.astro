@@ -4372,33 +4372,33 @@ import Admin from '../../../layouts/Admin.astro';
       'dream-dissolve': { label: 'Dream Dissolve', desc: 'Two images each sent through deep neural hallucination — the network finds eyes and feathers in everything, turning surfaces into living architectures', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('dream-dissolve', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'double-exposure': { label: 'Double Exposure', desc: 'Two images burned onto the same film. Screen blending lets the light accumulate, multiply adds depth in the shadows. The double-exposed image is sonified.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('double-exposure', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'feedback-loop': { label: 'Feedback Loop', desc: 'Compose, destroy, re-compose the wreckage, destroy again. Two images blended, distorted, fragmented back together with originals.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('feedback-loop', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'ghost-overlay': { label: 'Ghost Overlay', desc: "A haunting: A's edges become a soft veil cast over B with high feathering. Screen blending then adds A's full luminance as a second ghost layer.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: true,
-        render: (imgs, _p, rng) => {
+      'ghost-overlay': { label: 'Ghost Overlay', desc: "A haunting: A's edges become a soft veil cast over B with high feathering. Screen blending then adds A's full luminance as a second ghost layer.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false,
+        render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
           const bPx = getPixels(imgs[1]!);
           const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
-          let d = edgeMaskComposite(dA, dB, w, h, lerp(90, 140, rng()), lerp(15, 25, rng()), false);
-          d = blendPixels(d, dA, w, h, 'screen', lerp(0.4, 0.7, rng()));
+          let d = edgeMaskComposite(dA, dB, w, h, params.threshold ?? 120, params.feather ?? 20, false);
+          d = blendPixels(d, dA, w, h, 'screen', params.strength ?? 0.55);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
-        }, buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'phantom-limb': { label: 'Phantom Limb', desc: "One image's edge structure is cut out and laid over another — not the image itself, only its outline, its ghost. The screen blend lets the haunting show.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: true,
-        render: (imgs, _p, rng) => {
+        }, buildParams: buildGhostOverlayParams, getParams: getGhostOverlayParams, setParams: setGhostOverlayParams },
+      'phantom-limb': { label: 'Phantom Limb', desc: "One image's edge structure is cut out and laid over another — not the image itself, only its outline, its ghost. The screen blend lets the haunting show.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false,
+        render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
           const bPx = getPixels(imgs[1]!);
           const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
-          let d = edgeMaskComposite(dA, dB, w, h, lerp(80, 140, rng()), lerp(8, 20, rng()), false);
-          d = blendPixels(dB, d, w, h, 'screen', lerp(0.3, 0.6, rng()));
+          let d = edgeMaskComposite(dA, dB, w, h, params.threshold ?? 110, params.feather ?? 14, false);
+          d = blendPixels(dB, d, w, h, 'screen', params.strength ?? 0.45);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
-        }, buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'simple-cutout': { label: 'Simple Cutout', desc: "The most direct use of masking: A's edge skeleton is cut clean into B. Wherever A has strong edges, B shows through; everywhere else, A holds.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: true,
-        render: (imgs, _p, rng) => {
+        }, buildParams: buildPhantomLimbParams, getParams: getPhantomLimbParams, setParams: setPhantomLimbParams },
+      'simple-cutout': { label: 'Simple Cutout', desc: "The most direct use of masking: A's edge skeleton is cut clean into B. Wherever A has strong edges, B shows through; everywhere else, A holds.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false,
+        render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
           const bPx = getPixels(imgs[1]!);
           const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
-          let d = edgeMaskComposite(dA, dB, w, h, lerp(100, 160, rng()), lerp(5, 12, rng()), false);
-          d = channelShift(d, w, h, lerp(20, 55, rng()), lerp(-45, -15, rng()));
+          let d = edgeMaskComposite(dA, dB, w, h, params.threshold ?? 130, params.feather ?? 8, false);
+          d = channelShift(d, w, h, params.shift_r ?? 35, params.shift_b ?? -30);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
-        }, buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+        }, buildParams: buildSimpleCutoutParams, getParams: getSimpleCutoutParams, setParams: setSimpleCutoutParams },
       'spectral-merge': { label: 'Spectral Merge', desc: 'Two signals in frequency space, destructively interfered. Each image is spectrally filtered to different ranges. Difference blending cancels shared frequencies.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('spectral-merge', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'two-face': { label: 'Two Face', desc: "A luminance mask splits image A at its median brightness — the bright half stays A, the dark half becomes B. Auto-normalization means threshold=128 always hits the median.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('two-face', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'x-ray-composite': { label: 'X-Ray Composite', desc: "One image is decomposed to its principal components — stripped to structural essentials. Its edge skeleton is then masked over the second image.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('x-ray-composite', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
@@ -5043,6 +5043,153 @@ import Admin from '../../../layouts/Admin.astro';
         processingJobLinkEl.style.display = 'none';
       }
       runBtn.disabled = loading;
+    }
+
+    // ─── Ghost Overlay params ──────────────────────────────────────────────────
+
+    function buildGhostOverlayParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="go-threshold">Edge Threshold <span class="pt-val" id="go-threshold-val">120</span></label>
+          <input class="pt-range" type="range" id="go-threshold" min="30" max="220" step="1" value="120" />
+          <div class="pt-range-hints"><span>subtle</span><span>sharp</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="go-feather">Feather <span class="pt-val" id="go-feather-val">20</span></label>
+          <input class="pt-range" type="range" id="go-feather" min="0" max="40" step="1" value="20" />
+          <div class="pt-range-hints"><span>hard</span><span>soft</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="go-strength">Ghost Strength <span class="pt-val" id="go-strength-val">0.55</span></label>
+          <input class="pt-range" type="range" id="go-strength" min="0" max="1" step="0.01" value="0.55" />
+        </div>`;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['go-threshold', 'go-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+      const strEl = document.getElementById('go-strength') as HTMLInputElement;
+      const strVl = document.getElementById('go-strength-val') as HTMLSpanElement;
+      strEl?.addEventListener('input', () => { strVl.textContent = parseFloat(strEl.value).toFixed(2); fire(); });
+    }
+    function getGhostOverlayParams(): Record<string, any> {
+      return {
+        threshold: parseFloat((document.getElementById('go-threshold') as HTMLInputElement)?.value ?? '120'),
+        feather:   parseFloat((document.getElementById('go-feather')   as HTMLInputElement)?.value ?? '20'),
+        strength:  parseFloat((document.getElementById('go-strength')  as HTMLInputElement)?.value ?? '0.55'),
+      };
+    }
+    function setGhostOverlayParams(p: Record<string, any>) {
+      const set = (id: string, v: any, fmt?: (n: number) => string) => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement | null;
+        if (el) el.value = String(v);
+        if (vl) vl.textContent = fmt ? fmt(parseFloat(String(v))) : String(v);
+      };
+      if (p.threshold !== undefined) set('go-threshold', p.threshold);
+      if (p.feather   !== undefined) set('go-feather',   p.feather);
+      if (p.strength  !== undefined) set('go-strength',  p.strength, n => n.toFixed(2));
+    }
+
+    // ─── Phantom Limb params ───────────────────────────────────────────────────
+
+    function buildPhantomLimbParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="pl-threshold">Edge Threshold <span class="pt-val" id="pl-threshold-val">110</span></label>
+          <input class="pt-range" type="range" id="pl-threshold" min="30" max="220" step="1" value="110" />
+          <div class="pt-range-hints"><span>subtle</span><span>sharp</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="pl-feather">Feather <span class="pt-val" id="pl-feather-val">14</span></label>
+          <input class="pt-range" type="range" id="pl-feather" min="0" max="35" step="1" value="14" />
+          <div class="pt-range-hints"><span>hard</span><span>soft</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="pl-strength">Veil Strength <span class="pt-val" id="pl-strength-val">0.45</span></label>
+          <input class="pt-range" type="range" id="pl-strength" min="0" max="1" step="0.01" value="0.45" />
+        </div>`;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['pl-threshold', 'pl-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+      const strEl = document.getElementById('pl-strength') as HTMLInputElement;
+      const strVl = document.getElementById('pl-strength-val') as HTMLSpanElement;
+      strEl?.addEventListener('input', () => { strVl.textContent = parseFloat(strEl.value).toFixed(2); fire(); });
+    }
+    function getPhantomLimbParams(): Record<string, any> {
+      return {
+        threshold: parseFloat((document.getElementById('pl-threshold') as HTMLInputElement)?.value ?? '110'),
+        feather:   parseFloat((document.getElementById('pl-feather')   as HTMLInputElement)?.value ?? '14'),
+        strength:  parseFloat((document.getElementById('pl-strength')  as HTMLInputElement)?.value ?? '0.45'),
+      };
+    }
+    function setPhantomLimbParams(p: Record<string, any>) {
+      const set = (id: string, v: any, fmt?: (n: number) => string) => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement | null;
+        if (el) el.value = String(v);
+        if (vl) vl.textContent = fmt ? fmt(parseFloat(String(v))) : String(v);
+      };
+      if (p.threshold !== undefined) set('pl-threshold', p.threshold);
+      if (p.feather   !== undefined) set('pl-feather',   p.feather);
+      if (p.strength  !== undefined) set('pl-strength',  p.strength, n => n.toFixed(2));
+    }
+
+    // ─── Simple Cutout params ──────────────────────────────────────────────────
+
+    function buildSimpleCutoutParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="sc-threshold">Edge Threshold <span class="pt-val" id="sc-threshold-val">130</span></label>
+          <input class="pt-range" type="range" id="sc-threshold" min="30" max="220" step="1" value="130" />
+          <div class="pt-range-hints"><span>subtle</span><span>sharp</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sc-feather">Feather <span class="pt-val" id="sc-feather-val">8</span></label>
+          <input class="pt-range" type="range" id="sc-feather" min="0" max="25" step="1" value="8" />
+          <div class="pt-range-hints"><span>hard</span><span>soft</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sc-shift-r">Red Shift <span class="pt-val" id="sc-shift-r-val">35</span></label>
+          <input class="pt-range" type="range" id="sc-shift-r" min="0" max="80" step="1" value="35" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sc-shift-b">Blue Shift <span class="pt-val" id="sc-shift-b-val">-30</span></label>
+          <input class="pt-range" type="range" id="sc-shift-b" min="-80" max="0" step="1" value="-30" />
+        </div>`;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['sc-threshold', 'sc-feather', 'sc-shift-r', 'sc-shift-b'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getSimpleCutoutParams(): Record<string, any> {
+      return {
+        threshold: parseFloat((document.getElementById('sc-threshold') as HTMLInputElement)?.value ?? '130'),
+        feather:   parseFloat((document.getElementById('sc-feather')   as HTMLInputElement)?.value ?? '8'),
+        shift_r:   parseFloat((document.getElementById('sc-shift-r')   as HTMLInputElement)?.value ?? '35'),
+        shift_b:   parseFloat((document.getElementById('sc-shift-b')   as HTMLInputElement)?.value ?? '-30'),
+      };
+    }
+    function setSimpleCutoutParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement | null;
+        if (el) el.value = String(v);
+        if (vl) vl.textContent = String(v);
+      };
+      if (p.threshold !== undefined) set('sc-threshold', p.threshold);
+      if (p.feather   !== undefined) set('sc-feather',   p.feather);
+      if (p.shift_r   !== undefined) set('sc-shift-r',   p.shift_r);
+      if (p.shift_b   !== undefined) set('sc-shift-b',   p.shift_b);
     }
 
     // ─── Native canvas effect helpers ──────────────────────────────────────────
