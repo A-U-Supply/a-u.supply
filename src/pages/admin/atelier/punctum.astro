@@ -4379,7 +4379,7 @@ import Admin from '../../../layouts/Admin.astro';
           const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
           let d = edgeMaskComposite(dA, dB, w, h, lerp(90, 140, rng()), lerp(15, 25, rng()), false);
           d = blendPixels(d, dA, w, h, 'screen', lerp(0.4, 0.7, rng()));
-          return [{ canvas: jpegDestroy(pixelsToCanvas(d, w, h), lerp(3, 7, rng()), lerp(5, 14, rng())), mimeType: 'image/jpeg' }];
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'phantom-limb': { label: 'Phantom Limb', desc: "One image's edge structure is cut out and laid over another — not the image itself, only its outline, its ghost. The screen blend lets the haunting show.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: true,
         render: (imgs, _p, rng) => {
@@ -4388,7 +4388,7 @@ import Admin from '../../../layouts/Admin.astro';
           const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
           let d = edgeMaskComposite(dA, dB, w, h, lerp(80, 140, rng()), lerp(8, 20, rng()), false);
           d = blendPixels(dB, d, w, h, 'screen', lerp(0.3, 0.6, rng()));
-          return [{ canvas: jpegDestroy(pixelsToCanvas(d, w, h), lerp(3, 7, rng()), lerp(4, 12, rng())), mimeType: 'image/jpeg' }];
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'simple-cutout': { label: 'Simple Cutout', desc: "The most direct use of masking: A's edge skeleton is cut clean into B. Wherever A has strong edges, B shows through; everywhere else, A holds.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: true,
         render: (imgs, _p, rng) => {
@@ -4397,7 +4397,7 @@ import Admin from '../../../layouts/Admin.astro';
           const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
           let d = edgeMaskComposite(dA, dB, w, h, lerp(100, 160, rng()), lerp(5, 12, rng()), false);
           d = channelShift(d, w, h, lerp(20, 55, rng()), lerp(-45, -15, rng()));
-          return [{ canvas: jpegDestroy(pixelsToCanvas(d, w, h), lerp(2, 5, rng()), lerp(8, 20, rng())), mimeType: 'image/jpeg' }];
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'spectral-merge': { label: 'Spectral Merge', desc: 'Two signals in frequency space, destructively interfered. Each image is spectrally filtered to different ranges. Difference blending cancels shared frequencies.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('spectral-merge', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'two-face': { label: 'Two Face', desc: "A luminance mask splits image A at its median brightness — the bright half stays A, the dark half becomes B. Auto-normalization means threshold=128 always hits the median.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('two-face', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
@@ -5134,9 +5134,10 @@ import Admin from '../../../layouts/Admin.astro';
         let alpha = Math.min(255, Math.max(0, mask[i])) >= threshold ? 1 : 0;
         if (invert) alpha = 1 - alpha;
         const si = i * 4;
-        out[si]   = dA[si]   * alpha + dB[si]   * (1 - alpha);
-        out[si+1] = dA[si+1] * alpha + dB[si+1] * (1 - alpha);
-        out[si+2] = dA[si+2] * alpha + dB[si+2] * (1 - alpha);
+        // Where alpha=1 (edge), reveal dB; where alpha=0 (no edge), show dA
+        out[si]   = dB[si]   * alpha + dA[si]   * (1 - alpha);
+        out[si+1] = dB[si+1] * alpha + dA[si+1] * (1 - alpha);
+        out[si+2] = dB[si+2] * alpha + dA[si+2] * (1 - alpha);
         out[si+3] = 255;
       }
       return out;
