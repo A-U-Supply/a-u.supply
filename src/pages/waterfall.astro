@@ -36,7 +36,8 @@ import Base from '../layouts/Base.astro';
 
   .waterfall__inner img {
     width: 100%;
-    height: auto;
+    aspect-ratio: 1;
+    object-fit: cover;
     display: block;
   }
 
@@ -78,7 +79,7 @@ import Base from '../layouts/Base.astro';
       const img = document.createElement('img');
       img.src = item.thumbnail_url;
       img.alt = '';
-      img.loading = 'lazy';
+      img.loading = 'eager';
       return img;
     };
     items.forEach((item) => inner.appendChild(makeImg(item)));
@@ -112,4 +113,6 @@ import Base from '../layouts/Base.astro';
   }
 
   document.addEventListener('astro:page-load', initWaterfall);
+  // Cold-load fallback: astro:page-load may have already fired before this script ran
+  initWaterfall();
 </script>
