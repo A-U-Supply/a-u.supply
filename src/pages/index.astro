@@ -71,7 +71,8 @@ import Base from '../layouts/Base.astro';
 
   .image-strip__inner img {
     width: 92px;
-    height: auto;
+    height: 92px;
+    object-fit: cover;
     display: block;
     filter: grayscale(100%) brightness(0.45);
     pointer-events: none;
@@ -197,7 +198,7 @@ import Base from '../layouts/Base.astro';
       const img = document.createElement('img');
       img.src = item.thumbnail_sm_url ?? item.thumbnail_url;
       img.alt = '';
-      img.loading = 'lazy';
+      img.loading = 'eager';
       img.decoding = 'async';
       return img;
     };
@@ -214,4 +215,6 @@ import Base from '../layouts/Base.astro';
   }
 
   document.addEventListener('astro:page-load', initImageStrip);
+  // Cold-load fallback: astro:page-load may have already fired before this script ran
+  initImageStrip();
 </script>
