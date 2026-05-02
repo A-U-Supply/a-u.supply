@@ -103,6 +103,7 @@ import Admin from '../../../layouts/Admin.astro';
         <canvas id="pt-canvas" style="display:none"></canvas>
         <div class="pt-processing" id="pt-processing" style="display:none">
           <span id="pt-processing-status" class="loading-dots">Processing</span>
+          <a id="pt-processing-job-link" class="pt-processing-job-link" style="display:none" target="_blank"></a>
           <button id="pt-processing-cancel" class="pt-processing-cancel">✕ Cancel</button>
         </div>
         <div class="pt-empty" id="pt-empty">
@@ -429,6 +430,14 @@ import Admin from '../../../layouts/Admin.astro';
     letter-spacing: 0.5pt;
   }
   .pt-processing-cancel:hover { border-color: #ddd; color: #ddd; }
+  .pt-processing-job-link {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: #555;
+    text-decoration: none;
+    letter-spacing: 0.3pt;
+  }
+  .pt-processing-job-link:hover { color: #888; }
 
   .pt-empty {
     text-align: center;
@@ -1099,6 +1108,7 @@ import Admin from '../../../layouts/Admin.astro';
     const stencilParamsEl = document.getElementById('pt-stencil-params') as HTMLDivElement;
     const processingEl       = document.getElementById('pt-processing') as HTMLDivElement;
     const processingStatusEl = document.getElementById('pt-processing-status') as HTMLSpanElement;
+    const processingJobLinkEl = document.getElementById('pt-processing-job-link') as HTMLAnchorElement;
     const processingCancelEl = document.getElementById('pt-processing-cancel') as HTMLButtonElement;
     const runBtn             = document.getElementById('run-btn') as HTMLButtonElement;
     let cancelCurrentJob: (() => Promise<void>) | null = null;
@@ -4362,9 +4372,33 @@ import Admin from '../../../layouts/Admin.astro';
       'dream-dissolve': { label: 'Dream Dissolve', desc: 'Two images each sent through deep neural hallucination — the network finds eyes and feathers in everything, turning surfaces into living architectures', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('dream-dissolve', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'double-exposure': { label: 'Double Exposure', desc: 'Two images burned onto the same film. Screen blending lets the light accumulate, multiply adds depth in the shadows. The double-exposed image is sonified.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('double-exposure', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'feedback-loop': { label: 'Feedback Loop', desc: 'Compose, destroy, re-compose the wreckage, destroy again. Two images blended, distorted, fragmented back together with originals.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('feedback-loop', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'ghost-overlay': { label: 'Ghost Overlay', desc: "A haunting: A's edges become a soft veil cast over B with high feathering. Screen blending then adds A's full luminance as a second ghost layer.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('ghost-overlay', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'phantom-limb': { label: 'Phantom Limb', desc: "One image's edge structure is cut out and laid over another — not the image itself, only its outline, its ghost. The screen blend lets the haunting show.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('phantom-limb', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'simple-cutout': { label: 'Simple Cutout', desc: "The most direct use of masking: A's edge skeleton is cut clean into B. Wherever A has strong edges, B shows through; everywhere else, A holds.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('simple-cutout', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'ghost-overlay': { label: 'Ghost Overlay', desc: "A haunting: A's edges become a soft veil cast over B with high feathering. Screen blending then adds A's full luminance as a second ghost layer.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: true,
+        render: (imgs, _p, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!);
+          const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          let d = edgeMaskComposite(dA, dB, w, h, lerp(90, 140, rng()), lerp(15, 25, rng()), false);
+          d = blendPixels(d, dA, w, h, 'screen', lerp(0.4, 0.7, rng()));
+          return [{ canvas: jpegDestroy(pixelsToCanvas(d, w, h), lerp(3, 7, rng()), lerp(5, 14, rng())), mimeType: 'image/jpeg' }];
+        }, buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'phantom-limb': { label: 'Phantom Limb', desc: "One image's edge structure is cut out and laid over another — not the image itself, only its outline, its ghost. The screen blend lets the haunting show.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: true,
+        render: (imgs, _p, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!);
+          const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          let d = edgeMaskComposite(dA, dB, w, h, lerp(80, 140, rng()), lerp(8, 20, rng()), false);
+          d = blendPixels(dB, d, w, h, 'screen', lerp(0.3, 0.6, rng()));
+          return [{ canvas: jpegDestroy(pixelsToCanvas(d, w, h), lerp(3, 7, rng()), lerp(4, 12, rng())), mimeType: 'image/jpeg' }];
+        }, buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'simple-cutout': { label: 'Simple Cutout', desc: "The most direct use of masking: A's edge skeleton is cut clean into B. Wherever A has strong edges, B shows through; everywhere else, A holds.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: true,
+        render: (imgs, _p, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!);
+          const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          let d = edgeMaskComposite(dA, dB, w, h, lerp(100, 160, rng()), lerp(5, 12, rng()), false);
+          d = channelShift(d, w, h, lerp(20, 55, rng()), lerp(-45, -15, rng()));
+          return [{ canvas: jpegDestroy(pixelsToCanvas(d, w, h), lerp(2, 5, rng()), lerp(8, 20, rng())), mimeType: 'image/jpeg' }];
+        }, buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'spectral-merge': { label: 'Spectral Merge', desc: 'Two signals in frequency space, destructively interfered. Each image is spectrally filtered to different ranges. Difference blending cancels shared frequencies.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('spectral-merge', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'two-face': { label: 'Two Face', desc: "A luminance mask splits image A at its median brightness — the bright half stays A, the dark half becomes B. Auto-normalization means threshold=128 always hits the median.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('two-face', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'x-ray-composite': { label: 'X-Ray Composite', desc: "One image is decomposed to its principal components — stripped to structural essentials. Its edge skeleton is then masked over the second image.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('x-ray-composite', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
@@ -5006,9 +5040,163 @@ import Admin from '../../../layouts/Admin.astro';
         cancelCurrentJob = null;
         processingStatusEl.textContent = 'Processing';
         processingStatusEl.classList.add('loading-dots');
+        processingJobLinkEl.style.display = 'none';
       }
       runBtn.disabled = loading;
     }
+
+    // ─── Native canvas effect helpers ──────────────────────────────────────────
+
+    function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
+
+    function getPixels(img: HTMLImageElement): { d: Uint8ClampedArray; w: number; h: number } {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      c.getContext('2d')!.drawImage(img, 0, 0);
+      const id = c.getContext('2d')!.getImageData(0, 0, c.width, c.height);
+      return { d: id.data, w: c.width, h: c.height };
+    }
+
+    function pixelsToCanvas(d: Uint8ClampedArray, w: number, h: number): HTMLCanvasElement {
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(d), w, h), 0, 0);
+      return c;
+    }
+
+    // Resize source pixels to target dimensions using an offscreen canvas
+    function resizeToMatch(dSrc: Uint8ClampedArray, wSrc: number, hSrc: number, wDst: number, hDst: number): Uint8ClampedArray {
+      if (wSrc === wDst && hSrc === hDst) return dSrc;
+      const src = document.createElement('canvas');
+      src.width = wSrc; src.height = hSrc;
+      src.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(dSrc), wSrc, hSrc), 0, 0);
+      const dst = document.createElement('canvas');
+      dst.width = wDst; dst.height = hDst;
+      dst.getContext('2d')!.drawImage(src, 0, 0, wDst, hDst);
+      return dst.getContext('2d')!.getImageData(0, 0, wDst, hDst).data;
+    }
+
+    // Sobel edge magnitude, normalised 0–255
+    function sobelEdges(d: Uint8ClampedArray, w: number, h: number): Float32Array {
+      const gray = new Float32Array(w * h);
+      for (let i = 0; i < w * h; i++) gray[i] = 0.299*d[i*4] + 0.587*d[i*4+1] + 0.114*d[i*4+2];
+      const mag = new Float32Array(w * h);
+      let maxM = 0;
+      for (let y = 1; y < h-1; y++) {
+        for (let x = 1; x < w-1; x++) {
+          const gx = -gray[(y-1)*w+(x-1)] + gray[(y-1)*w+(x+1)]
+                     -2*gray[y*w+(x-1)]   + 2*gray[y*w+(x+1)]
+                     -gray[(y+1)*w+(x-1)] + gray[(y+1)*w+(x+1)];
+          const gy = -gray[(y-1)*w+(x-1)] - 2*gray[(y-1)*w+x] - gray[(y-1)*w+(x+1)]
+                     +gray[(y+1)*w+(x-1)] + 2*gray[(y+1)*w+x] + gray[(y+1)*w+(x+1)];
+          const m = Math.sqrt(gx*gx + gy*gy);
+          mag[y*w+x] = m;
+          if (m > maxM) maxM = m;
+        }
+      }
+      if (maxM > 0) for (let i = 0; i < mag.length; i++) mag[i] = mag[i] / maxM * 255;
+      return mag;
+    }
+
+    // Box blur (single-channel Float32Array), radius in pixels
+    function boxBlur1ch(src: Float32Array, w: number, h: number, r: number): Float32Array {
+      const rr = Math.max(1, Math.round(r));
+      const tmp = new Float32Array(w * h);
+      const out = new Float32Array(w * h);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          let s = 0, n = 0;
+          for (let dx = -rr; dx <= rr; dx++) { const nx = x+dx; if (nx >= 0 && nx < w) { s += src[y*w+nx]; n++; } }
+          tmp[y*w+x] = s/n;
+        }
+      }
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          let s = 0, n = 0;
+          for (let dy = -rr; dy <= rr; dy++) { const ny = y+dy; if (ny >= 0 && ny < h) { s += tmp[ny*w+x]; n++; } }
+          out[y*w+x] = s/n;
+        }
+      }
+      return out;
+    }
+
+    // Composite two pixel arrays using an edge-derived mask from dA.
+    // feather blurs the binary edge mask for soft transitions.
+    function edgeMaskComposite(
+      dA: Uint8ClampedArray, dB: Uint8ClampedArray,
+      w: number, h: number,
+      threshold: number, feather: number, invert: boolean,
+    ): Uint8ClampedArray {
+      const edges = sobelEdges(dA, w, h);
+      const mask  = feather > 0 ? boxBlur1ch(edges, w, h, feather) : edges;
+      const out   = new Uint8ClampedArray(w * h * 4);
+      for (let i = 0; i < w * h; i++) {
+        let alpha = Math.min(255, Math.max(0, mask[i])) >= threshold ? 1 : 0;
+        if (invert) alpha = 1 - alpha;
+        const si = i * 4;
+        out[si]   = dA[si]   * alpha + dB[si]   * (1 - alpha);
+        out[si+1] = dA[si+1] * alpha + dB[si+1] * (1 - alpha);
+        out[si+2] = dA[si+2] * alpha + dB[si+2] * (1 - alpha);
+        out[si+3] = 255;
+      }
+      return out;
+    }
+
+    // Screen / multiply / overlay / difference blend modes
+    function blendPixels(
+      dA: Uint8ClampedArray, dB: Uint8ClampedArray,
+      w: number, h: number,
+      mode: 'screen'|'multiply'|'overlay'|'difference', strength: number,
+    ): Uint8ClampedArray {
+      const out = new Uint8ClampedArray(w * h * 4);
+      for (let i = 0; i < w * h * 4; i += 4) {
+        for (let c = 0; c < 3; c++) {
+          const a = dA[i+c] / 255, b = dB[i+c] / 255;
+          let v: number;
+          if      (mode === 'screen')      v = 1 - (1-a)*(1-b);
+          else if (mode === 'multiply')    v = a * b;
+          else if (mode === 'overlay')     v = a < 0.5 ? 2*a*b : 1 - 2*(1-a)*(1-b);
+          else                             v = Math.abs(a - b);
+          out[i+c] = Math.round(dA[i+c] + strength * (v * 255 - dA[i+c]));
+        }
+        out[i+3] = 255;
+      }
+      return out;
+    }
+
+    // Shift R and B channels independently by pixel offsets along X
+    function channelShift(d: Uint8ClampedArray, w: number, h: number, offR: number, offB: number): Uint8ClampedArray {
+      const out = new Uint8ClampedArray(d);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = (y * w + x) * 4;
+          const rx = Math.min(w-1, Math.max(0, x + Math.round(offR)));
+          out[i]   = d[(y * w + rx) * 4];
+          const bx = Math.min(w-1, Math.max(0, x + Math.round(offB)));
+          out[i+2] = d[(y * w + bx) * 4 + 2];
+        }
+      }
+      return out;
+    }
+
+    // Re-encode a canvas through JPEG at low quality N times for block-artifact destruction.
+    // Data URLs decode synchronously in modern browsers — no async needed.
+    function jpegDestroy(canvas: HTMLCanvasElement, quality: number, iterations: number): HTMLCanvasElement {
+      let c = canvas;
+      const q = Math.max(0.01, Math.min(1, quality / 100));
+      for (let i = 0; i < Math.round(iterations); i++) {
+        const url = c.toDataURL('image/jpeg', q);
+        const img = new Image();
+        img.src = url;                          // data URLs decode synchronously
+        const c2 = document.createElement('canvas');
+        c2.width = c.width; c2.height = c.height;
+        c2.getContext('2d')!.drawImage(img, 0, 0);
+        c = c2;
+      }
+      return c;
+    }
+
+    // ─── Sparagmos async helpers ─────────────────────────────────────────────────
 
     async function uploadImgToLibrary(img: HTMLImageElement): Promise<string> {
       const c = document.createElement('canvas');
@@ -5023,58 +5211,83 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     async function runSparagmosRecipe(recipe: string, imgs: (HTMLImageElement | null)[], seed?: number): Promise<Output[]> {
-      // Phase 1: upload
+      // Phase 1: resolve or upload each slot image.
+      // Reuse the existing media item ID when the slot came from the library
+      // and no transform has been applied — avoids polluting The Stacks with
+      // redundant copies. Any image that must be uploaded is marked temp and
+      // deleted from the library once the job finishes.
       processingStatusEl.classList.add('loading-dots');
       processingStatusEl.textContent = 'Uploading';
-      const ids = await Promise.all(imgs.filter(Boolean).map(img => uploadImgToLibrary(img!)));
-
-      // Phase 2: submit job
-      processingStatusEl.textContent = 'Submitting';
-      const jobParams: Record<string, any> = { processing_mode: 'recipe', recipe };
-      if (seed !== undefined) jobParams.seed = seed;
-      const jobRes = await fetch('/api/jobs', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ app_name: 'sparagmos', media_item_ids: ids, params: jobParams }),
-      });
-      if (!jobRes.ok) throw new Error(await jobRes.text());
-      const { id: jobId } = await jobRes.json();
-
-      // Wire cancel button to this job
-      let cancelled = false;
-      cancelCurrentJob = async () => {
-        cancelled = true;
-        await fetch(`/api/jobs/${jobId}/cancel`, { method: 'POST', credentials: 'include' });
-      };
-
-      // Phase 3: poll — 16-min deadline matches server timeout_seconds=900
-      processingStatusEl.textContent = 'Queued';
-      const deadline = Date.now() + 16 * 60 * 1000;
-      let timedOut = true;
-      while (Date.now() < deadline) {
-        if (cancelled) throw new Error('Job was cancelled');
-        await new Promise(r => setTimeout(r, 2000));
-        const job = await (await fetch(`/api/jobs/${jobId}`, { credentials: 'include' })).json();
-        if (job.status === 'completed') { timedOut = false; break; }
-        if (job.status === 'failed')    throw new Error(job.error_message ?? 'Job failed');
-        if (job.status === 'cancelled') throw new Error('Job was cancelled');
-        processingStatusEl.textContent = job.started_at ? 'Running' : 'Queued';
-      }
-      if (timedOut) throw new Error('Job timed out after 16 minutes');
-
-      cancelCurrentJob = null;
-      const outs: any[] = await (await fetch(`/api/jobs/${jobId}/outputs`, { credentials: 'include' })).json();
-      if (!outs.length) throw new Error('Job completed but produced no outputs');
-      return Promise.all(outs.map(async (out, i) => {
-        const blob = await (await fetch(`/api/jobs/${jobId}/outputs/${out.id}/download`, { credentials: 'include' })).blob();
-        const url = URL.createObjectURL(blob);
-        const img = await new Promise<HTMLImageElement>(res => { const el = new Image(); el.onload = () => res(el); el.src = url; });
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
-        canvas.getContext('2d')!.drawImage(img, 0, 0);
-        URL.revokeObjectURL(url);
-        return { canvas, label: outs.length > 1 ? `Output ${i + 1}` : recipe, mimeType: 'image/png' } as Output;
+      const tempIds: string[] = [];
+      const ids = await Promise.all(imgs.map(async (img, i) => {
+        if (!img) return '';
+        const sid = sourceIds[i];
+        if (sid && effectiveImgs[i] === sourceImgs[i]) return sid;  // already in library, untransformed
+        const newId = await uploadImgToLibrary(img);
+        tempIds.push(newId);
+        return newId;
       }));
+
+      try {
+        // Phase 2: submit job
+        processingStatusEl.textContent = 'Submitting';
+        const jobParams: Record<string, any> = { processing_mode: 'recipe', recipe };
+        if (seed !== undefined) jobParams.seed = seed;
+        const jobRes = await fetch('/api/jobs', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ app_name: 'sparagmos', media_item_ids: ids, params: jobParams }),
+        });
+        if (!jobRes.ok) throw new Error(await jobRes.text());
+        const { id: jobId } = await jobRes.json();
+
+        // Show job ID link for debugging
+        processingJobLinkEl.href = `/admin/jobs?id=${jobId}`;
+        processingJobLinkEl.textContent = `job:${jobId.slice(0, 8)}`;
+        processingJobLinkEl.style.display = '';
+
+        // Wire cancel button to this job
+        let cancelled = false;
+        cancelCurrentJob = async () => {
+          cancelled = true;
+          await fetch(`/api/jobs/${jobId}/cancel`, { method: 'POST', credentials: 'include' });
+        };
+
+        // Phase 3: poll — 16-min deadline matches server timeout_seconds=900
+        processingStatusEl.textContent = 'Queued';
+        const deadline = Date.now() + 16 * 60 * 1000;
+        let timedOut = true;
+        while (Date.now() < deadline) {
+          if (cancelled) throw new Error('Job was cancelled');
+          await new Promise(r => setTimeout(r, 2000));
+          const job = await (await fetch(`/api/jobs/${jobId}`, { credentials: 'include' })).json();
+          if (job.status === 'completed') { timedOut = false; break; }
+          if (job.status === 'failed')    throw new Error(job.error_message ?? 'Job failed');
+          if (job.status === 'cancelled') throw new Error('Job was cancelled');
+          processingStatusEl.textContent = job.started_at ? 'Running' : 'Queued';
+        }
+        if (timedOut) throw new Error('Job timed out after 16 minutes');
+
+        cancelCurrentJob = null;
+        const outs: any[] = await (await fetch(`/api/jobs/${jobId}/outputs`, { credentials: 'include' })).json();
+        if (!outs.length) throw new Error('Job completed but produced no outputs');
+        return await Promise.all(outs.map(async (out, i) => {
+          const blob = await (await fetch(`/api/jobs/${jobId}/outputs/${out.id}/download`, { credentials: 'include' })).blob();
+          const url = URL.createObjectURL(blob);
+          const img = await new Promise<HTMLImageElement>(res => { const el = new Image(); el.onload = () => res(el); el.src = url; });
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+          canvas.getContext('2d')!.drawImage(img, 0, 0);
+          URL.revokeObjectURL(url);
+          return { canvas, label: outs.length > 1 ? `Output ${i + 1}` : recipe, mimeType: 'image/png' } as Output;
+        }));
+      } finally {
+        // Delete any images we uploaded temporarily (not sourced from the library).
+        // Fire-and-forget — failures don't matter here.
+        for (const id of tempIds) {
+          fetch(`/api/media/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {});
+        }
+      }
     }
 
     // ─── Core flow ─────────────────────────────────────────────────────────────
