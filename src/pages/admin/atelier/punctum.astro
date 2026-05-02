@@ -4531,7 +4531,37 @@ import Admin from '../../../layouts/Admin.astro';
           }
           return [{ canvas: pixelsToCanvas(out, w, h), mimeType: 'image/png' }];
         }, buildParams: buildExquisiteCorpseParams, getParams: getExquisiteCorpseParams, setParams: setExquisiteCorpseParams, onReroll: onRerollExquisiteCorpse },
-      'fossil-record': { label: 'Fossil Record', desc: 'Geological strata. Each image PCA-decomposed to different component counts. Opacity-blended as layers like sedimentary rock. Dithering creates stone textures.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('fossil-record', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'fossil-record': { label: 'Fossil Record', desc: 'Geological strata. Each image PCA-decomposed to different component counts. Opacity-blended as layers like sedimentary rock. Dithering creates stone textures.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const r = Math.round(params.hp_radius ?? 5);
+          const bs = params.blend_str ?? 0.55;
+          const dt = params.dither_thresh ?? 128;
+          // Approximate PCA decomposition: highpass at different radii extracts structural components
+          const compA = highpassRGB(dA, w, h, r);          // most components
+          const compB = highpassRGB(dB, w, h, r * 2);      // fewer components
+          const compC = highpassRGB(dC, w, h, r * 3);      // fewest (ghost)
+          // Opacity-blend as geological layers
+          let d = blendPixels(compA, compB, w, h, 'overlay', bs);
+          d = blendPixels(d, compC, w, h, 'screen', bs * 0.6);
+          // Bayer dither to create stone/sediment texture
+          const bayer4 = [[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
+          const stone = new Uint8ClampedArray(w * h * 4);
+          for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+              const i = (y * w + x) * 4;
+              const luma = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+              const bv = (bayer4[y % 4][x % 4] / 16) * 255;
+              const v = luma + bv - 128 > dt ? 255 : 0;
+              stone[i] = stone[i+1] = stone[i+2] = v; stone[i+3] = 255;
+            }
+          }
+          // Blend stone texture over the layer composite
+          d = blendPixels(d, stone, w, h, 'multiply', bs * 0.5);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildFossilRecordParams, getParams: getFossilRecordParams, setParams: setFossilRecordParams, onReroll: onRerollFossilRecord },
       'holographic-interference': { label: 'Holographic Interference', desc: 'Three images processed through spectral decomposition and channel aberration, then stacked via difference and screen blending to simulate holographic interference.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -4565,7 +4595,32 @@ import Admin from '../../../layouts/Admin.astro';
           d = edgeMaskComposite(d, dC, w, h, params.thresh2 ?? 110, params.feather ?? 10, true);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildMaskAndGlitchParams, getParams: getMaskAndGlitchParams, setParams: setMaskAndGlitchParams, onReroll: onRerollMaskAndGlitch },
-      'sediment-core': { label: 'Sediment Core', desc: 'Three images arranged as horizontal strata — the slow accumulation of time rendered as a geological cross-section pulled from the earth. Seam carving warps the layers.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('sediment-core', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'sediment-core': { label: 'Sediment Core', desc: 'Three images arranged as horizontal strata — the slow accumulation of time rendered as a geological cross-section pulled from the earth. Seam carving warps the layers.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const sh = Math.round(params.shift ?? 20);
+          const sp = params.scan_spacing ?? 4;
+          const so = params.scan_opacity ?? 0.30;
+          // Apply tape artifacts per stratum before compositing
+          const tA = channelShift(scanLines(dA, w, h, sp,   so),       w, h,  sh,              -Math.round(sh * 0.6));
+          const tB = channelShift(scanLines(dB, w, h, sp+1, so * 0.9), w, h, -Math.round(sh * 0.7), Math.round(sh * 0.5));
+          const tC = channelShift(scanLines(dC, w, h, sp,   so * 0.8), w, h,  Math.round(sh * 0.4), -sh);
+          // Three equal horizontal strata
+          const out = new Uint8ClampedArray(w * h * 4);
+          const sources = [tA, tB, tC];
+          const bandH = Math.floor(h / 3);
+          for (let y = 0; y < h; y++) {
+            const band = y < bandH ? 0 : y < bandH * 2 ? 1 : 2;
+            const src = sources[band];
+            for (let x = 0; x < w; x++) {
+              const i = (y * w + x) * 4;
+              out[i] = src[i]; out[i+1] = src[i+1]; out[i+2] = src[i+2]; out[i+3] = 255;
+            }
+          }
+          return [{ canvas: pixelsToCanvas(out, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildSedimentCoreParams, getParams: getSedimentCoreParams, setParams: setSedimentCoreParams, onReroll: onRerollSedimentCore },
       'signal-bleed': { label: 'Signal Bleed', desc: 'Three VHS signals bleeding into each other on a bad splitter. Each source gets its own flavor of analog decay. Vertical strip collage interleaves the damaged feeds.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
         render: (imgs, params, rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -4631,7 +4686,27 @@ import Admin from '../../../layouts/Admin.astro';
           d = edgeMaskComposite(dA, d, w, h, params.edge_thresh ?? 100, params.feather ?? 10, true);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildSortedMaskParams, getParams: getSortedMaskParams, setParams: setSortedMaskParams, onReroll: onRerollSortedMask },
-      'spectral-stencil': { label: 'Spectral Stencil', desc: 'Image A is bandpass-filtered in frequency space, stripping its low and high frequencies to leave only the mid-range structure — a ghost of the original used as stencil.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('spectral-stencil', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'spectral-stencil': { label: 'Spectral Stencil', desc: 'Image A is bandpass-filtered in frequency space, stripping its low and high frequencies to leave only the mid-range structure — a ghost of the original used as stencil.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const r = Math.round(params.hp_radius ?? 5);
+          // Bandpass approximation: highpass at r (removes low) gives mid+high;
+          // highpass at 2r then subtracted gives just mid-range structure
+          const hp1 = highpassRGB(dA, w, h, r);
+          const hp2 = highpassRGB(dA, w, h, r * 2);
+          // Bandpass ≈ hp1 - hp2 (mid structure as ghost)
+          const ghost = new Uint8ClampedArray(w * h * 4);
+          for (let i = 0; i < w * h * 4; i += 4) {
+            for (let c = 0; c < 3; c++) ghost[i+c] = Math.min(255, Math.abs(hp1[i+c] - hp2[i+c]) * 2);
+            ghost[i+3] = 255;
+          }
+          // Use ghost luma as stencil cutting into B; screen C over
+          let d = lumaComposite(ghost, dB, dA, w, h, 40, params.feather ?? 8, false);
+          d = blendPixels(d, dC, w, h, 'screen', params.screen_str ?? 0.40);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildSpectralStencilParams, getParams: getSpectralStencilParams, setParams: setSpectralStencilParams, onReroll: onRerollSpectralStencil },
       'triple-mask': { label: 'Triple Mask', desc: "Three images, two mask operations. First A's edges cut into B, producing a composite. Then that composite's own edges cut into C.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -4711,7 +4786,28 @@ import Admin from '../../../layouts/Admin.astro';
           d = edgeMaskComposite(d, dC, w, h, params.thresh ?? 110, params.feather ?? 10, false);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildSortedDisplacementParams, getParams: getSortedDisplacementParams, setParams: setSortedDisplacementParams, onReroll: onRerollSortedDisplacement },
-      'spectral-silver': { label: 'Spectral Silver', desc: 'Three images bandpass-filtered in frequency space — stripped to their mid-range structure, ghostly spectral remnants — then composited through silver gelatin stencil.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('spectral-silver', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'spectral-silver': { label: 'Spectral Silver', desc: 'Three images bandpass-filtered in frequency space — stripped to their mid-range structure, ghostly spectral remnants — then composited through silver gelatin stencil.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const r = Math.round(params.hp_radius ?? 5);
+          // Bandpass each source at slightly different radii
+          const ghostA = highpassRGB(dA, w, h, r);
+          const ghostB = highpassRGB(dB, w, h, r + 2);
+          const ghostC = highpassRGB(dC, w, h, Math.max(1, r - 1));
+          // Silver gelatin: screen ghosts together, then blend with cool silver tone
+          let d = blendPixels(ghostA, ghostB, w, h, 'screen', 0.7);
+          d = blendPixels(d, ghostC, w, h, 'screen', 0.5);
+          // Silver toning: blend toward light silver-gray (192, 192, 200)
+          const silver = solidColor(w, h, 192, 192, 200);
+          d = blendPixels(d, silver, w, h, 'screen', params.silver_str ?? 0.45);
+          // Edge stencil for structure
+          d = edgeMaskComposite(dA, d, w, h, 80, params.feather ?? 8, true);
+          // Screen C for depth
+          d = blendPixels(d, dC, w, h, 'screen', params.screen_str ?? 0.40);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildSpectralSilverParams, getParams: getSpectralSilverParams, setParams: setSpectralSilverParams, onReroll: onRerollSpectralSilver },
       'vhs-halation': { label: 'VHS Halation', desc: 'Three images CRT/VHS filtered — scan lines, color bleed, tracking errors — then composited through halation edge stencil. The organic grain boundary glows.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -4874,7 +4970,25 @@ import Admin from '../../../layouts/Admin.astro';
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildContrastSurgeryParams, getParams: getContrastSurgeryParams, setParams: setContrastSurgeryParams, onReroll: onRerollContrastSurgery },
       'cyanotype-bullethole-mask': { label: 'Cyanotype Bullet Hole Mask', desc: 'Four images: two riddled with bullet holes, then cyanotype-stenciled. The result is edge-masked against a fourth image — the bullet-punched cyanotype filtered through structure.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('cyanotype-bullethole-mask', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'displacement-blend-spectral': { label: 'Displacement Blend Spectral', desc: 'Four images: displacement-stenciled, then screen-blended with a fourth. The blended surface is spectral-filtered to strip frequencies. Warped stencil meets spectral void.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('displacement-blend-spectral', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'displacement-blend-spectral': { label: 'Displacement Blend Spectral', desc: 'Four images: displacement-stenciled, then screen-blended with a fourth. The blended surface is spectral-filtered to strip frequencies. Warped stencil meets spectral void.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          // Stage 1: swirl-displace A, stencil vs B
+          let d = swirlDistort(dA, w, h, params.swirl ?? 1.0);
+          d = edgeMaskComposite(d, dB, w, h, params.thresh ?? 110, params.feather ?? 10, false);
+          // Stage 2: screen blend with C
+          d = blendPixels(d, dC, w, h, 'screen', 0.55);
+          // Stage 3: spectral filter (highpass strips low frequencies, leaving structure)
+          const r = Math.round(params.hp_radius ?? 5);
+          const hp = highpassRGB(d, w, h, r);
+          d = blendPixels(d, hp, w, h, 'overlay', 0.6);
+          // Final: overlay D
+          d = blendPixels(d, dD, w, h, 'overlay', 0.35);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildDisplacementBlendSpectralParams, getParams: getDisplacementBlendSpectralParams, setParams: setDisplacementBlendSpectralParams, onReroll: onRerollDisplacementBlendSpectral },
       'dissolve-cascade': { label: 'Dissolve Cascade', desc: 'Four images dissolved in waves: screen blend accumulates the light, gradient masking carves the excess, multiply blend deepens the shadows, luminance masking cuts the final form.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -4887,7 +5001,25 @@ import Admin from '../../../layouts/Admin.astro';
           d = lumaComposite(dA, d, dA, w, h, params.thresh2 ?? 100, params.feather ?? 10, false);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildDissolveCascadeParams, getParams: getDissolveCascadeParams, setParams: setDissolveCascadeParams, onReroll: onRerollDissolveCascade },
-      'double-masked-collage': { label: 'Double Masked Collage', desc: 'A double masking sandwich: fragment, edge-mask, scatter-collage, luminance-mask again. Images A and B are Voronoi-fragmented — broken into organic cells.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('double-masked-collage', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'double-masked-collage': { label: 'Double Masked Collage', desc: 'A double masking sandwich: fragment, edge-mask, scatter-collage, luminance-mask again. Images A and B are Voronoi-fragmented — broken into organic cells.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const pieces = Math.round(params.pieces ?? 36);
+          const mr = params.mix_ratio ?? 0.55;
+          const f = params.feather ?? 10;
+          // Fragment A and B (simulates Voronoi-like cell fragmentation)
+          let d = gridFragment(dA, dA, dB, w, h, pieces, mr, rng);
+          // Edge-mask the fragment vs C
+          d = edgeMaskComposite(dA, dC, w, h, params.thresh ?? 110, f, false);
+          // Scatter-collage the result with C
+          d = gridFragment(d, d, dC, w, h, pieces, mr * 0.7, rng);
+          // Second masking: luma-mask vs D
+          d = lumaComposite(dA, d, dD, w, h, params.thresh ?? 110, f, false);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildDoubleMaskedCollageParams, getParams: getDoubleMaskedCollageParams, setParams: setDoubleMaskedCollageParams, onReroll: onRerollDoubleMaskedCollage },
       'fracture-and-mask': { label: 'Fracture and Mask', desc: 'A shatter-fragment sandwich with edge and luminance masking on either side. Images A and B are shatter-fragmented together — broken into irregular shards.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
         render: (imgs, params, rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -5056,7 +5188,27 @@ import Admin from '../../../layouts/Admin.astro';
           d = channelShift(d, w, h, sh, -Math.round(sh * 0.8));
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildPhotogramParams, getParams: getPhotogramParams, setParams: setPhotogramParams, onReroll: onRerollPhotogram },
-      'silhouette-collage': { label: 'Silhouette Collage', desc: "Image A is PCA-decomposed to 2 principal components — stripped to the barest structural silhouette. That silhouette is imposed over a collage of the remaining images.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('silhouette-collage', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'silhouette-collage': { label: 'Silhouette Collage', desc: "Image A is PCA-decomposed to 2 principal components — stripped to the barest structural silhouette. That silhouette is imposed over a collage of the remaining images.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          // Approximate PCA silhouette: extreme contrast reduction via highpass + threshold
+          const hp = highpassRGB(dA, w, h, 8);
+          const silhouette = new Uint8ClampedArray(w * h * 4);
+          for (let i = 0; i < w * h * 4; i += 4) {
+            const luma = 0.299 * hp[i] + 0.587 * hp[i+1] + 0.114 * hp[i+2];
+            const v = luma > (params.threshold ?? 110) ? 255 : 0;
+            silhouette[i] = silhouette[i+1] = silhouette[i+2] = v; silhouette[i+3] = 255;
+          }
+          // Collage of B, C, D as background
+          let bg = gridFragment(dB, dB, dC, w, h, 25, 0.55, rng);
+          bg = gridFragment(bg, bg, dD, w, h, 25, 0.4, rng);
+          // Impose silhouette over collage: bright silhouette → keep bg; dark → show A
+          const d = lumaComposite(silhouette, bg, dA, w, h, 128, params.feather ?? 8, false);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildSilhouetteCollageParams, getParams: getSilhouetteCollageParams, setParams: setSilhouetteCollageParams, onReroll: onRerollSilhouetteCollage },
       'sixshooter-halation-corrupt': { label: 'Six Shooter Halation Corrupt', desc: 'Four images: two six-shootered into scattered circular displacements, halation-edge composited through the third. The organic grain boundary dissolves into byte corruption.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('sixshooter-halation-corrupt', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'spectral-mask': { label: 'Spectral Mask', desc: 'Four images processed spectrally and then masked in pairs. Image A is spectrally shifted to emphasize its mid-range structure. The shifted and raw versions mask against each other.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('spectral-mask', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'stencil-burn': { label: 'Stencil Burn', desc: 'Image A is dithered to a near-binary stencil — its shapes reduced to stark positive and negative space. That stencil is used as a hard luminance mask cutting into B, C, and D.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
@@ -5152,7 +5304,29 @@ import Admin from '../../../layouts/Admin.astro';
           place(feeds[3]!, hw, hh);
           return [{ canvas: pixelsToCanvas(out, W, H), mimeType: 'image/png' }];
         }, buildParams: buildSurveillanceDecayParams, getParams: getSurveillanceDecayParams, setParams: setSurveillanceDecayParams, onReroll: onRerollSurveillanceDecay },
-      'text-ghost': { label: 'Text Ghost', desc: "Image A is PCA-decomposed to just 1-2 principal components — its texture and color stripped away until only the structural ghost remains. That ghost is screened over a collage.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('text-ghost', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'text-ghost': { label: 'Text Ghost', desc: "Image A is PCA-decomposed to just 1-2 principal components — its texture and color stripped away until only the structural ghost remains. That ghost is screened over a collage.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          // Approximate PCA ghost: high-radius highpass strips texture, leaving structural outline
+          const ghost = highpassRGB(dA, w, h, 12);
+          // Further soften — threshold to silhouette-like ghost
+          const thresh = params.threshold ?? 110;
+          const ghostSoft = new Uint8ClampedArray(w * h * 4);
+          for (let i = 0; i < w * h * 4; i += 4) {
+            const luma = 0.299 * ghost[i] + 0.587 * ghost[i+1] + 0.114 * ghost[i+2];
+            const alpha = Math.min(1, Math.max(0, (luma - thresh + (params.feather ?? 12)) / Math.max(1, params.feather ?? 12)));
+            ghostSoft[i] = ghostSoft[i+1] = ghostSoft[i+2] = Math.round(luma * alpha); ghostSoft[i+3] = 255;
+          }
+          // Collage of B, C, D
+          let bg = gridFragment(dB, dB, dC, w, h, 25, 0.55, rng);
+          bg = gridFragment(bg, bg, dD, w, h, 20, 0.4, rng);
+          // Screen ghost over collage
+          const d = blendPixels(bg, ghostSoft, w, h, 'screen', params.screen_str ?? 0.45);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildTextGhostParams, getParams: getTextGhostParams, setParams: setTextGhostParams, onReroll: onRerollTextGhost },
       'threshold-cascade': { label: 'Threshold Cascade', desc: 'Four mask_composite operations at four ascending threshold bands — 40, 80, 150, and 200 — each cutting a different pair of images at a different tonal level.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -8061,6 +8235,343 @@ import Admin from '../../../layouts/Admin.astro';
     }
     function onRerollBinaryArchaeology(rng: () => number) {
       setBinaryArchaeologyParams({ threshold: Math.round(lerp(50, 210, rng())), blend_str: parseFloat(lerp(0.2, 0.9, rng()).toFixed(2)) });
+    }
+
+    // ── sediment-core params ────────────────────────────────────────────────────
+    function buildSedimentCoreParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="sc-shift">Fault Shift <span class="pt-val" id="sc-shift-val">20</span></label>
+          <input class="pt-range" type="range" id="sc-shift" min="0" max="60" step="1" value="20" />
+          <div class="pt-range-hints"><span>none</span><span>extreme</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sc-scan-spacing">Scan Spacing <span class="pt-val" id="sc-scan-spacing-val">4</span></label>
+          <input class="pt-range" type="range" id="sc-scan-spacing" min="2" max="10" step="1" value="4" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sc-scan-opacity">Scan Opacity <span class="pt-val" id="sc-scan-opacity-val">0.30</span></label>
+          <input class="pt-range" type="range" id="sc-scan-opacity" min="0" max="0.7" step="0.01" value="0.30" />
+          <div class="pt-range-hints"><span>off</span><span>heavy</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['sc-shift','sc-scan-spacing','sc-scan-opacity'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getSedimentCoreParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { shift: get('sc-shift','20'), scan_spacing: get('sc-scan-spacing','4'), scan_opacity: get('sc-scan-opacity','0.30') };
+    }
+    function setSedimentCoreParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.shift        !== undefined) set('sc-shift',        p.shift);
+      if (p.scan_spacing !== undefined) set('sc-scan-spacing', p.scan_spacing);
+      if (p.scan_opacity !== undefined) set('sc-scan-opacity', p.scan_opacity);
+    }
+    function onRerollSedimentCore(rng: () => number) {
+      setSedimentCoreParams({ shift: Math.round(lerp(5, 55, rng())), scan_spacing: Math.round(lerp(2, 9, rng())), scan_opacity: parseFloat(lerp(0.05, 0.65, rng()).toFixed(2)) });
+    }
+
+    // ── spectral-stencil params ──────────────────────────────────────────────────
+    function buildSpectralStencilParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="ss2-hp-radius">Bandpass Radius <span class="pt-val" id="ss2-hp-radius-val">5</span></label>
+          <input class="pt-range" type="range" id="ss2-hp-radius" min="1" max="14" step="1" value="5" />
+          <div class="pt-range-hints"><span>fine</span><span>coarse</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ss2-feather">Stencil Feather <span class="pt-val" id="ss2-feather-val">8</span></label>
+          <input class="pt-range" type="range" id="ss2-feather" min="0" max="30" step="1" value="8" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ss2-screen-str">Screen Strength <span class="pt-val" id="ss2-screen-str-val">0.40</span></label>
+          <input class="pt-range" type="range" id="ss2-screen-str" min="0" max="0.9" step="0.01" value="0.40" />
+          <div class="pt-range-hints"><span>off</span><span>full</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['ss2-hp-radius','ss2-feather','ss2-screen-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getSpectralStencilParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { hp_radius: get('ss2-hp-radius','5'), feather: get('ss2-feather','8'), screen_str: get('ss2-screen-str','0.40') };
+    }
+    function setSpectralStencilParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.hp_radius  !== undefined) set('ss2-hp-radius',  p.hp_radius);
+      if (p.feather    !== undefined) set('ss2-feather',    p.feather);
+      if (p.screen_str !== undefined) set('ss2-screen-str', p.screen_str);
+    }
+    function onRerollSpectralStencil(rng: () => number) {
+      setSpectralStencilParams({ hp_radius: Math.round(lerp(2, 12, rng())), feather: Math.round(lerp(2, 24, rng())), screen_str: parseFloat(lerp(0.1, 0.8, rng()).toFixed(2)) });
+    }
+
+    // ── spectral-silver params ───────────────────────────────────────────────────
+    function buildSpectralSilverParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="sv-hp-radius">Bandpass Radius <span class="pt-val" id="sv-hp-radius-val">5</span></label>
+          <input class="pt-range" type="range" id="sv-hp-radius" min="1" max="14" step="1" value="5" />
+          <div class="pt-range-hints"><span>fine</span><span>coarse</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sv-feather">Stencil Feather <span class="pt-val" id="sv-feather-val">8</span></label>
+          <input class="pt-range" type="range" id="sv-feather" min="0" max="30" step="1" value="8" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sv-silver-str">Silver Toning <span class="pt-val" id="sv-silver-str-val">0.45</span></label>
+          <input class="pt-range" type="range" id="sv-silver-str" min="0" max="0.9" step="0.01" value="0.45" />
+          <div class="pt-range-hints"><span>none</span><span>full silver</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sv-screen-str">Screen Strength <span class="pt-val" id="sv-screen-str-val">0.40</span></label>
+          <input class="pt-range" type="range" id="sv-screen-str" min="0" max="0.9" step="0.01" value="0.40" />
+          <div class="pt-range-hints"><span>off</span><span>full</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['sv-hp-radius','sv-feather','sv-silver-str','sv-screen-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getSpectralSilverParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { hp_radius: get('sv-hp-radius','5'), feather: get('sv-feather','8'), silver_str: get('sv-silver-str','0.45'), screen_str: get('sv-screen-str','0.40') };
+    }
+    function setSpectralSilverParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.hp_radius  !== undefined) set('sv-hp-radius',  p.hp_radius);
+      if (p.feather    !== undefined) set('sv-feather',    p.feather);
+      if (p.silver_str !== undefined) set('sv-silver-str', p.silver_str);
+      if (p.screen_str !== undefined) set('sv-screen-str', p.screen_str);
+    }
+    function onRerollSpectralSilver(rng: () => number) {
+      setSpectralSilverParams({ hp_radius: Math.round(lerp(2, 12, rng())), feather: Math.round(lerp(2, 24, rng())), silver_str: parseFloat(lerp(0.2, 0.85, rng()).toFixed(2)), screen_str: parseFloat(lerp(0.1, 0.8, rng()).toFixed(2)) });
+    }
+
+    // ── fossil-record params ─────────────────────────────────────────────────────
+    function buildFossilRecordParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="fr-hp-radius">Structural Radius <span class="pt-val" id="fr-hp-radius-val">5</span></label>
+          <input class="pt-range" type="range" id="fr-hp-radius" min="1" max="14" step="1" value="5" />
+          <div class="pt-range-hints"><span>fine</span><span>coarse</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="fr-blend-str">Layer Strength <span class="pt-val" id="fr-blend-str-val">0.55</span></label>
+          <input class="pt-range" type="range" id="fr-blend-str" min="0.1" max="1" step="0.01" value="0.55" />
+          <div class="pt-range-hints"><span>faint</span><span>dense</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="fr-dither-thresh">Stone Dither <span class="pt-val" id="fr-dither-thresh-val">128</span></label>
+          <input class="pt-range" type="range" id="fr-dither-thresh" min="40" max="220" step="1" value="128" />
+          <div class="pt-range-hints"><span>dark</span><span>light</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['fr-hp-radius','fr-blend-str','fr-dither-thresh'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getFossilRecordParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { hp_radius: get('fr-hp-radius','5'), blend_str: get('fr-blend-str','0.55'), dither_thresh: get('fr-dither-thresh','128') };
+    }
+    function setFossilRecordParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.hp_radius    !== undefined) set('fr-hp-radius',    p.hp_radius);
+      if (p.blend_str    !== undefined) set('fr-blend-str',    p.blend_str);
+      if (p.dither_thresh !== undefined) set('fr-dither-thresh', p.dither_thresh);
+    }
+    function onRerollFossilRecord(rng: () => number) {
+      setFossilRecordParams({ hp_radius: Math.round(lerp(2, 12, rng())), blend_str: parseFloat(lerp(0.2, 0.9, rng()).toFixed(2)), dither_thresh: Math.round(lerp(60, 200, rng())) });
+    }
+
+    // ── displacement-blend-spectral params ──────────────────────────────────────
+    function buildDisplacementBlendSpectralParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="dbs-swirl">Swirl Angle <span class="pt-val" id="dbs-swirl-val">1.00</span></label>
+          <input class="pt-range" type="range" id="dbs-swirl" min="0" max="4" step="0.05" value="1.00" />
+          <div class="pt-range-hints"><span>none</span><span>extreme</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="dbs-thresh">Stencil Threshold <span class="pt-val" id="dbs-thresh-val">110</span></label>
+          <input class="pt-range" type="range" id="dbs-thresh" min="30" max="220" step="1" value="110" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="dbs-feather">Feather <span class="pt-val" id="dbs-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="dbs-feather" min="0" max="30" step="1" value="10" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="dbs-hp-radius">Spectral Radius <span class="pt-val" id="dbs-hp-radius-val">5</span></label>
+          <input class="pt-range" type="range" id="dbs-hp-radius" min="1" max="14" step="1" value="5" />
+          <div class="pt-range-hints"><span>fine</span><span>coarse</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['dbs-swirl','dbs-thresh','dbs-feather','dbs-hp-radius'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getDisplacementBlendSpectralParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { swirl: get('dbs-swirl','1.00'), thresh: get('dbs-thresh','110'), feather: get('dbs-feather','10'), hp_radius: get('dbs-hp-radius','5') };
+    }
+    function setDisplacementBlendSpectralParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.swirl     !== undefined) set('dbs-swirl',     p.swirl);
+      if (p.thresh    !== undefined) set('dbs-thresh',    p.thresh);
+      if (p.feather   !== undefined) set('dbs-feather',   p.feather);
+      if (p.hp_radius !== undefined) set('dbs-hp-radius', p.hp_radius);
+    }
+    function onRerollDisplacementBlendSpectral(rng: () => number) {
+      setDisplacementBlendSpectralParams({ swirl: parseFloat(lerp(0.3, 3.5, rng()).toFixed(2)), thresh: Math.round(lerp(50, 200, rng())), feather: Math.round(lerp(4, 24, rng())), hp_radius: Math.round(lerp(2, 12, rng())) });
+    }
+
+    // ── double-masked-collage params ─────────────────────────────────────────────
+    function buildDoubleMaskedCollageParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="dmc-pieces">Fragment Count <span class="pt-val" id="dmc-pieces-val">36</span></label>
+          <input class="pt-range" type="range" id="dmc-pieces" min="9" max="100" step="1" value="36" />
+          <div class="pt-range-hints"><span>coarse</span><span>fine</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="dmc-mix-ratio">Mix Ratio <span class="pt-val" id="dmc-mix-ratio-val">0.55</span></label>
+          <input class="pt-range" type="range" id="dmc-mix-ratio" min="0.1" max="0.9" step="0.01" value="0.55" />
+          <div class="pt-range-hints"><span>sparse</span><span>dense</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="dmc-thresh">Mask Threshold <span class="pt-val" id="dmc-thresh-val">110</span></label>
+          <input class="pt-range" type="range" id="dmc-thresh" min="30" max="220" step="1" value="110" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="dmc-feather">Feather <span class="pt-val" id="dmc-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="dmc-feather" min="0" max="30" step="1" value="10" />
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['dmc-pieces','dmc-mix-ratio','dmc-thresh','dmc-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getDoubleMaskedCollageParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { pieces: get('dmc-pieces','36'), mix_ratio: get('dmc-mix-ratio','0.55'), thresh: get('dmc-thresh','110'), feather: get('dmc-feather','10') };
+    }
+    function setDoubleMaskedCollageParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.pieces    !== undefined) set('dmc-pieces',    p.pieces);
+      if (p.mix_ratio !== undefined) set('dmc-mix-ratio', p.mix_ratio);
+      if (p.thresh    !== undefined) set('dmc-thresh',    p.thresh);
+      if (p.feather   !== undefined) set('dmc-feather',   p.feather);
+    }
+    function onRerollDoubleMaskedCollage(rng: () => number) {
+      setDoubleMaskedCollageParams({ pieces: Math.round(lerp(9, 100, rng())), mix_ratio: parseFloat(lerp(0.2, 0.85, rng()).toFixed(2)), thresh: Math.round(lerp(50, 200, rng())), feather: Math.round(lerp(4, 24, rng())) });
+    }
+
+    // ── silhouette-collage params ────────────────────────────────────────────────
+    function buildSilhouetteCollageParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="slc-threshold">Silhouette Threshold <span class="pt-val" id="slc-threshold-val">110</span></label>
+          <input class="pt-range" type="range" id="slc-threshold" min="30" max="220" step="1" value="110" />
+          <div class="pt-range-hints"><span>dark</span><span>light</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="slc-feather">Feather <span class="pt-val" id="slc-feather-val">8</span></label>
+          <input class="pt-range" type="range" id="slc-feather" min="0" max="30" step="1" value="8" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="slc-screen-str">Screen Strength <span class="pt-val" id="slc-screen-str-val">0.50</span></label>
+          <input class="pt-range" type="range" id="slc-screen-str" min="0" max="1" step="0.01" value="0.50" />
+          <div class="pt-range-hints"><span>off</span><span>full</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['slc-threshold','slc-feather','slc-screen-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getSilhouetteCollageParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { threshold: get('slc-threshold','110'), feather: get('slc-feather','8'), screen_str: get('slc-screen-str','0.50') };
+    }
+    function setSilhouetteCollageParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.threshold  !== undefined) set('slc-threshold',  p.threshold);
+      if (p.feather    !== undefined) set('slc-feather',    p.feather);
+      if (p.screen_str !== undefined) set('slc-screen-str', p.screen_str);
+    }
+    function onRerollSilhouetteCollage(rng: () => number) {
+      setSilhouetteCollageParams({ threshold: Math.round(lerp(40, 200, rng())), feather: Math.round(lerp(2, 24, rng())), screen_str: parseFloat(lerp(0.2, 0.85, rng()).toFixed(2)) });
+    }
+
+    // ── text-ghost params ────────────────────────────────────────────────────────
+    function buildTextGhostParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="tg-threshold">Ghost Threshold <span class="pt-val" id="tg-threshold-val">110</span></label>
+          <input class="pt-range" type="range" id="tg-threshold" min="30" max="220" step="1" value="110" />
+          <div class="pt-range-hints"><span>dark</span><span>light</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="tg-feather">Feather <span class="pt-val" id="tg-feather-val">12</span></label>
+          <input class="pt-range" type="range" id="tg-feather" min="0" max="40" step="1" value="12" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="tg-screen-str">Ghost Opacity <span class="pt-val" id="tg-screen-str-val">0.45</span></label>
+          <input class="pt-range" type="range" id="tg-screen-str" min="0" max="1" step="0.01" value="0.45" />
+          <div class="pt-range-hints"><span>subtle</span><span>full</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['tg-threshold','tg-feather','tg-screen-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getTextGhostParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { threshold: get('tg-threshold','110'), feather: get('tg-feather','12'), screen_str: get('tg-screen-str','0.45') };
+    }
+    function setTextGhostParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.threshold  !== undefined) set('tg-threshold',  p.threshold);
+      if (p.feather    !== undefined) set('tg-feather',    p.feather);
+      if (p.screen_str !== undefined) set('tg-screen-str', p.screen_str);
+    }
+    function onRerollTextGhost(rng: () => number) {
+      setTextGhostParams({ threshold: Math.round(lerp(40, 200, rng())), feather: Math.round(lerp(4, 32, rng())), screen_str: parseFloat(lerp(0.2, 0.85, rng()).toFixed(2)) });
     }
 
     // ─── Native canvas effect helpers ──────────────────────────────────────────
