@@ -4461,8 +4461,42 @@ import Admin from '../../../layouts/Admin.astro';
       'neural-chimera': { label: 'Neural Chimera', desc: 'Three images deepdreamed at different neural layers then Voronoi-fragmented together. Style transfer re-hallucinates the composite.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('neural-chimera', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'voronoi-chimera': { label: 'Voronoi Chimera', desc: 'Faces and forms fused at Voronoi cell boundaries. Each image gets a different neural/glitch treatment before being fragmented together.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('voronoi-chimera', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'wax-museum': { label: 'Wax Museum', desc: 'Three images each passed through style transfer — their surfaces repainted in the manner of some other image, some other logic.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('wax-museum', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'acid-wash': { label: 'Acid Wash', desc: 'Three images run through spectral transformation — their frequencies scrambled and redistributed — before being multiplied together.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('acid-wash', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'broadcast-static': { label: 'Broadcast Static', desc: 'Three images converted to sound and back — each through a different acoustic treatment, each emerging distorted in its own frequency range.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('broadcast-static', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'acid-wash': { label: 'Acid Wash', desc: 'Three images run through spectral transformation — their frequencies scrambled and redistributed — before being multiplied together.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const r  = Math.max(1, Math.round(params.hp_radius ?? 5));
+          const sh = Math.round(params.shift ?? 20);
+          let gA = highpassRGB(dA, w, h, r);
+          let gB = highpassRGB(dB, w, h, r + 3);
+          let gC = highpassRGB(dC, w, h, Math.max(1, r - 2));
+          gA = channelShift(gA, w, h,  sh, -sh);
+          gB = channelShift(gB, w, h, -Math.round(sh * 0.7), Math.round(sh * 1.3));
+          gC = channelShift(gC, w, h,  Math.round(sh * 0.5), Math.round(sh * -0.5));
+          let d = blendPixels(gA, gB, w, h, 'multiply', 1.0);
+          d     = blendPixels(d,  gC, w, h, 'multiply', 1.0);
+          d     = blendPixels(d,  dA, w, h, 'screen', params.screen_str ?? 0.4);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildAcidWashParams, getParams: getAcidWashParams, setParams: setAcidWashParams, onReroll: onRerollAcidWash },
+      'broadcast-static': { label: 'Broadcast Static', desc: 'Three images converted to sound and back — each through a different acoustic treatment, each emerging distorted in its own frequency range.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const sp = Math.round(params.scan_spacing ?? 4);
+          const so = params.scan_opacity ?? 0.35;
+          const sh = Math.round(params.shift ?? 25);
+          let tA = pixelSort(dA, w, h, Math.round(params.sort_thresh ?? 80), 'down');
+          tA = scanLines(tA, w, h, sp, so);
+          let tB = channelShift(dB, w, h, sh, -sh);
+          tB = scanLines(tB, w, h, sp + 1, so * 0.7);
+          let tC = highpassRGB(dC, w, h, Math.max(1, Math.round(params.hp_r ?? 4)));
+          tC = channelShift(tC, w, h, -Math.round(sh * 0.5), Math.round(sh * 0.5));
+          let d = blendPixels(tA, tB, w, h, 'screen', 0.7);
+          d     = blendPixels(d,  tC, w, h, 'overlay', 0.5);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildBroadcastStaticParams, getParams: getBroadcastStaticParams, setParams: setBroadcastStaticParams, onReroll: onRerollBroadcastStatic },
       'data-rot': { label: 'Data Rot', desc: 'Three images subjected to byte-level corruption before any composition — the damage is baked in from the start, not applied as finish.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -8212,6 +8246,131 @@ import Admin from '../../../layouts/Admin.astro';
     }
     function onRerollShiftedLinescreen(rng: () => number) {
       setShiftedLinescreenParams({ shift: Math.round(lerp(5, 70, rng())), screen_str: parseFloat(lerp(0.15, 0.7, rng()).toFixed(2)) });
+    }
+
+    // ── acid-wash params ────────────────────────────────────────────────────────
+    function buildAcidWashParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="aw-hp-radius">HP Radius <span class="pt-val" id="aw-hp-radius-val">5</span></label>
+          <input class="pt-range" type="range" id="aw-hp-radius" min="1" max="12" step="1" value="5" />
+          <div class="pt-range-hints"><span>tight</span><span>wide</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="aw-shift">Channel Shift <span class="pt-val" id="aw-shift-val">20</span></label>
+          <input class="pt-range" type="range" id="aw-shift" min="5" max="50" step="1" value="20" />
+          <div class="pt-range-hints"><span>subtle</span><span>scrambled</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="aw-screen-str">Screen Back <span class="pt-val" id="aw-screen-str-val">0.40</span></label>
+          <input class="pt-range" type="range" id="aw-screen-str" min="0" max="1" step="0.01" value="0.40" />
+          <div class="pt-range-hints"><span>dark</span><span>bright</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['aw-hp-radius','aw-shift'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+      const ssEl = document.getElementById('aw-screen-str') as HTMLInputElement;
+      const ssVl = document.getElementById('aw-screen-str-val') as HTMLSpanElement;
+      ssEl?.addEventListener('input', () => { ssVl.textContent = parseFloat(ssEl.value).toFixed(2); fire(); });
+    }
+    function getAcidWashParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { hp_radius: get('aw-hp-radius','5'), shift: get('aw-shift','20'), screen_str: get('aw-screen-str','0.40') };
+    }
+    function setAcidWashParams(p: Record<string, any>) {
+      const set = (id: string, v: any, fmt?: (n: number) => string) => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement | null;
+        if (el) el.value = String(v);
+        if (vl) vl.textContent = fmt ? fmt(parseFloat(String(v))) : String(v);
+      };
+      if (p.hp_radius  !== undefined) set('aw-hp-radius',  p.hp_radius);
+      if (p.shift      !== undefined) set('aw-shift',      p.shift);
+      if (p.screen_str !== undefined) set('aw-screen-str', p.screen_str, n => n.toFixed(2));
+    }
+    function onRerollAcidWash(rng: () => number) {
+      setAcidWashParams({
+        hp_radius:  Math.round(lerp(2, 10, rng())),
+        shift:      Math.round(lerp(5, 45, rng())),
+        screen_str: parseFloat(lerp(0.25, 0.65, rng()).toFixed(2)),
+      });
+    }
+
+    // ── broadcast-static params ──────────────────────────────────────────────────
+    function buildBroadcastStaticParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="bs-sort-thresh">Sort Threshold <span class="pt-val" id="bs-sort-thresh-val">80</span></label>
+          <input class="pt-range" type="range" id="bs-sort-thresh" min="40" max="160" step="1" value="80" />
+          <div class="pt-range-hints"><span>more sorted</span><span>less sorted</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="bs-shift">Channel Shift <span class="pt-val" id="bs-shift-val">25</span></label>
+          <input class="pt-range" type="range" id="bs-shift" min="10" max="60" step="1" value="25" />
+          <div class="pt-range-hints"><span>subtle</span><span>heavy</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="bs-hp-r">HP Radius <span class="pt-val" id="bs-hp-r-val">4</span></label>
+          <input class="pt-range" type="range" id="bs-hp-r" min="2" max="10" step="1" value="4" />
+          <div class="pt-range-hints"><span>tight</span><span>wide</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="bs-scan-spacing">Scan Spacing <span class="pt-val" id="bs-scan-spacing-val">4</span></label>
+          <input class="pt-range" type="range" id="bs-scan-spacing" min="2" max="8" step="1" value="4" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="bs-scan-opacity">Scan Opacity <span class="pt-val" id="bs-scan-opacity-val">0.35</span></label>
+          <input class="pt-range" type="range" id="bs-scan-opacity" min="0" max="0.7" step="0.01" value="0.35" />
+          <div class="pt-range-hints"><span>ghost</span><span>heavy</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['bs-sort-thresh','bs-shift','bs-hp-r','bs-scan-spacing'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+      const soEl = document.getElementById('bs-scan-opacity') as HTMLInputElement;
+      const soVl = document.getElementById('bs-scan-opacity-val') as HTMLSpanElement;
+      soEl?.addEventListener('input', () => { soVl.textContent = parseFloat(soEl.value).toFixed(2); fire(); });
+    }
+    function getBroadcastStaticParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return {
+        sort_thresh:   get('bs-sort-thresh','80'),
+        shift:         get('bs-shift','25'),
+        hp_r:          get('bs-hp-r','4'),
+        scan_spacing:  get('bs-scan-spacing','4'),
+        scan_opacity:  get('bs-scan-opacity','0.35'),
+      };
+    }
+    function setBroadcastStaticParams(p: Record<string, any>) {
+      const set = (id: string, v: any, fmt?: (n: number) => string) => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement | null;
+        if (el) el.value = String(v);
+        if (vl) vl.textContent = fmt ? fmt(parseFloat(String(v))) : String(v);
+      };
+      if (p.sort_thresh  !== undefined) set('bs-sort-thresh',  p.sort_thresh);
+      if (p.shift        !== undefined) set('bs-shift',        p.shift);
+      if (p.hp_r         !== undefined) set('bs-hp-r',         p.hp_r);
+      if (p.scan_spacing !== undefined) set('bs-scan-spacing', p.scan_spacing);
+      if (p.scan_opacity !== undefined) set('bs-scan-opacity', p.scan_opacity, n => n.toFixed(2));
+    }
+    function onRerollBroadcastStatic(rng: () => number) {
+      setBroadcastStaticParams({
+        sort_thresh:  Math.round(lerp(40, 140, rng())),
+        shift:        Math.round(lerp(10, 55, rng())),
+        hp_r:         Math.round(lerp(2, 9, rng())),
+        scan_spacing: Math.round(lerp(2, 8, rng())),
+        scan_opacity: parseFloat(lerp(0.1, 0.6, rng()).toFixed(2)),
+      });
     }
 
     // ── data-rot params ─────────────────────────────────────────────────────────
