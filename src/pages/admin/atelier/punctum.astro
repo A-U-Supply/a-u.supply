@@ -4739,7 +4739,24 @@ import Admin from '../../../layouts/Admin.astro';
           d = blendPixels(d, prussian, w, h, 'screen', params.blue_str ?? 0.55);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildBullseyeCyanotypeParams, getParams: getBullseyeCyanotypeParams, setParams: setBullseyeCyanotypeParams, onReroll: onRerollBullseyeCyanotype },
-      'curvy-corruption': { label: 'Curvy Corruption', desc: 'Three images composited through edge-following curvy line screens, then the result is byte-corrupted and CRT/VHS filtered.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('curvy-corruption', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'curvy-corruption': { label: 'Curvy Corruption', desc: 'Three images composited through edge-following curvy line screens, then the result is byte-corrupted and CRT/VHS filtered.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const sp = params.scan_spacing ?? 3;
+          const sh = Math.round(params.shift ?? 20);
+          // Edge-following curvy line screen approximation: scanLines + edgeMaskComposite
+          const sA = scanLines(dA, w, h, sp,   0.5);
+          const sB = scanLines(dB, w, h, sp+1, 0.5);
+          let d = edgeMaskComposite(sA, sB, w, h, 90, 8, false);
+          // Three-way composite with C
+          d = blendPixels(d, dC, w, h, 'screen', 0.4);
+          // Channel shift for CRT bleed
+          d = channelShift(d, w, h, sh, -Math.round(sh * 0.6));
+          // Byte corruption via jpeg destroy
+          return [{ canvas: jpegDestroy(pixelsToCanvas(d, w, h), params.quality ?? 4, 4), mimeType: 'image/jpeg' }];
+        }, buildParams: buildCurvyCorruptionParams, getParams: getCurvyCorruptionParams, setParams: setCurvyCorruptionParams, onReroll: onRerollCurvyCorruption },
       'cyanotype-corruption': { label: 'Cyanotype Corruption', desc: 'Three images composited through cyanotype stencil — prussian blue toning with highlight bloom — then the composite is byte-corrupted and channel-shifted.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -4760,7 +4777,35 @@ import Admin from '../../../layouts/Admin.astro';
           const q = params.quality ?? 5;
           return [{ canvas: jpegDestroy(pixelsToCanvas(d, w, h), q, 3), mimeType: 'image/jpeg' }];
         }, buildParams: buildCyanotypeCorruptionParams, getParams: getCyanotypeCorruptionParams, setParams: setCyanotypeCorruptionParams, onReroll: onRerollCyanotypeCorruption },
-      'reducedscreen-datamosh': { label: 'Reduced Screen Datamosh', desc: 'Three images composited through adaptive-frequency line screens — finer lines in detail regions, coarser in flat areas — then datamoshed.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('reducedscreen-datamosh', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'reducedscreen-datamosh': { label: 'Reduced Screen Datamosh', desc: 'Three images composited through adaptive-frequency line screens — finer lines in detail regions, coarser in flat areas — then datamoshed.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dt = params.thresh ?? 128;
+          // Adaptive-frequency line screen approximation: Bayer dither at different scales per source
+          const bayer4 = [[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
+          const bayer8 = [[0,32,8,40,2,34,10,42],[48,16,56,24,50,18,58,26],[12,44,4,36,14,46,6,38],[60,28,52,20,62,30,54,22],[3,35,11,43,1,33,9,41],[51,19,59,27,49,17,57,25],[15,47,7,39,13,45,5,37],[63,31,55,23,61,29,53,21]];
+          function dth(d: Uint8ClampedArray, mat: number[][], sz: number, thr: number): Uint8ClampedArray {
+            const out = new Uint8ClampedArray(w * h * 4);
+            const sc = 255 / (sz * sz);
+            for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+              const i = (y*w+x)*4;
+              const lm = 0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+              const bv = mat[y%sz][x%sz]*sc;
+              const v = lm+bv-128 > thr ? 255 : 0;
+              out[i]=out[i+1]=out[i+2]=v; out[i+3]=255;
+            }
+            return out;
+          }
+          const dA4 = dth(dA, bayer4, 4, dt);
+          const dB8 = dth(dB, bayer8, 8, dt - 20);
+          const dC4 = dth(dC, bayer4, 4, dt + 20);
+          let d = lumaComposite(dA4, dA, dB, w, h, 128, 8, false);
+          d = lumaComposite(dB8, d, dC, w, h, 128, 8, false);
+          d = blendPixels(d, dC4, w, h, 'screen', 0.35);
+          return [{ canvas: jpegDestroy(pixelsToCanvas(d, w, h), params.quality ?? 3, Math.round(params.iterations ?? 5)), mimeType: 'image/jpeg' }];
+        }, buildParams: buildReducedscreenDatamoshParams, getParams: getReducedscreenDatamoshParams, setParams: setReducedscreenDatamoshParams, onReroll: onRerollReducedscreenDatamosh },
       'shifted-linescreen': { label: 'Shifted Line Screen', desc: 'Three images channel-shifted until their color registers separate, then composited through parallel line screen stencils. The misregistered colors show through.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -4905,8 +4950,54 @@ import Admin from '../../../layouts/Admin.astro';
           d = blendPixels(d, dC, w, h, 'overlay', 0.35);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildBullseyeWobbleDisplacementParams, getParams: getBullseyeWobbleDisplacementParams, setParams: setBullseyeWobbleDisplacementParams, onReroll: onRerollBullseyeWobbleDisplacement },
-      'halftone-curvyscreen': { label: 'Halftone Curvy Screen', desc: 'Two-pass screen compositing: first halftone dot screen composites two images, then the result and a third image are composited through curvy line screen.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('halftone-curvyscreen', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'kaleidoscope-halftone': { label: 'Kaleidoscope Halftone', desc: "Two images kaleidoscoped into mandala patterns — radial symmetry folding their surfaces into repeating wedges — then a third image's halftone dot screen composites them.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('kaleidoscope-halftone', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'halftone-curvyscreen': { label: 'Halftone Curvy Screen', desc: 'Two-pass screen compositing: first halftone dot screen composites two images, then the result and a third image are composited through curvy line screen.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dt = params.dither_thresh ?? 128;
+          const sp = params.scan_spacing ?? 4;
+          // Pass 1: halftone dot screen composites A and B
+          const bayer4 = [[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
+          const halftone = new Uint8ClampedArray(w * h * 4);
+          for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+            const i = (y*w+x)*4;
+            const lm = 0.299*dA[i]+0.587*dA[i+1]+0.114*dA[i+2];
+            const bv = (bayer4[y%4][x%4]/16)*255;
+            const v = lm+bv-128 > dt ? 255 : 0;
+            halftone[i]=halftone[i+1]=halftone[i+2]=v; halftone[i+3]=255;
+          }
+          let d = lumaComposite(halftone, dA, dB, w, h, 128, 6, false);
+          // Pass 2: curvy screen (scanLines approximation) composites result with C
+          const screened = scanLines(d, w, h, sp, 0.5);
+          d = edgeMaskComposite(screened, dC, w, h, 90, 8, false);
+          d = blendPixels(d, dC, w, h, 'screen', params.screen_str ?? 0.50);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildHalftoneCurvyscreenParams, getParams: getHalftoneCurvyscreenParams, setParams: setHalftoneCurvyscreenParams, onReroll: onRerollHalftoneCurvyscreen },
+      'kaleidoscope-halftone': { label: 'Kaleidoscope Halftone', desc: "Two images kaleidoscoped into mandala patterns — radial symmetry folding their surfaces into repeating wedges — then a third image's halftone dot screen composites them.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const segs = Math.round(params.segments ?? 8);
+          const dt = params.dither_thresh ?? 128;
+          // Kaleidoscope both images
+          const kA = kaleidoscope(dA, w, h, segs);
+          const kB = kaleidoscope(dB, w, h, segs + 2);
+          // Halftone dot screen from C composites kA and kB
+          const bayer4 = [[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
+          const ht = new Uint8ClampedArray(w * h * 4);
+          for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+            const i = (y*w+x)*4;
+            const lm = 0.299*dC[i]+0.587*dC[i+1]+0.114*dC[i+2];
+            const bv = (bayer4[y%4][x%4]/16)*255;
+            const v = lm+bv-128 > dt ? 255 : 0;
+            ht[i]=ht[i+1]=ht[i+2]=v; ht[i+3]=255;
+          }
+          let d = lumaComposite(ht, kA, kB, w, h, 128, 8, false);
+          d = blendPixels(d, dC, w, h, 'screen', params.screen_str ?? 0.45);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildKaleidoscopeHalftoneParams, getParams: getKaleidoscopeHalftoneParams, setParams: setKaleidoscopeHalftoneParams, onReroll: onRerollKaleidoscopeHalftone },
       'lathe-displacement': { label: 'Lathe Displacement', desc: 'Two images lathe-turned — dozens of thin concentric rings each independently rotated into agate-like surfaces — then displacement-stenciled against a third.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
         render: (imgs, params, rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -4924,7 +5015,22 @@ import Admin from '../../../layouts/Admin.astro';
           d = edgeMaskComposite(d, dC, w, h, 80, 10, false);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildLatheDisplacementParams, getParams: getLatheDisplacementParams, setParams: setLatheDisplacementParams, onReroll: onRerollLatheDisplacement },
-      'lathe-kaleidoscope-stencil': { label: 'Lathe Kaleidoscope Stencil', desc: 'Double geometric destruction: one image lathe-turned into agate rings, another kaleidoscoped into mandala symmetry, a third wobble-eyed into drifting rings.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('lathe-kaleidoscope-stencil', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'lathe-kaleidoscope-stencil': { label: 'Lathe Kaleidoscope Stencil', desc: 'Double geometric destruction: one image lathe-turned into agate rings, another kaleidoscoped into mandala symmetry, a third wobble-eyed into drifting rings.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const rings = Math.round(params.rings ?? 16);
+          const rot = params.rotate ?? 1.0;
+          const segs = Math.round(params.segments ?? 6);
+          // A: lathe-turned (agate rings); B: kaleidoscoped (mandala)
+          const lA = ringRotate(dA, w, h, rings, 0, rot, 0, rng);
+          const kB = kaleidoscope(dB, w, h, segs);
+          // Stencil: edge composite lathe vs kaleidoscope, then C overlay
+          let d = edgeMaskComposite(lA, kB, w, h, 90, params.feather ?? 10, false);
+          d = blendPixels(d, dC, w, h, 'screen', 0.35);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildLatheKaleidoscopeStencilParams, getParams: getLatheKaleidoscopeStencilParams, setParams: setLatheKaleidoscopeStencilParams, onReroll: onRerollLatheKaleidoscopeStencil },
       'wobble-halation': { label: 'Wobble Halation', desc: 'Two images wobble-eyed — off-axis concentric rings drifting from center — then composited through halation edge stencil. The organic grain boundary meets the drifting rings.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
         render: (imgs, params, rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -5064,7 +5170,21 @@ import Admin from '../../../layouts/Admin.astro';
           d     = edgeMaskComposite(dC, d,       w, h, th, f + 8, false);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildCollageSurgeryParams, getParams: getCollageSurgeryParams, setParams: setCollageSurgeryParams, onReroll: onRerollCollageSurgery },
-      'collage-through-glass': { label: 'Collage Through Glass', desc: "Three images are mosaiced into a composite grid. Image D, PCA-reduced to a single structural component, provides a ghostly lens over the mosaic surface.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('collage-through-glass', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'collage-through-glass': { label: 'Collage Through Glass', desc: "Three images are mosaiced into a composite grid. Image D, PCA-reduced to a single structural component, provides a ghostly lens over the mosaic surface.", inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          // Mosaic A, B, C into composite grid
+          let mosaic = gridFragment(dA, dA, dB, w, h, Math.round(params.pieces ?? 25), params.mix_ratio ?? 0.55, rng);
+          mosaic = gridFragment(mosaic, mosaic, dC, w, h, Math.round(params.pieces ?? 25), (params.mix_ratio ?? 0.55) * 0.7, rng);
+          // D provides PCA ghost lens: highpass extracts structural component
+          const ghost = highpassRGB(dD, w, h, Math.round(params.hp_radius ?? 8));
+          // Screen ghost over mosaic
+          const d = blendPixels(mosaic, ghost, w, h, 'screen', params.ghost_str ?? 0.50);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildCollageGlassParams, getParams: getCollageGlassParams, setParams: setCollageGlassParams, onReroll: onRerollCollageGlass },
       'contrast-surgery': { label: 'Contrast Surgery', desc: 'Image A undergoes extreme channel surgery — massive RGB offsets pull its color registers apart until the content nearly dissolves into chromatic aberration.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -5356,7 +5476,24 @@ import Admin from '../../../layouts/Admin.astro';
           // JPEG corruption
           return [{ canvas: jpegDestroy(pixelsToCanvas(d, w, h), params.quality ?? 4, 4), mimeType: 'image/jpeg' }];
         }, buildParams: buildSixshooterHalationCorruptParams, getParams: getSixshooterHalationCorruptParams, setParams: setSixshooterHalationCorruptParams, onReroll: onRerollSixshooterHalationCorrupt },
-      'spectral-mask': { label: 'Spectral Mask', desc: 'Four images processed spectrally and then masked in pairs. Image A is spectrally shifted to emphasize its mid-range structure. The shifted and raw versions mask against each other.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('spectral-mask', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'spectral-mask': { label: 'Spectral Mask', desc: 'Four images processed spectrally and then masked in pairs. Image A is spectrally shifted to emphasize its mid-range structure. The shifted and raw versions mask against each other.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const r = Math.round(params.hp_radius ?? 5);
+          // Spectrally shift A: highpass extracts mid-range structure
+          const hpA = highpassRGB(dA, w, h, r);
+          // Shifted A masks against raw A to reveal B
+          let d = lumaComposite(hpA, dA, dB, w, h, 80, params.feather ?? 10, false);
+          // Same process for B vs C
+          const hpB = highpassRGB(dB, w, h, r + 2);
+          d = lumaComposite(hpB, d, dC, w, h, 80, params.feather ?? 10, false);
+          // D provides final spectral screen
+          d = blendPixels(d, highpassRGB(dD, w, h, r), w, h, 'screen', params.screen_str ?? 0.45);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildSpectralMaskParams, getParams: getSpectralMaskParams, setParams: setSpectralMaskParams, onReroll: onRerollSpectralMask },
       'stencil-burn': { label: 'Stencil Burn', desc: 'Image A is dithered to a near-binary stencil — its shapes reduced to stark positive and negative space. That stencil is used as a hard luminance mask cutting into B, C, and D.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -5509,7 +5646,37 @@ import Admin from '../../../layouts/Admin.astro';
           d = gridFragment(d, tC, tD, w, h, pieces, mr * 0.75, rng);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildTornCollageParams, getParams: getTornCollageParams, setParams: setTornCollageParams, onReroll: onRerollTornCollage },
-      'wobble-curvyscreen-dither': { label: 'Wobble Curvy Screen Dither', desc: 'Four images: two wobble-eyed into drifting off-axis rings, then curvy-line-screened against a third. The fourth image provides an edge mask over the result.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('wobble-curvyscreen-dither', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'wobble-curvyscreen-dither': { label: 'Wobble Curvy Screen Dither', desc: 'Four images: two wobble-eyed into drifting off-axis rings, then curvy-line-screened against a third. The fourth image provides an edge mask over the result.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
+          const dPx = getPixels(imgs[3]!); const dD = resizeToMatch(dPx.d, dPx.w, dPx.h, w, h);
+          const rings = Math.round(params.rings ?? 10);
+          const wob = params.wobble ?? 25;
+          const sp = params.scan_spacing ?? 4;
+          const dt = params.dither_thresh ?? 128;
+          // Wobble A and B (off-axis rings)
+          const wA = ringRotate(dA, w, h, rings, 0, 0.5, wob, rng);
+          const wB = ringRotate(dB, w, h, rings, 0, 0.5, wob * 1.2, rng);
+          // Curvy screen approximation: scanLines composite
+          let d = edgeMaskComposite(scanLines(wA, w, h, sp, 0.5), scanLines(wB, w, h, sp+1, 0.5), w, h, 90, 8, false);
+          d = blendPixels(d, dC, w, h, 'screen', 0.4);
+          // Bayer dither overlay
+          const bayer4 = [[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
+          const ht = new Uint8ClampedArray(w * h * 4);
+          for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+            const i = (y*w+x)*4;
+            const lm = 0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+            const bv = (bayer4[y%4][x%4]/16)*255;
+            const v = lm+bv-128 > dt ? 255 : 0;
+            ht[i]=ht[i+1]=ht[i+2]=v; ht[i+3]=255;
+          }
+          d = blendPixels(d, ht, w, h, 'multiply', 0.5);
+          // D edge mask
+          d = edgeMaskComposite(d, dD, w, h, 80, 10, false);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildWobbleCurvyscreenDitherParams, getParams: getWobbleCurvyscreenDitherParams, setParams: setWobbleCurvyscreenDitherParams, onReroll: onRerollWobbleCurvyscreenDither },
       'pca-quad': { label: 'PCA Quad', desc: 'Four images PCA-decomposed to varying depths — stripped to structural ghosts — then composited through three-level stencil. The brightness bands fill with different ghost images.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('pca-quad', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'quad-sort-destroy': { label: 'Quad Sort Destroy', desc: 'Four images three-level stenciled — brightness bands filling with different sources — then the composite is pixel-sorted and byte-corrupted. Three-source stencil meets total annihilation.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
         render: (imgs, params, _rng) => {
@@ -8383,6 +8550,333 @@ import Admin from '../../../layouts/Admin.astro';
       setBinaryArchaeologyParams({ threshold: Math.round(lerp(50, 210, rng())), blend_str: parseFloat(lerp(0.2, 0.9, rng()).toFixed(2)) });
     }
 
+    // ── kaleidoscope-halftone params ─────────────────────────────────────────────
+    function buildKaleidoscopeHalftoneParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="kh-segments">Segments <span class="pt-val" id="kh-segments-val">8</span></label>
+          <input class="pt-range" type="range" id="kh-segments" min="2" max="24" step="1" value="8" />
+          <div class="pt-range-hints"><span>2</span><span>24</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="kh-dither-thresh">Dither Threshold <span class="pt-val" id="kh-dither-thresh-val">128</span></label>
+          <input class="pt-range" type="range" id="kh-dither-thresh" min="40" max="220" step="1" value="128" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="kh-screen-str">Screen Strength <span class="pt-val" id="kh-screen-str-val">0.45</span></label>
+          <input class="pt-range" type="range" id="kh-screen-str" min="0" max="0.9" step="0.01" value="0.45" />
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['kh-segments','kh-dither-thresh','kh-screen-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getKaleidoscopeHalftoneParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { segments: get('kh-segments','8'), dither_thresh: get('kh-dither-thresh','128'), screen_str: get('kh-screen-str','0.45') };
+    }
+    function setKaleidoscopeHalftoneParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.segments     !== undefined) set('kh-segments',     p.segments);
+      if (p.dither_thresh !== undefined) set('kh-dither-thresh', p.dither_thresh);
+      if (p.screen_str   !== undefined) set('kh-screen-str',   p.screen_str);
+    }
+    function onRerollKaleidoscopeHalftone(rng: () => number) {
+      setKaleidoscopeHalftoneParams({ segments: Math.round(lerp(2, 22, rng())), dither_thresh: Math.round(lerp(50, 210, rng())), screen_str: parseFloat(lerp(0.15, 0.85, rng()).toFixed(2)) });
+    }
+
+    // ── lathe-kaleidoscope-stencil params ────────────────────────────────────────
+    function buildLatheKaleidoscopeStencilParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="lks-rings">Lathe Rings <span class="pt-val" id="lks-rings-val">16</span></label>
+          <input class="pt-range" type="range" id="lks-rings" min="4" max="40" step="1" value="16" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="lks-rotate">Lathe Rotation <span class="pt-val" id="lks-rotate-val">1.00</span></label>
+          <input class="pt-range" type="range" id="lks-rotate" min="0" max="6.28" step="0.05" value="1.00" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="lks-segments">Kaleidoscope Segments <span class="pt-val" id="lks-segments-val">6</span></label>
+          <input class="pt-range" type="range" id="lks-segments" min="2" max="24" step="1" value="6" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="lks-feather">Stencil Feather <span class="pt-val" id="lks-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="lks-feather" min="0" max="30" step="1" value="10" />
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['lks-rings','lks-rotate','lks-segments','lks-feather'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getLatheKaleidoscopeStencilParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { rings: get('lks-rings','16'), rotate: get('lks-rotate','1.00'), segments: get('lks-segments','6'), feather: get('lks-feather','10') };
+    }
+    function setLatheKaleidoscopeStencilParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.rings    !== undefined) set('lks-rings',    p.rings);
+      if (p.rotate   !== undefined) set('lks-rotate',   p.rotate);
+      if (p.segments !== undefined) set('lks-segments', p.segments);
+      if (p.feather  !== undefined) set('lks-feather',  p.feather);
+    }
+    function onRerollLatheKaleidoscopeStencil(rng: () => number) {
+      setLatheKaleidoscopeStencilParams({ rings: Math.round(lerp(4, 38, rng())), rotate: parseFloat(lerp(0.2, 5.8, rng()).toFixed(2)), segments: Math.round(lerp(2, 22, rng())), feather: Math.round(lerp(2, 24, rng())) });
+    }
+
+    // ── wobble-curvyscreen-dither params ─────────────────────────────────────────
+    function buildWobbleCurvyscreenDitherParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="wcd-rings">Wobble Rings <span class="pt-val" id="wcd-rings-val">10</span></label>
+          <input class="pt-range" type="range" id="wcd-rings" min="4" max="30" step="1" value="10" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="wcd-wobble">Wobble Amount <span class="pt-val" id="wcd-wobble-val">25</span></label>
+          <input class="pt-range" type="range" id="wcd-wobble" min="0" max="70" step="1" value="25" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="wcd-scan-spacing">Scan Spacing <span class="pt-val" id="wcd-scan-spacing-val">4</span></label>
+          <input class="pt-range" type="range" id="wcd-scan-spacing" min="2" max="10" step="1" value="4" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="wcd-dither-thresh">Dither Threshold <span class="pt-val" id="wcd-dither-thresh-val">128</span></label>
+          <input class="pt-range" type="range" id="wcd-dither-thresh" min="40" max="220" step="1" value="128" />
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['wcd-rings','wcd-wobble','wcd-scan-spacing','wcd-dither-thresh'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getWobbleCurvyscreenDitherParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { rings: get('wcd-rings','10'), wobble: get('wcd-wobble','25'), scan_spacing: get('wcd-scan-spacing','4'), dither_thresh: get('wcd-dither-thresh','128') };
+    }
+    function setWobbleCurvyscreenDitherParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.rings        !== undefined) set('wcd-rings',        p.rings);
+      if (p.wobble       !== undefined) set('wcd-wobble',       p.wobble);
+      if (p.scan_spacing !== undefined) set('wcd-scan-spacing', p.scan_spacing);
+      if (p.dither_thresh !== undefined) set('wcd-dither-thresh', p.dither_thresh);
+    }
+    function onRerollWobbleCurvyscreenDither(rng: () => number) {
+      setWobbleCurvyscreenDitherParams({ rings: Math.round(lerp(4, 28, rng())), wobble: Math.round(lerp(5, 65, rng())), scan_spacing: Math.round(lerp(2, 9, rng())), dither_thresh: Math.round(lerp(50, 210, rng())) });
+    }
+
+    // ── collage-through-glass params ─────────────────────────────────────────────
+    function buildCollageGlassParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="ctg-pieces">Mosaic Pieces <span class="pt-val" id="ctg-pieces-val">25</span></label>
+          <input class="pt-range" type="range" id="ctg-pieces" min="9" max="81" step="1" value="25" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ctg-mix-ratio">Mix Ratio <span class="pt-val" id="ctg-mix-ratio-val">0.55</span></label>
+          <input class="pt-range" type="range" id="ctg-mix-ratio" min="0.1" max="0.9" step="0.01" value="0.55" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ctg-hp-radius">Ghost Radius <span class="pt-val" id="ctg-hp-radius-val">8</span></label>
+          <input class="pt-range" type="range" id="ctg-hp-radius" min="2" max="16" step="1" value="8" />
+          <div class="pt-range-hints"><span>fine</span><span>coarse</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="ctg-ghost-str">Ghost Strength <span class="pt-val" id="ctg-ghost-str-val">0.50</span></label>
+          <input class="pt-range" type="range" id="ctg-ghost-str" min="0" max="1" step="0.01" value="0.50" />
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['ctg-pieces','ctg-mix-ratio','ctg-hp-radius','ctg-ghost-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getCollageGlassParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { pieces: get('ctg-pieces','25'), mix_ratio: get('ctg-mix-ratio','0.55'), hp_radius: get('ctg-hp-radius','8'), ghost_str: get('ctg-ghost-str','0.50') };
+    }
+    function setCollageGlassParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.pieces    !== undefined) set('ctg-pieces',    p.pieces);
+      if (p.mix_ratio !== undefined) set('ctg-mix-ratio', p.mix_ratio);
+      if (p.hp_radius !== undefined) set('ctg-hp-radius', p.hp_radius);
+      if (p.ghost_str !== undefined) set('ctg-ghost-str', p.ghost_str);
+    }
+    function onRerollCollageGlass(rng: () => number) {
+      setCollageGlassParams({ pieces: Math.round(lerp(9, 81, rng())), mix_ratio: parseFloat(lerp(0.2, 0.85, rng()).toFixed(2)), hp_radius: Math.round(lerp(3, 15, rng())), ghost_str: parseFloat(lerp(0.2, 0.85, rng()).toFixed(2)) });
+    }
+
+    // ── spectral-mask params ──────────────────────────────────────────────────────
+    function buildSpectralMaskParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="sm-hp-radius">Spectral Radius <span class="pt-val" id="sm-hp-radius-val">5</span></label>
+          <input class="pt-range" type="range" id="sm-hp-radius" min="1" max="14" step="1" value="5" />
+          <div class="pt-range-hints"><span>fine</span><span>coarse</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sm-feather">Mask Feather <span class="pt-val" id="sm-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="sm-feather" min="0" max="30" step="1" value="10" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="sm-screen-str">Screen Strength <span class="pt-val" id="sm-screen-str-val">0.45</span></label>
+          <input class="pt-range" type="range" id="sm-screen-str" min="0" max="0.9" step="0.01" value="0.45" />
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['sm-hp-radius','sm-feather','sm-screen-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getSpectralMaskParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { hp_radius: get('sm-hp-radius','5'), feather: get('sm-feather','10'), screen_str: get('sm-screen-str','0.45') };
+    }
+    function setSpectralMaskParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.hp_radius  !== undefined) set('sm-hp-radius',  p.hp_radius);
+      if (p.feather    !== undefined) set('sm-feather',    p.feather);
+      if (p.screen_str !== undefined) set('sm-screen-str', p.screen_str);
+    }
+    function onRerollSpectralMask(rng: () => number) {
+      setSpectralMaskParams({ hp_radius: Math.round(lerp(2, 12, rng())), feather: Math.round(lerp(2, 24, rng())), screen_str: parseFloat(lerp(0.1, 0.8, rng()).toFixed(2)) });
+    }
+
+    // ── curvy-corruption params ───────────────────────────────────────────────────
+    function buildCurvyCorruptionParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="cc3-scan-spacing">Line Spacing <span class="pt-val" id="cc3-scan-spacing-val">3</span></label>
+          <input class="pt-range" type="range" id="cc3-scan-spacing" min="2" max="12" step="1" value="3" />
+          <div class="pt-range-hints"><span>tight</span><span>sparse</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cc3-shift">Channel Shift <span class="pt-val" id="cc3-shift-val">20</span></label>
+          <input class="pt-range" type="range" id="cc3-shift" min="0" max="60" step="1" value="20" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cc3-quality">JPEG Quality <span class="pt-val" id="cc3-quality-val">4</span></label>
+          <input class="pt-range" type="range" id="cc3-quality" min="1" max="20" step="1" value="4" />
+          <div class="pt-range-hints"><span>destroyed</span><span>cleaner</span></div>
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['cc3-scan-spacing','cc3-shift','cc3-quality'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getCurvyCorruptionParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { scan_spacing: get('cc3-scan-spacing','3'), shift: get('cc3-shift','20'), quality: get('cc3-quality','4') };
+    }
+    function setCurvyCorruptionParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.scan_spacing !== undefined) set('cc3-scan-spacing', p.scan_spacing);
+      if (p.shift        !== undefined) set('cc3-shift',        p.shift);
+      if (p.quality      !== undefined) set('cc3-quality',      p.quality);
+    }
+    function onRerollCurvyCorruption(rng: () => number) {
+      setCurvyCorruptionParams({ scan_spacing: Math.round(lerp(2, 11, rng())), shift: Math.round(lerp(5, 55, rng())), quality: Math.round(lerp(1, 14, rng())) });
+    }
+
+    // ── reducedscreen-datamosh params ────────────────────────────────────────────
+    function buildReducedscreenDatamoshParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="rd-thresh">Screen Threshold <span class="pt-val" id="rd-thresh-val">128</span></label>
+          <input class="pt-range" type="range" id="rd-thresh" min="40" max="220" step="1" value="128" />
+          <div class="pt-range-hints"><span>dark</span><span>light</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="rd-quality">JPEG Quality <span class="pt-val" id="rd-quality-val">3</span></label>
+          <input class="pt-range" type="range" id="rd-quality" min="1" max="20" step="1" value="3" />
+          <div class="pt-range-hints"><span>destroyed</span><span>cleaner</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="rd-iterations">Mosh Passes <span class="pt-val" id="rd-iterations-val">5</span></label>
+          <input class="pt-range" type="range" id="rd-iterations" min="2" max="12" step="1" value="5" />
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['rd-thresh','rd-quality','rd-iterations'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getReducedscreenDatamoshParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { thresh: get('rd-thresh','128'), quality: get('rd-quality','3'), iterations: get('rd-iterations','5') };
+    }
+    function setReducedscreenDatamoshParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.thresh     !== undefined) set('rd-thresh',     p.thresh);
+      if (p.quality    !== undefined) set('rd-quality',    p.quality);
+      if (p.iterations !== undefined) set('rd-iterations', p.iterations);
+    }
+    function onRerollReducedscreenDatamosh(rng: () => number) {
+      setReducedscreenDatamoshParams({ thresh: Math.round(lerp(50, 210, rng())), quality: Math.round(lerp(1, 14, rng())), iterations: Math.round(lerp(2, 11, rng())) });
+    }
+
+    // ── halftone-curvyscreen params ───────────────────────────────────────────────
+    function buildHalftoneCurvyscreenParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="hcs-dither-thresh">Halftone Threshold <span class="pt-val" id="hcs-dither-thresh-val">128</span></label>
+          <input class="pt-range" type="range" id="hcs-dither-thresh" min="40" max="220" step="1" value="128" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="hcs-scan-spacing">Screen Spacing <span class="pt-val" id="hcs-scan-spacing-val">4</span></label>
+          <input class="pt-range" type="range" id="hcs-scan-spacing" min="2" max="12" step="1" value="4" />
+          <div class="pt-range-hints"><span>tight</span><span>sparse</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="hcs-screen-str">Screen Strength <span class="pt-val" id="hcs-screen-str-val">0.50</span></label>
+          <input class="pt-range" type="range" id="hcs-screen-str" min="0" max="0.9" step="0.01" value="0.50" />
+        </div>
+      `;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['hcs-dither-thresh','hcs-scan-spacing','hcs-screen-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getHalftoneCurvyscreenParams(): Record<string, any> {
+      const get = (id: string, def: string) => parseFloat((document.getElementById(id) as HTMLInputElement)?.value ?? def);
+      return { dither_thresh: get('hcs-dither-thresh','128'), scan_spacing: get('hcs-scan-spacing','4'), screen_str: get('hcs-screen-str','0.50') };
+    }
+    function setHalftoneCurvyscreenParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => { const el = document.getElementById(id) as HTMLInputElement; if (el) { el.value = String(v); const vl = document.getElementById(id+'-val'); if (vl) vl.textContent = String(v); } };
+      if (p.dither_thresh !== undefined) set('hcs-dither-thresh', p.dither_thresh);
+      if (p.scan_spacing  !== undefined) set('hcs-scan-spacing',  p.scan_spacing);
+      if (p.screen_str    !== undefined) set('hcs-screen-str',    p.screen_str);
+    }
+    function onRerollHalftoneCurvyscreen(rng: () => number) {
+      setHalftoneCurvyscreenParams({ dither_thresh: Math.round(lerp(50, 210, rng())), scan_spacing: Math.round(lerp(2, 11, rng())), screen_str: parseFloat(lerp(0.15, 0.85, rng()).toFixed(2)) });
+    }
+
     // ── bullseye-cyanotype params ────────────────────────────────────────────────
     function buildBullseyeCyanotypeParams() {
       paramsEl.innerHTML = `
@@ -9457,6 +9951,35 @@ import Admin from '../../../layouts/Admin.astro';
             if (px < 0 || px >= w || py < 0 || py >= h) continue;
             const i = (py * w + px) * 4;
             out[i] = dB[i]; out[i+1] = dB[i+1]; out[i+2] = dB[i+2]; out[i+3] = 255;
+          }
+        }
+      }
+      return out;
+    }
+
+    // Kaleidoscope: folds image into N-segment radial symmetry.
+    function kaleidoscope(d: Uint8ClampedArray, w: number, h: number, segments: number): Uint8ClampedArray {
+      const out = new Uint8ClampedArray(w * h * 4);
+      const cx = w / 2, cy = h / 2;
+      const n = Math.max(2, Math.round(segments));
+      const wedge = (2 * Math.PI) / n;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const dx = x - cx, dy = y - cy;
+          let angle = Math.atan2(dy, dx);
+          const r = Math.sqrt(dx * dx + dy * dy);
+          if (angle < 0) angle += 2 * Math.PI;
+          let localAngle = angle % wedge;
+          const sector = Math.floor(angle / wedge);
+          if (sector % 2 === 1) localAngle = wedge - localAngle;
+          const sx = Math.round(cx + r * Math.cos(localAngle));
+          const sy = Math.round(cy + r * Math.sin(localAngle));
+          const oi = (y * w + x) * 4;
+          if (sx >= 0 && sx < w && sy >= 0 && sy < h) {
+            const si = (sy * w + sx) * 4;
+            out[oi] = d[si]; out[oi+1] = d[si+1]; out[oi+2] = d[si+2]; out[oi+3] = 255;
+          } else {
+            out[oi] = out[oi+1] = out[oi+2] = 0; out[oi+3] = 255;
           }
         }
       }
