@@ -4170,6 +4170,7 @@ import Admin from '../../../layouts/Admin.astro';
       buildParams?: () => void;
       getParams?: () => Record<string, any>;
       setParams?: (p: Record<string, any>) => void;
+      onReroll?: (rng: () => number) => void;
     };
 
     const BOTS: Record<string, BotDef> = {
@@ -4372,7 +4373,7 @@ import Admin from '../../../layouts/Admin.astro';
       'dream-dissolve': { label: 'Dream Dissolve', desc: 'Two images each sent through deep neural hallucination — the network finds eyes and feathers in everything, turning surfaces into living architectures', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('dream-dissolve', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'double-exposure': { label: 'Double Exposure', desc: 'Two images burned onto the same film. Screen blending lets the light accumulate, multiply adds depth in the shadows. The double-exposed image is sonified.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('double-exposure', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'feedback-loop': { label: 'Feedback Loop', desc: 'Compose, destroy, re-compose the wreckage, destroy again. Two images blended, distorted, fragmented back together with originals.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('feedback-loop', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'ghost-overlay': { label: 'Ghost Overlay', desc: "A haunting: A's edges become a soft veil cast over B with high feathering. Screen blending then adds A's full luminance as a second ghost layer.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false,
+      'ghost-overlay': { label: 'Ghost Overlay', desc: "A haunting: A's edges become a soft veil cast over B with high feathering. Screen blending then adds A's full luminance as a second ghost layer.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
           const bPx = getPixels(imgs[1]!);
@@ -4380,8 +4381,8 @@ import Admin from '../../../layouts/Admin.astro';
           let d = edgeMaskComposite(dA, dB, w, h, params.threshold ?? 120, params.feather ?? 20, false);
           d = blendPixels(d, dA, w, h, 'screen', params.strength ?? 0.55);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
-        }, buildParams: buildGhostOverlayParams, getParams: getGhostOverlayParams, setParams: setGhostOverlayParams },
-      'phantom-limb': { label: 'Phantom Limb', desc: "One image's edge structure is cut out and laid over another — not the image itself, only its outline, its ghost. The screen blend lets the haunting show.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false,
+        }, buildParams: buildGhostOverlayParams, getParams: getGhostOverlayParams, setParams: setGhostOverlayParams, onReroll: onRerollGhostOverlay },
+      'phantom-limb': { label: 'Phantom Limb', desc: "One image's edge structure is cut out and laid over another — not the image itself, only its outline, its ghost. The screen blend lets the haunting show.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
           const bPx = getPixels(imgs[1]!);
@@ -4389,8 +4390,8 @@ import Admin from '../../../layouts/Admin.astro';
           let d = edgeMaskComposite(dA, dB, w, h, params.threshold ?? 110, params.feather ?? 14, false);
           d = blendPixels(dB, d, w, h, 'screen', params.strength ?? 0.45);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
-        }, buildParams: buildPhantomLimbParams, getParams: getPhantomLimbParams, setParams: setPhantomLimbParams },
-      'simple-cutout': { label: 'Simple Cutout', desc: "The most direct use of masking: A's edge skeleton is cut clean into B. Wherever A has strong edges, B shows through; everywhere else, A holds.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false,
+        }, buildParams: buildPhantomLimbParams, getParams: getPhantomLimbParams, setParams: setPhantomLimbParams, onReroll: onRerollPhantomLimb },
+      'simple-cutout': { label: 'Simple Cutout', desc: "The most direct use of masking: A's edge skeleton is cut clean into B. Wherever A has strong edges, B shows through; everywhere else, A holds.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
           const bPx = getPixels(imgs[1]!);
@@ -4398,7 +4399,7 @@ import Admin from '../../../layouts/Admin.astro';
           let d = edgeMaskComposite(dA, dB, w, h, params.threshold ?? 130, params.feather ?? 8, false);
           d = channelShift(d, w, h, params.shift_r ?? 35, params.shift_b ?? -30);
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
-        }, buildParams: buildSimpleCutoutParams, getParams: getSimpleCutoutParams, setParams: setSimpleCutoutParams },
+        }, buildParams: buildSimpleCutoutParams, getParams: getSimpleCutoutParams, setParams: setSimpleCutoutParams, onReroll: onRerollSimpleCutout },
       'spectral-merge': { label: 'Spectral Merge', desc: 'Two signals in frequency space, destructively interfered. Each image is spectrally filtered to different ranges. Difference blending cancels shared frequencies.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('spectral-merge', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'two-face': { label: 'Two Face', desc: "A luminance mask splits image A at its median brightness — the bright half stays A, the dark half becomes B. Auto-normalization means threshold=128 always hits the median.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('two-face', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'x-ray-composite': { label: 'X-Ray Composite', desc: "One image is decomposed to its principal components — stripped to structural essentials. Its edge skeleton is then masked over the second image.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('x-ray-composite', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
@@ -5092,6 +5093,13 @@ import Admin from '../../../layouts/Admin.astro';
       if (p.feather   !== undefined) set('go-feather',   p.feather);
       if (p.strength  !== undefined) set('go-strength',  p.strength, n => n.toFixed(2));
     }
+    function onRerollGhostOverlay(rng: () => number) {
+      setGhostOverlayParams({
+        threshold: Math.round(lerp(30, 220, rng())),
+        feather:   Math.round(lerp(0, 40, rng())),
+        strength:  parseFloat(lerp(0, 1, rng()).toFixed(2)),
+      });
+    }
 
     // ─── Phantom Limb params ───────────────────────────────────────────────────
 
@@ -5139,6 +5147,13 @@ import Admin from '../../../layouts/Admin.astro';
       if (p.threshold !== undefined) set('pl-threshold', p.threshold);
       if (p.feather   !== undefined) set('pl-feather',   p.feather);
       if (p.strength  !== undefined) set('pl-strength',  p.strength, n => n.toFixed(2));
+    }
+    function onRerollPhantomLimb(rng: () => number) {
+      setPhantomLimbParams({
+        threshold: Math.round(lerp(30, 220, rng())),
+        feather:   Math.round(lerp(0, 35, rng())),
+        strength:  parseFloat(lerp(0, 1, rng()).toFixed(2)),
+      });
     }
 
     // ─── Simple Cutout params ──────────────────────────────────────────────────
@@ -5190,6 +5205,14 @@ import Admin from '../../../layouts/Admin.astro';
       if (p.feather   !== undefined) set('sc-feather',   p.feather);
       if (p.shift_r   !== undefined) set('sc-shift-r',   p.shift_r);
       if (p.shift_b   !== undefined) set('sc-shift-b',   p.shift_b);
+    }
+    function onRerollSimpleCutout(rng: () => number) {
+      setSimpleCutoutParams({
+        threshold: Math.round(lerp(30, 220, rng())),
+        feather:   Math.round(lerp(0, 25, rng())),
+        shift_r:   Math.round(lerp(0, 80, rng())),
+        shift_b:   Math.round(lerp(-80, 0, rng())),
+      });
     }
 
     // ─── Native canvas effect helpers ──────────────────────────────────────────
@@ -5474,6 +5497,7 @@ import Admin from '../../../layouts/Admin.astro';
           currentSeed = seed !== undefined ? seed : (Math.random() * 2**31 | 0) || 1;
           rng = mulberry32(currentSeed);
           seedInput.value = String(currentSeed);
+          bot.onReroll?.(mulberry32(currentSeed));
         }
         const params = bot.getParams?.() ?? {};
         outputs = bot.render!(effectiveImgs, params, rng);
