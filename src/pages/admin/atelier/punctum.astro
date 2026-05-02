@@ -4371,8 +4371,30 @@ import Admin from '../../../layouts/Admin.astro';
 
       // ── Sparagmos recipes (2 images) ────────────────────────────────────────
       'dream-dissolve': { label: 'Dream Dissolve', desc: 'Two images each sent through deep neural hallucination — the network finds eyes and feathers in everything, turning surfaces into living architectures', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('dream-dissolve', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'double-exposure': { label: 'Double Exposure', desc: 'Two images burned onto the same film. Screen blending lets the light accumulate, multiply adds depth in the shadows. The double-exposed image is sonified.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('double-exposure', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'feedback-loop': { label: 'Feedback Loop', desc: 'Compose, destroy, re-compose the wreckage, destroy again. Two images blended, distorted, fragmented back together with originals.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('feedback-loop', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'double-exposure': { label: 'Double Exposure', desc: 'Two images burned onto the same film. Screen blending lets the light accumulate, multiply adds depth in the shadows. The double-exposed image is sonified.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!);
+          const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          const hpA = highpassRGB(dA, w, h, params.hp_radius ?? 4);
+          let d = blendPixels(hpA, dB, w, h, 'screen', params.screen_str ?? 0.75);
+          d = blendPixels(d, dA, w, h, 'multiply', params.multiply_str ?? 0.4);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildDoubleExposureParams, getParams: getDoubleExposureParams, setParams: setDoubleExposureParams, onReroll: onRerollDoubleExposure },
+      'feedback-loop': { label: 'Feedback Loop', desc: 'Compose, destroy, re-compose the wreckage, destroy again. Two images blended, distorted, fragmented back together with originals.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: true,
+        render: (imgs, params, rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!);
+          const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          let d = blendPixels(dA, dB, w, h, 'screen', 1.0);
+          d = swirlDistort(d, w, h, params.swirl_angle ?? 1.0);
+          const ang = params.swirl_angle ?? 1.0;
+          d = channelShift(d, w, h, Math.round(ang * 8), Math.round(-ang * 6));
+          d = gridFragment(d, dA, dB, w, h, params.pieces ?? 12, params.mix_ratio ?? 0.6, rng);
+          d = blendPixels(d, dB, w, h, 'overlay', params.overlay_str ?? 0.4);
+          d = channelShift(d, w, h, Math.round(-ang * 5), Math.round(ang * 4));
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildFeedbackLoopParams, getParams: getFeedbackLoopParams, setParams: setFeedbackLoopParams, onReroll: onRerollFeedbackLoop },
       'ghost-overlay': { label: 'Ghost Overlay', desc: "A haunting: A's edges become a soft veil cast over B with high feathering. Screen blending then adds A's full luminance as a second ghost layer.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: true,
         render: (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
@@ -4401,8 +4423,25 @@ import Admin from '../../../layouts/Admin.astro';
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildSimpleCutoutParams, getParams: getSimpleCutoutParams, setParams: setSimpleCutoutParams, onReroll: onRerollSimpleCutout },
       'spectral-merge': { label: 'Spectral Merge', desc: 'Two signals in frequency space, destructively interfered. Each image is spectrally filtered to different ranges. Difference blending cancels shared frequencies.', inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('spectral-merge', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'two-face': { label: 'Two Face', desc: "A luminance mask splits image A at its median brightness — the bright half stays A, the dark half becomes B. Auto-normalization means threshold=128 always hits the median.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('two-face', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
-      'x-ray-composite': { label: 'X-Ray Composite', desc: "One image is decomposed to its principal components — stripped to structural essentials. Its edge skeleton is then masked over the second image.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('x-ray-composite', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
+      'two-face': { label: 'Two Face', desc: "A luminance mask splits image A at its median brightness — the bright half stays A, the dark half becomes B. Auto-normalization means threshold=128 always hits the median.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!);
+          const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          let d = lumaMask(dA, dB, w, h, params.threshold ?? 128, params.feather ?? 10, false);
+          d = pixelSort(d, w, h, params.sort_threshold ?? 110, 'up');
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildTwoFaceParams, getParams: getTwoFaceParams, setParams: setTwoFaceParams, onReroll: onRerollTwoFace },
+      'x-ray-composite': { label: 'X-Ray Composite', desc: "One image is decomposed to its principal components — stripped to structural essentials. Its edge skeleton is then masked over the second image.", inputs: 2, inputLabels: ['Image A', 'Image B'], hasRandomness: true,
+        render: (imgs, params, _rng) => {
+          const { d: dA, w, h } = getPixels(imgs[0]!);
+          const bPx = getPixels(imgs[1]!);
+          const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
+          let d = edgeMaskComposite(dA, dB, w, h, params.threshold ?? 120, params.feather ?? 10, false);
+          d = blendPixels(d, dA, w, h, 'overlay', params.overlay_str ?? 0.55);
+          if ((params.hp_radius ?? 0) > 0) d = highpassRGB(d, w, h, params.hp_radius);
+          return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
+        }, buildParams: buildXRayCompositeParams, getParams: getXRayCompositeParams, setParams: setXRayCompositeParams, onReroll: onRerollXRayComposite },
 
       // ── Sparagmos recipes (3 images) ────────────────────────────────────────
       'dream-cutout': { label: 'Dream Cutout', desc: "Image A is deepdreamed heavily. The dreamed A's edge skeleton then cuts into B: the neural hallucination becomes a stencil.", inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('dream-cutout', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
@@ -5215,6 +5254,242 @@ import Admin from '../../../layouts/Admin.astro';
       });
     }
 
+    // ─── Two Face params ──────────────────────────────────────────────────────
+
+    function buildTwoFaceParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="tf-threshold">Luma Threshold <span class="pt-val" id="tf-threshold-val">128</span></label>
+          <input class="pt-range" type="range" id="tf-threshold" min="50" max="200" step="1" value="128" />
+          <div class="pt-range-hints"><span>dark split</span><span>light split</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="tf-feather">Feather <span class="pt-val" id="tf-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="tf-feather" min="0" max="30" step="1" value="10" />
+          <div class="pt-range-hints"><span>hard</span><span>soft</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="tf-sort-threshold">Sort Threshold <span class="pt-val" id="tf-sort-threshold-val">110</span></label>
+          <input class="pt-range" type="range" id="tf-sort-threshold" min="50" max="190" step="1" value="110" />
+          <div class="pt-range-hints"><span>more streaks</span><span>fewer streaks</span></div>
+        </div>`;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['tf-threshold', 'tf-feather', 'tf-sort-threshold'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+    }
+    function getTwoFaceParams(): Record<string, any> {
+      return {
+        threshold:      parseFloat((document.getElementById('tf-threshold')      as HTMLInputElement)?.value ?? '128'),
+        feather:        parseFloat((document.getElementById('tf-feather')         as HTMLInputElement)?.value ?? '10'),
+        sort_threshold: parseFloat((document.getElementById('tf-sort-threshold')  as HTMLInputElement)?.value ?? '110'),
+      };
+    }
+    function setTwoFaceParams(p: Record<string, any>) {
+      const set = (id: string, v: any) => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement | null;
+        if (el) el.value = String(v);
+        if (vl) vl.textContent = String(v);
+      };
+      if (p.threshold      !== undefined) set('tf-threshold',      p.threshold);
+      if (p.feather        !== undefined) set('tf-feather',         p.feather);
+      if (p.sort_threshold !== undefined) set('tf-sort-threshold',  p.sort_threshold);
+    }
+    function onRerollTwoFace(rng: () => number) {
+      setTwoFaceParams({
+        threshold:      Math.round(lerp(50, 200, rng())),
+        feather:        Math.round(lerp(0, 30, rng())),
+        sort_threshold: Math.round(lerp(50, 190, rng())),
+      });
+    }
+
+    // ─── Double Exposure params ───────────────────────────────────────────────
+
+    function buildDoubleExposureParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="de-hp-radius">Highpass Radius <span class="pt-val" id="de-hp-radius-val">4</span></label>
+          <input class="pt-range" type="range" id="de-hp-radius" min="1" max="15" step="1" value="4" />
+          <div class="pt-range-hints"><span>fine detail</span><span>broad structure</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="de-screen-str">Screen Strength <span class="pt-val" id="de-screen-str-val">0.75</span></label>
+          <input class="pt-range" type="range" id="de-screen-str" min="0" max="1" step="0.01" value="0.75" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="de-multiply-str">Multiply Strength <span class="pt-val" id="de-multiply-str-val">0.40</span></label>
+          <input class="pt-range" type="range" id="de-multiply-str" min="0" max="1" step="0.01" value="0.40" />
+        </div>`;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      const hpEl = document.getElementById('de-hp-radius') as HTMLInputElement;
+      const hpVl = document.getElementById('de-hp-radius-val') as HTMLSpanElement;
+      hpEl?.addEventListener('input', () => { hpVl.textContent = hpEl.value; fire(); });
+      (['de-screen-str', 'de-multiply-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = parseFloat(el.value).toFixed(2); fire(); });
+      });
+    }
+    function getDoubleExposureParams(): Record<string, any> {
+      return {
+        hp_radius:    parseFloat((document.getElementById('de-hp-radius')    as HTMLInputElement)?.value ?? '4'),
+        screen_str:   parseFloat((document.getElementById('de-screen-str')   as HTMLInputElement)?.value ?? '0.75'),
+        multiply_str: parseFloat((document.getElementById('de-multiply-str') as HTMLInputElement)?.value ?? '0.40'),
+      };
+    }
+    function setDoubleExposureParams(p: Record<string, any>) {
+      const set = (id: string, v: any, fmt?: (n: number) => string) => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement | null;
+        if (el) el.value = String(v);
+        if (vl) vl.textContent = fmt ? fmt(parseFloat(String(v))) : String(v);
+      };
+      if (p.hp_radius    !== undefined) set('de-hp-radius',    p.hp_radius);
+      if (p.screen_str   !== undefined) set('de-screen-str',   p.screen_str,   n => n.toFixed(2));
+      if (p.multiply_str !== undefined) set('de-multiply-str', p.multiply_str, n => n.toFixed(2));
+    }
+    function onRerollDoubleExposure(rng: () => number) {
+      setDoubleExposureParams({
+        hp_radius:    Math.round(lerp(1, 15, rng())),
+        screen_str:   parseFloat(lerp(0, 1, rng()).toFixed(2)),
+        multiply_str: parseFloat(lerp(0, 1, rng()).toFixed(2)),
+      });
+    }
+
+    // ─── X-Ray Composite params ───────────────────────────────────────────────
+
+    function buildXRayCompositeParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="xr-threshold">Edge Threshold <span class="pt-val" id="xr-threshold-val">120</span></label>
+          <input class="pt-range" type="range" id="xr-threshold" min="30" max="220" step="1" value="120" />
+          <div class="pt-range-hints"><span>subtle</span><span>sharp</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="xr-feather">Feather <span class="pt-val" id="xr-feather-val">10</span></label>
+          <input class="pt-range" type="range" id="xr-feather" min="0" max="25" step="1" value="10" />
+          <div class="pt-range-hints"><span>hard</span><span>soft</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="xr-overlay-str">Overlay Strength <span class="pt-val" id="xr-overlay-str-val">0.55</span></label>
+          <input class="pt-range" type="range" id="xr-overlay-str" min="0" max="1" step="0.01" value="0.55" />
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="xr-hp-radius">Highpass Radius <span class="pt-val" id="xr-hp-radius-val">0</span></label>
+          <input class="pt-range" type="range" id="xr-hp-radius" min="0" max="20" step="1" value="0" />
+          <div class="pt-range-hints"><span>off</span><span>strong</span></div>
+        </div>`;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      (['xr-threshold', 'xr-feather', 'xr-hp-radius'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = el.value; fire(); });
+      });
+      const ovEl = document.getElementById('xr-overlay-str') as HTMLInputElement;
+      const ovVl = document.getElementById('xr-overlay-str-val') as HTMLSpanElement;
+      ovEl?.addEventListener('input', () => { ovVl.textContent = parseFloat(ovEl.value).toFixed(2); fire(); });
+    }
+    function getXRayCompositeParams(): Record<string, any> {
+      return {
+        threshold:   parseFloat((document.getElementById('xr-threshold')   as HTMLInputElement)?.value ?? '120'),
+        feather:     parseFloat((document.getElementById('xr-feather')      as HTMLInputElement)?.value ?? '10'),
+        overlay_str: parseFloat((document.getElementById('xr-overlay-str') as HTMLInputElement)?.value ?? '0.55'),
+        hp_radius:   parseFloat((document.getElementById('xr-hp-radius')   as HTMLInputElement)?.value ?? '0'),
+      };
+    }
+    function setXRayCompositeParams(p: Record<string, any>) {
+      const set = (id: string, v: any, fmt?: (n: number) => string) => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement | null;
+        if (el) el.value = String(v);
+        if (vl) vl.textContent = fmt ? fmt(parseFloat(String(v))) : String(v);
+      };
+      if (p.threshold   !== undefined) set('xr-threshold',   p.threshold);
+      if (p.feather     !== undefined) set('xr-feather',      p.feather);
+      if (p.overlay_str !== undefined) set('xr-overlay-str', p.overlay_str, n => n.toFixed(2));
+      if (p.hp_radius   !== undefined) set('xr-hp-radius',   p.hp_radius);
+    }
+    function onRerollXRayComposite(rng: () => number) {
+      setXRayCompositeParams({
+        threshold:   Math.round(lerp(30, 220, rng())),
+        feather:     Math.round(lerp(0, 25, rng())),
+        overlay_str: parseFloat(lerp(0, 1, rng()).toFixed(2)),
+        hp_radius:   Math.round(lerp(0, 20, rng())),
+      });
+    }
+
+    // ─── Feedback Loop params ─────────────────────────────────────────────────
+
+    function buildFeedbackLoopParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="fl-swirl-angle">Swirl Angle <span class="pt-val" id="fl-swirl-angle-val">1.00</span></label>
+          <input class="pt-range" type="range" id="fl-swirl-angle" min="0" max="3" step="0.05" value="1.0" />
+          <div class="pt-range-hints"><span>none</span><span>max swirl</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="fl-pieces">Grid Pieces <span class="pt-val" id="fl-pieces-val">12</span></label>
+          <input class="pt-range" type="range" id="fl-pieces" min="4" max="36" step="1" value="12" />
+          <div class="pt-range-hints"><span>few</span><span>many</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="fl-mix-ratio">Mix Ratio <span class="pt-val" id="fl-mix-ratio-val">0.60</span></label>
+          <input class="pt-range" type="range" id="fl-mix-ratio" min="0" max="1" step="0.01" value="0.60" />
+          <div class="pt-range-hints"><span>keep canvas</span><span>fragment</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="fl-overlay-str">Overlay Strength <span class="pt-val" id="fl-overlay-str-val">0.40</span></label>
+          <input class="pt-range" type="range" id="fl-overlay-str" min="0" max="1" step="0.01" value="0.40" />
+        </div>`;
+      let t: ReturnType<typeof setTimeout>;
+      const fire = () => { clearTimeout(t); t = setTimeout(doRender, 60); };
+      const swEl = document.getElementById('fl-swirl-angle') as HTMLInputElement;
+      const swVl = document.getElementById('fl-swirl-angle-val') as HTMLSpanElement;
+      swEl?.addEventListener('input', () => { swVl.textContent = parseFloat(swEl.value).toFixed(2); fire(); });
+      const pcEl = document.getElementById('fl-pieces') as HTMLInputElement;
+      const pcVl = document.getElementById('fl-pieces-val') as HTMLSpanElement;
+      pcEl?.addEventListener('input', () => { pcVl.textContent = pcEl.value; fire(); });
+      (['fl-mix-ratio', 'fl-overlay-str'] as const).forEach(id => {
+        const el = document.getElementById(id) as HTMLInputElement;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement;
+        el?.addEventListener('input', () => { vl.textContent = parseFloat(el.value).toFixed(2); fire(); });
+      });
+    }
+    function getFeedbackLoopParams(): Record<string, any> {
+      return {
+        swirl_angle: parseFloat((document.getElementById('fl-swirl-angle') as HTMLInputElement)?.value ?? '1.0'),
+        pieces:      parseFloat((document.getElementById('fl-pieces')       as HTMLInputElement)?.value ?? '12'),
+        mix_ratio:   parseFloat((document.getElementById('fl-mix-ratio')    as HTMLInputElement)?.value ?? '0.60'),
+        overlay_str: parseFloat((document.getElementById('fl-overlay-str')  as HTMLInputElement)?.value ?? '0.40'),
+      };
+    }
+    function setFeedbackLoopParams(p: Record<string, any>) {
+      const set = (id: string, v: any, fmt?: (n: number) => string) => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        const vl = document.getElementById(id + '-val') as HTMLSpanElement | null;
+        if (el) el.value = String(v);
+        if (vl) vl.textContent = fmt ? fmt(parseFloat(String(v))) : String(v);
+      };
+      if (p.swirl_angle !== undefined) set('fl-swirl-angle', p.swirl_angle, n => n.toFixed(2));
+      if (p.pieces      !== undefined) set('fl-pieces',       p.pieces);
+      if (p.mix_ratio   !== undefined) set('fl-mix-ratio',    p.mix_ratio,   n => n.toFixed(2));
+      if (p.overlay_str !== undefined) set('fl-overlay-str',  p.overlay_str, n => n.toFixed(2));
+    }
+    function onRerollFeedbackLoop(rng: () => number) {
+      setFeedbackLoopParams({
+        swirl_angle: parseFloat(lerp(0, 3, rng()).toFixed(2)),
+        pieces:      Math.round(lerp(4, 36, rng())),
+        mix_ratio:   parseFloat(lerp(0, 1, rng()).toFixed(2)),
+        overlay_str: parseFloat(lerp(0, 1, rng()).toFixed(2)),
+      });
+    }
+
     // ─── Native canvas effect helpers ──────────────────────────────────────────
 
     function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
@@ -5365,6 +5640,168 @@ import Admin from '../../../layouts/Admin.astro';
         c = c2;
       }
       return c;
+    }
+
+    // Composite dA/dB using A's raw luminance as a soft mask.
+    // luma(A) >= threshold → show A (alpha=1); else show B (alpha=0).
+    // Feather ramps alpha linearly in [threshold - feather/2, threshold + feather/2].
+    function lumaMask(
+      dA: Uint8ClampedArray, dB: Uint8ClampedArray,
+      w: number, h: number,
+      threshold: number, feather: number, invert: boolean,
+    ): Uint8ClampedArray {
+      const out = new Uint8ClampedArray(w * h * 4);
+      const half = feather / 2;
+      for (let i = 0; i < w * h; i++) {
+        const si = i * 4;
+        const luma = 0.299 * dA[si] + 0.587 * dA[si + 1] + 0.114 * dA[si + 2];
+        let alpha: number;
+        if (feather <= 0) {
+          alpha = luma >= threshold ? 1 : 0;
+        } else {
+          alpha = Math.min(1, Math.max(0, (luma - (threshold - half)) / feather));
+        }
+        if (invert) alpha = 1 - alpha;
+        out[si]     = Math.round(dA[si]     * alpha + dB[si]     * (1 - alpha));
+        out[si + 1] = Math.round(dA[si + 1] * alpha + dB[si + 1] * (1 - alpha));
+        out[si + 2] = Math.round(dA[si + 2] * alpha + dB[si + 2] * (1 - alpha));
+        out[si + 3] = 255;
+      }
+      return out;
+    }
+
+    // Glitch pixel sort. For each column find contiguous runs where luma > threshold,
+    // sort each run by luma (ascending='up', descending='down'), write back.
+    function pixelSort(
+      d: Uint8ClampedArray, w: number, h: number,
+      threshold: number, direction: 'up' | 'down',
+    ): Uint8ClampedArray {
+      const out = new Uint8ClampedArray(d);
+      for (let x = 0; x < w; x++) {
+        let runStart = -1;
+        const flush = (runEnd: number) => {
+          if (runStart < 0 || runEnd - runStart < 2) { runStart = -1; return; }
+          const run: { luma: number; r: number; g: number; b: number }[] = [];
+          for (let y = runStart; y < runEnd; y++) {
+            const i = (y * w + x) * 4;
+            const luma = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+            run.push({ luma, r: d[i], g: d[i + 1], b: d[i + 2] });
+          }
+          run.sort((a, b) => direction === 'up' ? a.luma - b.luma : b.luma - a.luma);
+          for (let j = 0; j < run.length; j++) {
+            const i = ((runStart + j) * w + x) * 4;
+            out[i]     = run[j].r;
+            out[i + 1] = run[j].g;
+            out[i + 2] = run[j].b;
+          }
+          runStart = -1;
+        };
+        for (let y = 0; y < h; y++) {
+          const i = (y * w + x) * 4;
+          const luma = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+          if (luma > threshold) {
+            if (runStart < 0) runStart = y;
+          } else {
+            flush(y);
+          }
+        }
+        flush(h);
+      }
+      return out;
+    }
+
+    // Polar swirl warp. Each pixel at distance r from center is rotated by
+    // angle * (1 - r/maxR) radians. Pixels outside maxR are unrotated.
+    function swirlDistort(
+      d: Uint8ClampedArray, w: number, h: number, angle: number,
+    ): Uint8ClampedArray {
+      const out = new Uint8ClampedArray(w * h * 4);
+      const cx = w / 2, cy = h / 2;
+      const maxR = Math.min(w, h) / 2;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const dx = x - cx, dy = y - cy;
+          const r = Math.sqrt(dx * dx + dy * dy);
+          let srcX: number, srcY: number;
+          if (r >= maxR) {
+            srcX = x; srcY = y;
+          } else {
+            const a = Math.atan2(dy, dx) + angle * (1 - r / maxR);
+            srcX = Math.min(w - 1, Math.max(0, Math.round(cx + r * Math.cos(a))));
+            srcY = Math.min(h - 1, Math.max(0, Math.round(cy + r * Math.sin(a))));
+          }
+          const dst = (y * w + x) * 4;
+          const src = (srcY * w + srcX) * 4;
+          out[dst]     = d[src];
+          out[dst + 1] = d[src + 1];
+          out[dst + 2] = d[src + 2];
+          out[dst + 3] = 255;
+        }
+      }
+      return out;
+    }
+
+    // Divide image into a grid of ~pieces cells. For each cell:
+    // if rng() > mixRatio → keep canvas; else replace with dA or dB (rng()>0.5).
+    function gridFragment(
+      dCanvas: Uint8ClampedArray,
+      dA: Uint8ClampedArray, dB: Uint8ClampedArray,
+      w: number, h: number,
+      pieces: number, mixRatio: number,
+      rng: () => number,
+    ): Uint8ClampedArray {
+      const out = new Uint8ClampedArray(dCanvas);
+      const cols = Math.round(Math.sqrt(pieces));
+      const rows = Math.ceil(pieces / cols);
+      const cw = Math.ceil(w / cols);
+      const ch = Math.ceil(h / rows);
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const src = rng() > mixRatio ? null : (rng() > 0.5 ? dA : dB);
+          if (src === null) continue;
+          const x0 = col * cw, y0 = row * ch;
+          const x1 = Math.min(w, x0 + cw), y1 = Math.min(h, y0 + ch);
+          for (let py = y0; py < y1; py++) {
+            for (let px = x0; px < x1; px++) {
+              const i = (py * w + px) * 4;
+              out[i]     = src[i];
+              out[i + 1] = src[i + 1];
+              out[i + 2] = src[i + 2];
+              out[i + 3] = 255;
+            }
+          }
+        }
+      }
+      return out;
+    }
+
+    // Per-channel highpass: result = clamp(128 + original - boxBlur(original, radius)).
+    // Approximates FFT highpass. radius=0 returns a copy unchanged.
+    function highpassRGB(
+      d: Uint8ClampedArray, w: number, h: number, radius: number,
+    ): Uint8ClampedArray {
+      if (radius <= 0) return new Uint8ClampedArray(d);
+      const n = w * h;
+      const chR = new Float32Array(n);
+      const chG = new Float32Array(n);
+      const chB = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        chR[i] = d[i * 4];
+        chG[i] = d[i * 4 + 1];
+        chB[i] = d[i * 4 + 2];
+      }
+      const blurR = boxBlur1ch(chR, w, h, radius);
+      const blurG = boxBlur1ch(chG, w, h, radius);
+      const blurB = boxBlur1ch(chB, w, h, radius);
+      const out = new Uint8ClampedArray(w * h * 4);
+      for (let i = 0; i < n; i++) {
+        const si = i * 4;
+        out[si]     = Math.min(255, Math.max(0, Math.round(128 + chR[i] - blurR[i])));
+        out[si + 1] = Math.min(255, Math.max(0, Math.round(128 + chG[i] - blurG[i])));
+        out[si + 2] = Math.min(255, Math.max(0, Math.round(128 + chB[i] - blurB[i])));
+        out[si + 3] = 255;
+      }
+      return out;
     }
 
     // ─── Sparagmos async helpers ─────────────────────────────────────────────────
