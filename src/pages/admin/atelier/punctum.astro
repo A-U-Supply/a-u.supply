@@ -117,6 +117,11 @@ import Admin from '../../../layouts/Admin.astro';
       <!-- Thumbnail strip (multi-output bots) -->
       <div class="pt-strip" id="pt-strip" style="display:none"></div>
 
+      <!-- Random fill row -->
+      <div class="pt-random-row" id="pt-random-row">
+        <button class="pt-random-btn" id="pt-random-btn" title="Fill empty slots with random images">⟳ Random</button>
+      </div>
+
       <!-- Input slots -->
       <div class="pt-slots" id="pt-slots"></div>
     </div>
@@ -476,6 +481,27 @@ import Admin from '../../../layouts/Admin.astro';
   .pt-slot.locked {
     border-left: 3px solid #e07b54;
   }
+
+  /* ── Random fill row ── */
+  .pt-random-row {
+    display: flex;
+    align-items: center;
+    padding: 4px 0 2px;
+  }
+  .pt-random-btn {
+    background: none;
+    border: 1px solid var(--color-border);
+    color: var(--color-muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 3px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .pt-random-btn:hover { color: #ccc; border-color: #666; }
+  .pt-random-btn.busy { opacity: 0.5; pointer-events: none; }
 
   /* ── Slot swap button ── */
   .pt-slot-swap-wrap {
@@ -5826,7 +5852,8 @@ import Admin from '../../../layouts/Admin.astro';
     let slotTransforms: { rot: number; flip: boolean; aspect?: number }[] = [
       {rot:0,flip:false},{rot:0,flip:false},{rot:0,flip:false},{rot:0,flip:false}
     ];
-    let slotLocked: boolean[] = [false, false, false, false];
+    let slotLocked:   boolean[] = [false, false, false, false];
+    let slotUserSet:  boolean[] = [false, false, false, false];
     let effectiveImgs: (HTMLImageElement | null)[] = [null, null, null, null];
     let effectiveBlobUrls: (string | null)[] = [null, null, null, null];
     let slotHistory: SlotHistoryEntry[][] = [[], [], [], []];
@@ -10527,6 +10554,7 @@ import Admin from '../../../layouts/Admin.astro';
             effectiveImgs[i] = null;
             if (effectiveBlobUrls[i]) { URL.revokeObjectURL(effectiveBlobUrls[i]!); effectiveBlobUrls[i] = null; }
             slotHistory[i] = [];
+            slotUserSet[i] = false;
           }
         }
         outputs = [];
@@ -10676,6 +10704,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     function loadSlotFromBlob(slotIdx: number, blob: Blob) {
       showSlotLoading(slotIdx);
+      slotUserSet[slotIdx] = true;
       pushSlotHistory(slotIdx);
       sourceIds[slotIdx] = null;
       const url = URL.createObjectURL(blob);
@@ -10691,6 +10720,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     function loadSlotFromUrl(slotIdx: number, url: string, sourceId: string | null, onReady?: () => void) {
       showSlotLoading(slotIdx);
+      slotUserSet[slotIdx] = true;
       pushSlotHistory(slotIdx);
       sourceIds[slotIdx] = sourceId;
       const img = new Image();
@@ -10706,6 +10736,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     function loadSlotFromCanvas(slotIdx: number, canvas: HTMLCanvasElement) {
       showSlotLoading(slotIdx);
+      slotUserSet[slotIdx] = true;
       pushSlotHistory(slotIdx);
       canvas.toBlob((blob) => {
         if (!blob) return;
@@ -10719,6 +10750,42 @@ import Admin from '../../../layouts/Admin.astro';
         };
         img.src = url;
       }, 'image/png');
+    }
+
+    async function fillSlotsRandom(onlyEmpty = false) {
+      const bot = BOTS[currentBot];
+      const slots = Array.from({ length: bot.inputs }, (_, i) => i)
+        .filter(i => onlyEmpty ? !sourceImgs[i] : !slotUserSet[i]);
+      if (slots.length === 0) return;
+      const btn = document.getElementById('pt-random-btn') as HTMLButtonElement | null;
+      btn?.classList.add('busy');
+      try {
+        const res = await fetch('/api/search', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: '', media_types: ['image'], sort: 'random', page: 1, per_page: slots.length }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const items: { id: string }[] = data.results ?? data.hits ?? [];
+        for (let j = 0; j < slots.length && j < items.length; j++) {
+          fillSlotRandom(slots[j], `/api/media/${items[j].id}/file`, items[j].id);
+        }
+      } catch {}
+      btn?.classList.remove('busy');
+    }
+
+    function fillSlotRandom(slotIdx: number, url: string, sourceId: string) {
+      showSlotLoading(slotIdx);
+      pushSlotHistory(slotIdx);
+      sourceIds[slotIdx] = sourceId;
+      // slotUserSet intentionally NOT set — random fill is not user-explicit
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload  = () => { sourceImgs[slotIdx] = img; onSlotLoaded(slotIdx); };
+      img.onerror = () => hideSlotLoading(slotIdx);
+      img.src = url;
     }
 
     // ─── atelier metadata ──────────────────────────────────────────────────────
@@ -10768,6 +10835,7 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     rerollBtn.addEventListener('click', () => doReroll());
+    document.getElementById('pt-random-btn')?.addEventListener('click', () => fillSlotsRandom(false));
     runBtn.addEventListener('click', () => doReroll());
     processingCancelEl.addEventListener('click', async () => {
       if (cancelCurrentJob) await cancelCurrentJob();
@@ -11275,6 +11343,7 @@ import Admin from '../../../layouts/Admin.astro';
       card.addEventListener('click', () => {
         switchBot(id);
         closePicker();
+        fillSlotsRandom(true);
         if (allSlotsReady()) {
           if (BOTS[id].renderAsync) runBtn.disabled = false;
           else doReroll();
@@ -11412,6 +11481,10 @@ import Admin from '../../../layouts/Admin.astro';
     activeTabIdx = 0;
     switchBot(_firstTab.currentBot);
     renderTabBar();
+
+    if (!autoExport) {
+      fillSlotsRandom(true);
+    }
 
     if (autoExport) {
       // Restore params before loading images
