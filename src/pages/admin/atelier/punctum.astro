@@ -82,7 +82,7 @@ import Admin from '../../../layouts/Admin.astro';
     </div>
     <div class="pt-actions">
       <div class="pt-reroll-wrap">
-        <button class="btn btn--secondary" id="reroll-btn" disabled>⟳<span class="pt-reroll-label"> RE-ROLL</span></button>
+        <button class="btn btn--secondary" id="reroll-btn" disabled><span class="pt-reroll-icon">⟳</span><span class="pt-reroll-label"> RE-ROLL</span></button>
         <button class="btn btn--secondary" id="run-btn" style="display:none" disabled>▶ RUN</button>
       </div>
       <button class="btn btn--secondary" id="download-btn" disabled>↓ Download</button>
@@ -572,6 +572,29 @@ import Admin from '../../../layouts/Admin.astro';
     text-transform: uppercase;
     letter-spacing: 0.05em;
     pointer-events: none;
+  }
+
+  /* ── Slot loading spinner ── */
+  @keyframes pt-spin { to { transform: rotate(360deg); } }
+  .pt-slot__spinner {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+  }
+  .pt-slot__spinner::after {
+    content: '';
+    width: 18px; height: 18px;
+    border: 2px solid rgba(255,255,255,0.2);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: pt-spin 0.55s linear infinite;
+  }
+
+  /* ── RE-ROLL busy state ── */
+  #reroll-btn.busy .pt-reroll-icon {
+    display: inline-block;
+    animation: pt-spin 0.5s linear infinite;
   }
 
   /* ── Controls row ── */
@@ -6042,6 +6065,7 @@ import Admin from '../../../layouts/Admin.astro';
         const empty = document.getElementById(`slot-empty-${slotIdx}`);
         if (thumb) { thumb.src = img.src; thumb.style.display = 'block'; }
         if (empty) empty.style.display = 'none';
+        hideSlotLoading(slotIdx);
         return;
       }
 
@@ -6099,6 +6123,7 @@ import Admin from '../../../layouts/Admin.astro';
 
       const thumb = document.getElementById(`slot-thumb-${slotIdx}`) as HTMLImageElement | null;
       const empty = document.getElementById(`slot-empty-${slotIdx}`);
+      hideSlotLoading(slotIdx);
       if (thumb && effectiveImgs[slotIdx]) {
         thumb.src = effectiveImgs[slotIdx]!.src;
         thumb.style.display = 'block';
@@ -6140,6 +6165,7 @@ import Admin from '../../../layouts/Admin.astro';
             <div class="pt-slot__empty-icon" id="slot-empty-${i}">+</div>
             <input type="file" accept="image/*" style="display:none" id="slot-file-${i}" />
             <div class="pt-slot__kept-badge" id="slot-kept-badge-${i}" style="display:none">KEPT</div>
+            <div class="pt-slot__spinner" id="slot-spinner-${i}" style="display:none"></div>
           </div>
           <div class="pt-slot__controls" id="slot-controls-${i}">
             <button class="pt-slot__btn pt-slot__btn--back" data-slot-back="${i}" disabled
@@ -10361,6 +10387,9 @@ import Admin from '../../../layouts/Admin.astro';
         }
         setAsyncLoading(false);
       } else {
+        rerollBtn.classList.add('busy');
+        rerollBtn.disabled = true;
+        await new Promise(r => setTimeout(r, 0)); // yield so browser paints busy state
         if (bot.hasRandomness) {
           currentSeed = seed !== undefined ? seed : (Math.random() * 2**31 | 0) || 1;
           rng = mulberry32(currentSeed);
@@ -10370,6 +10399,7 @@ import Admin from '../../../layouts/Admin.astro';
         const params = bot.getParams?.() ?? {};
         outputs = bot.render!(effectiveImgs, params, rng);
         appendStencilOutputs();
+        rerollBtn.classList.remove('busy');
       }
       activeOutputIdx = 0;
       renderStrip();
@@ -10381,10 +10411,14 @@ import Admin from '../../../layouts/Admin.astro';
       if (!allSlotsReady()) return;
       const bot = BOTS[currentBot];
       if (bot.renderAsync) return; // async bots don't re-render on param change
+      rerollBtn.disabled = true;
+      rerollBtn.classList.add('busy');
       if (bot.hasRandomness) rng = mulberry32(currentSeed);
       const params = bot.getParams?.() ?? {};
       outputs = bot.render!(effectiveImgs, params, rng);
       appendStencilOutputs();
+      rerollBtn.classList.remove('busy');
+      rerollBtn.disabled = !bot.hasRandomness;
       renderStrip();
       setActiveOutput(activeOutputIdx < outputs.length ? activeOutputIdx : 0);
     }
@@ -10569,6 +10603,15 @@ import Admin from '../../../layouts/Admin.astro';
       });
     }
 
+    function showSlotLoading(idx: number) {
+      const el = document.getElementById(`slot-spinner-${idx}`);
+      if (el) el.style.display = 'flex';
+    }
+    function hideSlotLoading(idx: number) {
+      const el = document.getElementById(`slot-spinner-${idx}`);
+      if (el) el.style.display = 'none';
+    }
+
     function swapSlots(a: number, b: number) {
       pushSlotHistory(a);
       pushSlotHistory(b);
@@ -10632,6 +10675,7 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     function loadSlotFromBlob(slotIdx: number, blob: Blob) {
+      showSlotLoading(slotIdx);
       pushSlotHistory(slotIdx);
       sourceIds[slotIdx] = null;
       const url = URL.createObjectURL(blob);
@@ -10646,6 +10690,7 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     function loadSlotFromUrl(slotIdx: number, url: string, sourceId: string | null, onReady?: () => void) {
+      showSlotLoading(slotIdx);
       pushSlotHistory(slotIdx);
       sourceIds[slotIdx] = sourceId;
       const img = new Image();
@@ -10655,11 +10700,12 @@ import Admin from '../../../layouts/Admin.astro';
         onSlotLoaded(slotIdx);
         onReady?.();
       };
-      img.onerror = () => (window as any).toast?.error('Failed to load image');
+      img.onerror = () => { hideSlotLoading(slotIdx); (window as any).toast?.error('Failed to load image'); };
       img.src = url;
     }
 
     function loadSlotFromCanvas(slotIdx: number, canvas: HTMLCanvasElement) {
+      showSlotLoading(slotIdx);
       pushSlotHistory(slotIdx);
       canvas.toBlob((blob) => {
         if (!blob) return;
