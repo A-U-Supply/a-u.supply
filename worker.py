@@ -36,6 +36,7 @@ logger = logging.getLogger("worker")
 
 JOB_DATA_DIR = Path(os.environ.get("JOB_DATA_DIR", "/app/job-data"))
 SEARCH_MEDIA_DIR = Path(os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data"))
+MODEL_CACHE_DIR = Path(os.environ.get("MODEL_CACHE_DIR", "/app/model-cache"))
 POLL_INTERVAL = int(os.environ.get("WORKER_POLL_INTERVAL", "2"))
 LOG_TAIL_LINES = 50
 
@@ -169,6 +170,13 @@ def _build_docker_command(job: Job, manifest: dict, job_dir: Path) -> list[str]:
     # The job dir on the host filesystem — this is what Docker sees
     host_job_dir = f"/var/lib/dokku/data/storage/au-supply-jobs/{job.id}"
 
+    # Host path for the model cache — must be a persistent volume on the host.
+    # Set MODEL_CACHE_DIR env var to e.g. /var/lib/dokku/data/storage/au-supply-model-cache.
+    # PyTorch respects TORCH_HOME; HuggingFace respects HF_HOME.
+    # Models are downloaded once on first run, then reused from disk — skipping the
+    # 40-60s per-job re-download that was happening with ephemeral containers.
+    host_model_cache = str(MODEL_CACHE_DIR)
+
     cmd = [
         "docker", "run", "--rm",
         "--name", f"job-{job.id[:12]}",
@@ -176,6 +184,10 @@ def _build_docker_command(job: Job, manifest: dict, job_dir: Path) -> list[str]:
         "--memory", "4g",
         "--cpus", "2",
         "-v", f"{host_job_dir}:/work",
+        "-v", f"{host_model_cache}:/root/.cache/torch",
+        "-v", f"{host_model_cache}/hf:/root/.cache/huggingface",
+        "-e", "TORCH_HOME=/root/.cache/torch",
+        "-e", "HF_HOME=/root/.cache/huggingface",
     ]
 
     # Forward environment variables declared in manifest
@@ -330,15 +342,25 @@ def _run_job(job: Job, db: Session):
         if login_result.returncode != 0:
             logger.warning("GHCR login failed: %s", login_result.stderr.strip())
 
-    # Pull image
+    # Pull image only if not already present locally, or if the manifest sets force_pull = true.
+    # Skipping the pull on cached images saves 5-15s of registry round-trip per job.
     image = manifest["image"]
-    logger.info("Pulling image %s", image)
-    pull_result = subprocess.run(
-        ["docker", "pull", image],
-        capture_output=True, text=True, timeout=300,
+    force_pull = manifest.get("force_pull", False)
+    inspect_result = subprocess.run(
+        ["docker", "image", "inspect", image, "--format", "{{.Id}}"],
+        capture_output=True, text=True, timeout=10,
     )
-    if pull_result.returncode != 0:
-        logger.warning("Docker pull failed (may use cached image): %s", pull_result.stderr.strip())
+    image_missing = inspect_result.returncode != 0
+    if image_missing or force_pull:
+        logger.info("Pulling image %s (missing=%s, force=%s)", image, image_missing, force_pull)
+        pull_result = subprocess.run(
+            ["docker", "pull", image],
+            capture_output=True, text=True, timeout=300,
+        )
+        if pull_result.returncode != 0:
+            logger.warning("Docker pull failed (may use cached image): %s", pull_result.stderr.strip())
+    else:
+        logger.info("Image %s already present locally, skipping pull", image)
 
     # Check for cancellation before running
     db.refresh(job)
@@ -439,6 +461,7 @@ def _run_job(job: Job, db: Session):
 def main():
     """Main worker loop."""
     JOB_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    (MODEL_CACHE_DIR / "hf").mkdir(parents=True, exist_ok=True)
     logger.info("Worker started. Polling every %ds. Job data: %s", POLL_INTERVAL, JOB_DATA_DIR)
 
     while not _shutdown:
