@@ -21,6 +21,8 @@ The `Dockerfile` and `Procfile` must stay at the repo root — Dokku's buildpack
 
 SQLite DB, release media, and search media are stored in persistent volumes that survive container rebuilds. The legacy site lives in a separate persisted volume. **Merging a PR does not lose data.**
 
+The worker also mounts a persistent **model cache** at `/var/lib/dokku/data/storage/au-supply-model-cache` (host) → same path inside the worker container. This holds PyTorch / HuggingFace weights (`TORCH_HOME`, `HF_HOME`) for dream / neural bot jobs so models download once instead of on every job. The path is exposed to the worker via the `MODEL_CACHE_DIR` env var, and the worker passes the same host path through to child bot containers as `-v` mounts. If the app is ever rebuilt from scratch, run `setup-storage.yml` to re-establish the mount and env var.
+
 ## SSL
 
 Auto-managed via Let's Encrypt. No manual renewal needed.

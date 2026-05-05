@@ -20,6 +20,13 @@ jobs:
           ssh dokku@204.168.201.89 storage:unmount au-supply /var/lib/dokku/data/storage/au-supply:/app/data || true
           ssh dokku@204.168.201.89 storage:list au-supply
 
+      - name: Ensure model cache volume + env var
+        run: |
+          ssh dokku@204.168.201.89 storage:ensure-directory au-supply-model-cache
+          ssh dokku@204.168.201.89 storage:mount au-supply /var/lib/dokku/data/storage/au-supply-model-cache:/var/lib/dokku/data/storage/au-supply-model-cache || true
+          ssh dokku@204.168.201.89 config:set --no-restart au-supply MODEL_CACHE_DIR=/var/lib/dokku/data/storage/au-supply-model-cache
+          ssh dokku@204.168.201.89 storage:list au-supply
+
       - name: Rebuild app
         run: |
           ssh dokku@204.168.201.89 apps:unlock au-supply || true
