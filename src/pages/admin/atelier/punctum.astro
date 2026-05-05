@@ -11611,8 +11611,12 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     // Initialize first tab and build slots + params
+    const _nativeBotIds = Object.entries(BOTS)
+      .filter(([, def]) => !def.renderAsync)
+      .map(([id]) => id);
+    const _randomBotId = _nativeBotIds[Math.floor(Math.random() * _nativeBotIds.length)];
     const _firstTab = makeEmptyTabState();
-    _firstTab.currentBot = (botParam && BOTS[botParam]) ? botParam : botSelect.value;
+    _firstTab.currentBot = (botParam && BOTS[botParam]) ? botParam : _randomBotId;
     tabs.push(_firstTab);
     activeTabIdx = 0;
     switchBot(_firstTab.currentBot);
