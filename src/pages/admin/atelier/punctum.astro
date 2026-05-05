@@ -1586,13 +1586,39 @@ import Admin from '../../../layouts/Admin.astro';
       return { gx, gy, mag };
     }
 
+    // Reuse OffscreenCanvas pair across applyBlur calls — creating two OffscreenCanvases
+    // per call was causing 12+ canvas-pair allocations per render in multi-blur bots
+    // (Oil Spiral 4×, Soapy Spiral 4×, Curvy Lines 2×, Spiral Screen 2×).
+    // Revert this block if blur output looks wrong across different-sized renders.
+    let _blurSrc: OffscreenCanvas | null = null;
+    let _blurDst: OffscreenCanvas | null = null;
+    let _blurCW = 0, _blurCH = 0;
+    // Reuse input pixel scratch buffer across blurFloat calls (avoids ~8MB alloc × 12/render).
+    let _blurScratch: Uint8ClampedArray | null = null;
+
+    function applyBlur(pixels: Uint8ClampedArray, W: number, H: number, sigma: number): Uint8ClampedArray {
+      if (!_blurSrc || _blurCW !== W || _blurCH !== H) {
+        _blurSrc = new OffscreenCanvas(W, H);
+        _blurDst = new OffscreenCanvas(W, H);
+        _blurCW = W; _blurCH = H;
+      }
+      _blurSrc.getContext('2d')!.putImageData(new ImageData(pixels, W, H), 0, 0);
+      const ctx = _blurDst!.getContext('2d')!;
+      ctx.clearRect(0, 0, W, H);
+      ctx.filter = `blur(${sigma}px)`;
+      ctx.drawImage(_blurSrc, 0, 0);
+      ctx.filter = 'none';
+      return ctx.getImageData(0, 0, W, H).data;
+    }
+
     function blurFloat(data: Float32Array, W: number, H: number, sigma: number): Float32Array {
       const n = W * H;
       let minVal = data[0], maxVal = data[0];
       for (let i = 1; i < n; i++) { if (data[i] < minVal) minVal = data[i]; if (data[i] > maxVal) maxVal = data[i]; }
       const range = maxVal - minVal;
       if (range < 1e-10) { const r = new Float32Array(n); r.fill(minVal); return r; }
-      const px = new Uint8ClampedArray(n * 4);
+      if (!_blurScratch || _blurScratch.length < n * 4) _blurScratch = new Uint8ClampedArray(n * 4);
+      const px = _blurScratch;
       for (let i = 0; i < n; i++) {
         const v = Math.round((data[i] - minVal) / range * 255);
         px[i*4] = px[i*4+1] = px[i*4+2] = v; px[i*4+3] = 255;
