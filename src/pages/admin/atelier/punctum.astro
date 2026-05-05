@@ -1511,6 +1511,32 @@ import Admin from '../../../layouts/Admin.astro';
       return ys[i] + (ys[i+1]-ys[i]) * (v-xs[i]) / (xs[i+1]-xs[i]);
     }
 
+    // O(n) percentile via 256-bucket histogram.
+    // Replaces Array.from(data).sort() for single-percentile lookups — O(n log n) → O(n).
+    // Accurate to within (max-min)/256 of the true value, which is imperceptible for
+    // normalisation thresholds. Revert to the sort-based version if output changes.
+    function histPercentile(data: Float32Array | Uint8Array, p: number): number {
+      const n = data.length;
+      if (n === 0) return 0;
+      let lo = data[0], hi = data[0];
+      for (let i = 1; i < n; i++) {
+        if (data[i] < lo) lo = data[i];
+        if (data[i] > hi) hi = data[i];
+      }
+      if (hi === lo) return lo;
+      const range = hi - lo;
+      const buckets = new Int32Array(256);
+      const scale = 255 / range;
+      for (let i = 0; i < n; i++) buckets[((data[i] - lo) * scale + 0.5) | 0]++;
+      const target = Math.floor(n * p);
+      let cum = 0;
+      for (let b = 0; b < 256; b++) {
+        cum += buckets[b];
+        if (cum > target) return lo + (b / 255) * range;
+      }
+      return hi;
+    }
+
     function applyBlur(pixels: Uint8ClampedArray, W: number, H: number, sigma: number): Uint8ClampedArray {
       const src = new OffscreenCanvas(W, H);
       const id = src.getContext('2d')!.createImageData(W, H);
@@ -2731,9 +2757,8 @@ import Admin from '../../../layouts/Admin.astro';
         return tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
       };
       const make3Level = (gray: Uint8Array): Uint8Array => {
-        const sorted = Array.from(gray).sort((a, b) => a - b);
-        const p33 = sorted[Math.floor(sorted.length * 0.33)];
-        const p67 = sorted[Math.floor(sorted.length * 0.67)];
+        const p33 = histPercentile(gray, 0.33);
+        const p67 = histPercentile(gray, 0.67);
         const mask = new Uint8Array(W * H);
         for (let i = 0; i < W * H; i++) mask[i] = gray[i] < p33 ? 0 : gray[i] < p67 ? 128 : 255;
         return mask;
@@ -2854,8 +2879,7 @@ import Admin from '../../../layouts/Admin.astro';
       const gradFields = pixelData.map(pd => {
         const blurred = blurSigma > 0 ? applyBlur(pd as Uint8ClampedArray, W, H, blurSigma) : pd as Uint8ClampedArray;
         const { gx, gy, mag } = sobelGradients(blurred, W, H);
-        const magArr = Array.from(mag).sort((a, b) => a - b);
-        const p99 = magArr[Math.floor(magArr.length * 0.99)] + 1e-6;
+        const p99 = histPercentile(mag, 0.99) + 1e-6;
         const gxN = new Float32Array(W * H), gyN = new Float32Array(W * H);
         for (let i = 0; i < W * H; i++) { gxN[i] = gx[i] / p99; gyN[i] = gy[i] / p99; }
         return { gxN, gyN };
@@ -3027,8 +3051,7 @@ import Admin from '../../../layouts/Admin.astro';
       const blurPx = applyBlur(grayPx, W, H, Math.min(W, H) * 0.06);
       const blurGray = new Float32Array(W * H);
       for (let i = 0; i < W * H; i++) blurGray[i] = blurPx[i*4];
-      const blurSorted = Array.from(blurGray).sort((a, b) => a - b);
-      const p70 = blurSorted[Math.floor(blurSorted.length * 0.70)];
+      const p70 = histPercentile(blurGray, 0.70);
       const minDist2 = (Math.min(W, H) * 0.15) ** 2;
       const candidates: [number, number, number][] = [];
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -3052,8 +3075,7 @@ import Admin from '../../../layouts/Admin.astro';
       const bcos = blurFloat(cos2, W, H, 50), bsin = blurFloat(sin2, W, H, 50);
       const smoothAngle = new Float32Array(W * H);
       for (let i = 0; i < W * H; i++) smoothAngle[i] = Math.atan2(bsin[i], bcos[i]) / 2;
-      const magArr = Array.from(mag).sort((a, b) => a - b);
-      const mag99 = magArr[Math.floor(magArr.length * 0.99)] + 1e-6;
+      const mag99 = histPercentile(mag, 0.99) + 1e-6;
       const ewRaw = new Float32Array(W * H);
       for (let i = 0; i < W * H; i++) ewRaw[i] = Math.min(mag[i] / mag99, 1);
       const ewBlur = blurFloat(ewRaw, W, H, 30);
@@ -3197,8 +3219,7 @@ import Admin from '../../../layouts/Admin.astro';
       const bl = applyBlur(px, W, H, Math.min(W, H) * 0.08);
       const bg = new Float32Array(W * H);
       for (let i = 0; i < W * H; i++) bg[i] = bl[i*4];
-      const sorted = Array.from(bg).sort((a, b) => a - b);
-      const thresh = sorted[Math.floor(sorted.length * 0.9)];
+      const thresh = histPercentile(bg, 0.9);
       let sumX = 0, sumY = 0, count = 0;
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         if (bg[y*W+x] > thresh) { sumX += x; sumY += y; count++; }
@@ -3228,8 +3249,7 @@ import Admin from '../../../layouts/Admin.astro';
       const bcos = blurFloat(cos2, W, H, 50), bsin = blurFloat(sin2, W, H, 50);
       const smoothAngle = new Float32Array(W * H);
       for (let i = 0; i < W * H; i++) smoothAngle[i] = Math.atan2(bsin[i], bcos[i]) / 2;
-      const magArr = Array.from(mag).sort((a, b) => a - b);
-      const mag99 = magArr[Math.floor(magArr.length * 0.99)] + 1e-6;
+      const mag99 = histPercentile(mag, 0.99) + 1e-6;
       const ewRaw = new Float32Array(W * H);
       for (let i = 0; i < W * H; i++) ewRaw[i] = Math.min(mag[i] / mag99, 1);
       const ew = new Float32Array(W * H);
@@ -3478,8 +3498,7 @@ import Admin from '../../../layouts/Admin.astro';
       const smoothAngle = new Float32Array(W * H);
       for (let i = 0; i < W * H; i++) smoothAngle[i] = Math.atan2(bsin[i], bcos[i]) / 2;
       // Edge weight
-      const magArr = Array.from(mag).sort((a, b) => a - b);
-      const mag85 = magArr[Math.floor(magArr.length * 0.85)] + 1e-6;
+      const mag85 = histPercentile(mag, 0.85) + 1e-6;
       const ewRaw = new Float32Array(W * H);
       for (let i = 0; i < W * H; i++) ewRaw[i] = Math.min(mag[i] / mag85, 1);
       const ewBlur = blurFloat(ewRaw, W, H, 30);
@@ -3589,8 +3608,7 @@ import Admin from '../../../layouts/Admin.astro';
       const bcos = blurFloat(cos2, W, H, 50), bsin = blurFloat(sin2, W, H, 50);
       const smoothAngle = new Float32Array(W * H);
       for (let i = 0; i < W * H; i++) smoothAngle[i] = Math.atan2(bsin[i], bcos[i]) / 2;
-      const magArr = Array.from(mag).sort((a, b) => a - b);
-      const mag85 = magArr[Math.floor(magArr.length * 0.85)] + 1e-6;
+      const mag85 = histPercentile(mag, 0.85) + 1e-6;
       const ewRaw = new Float32Array(W * H);
       for (let i = 0; i < W * H; i++) ewRaw[i] = Math.min(mag[i] / mag85, 1);
       const ewBlur = blurFloat(ewRaw, W, H, 30);
@@ -3911,8 +3929,7 @@ import Admin from '../../../layouts/Admin.astro';
         // Normalize by p99 magnitude
         const mag = new Float32Array(W * H);
         for (let i = 0; i < W * H; i++) mag[i] = Math.sqrt(vx[i]*vx[i]+vy[i]*vy[i]);
-        const magSorted = Array.from(mag).sort((a,b)=>a-b);
-        const p99 = magSorted[Math.floor(magSorted.length*0.99)] + 1e-6;
+        const p99 = histPercentile(mag, 0.99) + 1e-6;
         for (let i = 0; i < W * H; i++) { vx[i] = vx[i]/p99*strength; vy[i] = vy[i]/p99*strength; }
         // Backward map
         const tmp = new OffscreenCanvas(W, H);
