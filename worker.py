@@ -37,6 +37,7 @@ logger = logging.getLogger("worker")
 JOB_DATA_DIR = Path(os.environ.get("JOB_DATA_DIR", "/app/job-data"))
 SEARCH_MEDIA_DIR = Path(os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data"))
 MODEL_CACHE_DIR = Path(os.environ.get("MODEL_CACHE_DIR", "/app/model-cache"))
+MODEL_CACHE_HOST_DIR = os.environ.get("MODEL_CACHE_HOST_DIR", "/var/lib/dokku/data/storage/au-supply-model-cache")
 POLL_INTERVAL = int(os.environ.get("WORKER_POLL_INTERVAL", "2"))
 LOG_TAIL_LINES = 50
 
@@ -56,6 +57,19 @@ signal.signal(signal.SIGINT, _handle_signal)
 
 def _utcnow():
     return datetime.now(timezone.utc)
+
+
+def _recover_orphaned_jobs(db: Session):
+    """Reset jobs left in 'running' state from a previous worker instance."""
+    orphans = db.query(Job).filter(Job.status == "running").all()
+    for job in orphans:
+        logger.warning("Resetting orphaned running job %s (app=%s)", job.id, job.app_name)
+        job.status = "failed"
+        job.error_message = "Reset: worker restarted while job was running"
+        job.completed_at = _utcnow()
+    if orphans:
+        db.commit()
+        logger.info("Reset %d orphaned job(s) to failed", len(orphans))
 
 
 def _infer_media_type(filename: str) -> str | None:
@@ -170,13 +184,6 @@ def _build_docker_command(job: Job, manifest: dict, job_dir: Path) -> list[str]:
     # The job dir on the host filesystem — this is what Docker sees
     host_job_dir = f"/var/lib/dokku/data/storage/au-supply-jobs/{job.id}"
 
-    # Host path for the model cache — must be a persistent volume on the host.
-    # Set MODEL_CACHE_DIR env var to e.g. /var/lib/dokku/data/storage/au-supply-model-cache.
-    # PyTorch respects TORCH_HOME; HuggingFace respects HF_HOME.
-    # Models are downloaded once on first run, then reused from disk — skipping the
-    # 40-60s per-job re-download that was happening with ephemeral containers.
-    host_model_cache = str(MODEL_CACHE_DIR)
-
     cmd = [
         "docker", "run", "--rm",
         "--name", f"job-{job.id[:12]}",
@@ -184,8 +191,8 @@ def _build_docker_command(job: Job, manifest: dict, job_dir: Path) -> list[str]:
         "--memory", "4g",
         "--cpus", "2",
         "-v", f"{host_job_dir}:/work",
-        "-v", f"{host_model_cache}:/root/.cache/torch",
-        "-v", f"{host_model_cache}/hf:/root/.cache/huggingface",
+        "-v", f"{MODEL_CACHE_HOST_DIR}:/root/.cache/torch",
+        "-v", f"{MODEL_CACHE_HOST_DIR}/hf:/root/.cache/huggingface",
         "-e", "TORCH_HOME=/root/.cache/torch",
         "-e", "HF_HOME=/root/.cache/huggingface",
     ]
@@ -463,6 +470,12 @@ def main():
     JOB_DATA_DIR.mkdir(parents=True, exist_ok=True)
     (MODEL_CACHE_DIR / "hf").mkdir(parents=True, exist_ok=True)
     logger.info("Worker started. Polling every %ds. Job data: %s", POLL_INTERVAL, JOB_DATA_DIR)
+
+    startup_db = SessionLocal()
+    try:
+        _recover_orphaned_jobs(startup_db)
+    finally:
+        startup_db.close()
 
     while not _shutdown:
         db = SessionLocal()
