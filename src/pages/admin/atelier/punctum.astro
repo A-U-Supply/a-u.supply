@@ -10900,27 +10900,36 @@ import Admin from '../../../layouts/Admin.astro';
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: '', media_types: ['image'], sort: 'random', page: 1, per_page: slots.length }),
+          body: JSON.stringify({ query: '', media_types: ['image'], sort: 'random', page: 1, per_page: slots.length + 3 }),
         });
         if (!res.ok) return;
         const data = await res.json();
         const items: { id: string }[] = data.results ?? data.hits ?? [];
+        const pool = items.slice(slots.length); // surplus images as fallback on load failure
         for (let j = 0; j < slots.length && j < items.length; j++) {
-          fillSlotRandom(slots[j], `/api/media/${items[j].id}/file`, items[j].id);
+          fillSlotRandom(slots[j], `/api/media/${items[j].id}/file`, items[j].id, pool);
         }
       } catch {}
       btn?.classList.remove('busy');
     }
 
-    function fillSlotRandom(slotIdx: number, url: string, sourceId: string) {
+    function fillSlotRandom(slotIdx: number, url: string, sourceId: string, fallbackPool?: { id: string }[]) {
       showSlotLoading(slotIdx);
       pushSlotHistory(slotIdx);
+      _loadSlotRandomImage(slotIdx, url, sourceId, fallbackPool);
+    }
+
+    function _loadSlotRandomImage(slotIdx: number, url: string, sourceId: string, fallbackPool?: { id: string }[]) {
       sourceIds[slotIdx] = sourceId;
       // slotUserSet intentionally NOT set — random fill is not user-explicit
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload  = () => { sourceImgs[slotIdx] = img; onSlotLoaded(slotIdx); };
-      img.onerror = () => hideSlotLoading(slotIdx);
+      img.onerror = () => {
+        const next = fallbackPool?.shift();
+        if (next) _loadSlotRandomImage(slotIdx, `/api/media/${next.id}/file`, next.id, fallbackPool);
+        else hideSlotLoading(slotIdx);
+      };
       img.src = url;
     }
 
