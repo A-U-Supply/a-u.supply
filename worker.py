@@ -458,7 +458,7 @@ def _run_job(job: Job, db: Session):
         else:
             logger.error("Job %s crashed (exit %d): %s", job.id, return_code, error_msg[:200])
         job.status = "failed"
-        job.error_message = error_msg[:2000]
+        job.error_message = error_msg[-2000:]
         job.retry_count += 1
 
     job.completed_at = _utcnow()

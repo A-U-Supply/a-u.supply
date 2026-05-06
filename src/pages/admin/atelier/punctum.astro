@@ -10499,7 +10499,10 @@ import Admin from '../../../layouts/Admin.astro';
         while (Date.now() < deadline) {
           if (cancelled) throw new Error('Job was cancelled');
           await new Promise(r => setTimeout(r, 2000));
-          const job = await (await fetch(`/api/jobs/${jobId}`, { credentials: 'include' })).json();
+          const _jobResp = await fetch(`/api/jobs/${jobId}`, { credentials: 'include' });
+          if (!_jobResp.ok) throw new Error(`Job status check failed (${_jobResp.status})`);
+          const job = await _jobResp.json();
+          if (!job.status) throw new Error('Unexpected job response');
           if (job.status === 'completed') { timedOut = false; break; }
           if (job.status === 'failed')    throw new Error(job.error_message ?? 'Job failed');
           if (job.status === 'cancelled') throw new Error('Job was cancelled');
