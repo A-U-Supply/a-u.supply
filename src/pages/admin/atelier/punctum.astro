@@ -58,11 +58,11 @@ import Admin from '../../../layouts/Admin.astro';
     </div>
     <p class="pt-bot-desc" id="pt-bot-desc">Circular crop rotations from random positions across the image</p>
     <div id="pt-bot-params-wrap" class="collapsed">
-      <button class="pt-params-toggle" id="pt-bot-params-toggle">▼ Bot Parameters</button>
+      <button class="pt-params-toggle" id="pt-bot-params-toggle">Bot Parameters</button>
       <div id="pt-params"></div>
     </div>
     <div id="pt-stencil-params-wrap" class="collapsed">
-      <button class="pt-params-toggle" id="pt-stencil-params-toggle">▼ Stencil Parameters</button>
+      <button class="pt-params-toggle" id="pt-stencil-params-toggle">Stencil Parameters</button>
       <div id="pt-stencil-params">
         <div class="pt-field pt-stencil-field">
           <label class="pt-label" for="st-bias">Threshold Bias <span class="pt-val" id="st-bias-val">0</span></label>
@@ -368,14 +368,21 @@ import Admin from '../../../layouts/Admin.astro';
   .pt-tab-add:hover { border-color: #aaa; color: #fff; }
 
   .pt-params-toggle {
-    background: none; border: none; color: #999;
-    font-size: 0.7rem; cursor: pointer; padding: 2px 0 6px;
-    display: block; width: 100%; text-align: left;
-    letter-spacing: 0.05em;
+    background: rgba(255,255,255,0.04); border: 1px solid #3a3a3a; border-radius: 3px;
+    color: #bbb; font-size: 0.75rem; cursor: pointer;
+    padding: 5px 10px; margin: 3px 0;
+    display: inline-flex; align-items: center; gap: 8px;
+    text-align: left; letter-spacing: 0.05em;
+    transition: border-color 0.15s, color 0.15s;
   }
-  .pt-params-toggle:hover { color: #ddd; }
-  #pt-bot-params-wrap.collapsed .pt-params-toggle,
-  #pt-stencil-params-wrap.collapsed .pt-params-toggle { padding-bottom: 2px; }
+  .pt-params-toggle:hover { border-color: #555; color: #ddd; }
+  .pt-params-toggle::after {
+    content: '›'; font-size: 1rem; line-height: 1;
+    display: inline-block; transform: rotate(90deg);
+    transition: transform 0.15s;
+  }
+  #pt-bot-params-wrap.collapsed .pt-params-toggle::after,
+  #pt-stencil-params-wrap.collapsed .pt-params-toggle::after { transform: rotate(0deg); }
   #pt-bot-params-wrap.collapsed #pt-params { display: none !important; }
   #pt-stencil-params-wrap.collapsed #pt-stencil-params { display: none !important; }
 
@@ -1145,6 +1152,7 @@ import Admin from '../../../layouts/Admin.astro';
   }
 
   @media (max-width: 700px) {
+    .pt-params-toggle { width: 100%; justify-content: space-between; }
     .pt-shell {
       grid-template-columns: 1fr;
     }
@@ -11234,12 +11242,9 @@ import Admin from '../../../layouts/Admin.astro';
     document.getElementById('st-invert')?.addEventListener('change', () => doRender());
 
     // ─── Params collapse ───────────────────────────────────────────────────────
-    function wireParamsToggle(wrapId: string, btnId: string, label: string) {
+    function wireParamsToggle(wrapId: string, btnId: string, _label: string) {
       document.getElementById(btnId)?.addEventListener('click', () => {
-        const wrap = document.getElementById(wrapId);
-        const btn  = document.getElementById(btnId)!;
-        const collapsed = wrap?.classList.toggle('collapsed');
-        btn.textContent = (collapsed ? '▼ ' : '▲ ') + label;
+        document.getElementById(wrapId)?.classList.toggle('collapsed');
       });
     }
     wireParamsToggle('pt-bot-params-wrap',     'pt-bot-params-toggle',     'Bot Parameters');
