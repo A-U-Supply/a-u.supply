@@ -2,6 +2,7 @@
 
 Usage (from host):
     ssh dokku run au-supply .venv/bin/python manage.py create-user <email> <password> <name> [role]
+    ssh dokku run au-supply .venv/bin/python manage.py set-password <email> <password>
     ssh dokku run au-supply .venv/bin/python manage.py list-users
     ssh dokku run au-supply .venv/bin/python manage.py make-apikey <email> <label> <scope>
     ssh dokku run au-supply .venv/bin/python manage.py revoke-apikey <key-prefix>
@@ -35,6 +36,19 @@ def create_user(email: str, password: str, name: str, role: str = "member"):
     db.add(user)
     db.commit()
     print(f"Created: {user.name} ({user.email}) role={user.role} id={user.id}")
+    db.close()
+
+
+def set_password(email: str, password: str):
+    db = SessionLocal()
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        print(f"ERROR: {email} not found")
+        db.close()
+        sys.exit(1)
+    user.password_hash = hash_password(password)
+    db.commit()
+    print(f"Password updated for {user.name} ({user.email})")
     db.close()
 
 
@@ -673,6 +687,12 @@ if __name__ == "__main__":
             print("Usage: manage.py set-role <email> <role>")
             sys.exit(1)
         set_role(sys.argv[2], sys.argv[3])
+
+    elif cmd == "set-password":
+        if len(sys.argv) < 4:
+            print("Usage: manage.py set-password <email> <password>")
+            sys.exit(1)
+        set_password(sys.argv[2], sys.argv[3])
 
     elif cmd == "list-users":
         list_users()
