@@ -10559,7 +10559,9 @@ import Admin from '../../../layouts/Admin.astro';
           outputs = await bot.renderAsync(effectiveImgs.slice(0, bot.inputs), bot.getParams?.() ?? {}, asyncSeed);
         } catch (e: any) {
           setAsyncLoading(false);
-          (window as any).toast?.error('Sparagmos job failed: ' + (e?.message ?? String(e)));
+          outputs = [];
+          renderStrip();
+          (window as any).toast?.error('Job failed: ' + (e?.message ?? String(e)));
           return;
         }
         setAsyncLoading(false);
