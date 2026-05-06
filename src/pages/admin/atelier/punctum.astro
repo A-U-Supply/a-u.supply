@@ -4372,7 +4372,7 @@ import Admin from '../../../layouts/Admin.astro';
       hasRandomness: boolean;
       isStencil?: boolean;
       hasNativeBW?: boolean;
-      render?: (imgs: (HTMLImageElement | null)[], params: Record<string, any>, rng: () => number) => Output[];
+      render?: (imgs: (HTMLImageElement | null)[], params: Record<string, any>, rng: () => number) => Output[] | Promise<Output[]>;
       renderAsync?: (imgs: (HTMLImageElement | null)[], params: Record<string, any>, seed?: number) => Promise<Output[]>;
       buildParams?: () => void;
       getParams?: () => Record<string, any>;
@@ -4704,7 +4704,7 @@ import Admin from '../../../layouts/Admin.astro';
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildBroadcastStaticParams, getParams: getBroadcastStaticParams, setParams: setBroadcastStaticParams, onReroll: onRerollBroadcastStatic },
       'data-rot': { label: 'Data Rot', desc: 'Three images subjected to byte-level corruption before any composition — the damage is baked in from the start, not applied as finish.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
-        render: (imgs, params, _rng) => {
+        render: async (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
           const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
           const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
@@ -4712,9 +4712,11 @@ import Admin from '../../../layouts/Admin.astro';
           const it = Math.round(params.iterations ?? 6);
           const sh = Math.round(params.shift ?? 20);
           // Corrupt each source at slightly different quality levels baked in from the start
-          const rA = jpegDestroy(pixelsToCanvas(channelShift(dA, w, h,  sh,           -Math.round(sh*0.6)), w, h), q,     it);
-          const rB = jpegDestroy(pixelsToCanvas(channelShift(dB, w, h, -Math.round(sh*0.7), Math.round(sh*0.5)), w, h), Math.max(1, q-1), Math.round(it*0.8));
-          const rC = jpegDestroy(pixelsToCanvas(channelShift(dC, w, h,  Math.round(sh*0.4), -sh),            w, h), Math.min(20, q+2), Math.round(it*1.2));
+          const [rA, rB, rC] = await Promise.all([
+            jpegDestroy(pixelsToCanvas(channelShift(dA, w, h,  sh,           -Math.round(sh*0.6)), w, h), q,     it),
+            jpegDestroy(pixelsToCanvas(channelShift(dB, w, h, -Math.round(sh*0.7), Math.round(sh*0.5)), w, h), Math.max(1, q-1), Math.round(it*0.8)),
+            jpegDestroy(pixelsToCanvas(channelShift(dC, w, h,  Math.round(sh*0.4), -sh),            w, h), Math.min(20, q+2), Math.round(it*1.2)),
+          ]);
           // Compose: screen A over B, then difference with C to amplify damage artifacts
           const pA = getPixels(rA); const pB = getPixels(rB); const pC = getPixels(rC);
           const dBr = resizeToMatch(pB.d, pB.w, pB.h, pA.w, pA.h);
@@ -4981,7 +4983,7 @@ import Admin from '../../../layouts/Admin.astro';
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildBullseyeCyanotypeParams, getParams: getBullseyeCyanotypeParams, setParams: setBullseyeCyanotypeParams, onReroll: onRerollBullseyeCyanotype },
       'curvy-corruption': { label: 'Curvy Corruption', desc: 'Three images composited through edge-following curvy line screens, then the result is byte-corrupted and CRT/VHS filtered.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
-        render: (imgs, params, _rng) => {
+        render: async (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
           const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
           const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
@@ -4996,10 +4998,10 @@ import Admin from '../../../layouts/Admin.astro';
           // Channel shift for CRT bleed
           d = channelShift(d, w, h, sh, -Math.round(sh * 0.6));
           // Byte corruption via jpeg destroy
-          return [{ canvas: jpegDestroy(pixelsToCanvas(d, w, h), params.quality ?? 4, 4), mimeType: 'image/jpeg' }];
+          return [{ canvas: await jpegDestroy(pixelsToCanvas(d, w, h), params.quality ?? 4, 4), mimeType: 'image/jpeg' }];
         }, buildParams: buildCurvyCorruptionParams, getParams: getCurvyCorruptionParams, setParams: setCurvyCorruptionParams, onReroll: onRerollCurvyCorruption },
       'cyanotype-corruption': { label: 'Cyanotype Corruption', desc: 'Three images composited through cyanotype stencil — prussian blue toning with highlight bloom — then the composite is byte-corrupted and channel-shifted.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
-        render: (imgs, params, _rng) => {
+        render: async (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
           const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
           const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
@@ -5016,10 +5018,10 @@ import Admin from '../../../layouts/Admin.astro';
           d = channelShift(d, w, h, sr, -Math.round(sr * 0.6));
           // Step 5: jpegDestroy for cyanotype grain texture
           const q = params.quality ?? 5;
-          return [{ canvas: jpegDestroy(pixelsToCanvas(d, w, h), q, 3), mimeType: 'image/jpeg' }];
+          return [{ canvas: await jpegDestroy(pixelsToCanvas(d, w, h), q, 3), mimeType: 'image/jpeg' }];
         }, buildParams: buildCyanotypeCorruptionParams, getParams: getCyanotypeCorruptionParams, setParams: setCyanotypeCorruptionParams, onReroll: onRerollCyanotypeCorruption },
       'reducedscreen-datamosh': { label: 'Reduced Screen Datamosh', desc: 'Three images composited through adaptive-frequency line screens — finer lines in detail regions, coarser in flat areas — then datamoshed.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
-        render: (imgs, params, _rng) => {
+        render: async (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
           const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
           const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
@@ -5045,7 +5047,7 @@ import Admin from '../../../layouts/Admin.astro';
           let d = lumaComposite(dA4, dA, dB, w, h, 128, 8, false);
           d = lumaComposite(dB8, d, dC, w, h, 128, 8, false);
           d = blendPixels(d, dC4, w, h, 'screen', 0.35);
-          return [{ canvas: jpegDestroy(pixelsToCanvas(d, w, h), params.quality ?? 3, Math.round(params.iterations ?? 5)), mimeType: 'image/jpeg' }];
+          return [{ canvas: await jpegDestroy(pixelsToCanvas(d, w, h), params.quality ?? 3, Math.round(params.iterations ?? 5)), mimeType: 'image/jpeg' }];
         }, buildParams: buildReducedscreenDatamoshParams, getParams: getReducedscreenDatamoshParams, setParams: setReducedscreenDatamoshParams, onReroll: onRerollReducedscreenDatamosh },
       'shifted-linescreen': { label: 'Shifted Line Screen', desc: 'Three images channel-shifted until their color registers separate, then composited through parallel line screen stencils. The misregistered colors show through.', inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
         render: (imgs, params, _rng) => {
@@ -5699,7 +5701,7 @@ import Admin from '../../../layouts/Admin.astro';
           return [{ canvas: pixelsToCanvas(d, w, h), mimeType: 'image/png' }];
         }, buildParams: buildSilhouetteCollageParams, getParams: getSilhouetteCollageParams, setParams: setSilhouetteCollageParams, onReroll: onRerollSilhouetteCollage },
       'sixshooter-halation-corrupt': { label: 'Six Shooter Halation Corrupt', desc: 'Four images: two six-shootered into scattered circular displacements, halation-edge composited through the third. The organic grain boundary dissolves into byte corruption.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
-        render: (imgs, params, rng) => {
+        render: async (imgs, params, rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
           const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
           const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
@@ -5715,7 +5717,7 @@ import Admin from '../../../layouts/Admin.astro';
           // D as overlay
           d = blendPixels(d, dD, w, h, 'overlay', 0.25);
           // JPEG corruption
-          return [{ canvas: jpegDestroy(pixelsToCanvas(d, w, h), params.quality ?? 4, 4), mimeType: 'image/jpeg' }];
+          return [{ canvas: await jpegDestroy(pixelsToCanvas(d, w, h), params.quality ?? 4, 4), mimeType: 'image/jpeg' }];
         }, buildParams: buildSixshooterHalationCorruptParams, getParams: getSixshooterHalationCorruptParams, setParams: setSixshooterHalationCorruptParams, onReroll: onRerollSixshooterHalationCorrupt },
       'spectral-mask': { label: 'Spectral Mask', desc: 'Four images processed spectrally and then masked in pairs. Image A is spectrally shifted to emphasize its mid-range structure. The shifted and raw versions mask against each other.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
         render: (imgs, params, _rng) => {
@@ -5920,7 +5922,7 @@ import Admin from '../../../layouts/Admin.astro';
         }, buildParams: buildWobbleCurvyscreenDitherParams, getParams: getWobbleCurvyscreenDitherParams, setParams: setWobbleCurvyscreenDitherParams, onReroll: onRerollWobbleCurvyscreenDither },
       'pca-quad': { label: 'PCA Quad', desc: 'Four images PCA-decomposed to varying depths — stripped to structural ghosts — then composited through three-level stencil. The brightness bands fill with different ghost images.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: false, renderAsync: (imgs, _p, seed) => runSparagmosRecipe('pca-quad', imgs, seed), buildParams: () => {}, getParams: () => ({}), setParams: () => {} },
       'quad-sort-destroy': { label: 'Quad Sort Destroy', desc: 'Four images three-level stenciled — brightness bands filling with different sources — then the composite is pixel-sorted and byte-corrupted. Three-source stencil meets total annihilation.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
-        render: (imgs, params, _rng) => {
+        render: async (imgs, params, _rng) => {
           const { d: dA, w, h } = getPixels(imgs[0]!);
           const bPx = getPixels(imgs[1]!); const dB = resizeToMatch(bPx.d, bPx.w, bPx.h, w, h);
           const cPx = getPixels(imgs[2]!); const dC = resizeToMatch(cPx.d, cPx.w, cPx.h, w, h);
@@ -5932,7 +5934,7 @@ import Admin from '../../../layouts/Admin.astro';
           d     = pixelSort(d, w, h, params.sort_thresh ?? 80, 'up');
           const sr = Math.round(params.shift_r ?? 30);
           d     = channelShift(d, w, h, sr, -Math.round(sr * 0.7));
-          return [{ canvas: jpegDestroy(pixelsToCanvas(d, w, h), params.quality ?? 4, 3), mimeType: 'image/jpeg' }];
+          return [{ canvas: await jpegDestroy(pixelsToCanvas(d, w, h), params.quality ?? 4, 3), mimeType: 'image/jpeg' }];
         }, buildParams: buildQuadSortDestroyParams, getParams: getQuadSortDestroyParams, setParams: setQuadSortDestroyParams, onReroll: onRerollQuadSortDestroy },
       'stencil-into-displacement': { label: 'Stencil Into Displacement', desc: 'Four images in two stages: first, Otsu stencil composites images A and B using C as the mask. Then the stencil composite is displacement-warped against the fourth.', inputs: 4, inputLabels: ['Image A', 'Image B', 'Image C', 'Image D'], hasRandomness: true,
         render: (imgs, params, _rng) => {
@@ -10073,18 +10075,19 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     // Re-encode a canvas through JPEG at low quality N times for block-artifact destruction.
-    // Data URLs decode synchronously in modern browsers — no async needed.
-    function jpegDestroy(canvas: HTMLCanvasElement, quality: number, iterations: number): HTMLCanvasElement {
+    async function jpegDestroy(canvas: HTMLCanvasElement, quality: number, iterations: number): Promise<HTMLCanvasElement> {
       let c = canvas;
       const q = Math.max(0.01, Math.min(1, quality / 100));
       for (let i = 0; i < Math.round(iterations); i++) {
         const url = c.toDataURL('image/jpeg', q);
-        const img = new Image();
-        img.src = url;                          // data URLs decode synchronously
-        const c2 = document.createElement('canvas');
-        c2.width = c.width; c2.height = c.height;
-        c2.getContext('2d')!.drawImage(img, 0, 0);
-        c = c2;
+        await new Promise<void>((resolve) => {
+          const img = new Image();
+          const c2 = document.createElement('canvas');
+          c2.width = c.width; c2.height = c.height;
+          img.onload = () => { c2.getContext('2d')!.drawImage(img, 0, 0); c = c2; resolve(); };
+          img.onerror = () => resolve(); // skip iteration on decode failure rather than hanging
+          img.src = url;
+        });
       }
       return c;
     }
@@ -10560,7 +10563,7 @@ import Admin from '../../../layouts/Admin.astro';
           bot.onReroll?.(mulberry32(currentSeed));
         }
         const params = bot.getParams?.() ?? {};
-        outputs = bot.render!(effectiveImgs, params, rng);
+        outputs = await Promise.resolve(bot.render!(effectiveImgs, params, rng));
         appendStencilOutputs();
         rerollBtn.classList.remove('busy');
       }
@@ -10570,7 +10573,7 @@ import Admin from '../../../layouts/Admin.astro';
       enableActions(true);
     }
 
-    function doRender() {
+    async function doRender() {
       if (!allSlotsReady()) return;
       const bot = BOTS[currentBot];
       if (bot.renderAsync) return; // async bots don't re-render on param change
@@ -10578,7 +10581,7 @@ import Admin from '../../../layouts/Admin.astro';
       rerollBtn.classList.add('busy');
       if (bot.hasRandomness) rng = mulberry32(currentSeed);
       const params = bot.getParams?.() ?? {};
-      outputs = bot.render!(effectiveImgs, params, rng);
+      outputs = await Promise.resolve(bot.render!(effectiveImgs, params, rng));
       appendStencilOutputs();
       rerollBtn.classList.remove('busy');
       rerollBtn.disabled = !bot.hasRandomness;
