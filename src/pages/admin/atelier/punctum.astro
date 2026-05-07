@@ -3392,6 +3392,582 @@ import Admin from '../../../layouts/Admin.astro';
       if (p['soap-power-exp'] != null) { (document.getElementById('soap-power-exp') as HTMLInputElement).value = String(p['soap-power-exp']); document.getElementById('soap-power-exp-val')!.textContent = parseFloat(p['soap-power-exp']).toFixed(1); }
     }
 
+    // ─── Oil Spiral Cells ─────────────────────────────────────────────────────
+
+    function makeOilSpiralCellsMask(img: HTMLImageElement, W: number, H: number, freq: number, warpStr: number, nPeaks: number, topoBlend: number, bias = 0, contrast = 1, power = 3): OffscreenCanvas {
+      const tmp = new OffscreenCanvas(W, H);
+      tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+      const rawData = tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+      const gray = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) gray[i] = 0.299*rawData[i*4] + 0.587*rawData[i*4+1] + 0.114*rawData[i*4+2];
+      const tone = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) tone[i] = Math.max(0.1, Math.min(0.9, piecewiseLerp([0,64,128,192,255],[0,25,128,230,255], gray[i]) / 255));
+      const toneAdj = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) toneAdj[i] = Math.max(0.01, Math.min(0.99, (tone[i] - 0.5) * contrast + 0.5 + bias));
+      const grayPx = new Uint8ClampedArray(W * H * 4);
+      for (let i = 0; i < W * H; i++) { grayPx[i*4]=grayPx[i*4+1]=grayPx[i*4+2]=gray[i]; grayPx[i*4+3]=255; }
+      const blurPx = applyBlur(grayPx, W, H, Math.min(W, H) * 0.06);
+      const blurGray = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) blurGray[i] = blurPx[i*4];
+      const p70 = histPercentile(blurGray, 0.70);
+      const minDist2 = (Math.min(W, H) * 0.15) ** 2;
+      const candidates: [number, number, number][] = [];
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const v = blurGray[y*W+x]; if (v > p70) candidates.push([x, y, v]);
+      }
+      candidates.sort((a, b) => b[2] - a[2]);
+      const peaks: [number, number][] = [];
+      for (const [px, py] of candidates) {
+        if (peaks.length >= nPeaks) break;
+        let ok = true;
+        for (const [qx, qy] of peaks) if ((px-qx)**2+(py-qy)**2 < minDist2) { ok = false; break; }
+        if (ok) peaks.push([px, py]);
+      }
+      while (peaks.length < 2) peaks.push([Math.floor(W * (peaks.length + 1) / 3), Math.floor(H / 2)]);
+      const { gx, gy, mag } = sobelGradients(applyBlur(grayPx, W, H, 2.0), W, H);
+      const lineAngle = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) lineAngle[i] = Math.atan2(gy[i], gx[i]) + Math.PI / 2;
+      const cos2 = new Float32Array(W * H), sin2 = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) { cos2[i] = Math.cos(2*lineAngle[i]); sin2[i] = Math.sin(2*lineAngle[i]); }
+      const bcos = blurFloat(cos2, W, H, 50), bsin = blurFloat(sin2, W, H, 50);
+      const smoothAngle = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) smoothAngle[i] = Math.atan2(bsin[i], bcos[i]) / 2;
+      const mag99 = histPercentile(mag, 0.99) + 1e-6;
+      const ewRaw = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) ewRaw[i] = Math.min(mag[i] / mag99, 1);
+      const ewBlur = blurFloat(ewRaw, W, H, 30);
+      const ew = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) ew[i] = Math.max(0, Math.min(1, ewBlur[i] * 3));
+      const warpPx = freq * warpStr;
+      const xw = new Float32Array(W * H), yw = new Float32Array(W * H);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = y*W+x; xw[i] = x + ew[i]*warpPx*Math.cos(smoothAngle[i]); yw[i] = y + ew[i]*warpPx*Math.sin(smoothAngle[i]);
+      }
+      const cellIdx = new Int32Array(W * H);
+      const rMap = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) {
+        let minD2 = Infinity, minK = 0;
+        for (let k = 0; k < peaks.length; k++) {
+          const dx = xw[i]-peaks[k][0], dy = yw[i]-peaks[k][1], d2 = dx*dx+dy*dy;
+          if (d2 < minD2) { minD2 = d2; minK = k; }
+        }
+        cellIdx[i] = minK; rMap[i] = Math.sqrt(minD2);
+      }
+      const corners: [number, number][] = [[0,0],[W,0],[0,H],[W,H]];
+      const peakRMax = peaks.map(([px, py]) => {
+        let rMax = 0;
+        for (const [cx, cy] of corners) { const d = Math.sqrt((cx-px)**2+(cy-py)**2); if (d > rMax) rMax = d; }
+        return Math.max(rMax, 1.0);
+      });
+      const oc = new OffscreenCanvas(W, H);
+      const od = oc.getContext('2d')!.createImageData(W, H);
+      for (let i = 0; i < W * H; i++) {
+        const k = cellIdx[i], [px, py] = peaks[k];
+        const spiralSc = rMap[i]**power / (freq * peakRMax[k]**(power-1) + 1e-6) - Math.atan2(yw[i]-py, xw[i]-px) / (2*Math.PI);
+        const sc = (1 - topoBlend) * spiralSc + topoBlend * (gray[i] / 255);
+        const screen = ((sc % 1) + 1) % 1;
+        const v = toneAdj[i] > screen ? 255 : 0;
+        od.data[i*4] = od.data[i*4+1] = od.data[i*4+2] = v; od.data[i*4+3] = 255;
+      }
+      oc.getContext('2d')!.putImageData(od, 0, 0);
+      return oc;
+    }
+
+    function renderOilSpiralCells(imgs: (HTMLImageElement | null)[], params: Record<string, any>, _rng: () => number): Output[] {
+      if (!imgs[0] || !imgs[1] || !imgs[2]) return [];
+      const W = imgs[0].naturalWidth, H = imgs[0].naturalHeight;
+      const freq = params['osc-freq'] ?? 35;
+      const warpStr = params['osc-warp'] ?? 2;
+      const nPeaks = params['osc-peaks'] ?? 6;
+      const topoBlend = params['osc-topo'] ?? 0.2;
+      const bias = params['osc-bias'] ?? 0;
+      const contrast = params['osc-contrast'] ?? 1;
+      const power = params['osc-power-exp'] ?? 3;
+      const masks = [imgs[0]!, imgs[1]!, imgs[2]!].map(img => makeOilSpiralCellsMask(img, W, H, freq, warpStr, nPeaks, topoBlend, bias, contrast, power));
+      const pixelData = [imgs[0]!, imgs[1]!, imgs[2]!].map(img => {
+        const tmp = new OffscreenCanvas(W, H); tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+        return tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+      });
+      const out: Output[] = [];
+      for (const [s, a, b] of STENCIL_PERMS) {
+        const sd = masks[s].getContext('2d')!.getImageData(0, 0, W, H).data;
+        const ad = pixelData[a], bd = pixelData[b];
+        const oc = new OffscreenCanvas(W, H);
+        const od = oc.getContext('2d')!.createImageData(W, H);
+        for (let i = 0; i < W * H; i++) {
+          const src = sd[i*4] >= 128 ? ad : bd;
+          od.data[i*4]=src[i*4]; od.data[i*4+1]=src[i*4+1]; od.data[i*4+2]=src[i*4+2]; od.data[i*4+3]=255;
+        }
+        oc.getContext('2d')!.putImageData(od, 0, 0);
+        out.push({ canvas: ocToCanvas(oc), label: `S${s}·A${a}·B${b}`, mimeType: 'image/jpeg' });
+      }
+      ['A','B','C'].forEach((_lbl, i) => out.push({ canvas: ocToCanvas(masks[i]), label: `Cells ${['A','B','C'][i]}`, mimeType: 'image/png' }));
+      return out;
+    }
+
+    function buildOilSpiralCellsParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="osc-freq">Frequency <span class="pt-val" id="osc-freq-val">35</span></label>
+          <input class="pt-range" type="range" id="osc-freq" min="5" max="80" step="1" value="35" />
+          <div class="pt-range-hints"><span>5</span><span>80</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="osc-warp">Warp <span class="pt-val" id="osc-warp-val">2.0</span></label>
+          <input class="pt-range" type="range" id="osc-warp" min="0" max="8" step="0.2" value="2" />
+          <div class="pt-range-hints"><span>0</span><span>8</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="osc-peaks">Peaks <span class="pt-val" id="osc-peaks-val">6</span></label>
+          <input class="pt-range" type="range" id="osc-peaks" min="2" max="12" step="1" value="6" />
+          <div class="pt-range-hints"><span>2</span><span>12</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="osc-topo">Topo Blend <span class="pt-val" id="osc-topo-val">0.20</span></label>
+          <input class="pt-range" type="range" id="osc-topo" min="0" max="1" step="0.05" value="0.2" />
+          <div class="pt-range-hints"><span>0</span><span>1</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="osc-bias">Bias <span class="pt-val" id="osc-bias-val">0.00</span></label>
+          <input class="pt-range" type="range" id="osc-bias" min="-0.4" max="0.4" step="0.02" value="0" />
+          <div class="pt-range-hints"><span>−0.4</span><span>+0.4</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="osc-contrast">Contrast <span class="pt-val" id="osc-contrast-val">1.00</span></label>
+          <input class="pt-range" type="range" id="osc-contrast" min="0.25" max="4" step="0.05" value="1" />
+          <div class="pt-range-hints"><span>0.25</span><span>4</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="osc-power-exp">Power <span class="pt-val" id="osc-power-exp-val">3.0</span></label>
+          <input class="pt-range" type="range" id="osc-power-exp" min="1" max="5" step="0.5" value="3" />
+          <div class="pt-range-hints"><span>1</span><span>5</span></div>
+        </div>`;
+      enhanceSliders();
+      const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+      const dRender = debounce(() => doRender(), 200);
+      document.getElementById('osc-freq')!.addEventListener('input', (e) => { document.getElementById('osc-freq-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+      document.getElementById('osc-warp')!.addEventListener('input', (e) => { document.getElementById('osc-warp-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(1); dRender(); });
+      document.getElementById('osc-peaks')!.addEventListener('input', (e) => { document.getElementById('osc-peaks-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+      document.getElementById('osc-topo')!.addEventListener('input', (e) => { document.getElementById('osc-topo-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(2); dRender(); });
+      document.getElementById('osc-bias')!.addEventListener('input', (e) => { document.getElementById('osc-bias-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(2); dRender(); });
+      document.getElementById('osc-contrast')!.addEventListener('input', (e) => { document.getElementById('osc-contrast-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(2); dRender(); });
+      document.getElementById('osc-power-exp')!.addEventListener('input', (e) => { document.getElementById('osc-power-exp-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(1); dRender(); });
+    }
+    function getOilSpiralCellsParams(): Record<string, any> {
+      return {
+        'osc-freq': parseInt((document.getElementById('osc-freq') as HTMLInputElement).value, 10),
+        'osc-warp': parseFloat((document.getElementById('osc-warp') as HTMLInputElement).value),
+        'osc-peaks': parseInt((document.getElementById('osc-peaks') as HTMLInputElement).value, 10),
+        'osc-topo': parseFloat((document.getElementById('osc-topo') as HTMLInputElement).value),
+        'osc-bias': parseFloat((document.getElementById('osc-bias') as HTMLInputElement).value),
+        'osc-contrast': parseFloat((document.getElementById('osc-contrast') as HTMLInputElement).value),
+        'osc-power-exp': parseFloat((document.getElementById('osc-power-exp') as HTMLInputElement).value),
+      };
+    }
+    function setOilSpiralCellsParams(p: Record<string, any>) {
+      if (p['osc-freq'] != null) { (document.getElementById('osc-freq') as HTMLInputElement).value = String(p['osc-freq']); document.getElementById('osc-freq-val')!.textContent = String(p['osc-freq']); }
+      if (p['osc-warp'] != null) { (document.getElementById('osc-warp') as HTMLInputElement).value = String(p['osc-warp']); document.getElementById('osc-warp-val')!.textContent = parseFloat(p['osc-warp']).toFixed(1); }
+      if (p['osc-peaks'] != null) { (document.getElementById('osc-peaks') as HTMLInputElement).value = String(p['osc-peaks']); document.getElementById('osc-peaks-val')!.textContent = String(p['osc-peaks']); }
+      if (p['osc-topo'] != null) { (document.getElementById('osc-topo') as HTMLInputElement).value = String(p['osc-topo']); document.getElementById('osc-topo-val')!.textContent = parseFloat(p['osc-topo']).toFixed(2); }
+      if (p['osc-bias'] != null) { (document.getElementById('osc-bias') as HTMLInputElement).value = String(p['osc-bias']); document.getElementById('osc-bias-val')!.textContent = parseFloat(p['osc-bias']).toFixed(2); }
+      if (p['osc-contrast'] != null) { (document.getElementById('osc-contrast') as HTMLInputElement).value = String(p['osc-contrast']); document.getElementById('osc-contrast-val')!.textContent = parseFloat(p['osc-contrast']).toFixed(2); }
+      if (p['osc-power-exp'] != null) { (document.getElementById('osc-power-exp') as HTMLInputElement).value = String(p['osc-power-exp']); document.getElementById('osc-power-exp-val')!.textContent = parseFloat(p['osc-power-exp']).toFixed(1); }
+    }
+
+    // ─── Oil Spiral Cells Bleed ───────────────────────────────────────────────
+
+    function applyBleedEffects(src: Uint8ClampedArray, W: number, H: number, bleedStr: number): Uint8ClampedArray {
+      // Step 1: Ripple warp
+      const amp = 3, freqR = 0.02 * 2 * Math.PI;
+      let d = new Uint8ClampedArray(W * H * 4);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const sx = Math.max(0, Math.min(W-1, Math.round(x + amp * Math.sin(freqR * y))));
+        const sy = Math.max(0, Math.min(H-1, Math.round(y + amp * Math.sin(freqR * x))));
+        const di = (y*W+x)*4, si = (sy*W+sx)*4;
+        d[di]=src[si]; d[di+1]=src[si+1]; d[di+2]=src[si+2]; d[di+3]=255;
+      }
+      // Step 2: Chromatic aberration (shift R right, B left)
+      const ca = new Uint8ClampedArray(W * H * 4);
+      const shift = 2;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = (y*W+x)*4;
+        const rx = Math.min(W-1, x+shift), bx = Math.max(0, x-shift);
+        ca[i]   = d[(y*W+rx)*4];
+        ca[i+1] = d[i+1];
+        ca[i+2] = d[(y*W+bx)*4+2];
+        ca[i+3] = 255;
+      }
+      d = ca;
+      // Step 3: Contrast stretch
+      const lum = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) lum[i] = 0.299*d[i*4] + 0.587*d[i*4+1] + 0.114*d[i*4+2];
+      const lo = histPercentile(lum, 0.02), hi = histPercentile(lum, 0.98);
+      const lumRange = Math.max(hi - lo, 1);
+      const cs = new Uint8ClampedArray(W * H * 4);
+      for (let i = 0; i < W * H; i++) {
+        const t = Math.max(0, Math.min(1, (lum[i] - lo) / lumRange));
+        const targetLum = t * 255;
+        const f = lum[i] > 1 ? targetLum / lum[i] : 1;
+        cs[i*4]   = Math.min(255, Math.max(0, d[i*4] * f));
+        cs[i*4+1] = Math.min(255, Math.max(0, d[i*4+1] * f));
+        cs[i*4+2] = Math.min(255, Math.max(0, d[i*4+2] * f));
+        cs[i*4+3] = 255;
+      }
+      d = cs;
+      // Step 4: Barrel/bulge distortion (inverse mapping)
+      const cx = W / 2, cy = H / 2;
+      const bulged = new Uint8ClampedArray(W * H * 4);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const dxn = (x - cx) / cx, dyn = (y - cy) / cy;
+        const r2 = dxn*dxn + dyn*dyn;
+        const f = 1.0 + bleedStr * r2;
+        const srcX = Math.max(0, Math.min(W-1, Math.round(cx + (dxn / f) * cx)));
+        const srcY = Math.max(0, Math.min(H-1, Math.round(cy + (dyn / f) * cy)));
+        const di = (y*W+x)*4, si = (srcY*W+srcX)*4;
+        bulged[di]=d[si]; bulged[di+1]=d[si+1]; bulged[di+2]=d[si+2]; bulged[di+3]=255;
+      }
+      return bulged;
+    }
+
+    function renderOilSpiralCellsBleed(imgs: (HTMLImageElement | null)[], params: Record<string, any>, _rng: () => number): Output[] {
+      if (!imgs[0] || !imgs[1] || !imgs[2]) return [];
+      const W = imgs[0].naturalWidth, H = imgs[0].naturalHeight;
+      const freq = params['oscb-freq'] ?? 15;
+      const warpStr = params['oscb-warp'] ?? 2;
+      const nPeaks = params['oscb-peaks'] ?? 6;
+      const topoBlend = params['oscb-topo'] ?? 0.2;
+      const bleedStr = params['oscb-bleed'] ?? 0.35;
+      const bias = params['oscb-bias'] ?? 0;
+      const contrast = params['oscb-contrast'] ?? 1;
+      const power = params['oscb-power-exp'] ?? 3;
+      const masks = [imgs[0]!, imgs[1]!, imgs[2]!].map(img => makeOilSpiralCellsMask(img, W, H, freq, warpStr, nPeaks, topoBlend, bias, contrast, power));
+      const pixelData = [imgs[0]!, imgs[1]!, imgs[2]!].map(img => {
+        const tmp = new OffscreenCanvas(W, H); tmp.getContext('2d')!.drawImage(img, 0, 0, W, H);
+        return tmp.getContext('2d')!.getImageData(0, 0, W, H).data;
+      });
+      const out: Output[] = [];
+      for (const [s, a, b] of STENCIL_PERMS) {
+        const sd = masks[s].getContext('2d')!.getImageData(0, 0, W, H).data;
+        const ad = pixelData[a], bd = pixelData[b];
+        const raw = new Uint8ClampedArray(W * H * 4);
+        for (let i = 0; i < W * H; i++) {
+          const src = sd[i*4] >= 128 ? ad : bd;
+          raw[i*4]=src[i*4]; raw[i*4+1]=src[i*4+1]; raw[i*4+2]=src[i*4+2]; raw[i*4+3]=255;
+        }
+        const bled = applyBleedEffects(raw, W, H, bleedStr);
+        const oc = new OffscreenCanvas(W, H);
+        const od = oc.getContext('2d')!.createImageData(W, H);
+        od.data.set(bled);
+        oc.getContext('2d')!.putImageData(od, 0, 0);
+        out.push({ canvas: ocToCanvas(oc), label: `S${s}·A${a}·B${b}`, mimeType: 'image/jpeg' });
+      }
+      return out;
+    }
+
+    function buildOilSpiralCellsBleedParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="oscb-freq">Frequency <span class="pt-val" id="oscb-freq-val">15</span></label>
+          <input class="pt-range" type="range" id="oscb-freq" min="5" max="60" step="1" value="15" />
+          <div class="pt-range-hints"><span>5</span><span>60</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="oscb-warp">Warp <span class="pt-val" id="oscb-warp-val">2.0</span></label>
+          <input class="pt-range" type="range" id="oscb-warp" min="0" max="8" step="0.2" value="2" />
+          <div class="pt-range-hints"><span>0</span><span>8</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="oscb-peaks">Peaks <span class="pt-val" id="oscb-peaks-val">6</span></label>
+          <input class="pt-range" type="range" id="oscb-peaks" min="2" max="12" step="1" value="6" />
+          <div class="pt-range-hints"><span>2</span><span>12</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="oscb-topo">Topo Blend <span class="pt-val" id="oscb-topo-val">0.20</span></label>
+          <input class="pt-range" type="range" id="oscb-topo" min="0" max="1" step="0.05" value="0.2" />
+          <div class="pt-range-hints"><span>0</span><span>1</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="oscb-bleed">Bleed <span class="pt-val" id="oscb-bleed-val">0.35</span></label>
+          <input class="pt-range" type="range" id="oscb-bleed" min="0" max="1" step="0.05" value="0.35" />
+          <div class="pt-range-hints"><span>0</span><span>1</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="oscb-bias">Bias <span class="pt-val" id="oscb-bias-val">0.00</span></label>
+          <input class="pt-range" type="range" id="oscb-bias" min="-0.4" max="0.4" step="0.02" value="0" />
+          <div class="pt-range-hints"><span>−0.4</span><span>+0.4</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="oscb-contrast">Contrast <span class="pt-val" id="oscb-contrast-val">1.00</span></label>
+          <input class="pt-range" type="range" id="oscb-contrast" min="0.25" max="4" step="0.05" value="1" />
+          <div class="pt-range-hints"><span>0.25</span><span>4</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="oscb-power-exp">Power <span class="pt-val" id="oscb-power-exp-val">3.0</span></label>
+          <input class="pt-range" type="range" id="oscb-power-exp" min="1" max="5" step="0.5" value="3" />
+          <div class="pt-range-hints"><span>1</span><span>5</span></div>
+        </div>`;
+      enhanceSliders();
+      const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+      const dRender = debounce(() => doRender(), 200);
+      document.getElementById('oscb-freq')!.addEventListener('input', (e) => { document.getElementById('oscb-freq-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+      document.getElementById('oscb-warp')!.addEventListener('input', (e) => { document.getElementById('oscb-warp-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(1); dRender(); });
+      document.getElementById('oscb-peaks')!.addEventListener('input', (e) => { document.getElementById('oscb-peaks-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+      document.getElementById('oscb-topo')!.addEventListener('input', (e) => { document.getElementById('oscb-topo-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(2); dRender(); });
+      document.getElementById('oscb-bleed')!.addEventListener('input', (e) => { document.getElementById('oscb-bleed-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(2); dRender(); });
+      document.getElementById('oscb-bias')!.addEventListener('input', (e) => { document.getElementById('oscb-bias-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(2); dRender(); });
+      document.getElementById('oscb-contrast')!.addEventListener('input', (e) => { document.getElementById('oscb-contrast-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(2); dRender(); });
+      document.getElementById('oscb-power-exp')!.addEventListener('input', (e) => { document.getElementById('oscb-power-exp-val')!.textContent = parseFloat((e.target as HTMLInputElement).value).toFixed(1); dRender(); });
+    }
+    function getOilSpiralCellsBleedParams(): Record<string, any> {
+      return {
+        'oscb-freq': parseInt((document.getElementById('oscb-freq') as HTMLInputElement).value, 10),
+        'oscb-warp': parseFloat((document.getElementById('oscb-warp') as HTMLInputElement).value),
+        'oscb-peaks': parseInt((document.getElementById('oscb-peaks') as HTMLInputElement).value, 10),
+        'oscb-topo': parseFloat((document.getElementById('oscb-topo') as HTMLInputElement).value),
+        'oscb-bleed': parseFloat((document.getElementById('oscb-bleed') as HTMLInputElement).value),
+        'oscb-bias': parseFloat((document.getElementById('oscb-bias') as HTMLInputElement).value),
+        'oscb-contrast': parseFloat((document.getElementById('oscb-contrast') as HTMLInputElement).value),
+        'oscb-power-exp': parseFloat((document.getElementById('oscb-power-exp') as HTMLInputElement).value),
+      };
+    }
+    function setOilSpiralCellsBleedParams(p: Record<string, any>) {
+      if (p['oscb-freq'] != null) { (document.getElementById('oscb-freq') as HTMLInputElement).value = String(p['oscb-freq']); document.getElementById('oscb-freq-val')!.textContent = String(p['oscb-freq']); }
+      if (p['oscb-warp'] != null) { (document.getElementById('oscb-warp') as HTMLInputElement).value = String(p['oscb-warp']); document.getElementById('oscb-warp-val')!.textContent = parseFloat(p['oscb-warp']).toFixed(1); }
+      if (p['oscb-peaks'] != null) { (document.getElementById('oscb-peaks') as HTMLInputElement).value = String(p['oscb-peaks']); document.getElementById('oscb-peaks-val')!.textContent = String(p['oscb-peaks']); }
+      if (p['oscb-topo'] != null) { (document.getElementById('oscb-topo') as HTMLInputElement).value = String(p['oscb-topo']); document.getElementById('oscb-topo-val')!.textContent = parseFloat(p['oscb-topo']).toFixed(2); }
+      if (p['oscb-bleed'] != null) { (document.getElementById('oscb-bleed') as HTMLInputElement).value = String(p['oscb-bleed']); document.getElementById('oscb-bleed-val')!.textContent = parseFloat(p['oscb-bleed']).toFixed(2); }
+      if (p['oscb-bias'] != null) { (document.getElementById('oscb-bias') as HTMLInputElement).value = String(p['oscb-bias']); document.getElementById('oscb-bias-val')!.textContent = parseFloat(p['oscb-bias']).toFixed(2); }
+      if (p['oscb-contrast'] != null) { (document.getElementById('oscb-contrast') as HTMLInputElement).value = String(p['oscb-contrast']); document.getElementById('oscb-contrast-val')!.textContent = parseFloat(p['oscb-contrast']).toFixed(2); }
+      if (p['oscb-power-exp'] != null) { (document.getElementById('oscb-power-exp') as HTMLInputElement).value = String(p['oscb-power-exp']); document.getElementById('oscb-power-exp-val')!.textContent = parseFloat(p['oscb-power-exp']).toFixed(1); }
+    }
+
+    // ─── Character Stencil (shared) ───────────────────────────────────────────
+
+    function buildGlyphAtlas(chars: string[], cellSize: number, font: string): Array<{char: string, brightness: number}> {
+      const oc = new OffscreenCanvas(cellSize, cellSize);
+      const ctx = oc.getContext('2d')!;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'center';
+      ctx.font = `${Math.round(cellSize * 0.85)}px ${font}`;
+      return chars.map(char => {
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cellSize, cellSize);
+        ctx.fillStyle = '#000'; ctx.fillText(char, cellSize / 2, cellSize / 2);
+        const d = ctx.getImageData(0, 0, cellSize, cellSize).data;
+        let sum = 0;
+        for (let i = 0; i < d.length; i += 4) sum += d[i]; // R channel
+        return { char, brightness: sum / (cellSize * cellSize * 255) }; // 0=black, 1=white
+      }).sort((a, b) => a.brightness - b.brightness); // dark (dense chars) first
+    }
+
+    function composeCharMask(maskOC: OffscreenCanvas, fill1: HTMLImageElement, fill2: HTMLImageElement, W: number, H: number): [Output, Output] {
+      const f1OC = new OffscreenCanvas(W, H); f1OC.getContext('2d')!.drawImage(fill1, 0, 0, W, H);
+      const f2OC = new OffscreenCanvas(W, H); f2OC.getContext('2d')!.drawImage(fill2, 0, 0, W, H);
+      const maskData = maskOC.getContext('2d')!.getImageData(0, 0, W, H).data;
+      const f1Data = f1OC.getContext('2d')!.getImageData(0, 0, W, H).data;
+      const f2Data = f2OC.getContext('2d')!.getImageData(0, 0, W, H).data;
+      const outOC = new OffscreenCanvas(W, H), invOC = new OffscreenCanvas(W, H);
+      const od = outOC.getContext('2d')!.createImageData(W, H);
+      const odi = invOC.getContext('2d')!.createImageData(W, H);
+      for (let i = 0; i < W * H; i++) {
+        const fg = maskData[i*4] < 128 ? f1Data : f2Data;
+        const bg = maskData[i*4] < 128 ? f2Data : f1Data;
+        od.data[i*4]=fg[i*4]; od.data[i*4+1]=fg[i*4+1]; od.data[i*4+2]=fg[i*4+2]; od.data[i*4+3]=255;
+        odi.data[i*4]=bg[i*4]; odi.data[i*4+1]=bg[i*4+1]; odi.data[i*4+2]=bg[i*4+2]; odi.data[i*4+3]=255;
+      }
+      outOC.getContext('2d')!.putImageData(od, 0, 0);
+      invOC.getContext('2d')!.putImageData(odi, 0, 0);
+      return [
+        { canvas: ocToCanvas(outOC), label: 'A', mimeType: 'image/jpeg' },
+        { canvas: ocToCanvas(invOC), label: 'B', mimeType: 'image/jpeg' },
+      ];
+    }
+
+    // ─── ASCII Stencil ────────────────────────────────────────────────────────
+
+    function renderAsciiStencil(imgs: (HTMLImageElement | null)[], params: Record<string, any>, _rng: () => number): Output[] {
+      if (!imgs[0] || !imgs[1] || !imgs[2]) return [];
+      const W = imgs[0].naturalWidth, H = imgs[0].naturalHeight;
+      const cellSize: number = params['asc-cell'] ?? 12;
+      const ascFont = 'monospace';
+      const ASCII_CHARS = ' !"#$%&\'()*+,-./:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~·•°±×÷≈≡∞□▪▫▬▲△▴▵◆◇○●◕◉'.split('');
+      const atlas = buildGlyphAtlas(ASCII_CHARS, cellSize, ascFont);
+      const sOC = new OffscreenCanvas(W, H);
+      sOC.getContext('2d')!.drawImage(imgs[0]!, 0, 0, W, H);
+      const sData = sOC.getContext('2d')!.getImageData(0, 0, W, H).data;
+      const gray = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) gray[i] = 0.299*sData[i*4] + 0.587*sData[i*4+1] + 0.114*sData[i*4+2];
+      const maskOC = new OffscreenCanvas(W, H);
+      const maskCtx = maskOC.getContext('2d')!;
+      maskCtx.fillStyle = '#fff'; maskCtx.fillRect(0, 0, W, H);
+      maskCtx.fillStyle = '#000';
+      maskCtx.font = `${Math.round(cellSize * 0.85)}px ${ascFont}`;
+      maskCtx.textBaseline = 'middle'; maskCtx.textAlign = 'center';
+      const cols = Math.ceil(W / cellSize), rows = Math.ceil(H / cellSize);
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const x0 = col * cellSize, y0 = row * cellSize;
+          const x1 = Math.min(x0 + cellSize, W), y1 = Math.min(y0 + cellSize, H);
+          let sum = 0, count = 0;
+          for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { sum += gray[y*W+x]; count++; }
+          const br = sum / (count * 255);
+          const idx = Math.min(atlas.length - 1, Math.round(br * (atlas.length - 1)));
+          maskCtx.fillText(atlas[idx].char, x0 + cellSize / 2, y0 + cellSize / 2);
+        }
+      }
+      const [comp, inv] = composeCharMask(maskOC, imgs[1]!, imgs[2]!, W, H);
+      return [comp, inv, { canvas: ocToCanvas(maskOC), label: 'Mask', mimeType: 'image/png' }];
+    }
+
+    function buildAsciiStencilParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="asc-cell">Cell Size <span class="pt-val" id="asc-cell-val">12</span></label>
+          <input class="pt-range" type="range" id="asc-cell" min="6" max="32" step="1" value="12" />
+          <div class="pt-range-hints"><span>6</span><span>32</span></div>
+        </div>`;
+      enhanceSliders();
+      const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+      const dRender = debounce(() => doRender(), 300);
+      document.getElementById('asc-cell')!.addEventListener('input', (e) => { document.getElementById('asc-cell-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+    }
+    function getAsciiStencilParams(): Record<string, any> {
+      return { 'asc-cell': parseInt((document.getElementById('asc-cell') as HTMLInputElement).value, 10) };
+    }
+    function setAsciiStencilParams(p: Record<string, any>) {
+      if (p['asc-cell'] != null) { (document.getElementById('asc-cell') as HTMLInputElement).value = String(p['asc-cell']); document.getElementById('asc-cell-val')!.textContent = String(p['asc-cell']); }
+    }
+
+    // ─── Kanji Stencil ────────────────────────────────────────────────────────
+
+    function renderKanjiStencil(imgs: (HTMLImageElement | null)[], params: Record<string, any>, _rng: () => number): Output[] {
+      if (!imgs[0] || !imgs[1] || !imgs[2]) return [];
+      const W = imgs[0].naturalWidth, H = imgs[0].naturalHeight;
+      const cellSize: number = params['kan-cell'] ?? 14;
+      const kanjiFont = '"Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans CJK JP","MS Gothic",monospace';
+      // Direction-mapped character buckets: [horiz, diag45, vert, diag135]
+      const BUCKETS: string[][] = [
+        '一二三四五六七八九十工王士土ニ─━═'.split('').filter(c => c.trim()),
+        '乂又メ×〆乃'.split('').filter(c => c.trim()),
+        '丨川山小大木水日月目井│'.split('').filter(c => c.trim()),
+        '乙己乚入╲乃'.split('').filter(c => c.trim()),
+      ];
+      const ALL_CHARS = [...new Set(BUCKETS.flat())];
+      const bucketAtlases = BUCKETS.map(b => buildGlyphAtlas(b.length >= 3 ? b : ALL_CHARS, cellSize, kanjiFont));
+      const allAtlas = buildGlyphAtlas(ALL_CHARS, cellSize, kanjiFont);
+      const sOC = new OffscreenCanvas(W, H);
+      sOC.getContext('2d')!.drawImage(imgs[0]!, 0, 0, W, H);
+      const sData = sOC.getContext('2d')!.getImageData(0, 0, W, H).data;
+      const gray = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) gray[i] = 0.299*sData[i*4] + 0.587*sData[i*4+1] + 0.114*sData[i*4+2];
+      const grayPx = new Uint8ClampedArray(W * H * 4);
+      for (let i = 0; i < W * H; i++) { grayPx[i*4]=grayPx[i*4+1]=grayPx[i*4+2]=gray[i]; grayPx[i*4+3]=255; }
+      const { gx, gy, mag } = sobelGradients(applyBlur(grayPx, W, H, 1.0), W, H);
+      const maskOC = new OffscreenCanvas(W, H);
+      const maskCtx = maskOC.getContext('2d')!;
+      maskCtx.fillStyle = '#fff'; maskCtx.fillRect(0, 0, W, H);
+      maskCtx.fillStyle = '#000';
+      maskCtx.font = `${Math.round(cellSize * 0.85)}px ${kanjiFont}`;
+      maskCtx.textBaseline = 'middle'; maskCtx.textAlign = 'center';
+      const cols = Math.ceil(W / cellSize), rows = Math.ceil(H / cellSize);
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const x0 = col * cellSize, y0 = row * cellSize;
+          const x1 = Math.min(x0 + cellSize, W), y1 = Math.min(y0 + cellSize, H);
+          let sumGray = 0, count = 0;
+          const dirBins = [0, 0, 0, 0]; // horiz, diag45, vert, diag135
+          for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+            const i = y*W+x; sumGray += gray[i]; count++;
+            if (mag[i] > 5) {
+              const ea = ((Math.atan2(gy[i], gx[i]) % Math.PI) + Math.PI) % Math.PI;
+              dirBins[Math.floor(((ea + Math.PI/8) % Math.PI) / (Math.PI/4)) % 4] += mag[i];
+            }
+          }
+          const br = sumGray / (count * 255);
+          const hasDirs = dirBins.some(v => v > 0);
+          const domBin = hasDirs ? dirBins.indexOf(Math.max(...dirBins)) : -1;
+          const atlas = domBin >= 0 ? bucketAtlases[domBin] : allAtlas;
+          const idx = Math.min(atlas.length - 1, Math.round(br * (atlas.length - 1)));
+          maskCtx.fillText(atlas[idx].char, x0 + cellSize / 2, y0 + cellSize / 2);
+        }
+      }
+      const [comp, inv] = composeCharMask(maskOC, imgs[1]!, imgs[2]!, W, H);
+      return [comp, inv, { canvas: ocToCanvas(maskOC), label: 'Mask', mimeType: 'image/png' }];
+    }
+
+    function buildKanjiStencilParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="kan-cell">Cell Size <span class="pt-val" id="kan-cell-val">14</span></label>
+          <input class="pt-range" type="range" id="kan-cell" min="8" max="40" step="1" value="14" />
+          <div class="pt-range-hints"><span>8</span><span>40</span></div>
+        </div>`;
+      enhanceSliders();
+      const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+      const dRender = debounce(() => doRender(), 300);
+      document.getElementById('kan-cell')!.addEventListener('input', (e) => { document.getElementById('kan-cell-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+    }
+    function getKanjiStencilParams(): Record<string, any> {
+      return { 'kan-cell': parseInt((document.getElementById('kan-cell') as HTMLInputElement).value, 10) };
+    }
+    function setKanjiStencilParams(p: Record<string, any>) {
+      if (p['kan-cell'] != null) { (document.getElementById('kan-cell') as HTMLInputElement).value = String(p['kan-cell']); document.getElementById('kan-cell-val')!.textContent = String(p['kan-cell']); }
+    }
+
+    // ─── Typographer ──────────────────────────────────────────────────────────
+
+    function renderTypographer(imgs: (HTMLImageElement | null)[], params: Record<string, any>, _rng: () => number): Output[] {
+      if (!imgs[0] || !imgs[1] || !imgs[2]) return [];
+      const W = imgs[0].naturalWidth, H = imgs[0].naturalHeight;
+      const cellSize: number = params['typ-cell'] ?? 18;
+      const typFont = 'Georgia, "Times New Roman", serif';
+      const TYP_CHARS = ' abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~\u2588\u2593\u2592\u2591\u2584\u2580'.split('');
+      const atlas = buildGlyphAtlas(TYP_CHARS, cellSize, typFont);
+      const sOC = new OffscreenCanvas(W, H);
+      sOC.getContext('2d')!.drawImage(imgs[0]!, 0, 0, W, H);
+      const sData = sOC.getContext('2d')!.getImageData(0, 0, W, H).data;
+      const gray = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) gray[i] = 0.299*sData[i*4] + 0.587*sData[i*4+1] + 0.114*sData[i*4+2];
+      const maskOC = new OffscreenCanvas(W, H);
+      const maskCtx = maskOC.getContext('2d')!;
+      maskCtx.fillStyle = '#fff'; maskCtx.fillRect(0, 0, W, H);
+      maskCtx.fillStyle = '#000';
+      maskCtx.font = `${Math.round(cellSize * 0.85)}px ${typFont}`;
+      maskCtx.textBaseline = 'middle'; maskCtx.textAlign = 'center';
+      const cols = Math.ceil(W / cellSize), rows = Math.ceil(H / cellSize);
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const x0 = col * cellSize, y0 = row * cellSize;
+          const x1 = Math.min(x0 + cellSize, W), y1 = Math.min(y0 + cellSize, H);
+          let sum = 0, count = 0;
+          for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { sum += gray[y*W+x]; count++; }
+          const br = sum / (count * 255);
+          const idx = Math.min(atlas.length - 1, Math.round(br * (atlas.length - 1)));
+          maskCtx.fillText(atlas[idx].char, x0 + cellSize / 2, y0 + cellSize / 2);
+        }
+      }
+      const [comp, inv] = composeCharMask(maskOC, imgs[1]!, imgs[2]!, W, H);
+      return [comp, inv, { canvas: ocToCanvas(maskOC), label: 'Mask', mimeType: 'image/png' }];
+    }
+
+    function buildTypographerParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="typ-cell">Cell Size <span class="pt-val" id="typ-cell-val">18</span></label>
+          <input class="pt-range" type="range" id="typ-cell" min="8" max="48" step="1" value="18" />
+          <div class="pt-range-hints"><span>8</span><span>48</span></div>
+        </div>`;
+      enhanceSliders();
+      const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+      const dRender = debounce(() => doRender(), 300);
+      document.getElementById('typ-cell')!.addEventListener('input', (e) => { document.getElementById('typ-cell-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+    }
+    function getTypographerParams(): Record<string, any> {
+      return { 'typ-cell': parseInt((document.getElementById('typ-cell') as HTMLInputElement).value, 10) };
+    }
+    function setTypographerParams(p: Record<string, any>) {
+      if (p['typ-cell'] != null) { (document.getElementById('typ-cell') as HTMLInputElement).value = String(p['typ-cell']); document.getElementById('typ-cell-val')!.textContent = String(p['typ-cell']); }
+    }
+
     // ─── Halation Edge ────────────────────────────────────────────────────────
 
     function makeHalationMask(img: HTMLImageElement, W: number, H: number, params: Record<string, any>, rng: () => number): OffscreenCanvas {
@@ -4522,6 +5098,36 @@ import Admin from '../../../layouts/Admin.astro';
         inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
         render: renderSoapySpiral,
         buildParams: buildSoapySpiralParams, getParams: getSoapySpiralParams, setParams: setSoapySpiralParams,
+      },
+      oilspiralcells: {
+        label: 'Oil Spiral Cells', desc: 'Voronoi r³ spiral blended with iso-brightness topographic contours',
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
+        render: renderOilSpiralCells,
+        buildParams: buildOilSpiralCellsParams, getParams: getOilSpiralCellsParams, setParams: setOilSpiralCellsParams,
+      },
+      oilspiralcellsbleed: {
+        label: 'Oil Spiral Bleed', desc: 'Oil Spiral Cells with ripple warp, chromatic aberration, contrast stretch and bulge',
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
+        render: renderOilSpiralCellsBleed,
+        buildParams: buildOilSpiralCellsBleedParams, getParams: getOilSpiralCellsBleedParams, setParams: setOilSpiralCellsBleedParams,
+      },
+      ascii_stencil: {
+        label: 'ASCII Stencil', desc: 'Stencil rendered as a brightness-matched ASCII character grid',
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
+        render: renderAsciiStencil,
+        buildParams: buildAsciiStencilParams, getParams: getAsciiStencilParams, setParams: setAsciiStencilParams,
+      },
+      kanji_stencil: {
+        label: 'Kanji Stencil', desc: 'Stencil rendered as directional kanji characters matched to edge angles',
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
+        render: renderKanjiStencil,
+        buildParams: buildKanjiStencilParams, getParams: getKanjiStencilParams, setParams: setKanjiStencilParams,
+      },
+      typographer: {
+        label: 'Typographer', desc: 'Stencil rendered as a serif typographic character grid',
+        inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false,
+        render: renderTypographer,
+        buildParams: buildTypographerParams, getParams: getTypographerParams, setParams: setTypographerParams,
       },
       halationedge: {
         label: 'Halation Edge', desc: 'Grainy halftone noise blended into stencil edges — worn intaglio look',
@@ -11411,7 +12017,8 @@ import Admin from '../../../layouts/Admin.astro';
         bots: ['bullethole','stencil','bw','cyanotype','wobbleeye','lathe','bullseye',
                'sixshooter','lattice','stencilburn','zellij','zellij_medium','halftone',
                'linescreen','penrose','monochrome','silver','quad','kaleidoscope',
-               'displacement','oilspiral','soapyspiral','halationedge','curvylines'],
+               'displacement','oilspiral','soapyspiral','oilspiralcells','oilspiralcellsbleed',
+               'ascii_stencil','kanji_stencil','typographer','halationedge','curvylines'],
       },
       {
         label: 'Protease Bots',
