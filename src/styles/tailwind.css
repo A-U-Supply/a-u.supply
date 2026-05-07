@@ -1,0 +1,73 @@
+@import 'tailwindcss';
+
+/*
+ * Brutalist design tokens — pulled from src/styles/global.css so Tailwind
+ * utilities and bits-ui components inherit the existing palette/typography.
+ * Tailwind 4 reads `@theme` to generate utilities. We override the default
+ * colors / radius / shadows so the kit ships with no rounded corners and
+ * no soft drop shadows by default.
+ */
+@theme {
+  --color-bg: #fff;
+  --color-fg: #1a1a1a;
+  --color-muted: #666;
+  --color-border: #ccc;
+  --color-accent: #b8860b;
+
+  --font-mono: 'Courier New', Courier, monospace;
+  --font-sans: 'Courier New', Courier, monospace;
+
+  /* No rounded corners, ever, by default. */
+  --radius-none: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+  --radius-3xl: 0;
+  --radius-full: 9999px; /* still allow if explicitly opted-in */
+
+  /* Hard, brutalist shadows. */
+  --shadow-sm: 1px 1px 0 var(--color-fg);
+  --shadow-md: 2px 2px 0 var(--color-fg);
+  --shadow-lg: 3px 3px 0 var(--color-fg);
+  --shadow-xl: 4px 4px 0 var(--color-fg);
+}
+
+/*
+ * Reusable component class for brutalist controls. Keeps the look consistent
+ * across bits-ui components (buttons, popover triggers, list items) without
+ * scattering long utility chains.
+ */
+@layer components {
+  .brutalist-control {
+    border: 2px solid var(--color-fg);
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-mono);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    box-shadow: 2px 2px 0 var(--color-fg);
+    transition:
+      transform 60ms ease,
+      box-shadow 60ms ease,
+      background 80ms,
+      color 80ms;
+    user-select: none;
+  }
+  .brutalist-control:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--color-fg);
+  }
+  .brutalist-control:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--color-fg);
+  }
+  .brutalist-control[data-state='open'],
+  .brutalist-control[data-selected='true'],
+  .brutalist-control[aria-pressed='true'] {
+    background: var(--color-fg);
+    color: var(--color-bg);
+  }
+}
