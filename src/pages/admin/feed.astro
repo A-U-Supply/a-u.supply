@@ -194,26 +194,33 @@ import Admin from '../../layouts/Admin.astro';
     .ru-react-btn:hover { border-color: var(--accent, #888); }
     .ru-react-btn--mine { border-color: var(--accent, #888); background: rgba(255,255,255,0.06); }
     .ru-react-count { font-size: 0.7rem; }
-    .ru-react-add {
-      font-size: 0.75rem; padding: 0.15rem 0.4rem;
-      border: 1px dashed var(--border, #444); border-radius: 3px;
-      background: transparent; color: inherit; cursor: pointer; opacity: 0.4;
-      transition: opacity 0.1s;
-    }
-    .ru-react-add:hover { opacity: 0.9; }
-
-    /* ── Thread indicator ── */
-    .ru-thread-indicator {
-      display: inline-flex; align-items: center; gap: 0.35rem;
-      font-size: 0.72rem; opacity: 0.45;
-      background: none; border: none; color: inherit;
-      cursor: pointer; padding: 0;
-      transition: opacity 0.1s;
-    }
-    .ru-thread-indicator:hover { opacity: 0.9; }
-    .ru-thread-indicator__avatars {
+    /* ── Action bar ── */
+    .ru-post__actions {
       display: flex;
+      gap: 0.3rem;
+      flex-wrap: wrap;
+      align-items: center;
     }
+    .ru-action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.72rem;
+      padding: 0.25rem 0.55rem;
+      border: 1px solid rgba(0,0,0,0.15);
+      border-radius: 3px;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      opacity: 0.5;
+      white-space: nowrap;
+      text-decoration: none;
+      transition: opacity 0.1s, border-color 0.1s;
+      line-height: 1;
+    }
+    .ru-action-btn:hover { opacity: 1; border-color: rgba(0,0,0,0.35); }
+    .ru-action-btn--active { opacity: 1; background: rgba(0,0,0,0.07); border-color: rgba(0,0,0,0.3); }
+    .ru-action-icon { font-size: 0.85rem; }
     .ru-thread-avatar {
       width: 16px; height: 16px; border-radius: 50%;
       display: inline-flex; align-items: center; justify-content: center;
@@ -315,11 +322,12 @@ import Admin from '../../layouts/Admin.astro';
     .ru-epicker {
       position: fixed; z-index: 500;
       top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: min(336px, 96vw);
+      width: min(360px, 96vw);
       background: var(--bg, #111); border: 1px solid var(--border, #333);
       border-radius: 8px; overflow: hidden;
       display: flex; flex-direction: column;
       box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      color: rgba(255,255,255,0.85);
     }
     .ru-epicker__top {
       display: flex; flex-direction: column;
@@ -340,15 +348,15 @@ import Admin from '../../layouts/Admin.astro';
     .ru-epicker__search {
       margin: 0.3rem 0.4rem; padding: 0.3rem 0.5rem;
       background: var(--bg2, #1a1a1a); border: 1px solid var(--border, #333);
-      border-radius: 4px; color: inherit; font-size: 0.78rem; font-family: inherit;
+      border-radius: 4px; color: rgba(255,255,255,0.85); font-size: 0.78rem; font-family: inherit;
     }
     .ru-epicker__search:focus { outline: none; border-color: var(--accent, #666); }
     .ru-epicker__grid {
-      display: grid; grid-template-columns: repeat(9, 1fr);
-      overflow-y: auto; max-height: 280px; padding: 0.25rem; gap: 1px;
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      overflow-y: auto; max-height: 300px; padding: 0.25rem; gap: 1px;
     }
     .ru-epicker__emoji {
-      font-size: 1.25rem; text-align: center; padding: 0.2rem;
+      font-size: 1.6rem; text-align: center; padding: 0.3rem;
       cursor: pointer; border-radius: 4px; border: none; background: none;
       transition: background 0.1s; line-height: 1.4;
     }
@@ -369,6 +377,8 @@ import Admin from '../../layouts/Admin.astro';
   </style>
 
   <script>
+    import { addItemsToWorkspace } from '../../lib/workspace.ts';
+
     // ─── State ────────────────────────────────────────────────────────────────
     let currentPage = 1;
     let isLoading = false;
@@ -672,24 +682,19 @@ import Admin from '../../layouts/Admin.astro';
       }
       body.appendChild(mediaWrap);
 
-      // Footer: reactions + thread indicator
+      // Footer: reactions + action bar
       const footer = document.createElement('div');
       footer.className = 'ru-post__footer';
-      footer.appendChild(buildReactRow(item.id));
-
-      const indicator = document.createElement('button');
-      indicator.className = 'ru-thread-indicator';
-      indicator.dataset.count = '0';
-      indicator.dataset.open = 'false';
-      indicator.style.display = 'none';
-      indicator.addEventListener('click', () => toggleThread(item.id, post, indicator));
-      footer.appendChild(indicator);
+      const reactRow = buildReactRow(item.id);
+      footer.appendChild(reactRow);
+      const { actionsRow, threadBtn } = buildActionsRow(item, post, reactRow);
+      footer.appendChild(actionsRow);
       body.appendChild(footer);
 
       post.appendChild(body);
 
       // Load comment count async
-      loadCommentCount(item.id, indicator);
+      loadCommentCount(item.id, threadBtn);
 
       return post;
     }
@@ -775,6 +780,85 @@ import Admin from '../../layouts/Admin.astro';
       }
     });
 
+    // ─── Action bar ───────────────────────────────────────────────────────────
+    function makeActionBtn(icon: string, label: string, title: string): HTMLButtonElement {
+      const btn = document.createElement('button');
+      btn.className = 'ru-action-btn';
+      btn.title = title;
+      btn.innerHTML = `<span class="ru-action-icon">${icon}</span>${label}`;
+      return btn;
+    }
+
+    function buildActionsRow(
+      item: any,
+      post: HTMLElement,
+      reactRow: HTMLElement,
+    ): { actionsRow: HTMLElement; threadBtn: HTMLButtonElement } {
+      const row = document.createElement('div');
+      row.className = 'ru-post__actions';
+
+      // React
+      const reactBtn = makeActionBtn('☺', ' React', 'Add reaction');
+      reactBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const data = (reactRow as any).__lastData ?? { mine: [] };
+        openEpicker(data.mine, async (emoji) => {
+          await toggleReaction(item.id, emoji, reactRow);
+        });
+      });
+      row.appendChild(reactBtn);
+
+      // Comments / thread
+      const threadBtn = document.createElement('button');
+      threadBtn.className = 'ru-action-btn ru-action-thread';
+      threadBtn.dataset.count = '0';
+      threadBtn.dataset.open = 'false';
+      threadBtn.title = 'Comments';
+      threadBtn.innerHTML = `<span class="ru-action-icon">💬</span> <span class="ru-action-label">0</span>`;
+      threadBtn.addEventListener('click', () => toggleThread(item.id, post, threadBtn));
+      row.appendChild(threadBtn);
+
+      // Download
+      const dlBtn = document.createElement('a');
+      dlBtn.className = 'ru-action-btn';
+      dlBtn.href = `/api/media/${item.id}/file`;
+      dlBtn.download = item.filename ?? '';
+      dlBtn.title = 'Download file';
+      dlBtn.innerHTML = `<span class="ru-action-icon">↓</span> Download`;
+      row.appendChild(dlBtn);
+
+      // Copy link
+      const linkBtn = makeActionBtn('⛓', ' Link', 'Copy link to this item in The Stacks');
+      linkBtn.addEventListener('click', async () => {
+        const url = `${window.location.origin}/admin/search/detail?id=${item.id}`;
+        try {
+          await navigator.clipboard.writeText(url);
+          (window as any).toast?.success('Link copied');
+        } catch {
+          (window as any).toast?.error('Could not copy link');
+        }
+      });
+      row.appendChild(linkBtn);
+
+      // Add to workspace
+      const wsBtn = makeActionBtn('⊞', ' Workspace', 'Add to workspace');
+      wsBtn.addEventListener('click', async () => {
+        wsBtn.disabled = true;
+        const result = await addItemsToWorkspace([item.id]);
+        wsBtn.disabled = false;
+        if (result) {
+          (window as any).toast?.success(
+            result.added > 0 ? 'Added to workspace' : 'Already in workspace',
+          );
+        } else {
+          (window as any).toast?.error('Could not add to workspace');
+        }
+      });
+      row.appendChild(wsBtn);
+
+      return { actionsRow: row, threadBtn };
+    }
+
     // ─── Reactions ────────────────────────────────────────────────────────────
     function buildReactRow(mediaId: string): HTMLElement {
       const row = document.createElement('div');
@@ -797,6 +881,7 @@ import Admin from '../../layouts/Admin.astro';
       row: HTMLElement,
       data: { counts: Record<string, number>; mine: string[] },
     ) {
+      (row as any).__lastData = data;
       row.innerHTML = '';
       for (const [emoji, count] of Object.entries(data.counts)) {
         if (count === 0) continue;
@@ -807,17 +892,6 @@ import Admin from '../../layouts/Admin.astro';
         btn.addEventListener('click', () => toggleReaction(mediaId, emoji, row));
         row.appendChild(btn);
       }
-      const addBtn = document.createElement('button');
-      addBtn.className = 'ru-react-add';
-      addBtn.textContent = '＋';
-      addBtn.title = 'Add reaction';
-      addBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openEpicker(data.mine, async (emoji) => {
-          await toggleReaction(mediaId, emoji, row);
-        });
-      });
-      row.appendChild(addBtn);
     }
 
     async function toggleReaction(mediaId: string, emoji: string, row: HTMLElement) {
@@ -831,11 +905,12 @@ import Admin from '../../layouts/Admin.astro';
       } catch {}
     }
 
-    // ─── Comment count / thread indicator ────────────────────────────────────
+    // ─── Comment count / thread button ───────────────────────────────────────
     function updateIndicatorText(indicator: HTMLButtonElement, open: boolean) {
       const n = parseInt(indicator.dataset.count ?? '0', 10);
-      const word = n === 1 ? 'reply' : 'replies';
-      indicator.textContent = `↳ ${n} ${word}${open ? ' ▾' : ''}`;
+      const labelEl = indicator.querySelector('.ru-action-label');
+      if (labelEl) labelEl.textContent = String(n);
+      indicator.classList.toggle('ru-action-btn--active', open);
     }
 
     async function loadCommentCount(mediaId: string, indicator: HTMLButtonElement) {
@@ -845,7 +920,6 @@ import Admin from '../../layouts/Admin.astro';
         const { count } = await res.json();
         indicator.dataset.count = String(count);
         updateIndicatorText(indicator, indicator.dataset.open === 'true');
-        indicator.style.display = count > 0 ? 'inline-flex' : 'none';
       } catch {}
     }
 
@@ -863,8 +937,7 @@ import Admin from '../../layouts/Admin.astro';
         return;
       }
       indicator.dataset.open = 'true';
-      const prevText = indicator.textContent;
-      indicator.textContent = 'loading…';
+      indicator.disabled = true;
       try {
         const res = await fetch(`/api/media/${mediaId}/comments`, { credentials: 'include' });
         const comments: any[] = res.ok ? await res.json() : [];
@@ -875,7 +948,9 @@ import Admin from '../../layouts/Admin.astro';
         );
       } catch {
         indicator.dataset.open = 'false';
-        indicator.textContent = prevText ?? '';
+        updateIndicatorText(indicator, false);
+      } finally {
+        indicator.disabled = false;
       }
     }
 
@@ -941,7 +1016,7 @@ import Admin from '../../layouts/Admin.astro';
           wrap.remove();
           const indicator = section
             .closest<HTMLElement>('.ru-post')
-            ?.querySelector<HTMLButtonElement>('.ru-thread-indicator');
+            ?.querySelector<HTMLButtonElement>('.ru-action-thread');
           if (indicator) await loadCommentCount(mediaId, indicator);
         });
         actions.appendChild(delBtn);
@@ -1001,7 +1076,7 @@ import Admin from '../../layouts/Admin.astro';
             );
             const indicator = section
               .closest<HTMLElement>('.ru-post')
-              ?.querySelector<HTMLButtonElement>('.ru-thread-indicator');
+              ?.querySelector<HTMLButtonElement>('.ru-action-thread');
             if (indicator) await loadCommentCount(mediaId, indicator);
           }
         } catch {
