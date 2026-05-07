@@ -259,6 +259,11 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
 
     <div id="load-more-sentinel" class="load-more-sentinel" aria-hidden="true">
     </div>
+    <div class="pagination" id="pagination" style="display:none;">
+      <button class="action-btn" id="prev-page" type="button">Prev</button>
+      <span id="page-info">Page 1</span>
+      <button class="action-btn" id="next-page" type="button">Next</button>
+    </div>
     <div class="results-footer" id="results-footer" style="display:none;">
       <span id="results-progress">0 of 0</span>
       <span id="results-loading-more" hidden>Loading more…</span>
@@ -682,6 +687,22 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     height: 1px;
     width: 100%;
     pointer-events: none;
+  }
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-md);
+    padding: var(--space-md) 0;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+  .pagination .action-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
   .results-footer {
     display: flex;
@@ -1186,12 +1207,20 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     }
     function setView(next: ViewMode) {
       if (currentView === next) return;
+      const wasFeed = currentView === 'feed';
       currentView = next;
       try {
         localStorage.setItem('au.searchView', next);
       } catch {}
       syncViewButtons();
-      renderResults();
+      // Switching out of feed (which accumulates pages 1..N) into a
+      // paginated view: drop the accumulated buffer and re-fetch just the
+      // current page so the grid/list shows one page at a time.
+      if (wasFeed && next !== 'feed' && allResults.length > pageSize) {
+        doSearch();
+      } else {
+        renderResults();
+      }
     }
     syncViewButtons();
     document
@@ -1288,6 +1317,24 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     searchForm.addEventListener('submit', (e) => {
       e.preventDefault();
       applyAndSearch();
+    });
+
+    // Prev/next pagination — only used by grid + list views (feed has
+    // its own scroll-driven loader). Replaces results with the new page
+    // and scrolls to the top so the user sees what they navigated to.
+    document.getElementById('prev-page')?.addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage--;
+        doSearch();
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      }
+    });
+    document.getElementById('next-page')?.addEventListener('click', () => {
+      if (currentPage * pageSize < totalResults) {
+        currentPage++;
+        doSearch();
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      }
     });
 
     // Select all
@@ -1691,7 +1738,10 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       if (currentPage > 1) stateParams.set('page', String(currentPage));
       const qs = stateParams.toString();
       const newUrl = window.location.pathname + (qs ? '?' + qs : '');
-      history.replaceState(null, '', newUrl);
+      // Preserve history.state (Astro ClientRouter stores scrollX/Y there for
+      // back-nav restoration — passing null wipes it and breaks "go back to
+      // your spot" on mobile).
+      history.replaceState(history.state, '', newUrl);
 
       try {
         const res = await fetch('/api/search', {
@@ -1781,7 +1831,10 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       const qs = params.toString();
       const newUrl = window.location.pathname + (qs ? '?' + qs : '');
       if (newUrl !== window.location.pathname + window.location.search) {
-        history.replaceState(null, '', newUrl);
+        // Preserve existing history.state — Astro ClientRouter relies on
+        // scrollX/Y/index living there for back-nav restoration. Passing
+        // null wipes it and breaks "go back to your spot" on mobile.
+        history.replaceState(history.state, '', newUrl);
       }
     }
 
@@ -1790,13 +1843,18 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       pageStartObserver?.disconnect();
       visiblePages.clear();
 
+      // Infinite scroll is feed-only. Grid + List use prev/next pagination
+      // because tile density makes scroll-driven loading feel chaotic on
+      // those views.
+      if (currentView !== 'feed') return;
+
       if (hasMoreToLoad()) {
         loadMoreObserver = new IntersectionObserver(
           (entries) => {
             if (entries.some((e) => e.isIntersecting)) loadNextPage();
           },
           // Pre-fetch a screenful before the user reaches the bottom so the
-          // grid feels continuous instead of stalling.
+          // feed feels continuous instead of stalling.
           { rootMargin: '600px 0px' },
         );
         loadMoreObserver.observe(sentinelEl);
@@ -2020,14 +2078,45 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
           .join('');
       }
 
-      // Footer with progress + sentinel for infinite scroll.
-      const loadedFirst = 1;
-      const loadedLast = allResults.length;
-      footerEl.style.display = totalResults > 0 ? 'flex' : 'none';
-      progressEl.textContent =
-        loadedLast >= totalResults
-          ? `${totalResults.toLocaleString()} of ${totalResults.toLocaleString()}`
-          : `${loadedFirst.toLocaleString()}–${loadedLast.toLocaleString()} of ${totalResults.toLocaleString()}`;
+      // Pagination vs infinite-scroll progress footer — feed gets the
+      // continuous "1–48 of 230" footer + scroll loader; grid and list get
+      // classic prev/next buttons because tile density makes scroll-driven
+      // loading feel chaotic on those views.
+      const paginationEl = document.getElementById(
+        'pagination',
+      ) as HTMLElement | null;
+      const totalPages = Math.max(1, Math.ceil(totalResults / pageSize));
+
+      if (currentView === 'feed') {
+        if (paginationEl) paginationEl.style.display = 'none';
+        const loadedLast = allResults.length;
+        footerEl.style.display = totalResults > 0 ? 'flex' : 'none';
+        progressEl.textContent =
+          loadedLast >= totalResults
+            ? `${totalResults.toLocaleString()} of ${totalResults.toLocaleString()}`
+            : `1–${loadedLast.toLocaleString()} of ${totalResults.toLocaleString()}`;
+      } else {
+        // Paginated view: hide the infinite-scroll footer, show prev/next.
+        footerEl.style.display = 'none';
+        if (paginationEl) {
+          if (totalPages > 1) {
+            paginationEl.style.display = 'flex';
+            const pageInfo = document.getElementById('page-info');
+            if (pageInfo)
+              pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+            const prev = document.getElementById(
+              'prev-page',
+            ) as HTMLButtonElement | null;
+            const next = document.getElementById(
+              'next-page',
+            ) as HTMLButtonElement | null;
+            if (prev) prev.disabled = currentPage <= 1;
+            if (next) next.disabled = currentPage >= totalPages;
+          } else {
+            paginationEl.style.display = 'none';
+          }
+        }
+      }
 
       setupInfiniteScrollObservers();
 
@@ -2887,10 +2976,70 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       });
     }
 
+    // Scroll restoration: when the user taps a search result and comes back,
+    // load the same number of pages they had loaded and restore their scroll
+    // position so they land exactly where they left off. Astro VT's
+    // history.state-driven scroll restore alone isn't enough because we only
+    // load `?page=N` results on a fresh visit — the saved scrollY would
+    // point past the bottom of a too-short DOM.
+    const SCROLL_KEY = 'au.searchScroll';
+    type SavedScroll = { search: string; scrollY: number; maxPage: number };
+
+    function readSavedScroll(): SavedScroll | null {
+      try {
+        const raw = sessionStorage.getItem(SCROLL_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as SavedScroll;
+        return parsed.search === window.location.search ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function saveScrollState() {
+      try {
+        sessionStorage.setItem(
+          SCROLL_KEY,
+          JSON.stringify({
+            search: window.location.search,
+            scrollY: window.scrollY,
+            maxPage: maxLoadedPage(),
+          }),
+        );
+      } catch {}
+    }
+
+    // Save on every form of navigation away (covers in-tab nav, tab close,
+    // bfcache eviction, Astro VT navigations).
+    window.addEventListener('pagehide', saveScrollState);
+    document.addEventListener('astro:before-preparation', saveScrollState);
+
     // Restore form state from URL, load facets, then run first search
     restoreFromUrl();
     updateCrossFilterState();
     await loadFacets();
-    doSearch();
+
+    const savedScroll = readSavedScroll();
+    if (savedScroll) {
+      // Coming back from a detail page. In feed view we accumulate pages,
+      // so re-load every page they had to rebuild the DOM height, then
+      // restore scroll. In grid/list (paginated) the URL already points to
+      // their page; one fetch is enough.
+      if (currentView === 'feed' && savedScroll.maxPage > 1) {
+        const targetMax = savedScroll.maxPage;
+        currentPage = 1;
+        await doSearch();
+        while (maxLoadedPage() < targetMax && hasMoreToLoad()) {
+          currentPage = maxLoadedPage() + 1;
+          await doSearch({ append: true });
+        }
+      } else {
+        await doSearch();
+      }
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      window.scrollTo(0, savedScroll.scrollY);
+    } else {
+      doSearch();
+    }
   });
 </script>
