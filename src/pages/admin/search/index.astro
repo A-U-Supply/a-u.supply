@@ -47,10 +47,19 @@ import Admin from '../../../layouts/Admin.astro';
       <div class="filter-body" id="filter-body">
         <div class="filter-group">
           <label class="filter-label">Index</label>
-          <select id="filter-output-index">
-            <option value="__inputs__">Inputs</option>
-            <option value="outputs">Outputs</option>
-          </select>
+          <div
+            class="pill-group"
+            id="filter-output-index"
+            role="group"
+            aria-label="Index"
+          >
+            <button
+              type="button"
+              class="pill active"
+              data-value="__inputs__"
+              aria-pressed="true">Inputs</button
+            >
+          </div>
         </div>
 
         <div class="filter-group">
@@ -443,6 +452,36 @@ import Admin from '../../../layouts/Admin.astro';
   }
   .filter-check input {
     margin-right: 4px;
+  }
+  .pill-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .pill {
+    padding: 3px 8px;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    background: none;
+    border: 1px solid var(--color-border);
+    color: var(--color-muted);
+    cursor: pointer;
+    transition:
+      background 80ms,
+      color 80ms,
+      border-color 80ms;
+  }
+  .pill:hover {
+    border-color: var(--color-text);
+    color: var(--color-text);
+  }
+  .pill.active {
+    background: var(--color-text);
+    color: var(--color-bg);
+    border-color: var(--color-text);
+    font-weight: bold;
   }
   .filter-group input[type='text'],
   .filter-group input[type='number'],
@@ -1010,10 +1049,37 @@ import Admin from '../../../layouts/Admin.astro';
       doSearch();
     });
 
-    // Cross-filter listeners: disable incompatible filters on the fly.
+    // Index pills: clicking toggles selection, runs the search immediately,
+    // and updates the URL (doSearch writes the URL at the end).
     document
       .getElementById('filter-output-index')
-      ?.addEventListener('change', updateCrossFilterState);
+      ?.addEventListener('click', (e) => {
+        const pill = (e.target as HTMLElement).closest(
+          '.pill',
+        ) as HTMLElement | null;
+        if (!pill) return;
+        pill.classList.toggle('active');
+        pill.setAttribute(
+          'aria-pressed',
+          pill.classList.contains('active') ? 'true' : 'false',
+        );
+        const group = pill.parentElement!;
+        // Never allow zero pills active — fall back to Inputs.
+        if (!group.querySelector('.pill.active')) {
+          const fallback = group.querySelector<HTMLElement>(
+            '.pill[data-value="__inputs__"]',
+          );
+          if (fallback) {
+            fallback.classList.add('active');
+            fallback.setAttribute('aria-pressed', 'true');
+          }
+        }
+        updateCrossFilterState();
+        currentPage = 1;
+        doSearch();
+      });
+
+    // Cross-filter listeners: disable incompatible filters on the fly.
     document
       .querySelectorAll('.filter-check input[type="checkbox"]')
       .forEach((cb) => {
@@ -1258,9 +1324,12 @@ import Admin from '../../../layouts/Admin.astro';
       const colorGroups = colorGroupVal
         ? [colorGroupVal]
         : preservedMultiColors.slice();
-      const outputIndex = (
-        document.getElementById('filter-output-index') as HTMLSelectElement
-      ).value;
+      const outputIndexEl = document.getElementById('filter-output-index')!;
+      const outputIndexes = Array.from(
+        outputIndexEl.querySelectorAll<HTMLElement>('.pill.active'),
+      )
+        .map((p) => p.dataset.value || '')
+        .filter(Boolean);
       const tags = (document.getElementById('filter-tags') as HTMLInputElement)
         .value;
       const reactionsMin =
@@ -1291,7 +1360,7 @@ import Admin from '../../../layouts/Admin.astro';
         types,
         channels,
         poster,
-        outputIndex,
+        outputIndexes,
         colorGroups,
         dateFrom,
         dateTo,
@@ -1310,17 +1379,22 @@ import Admin from '../../../layouts/Admin.astro';
     // - Transcript requires audio or video checked.
     // - OCR Text requires image checked.
     function updateCrossFilterState() {
-      const outputIndex = (
-        document.getElementById('filter-output-index') as HTMLSelectElement
-      ).value;
+      const activeIndexes = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          '#filter-output-index .pill.active',
+        ),
+      ).map((p) => p.dataset.value || '');
       const jobAppEl = document.getElementById(
         'filter-job-app',
       ) as HTMLSelectElement;
       const jobAppHint = document.getElementById('job-app-hint')!;
-      const isInputs = outputIndex === '__inputs__';
-      jobAppEl.disabled = isInputs;
-      if (isInputs) jobAppEl.value = '';
-      jobAppHint.style.display = isInputs ? 'block' : 'none';
+      // Only block Job App when the user has *only* Inputs selected — any
+      // real output index in the mix means at least some rows have a job_app.
+      const onlyInputs =
+        activeIndexes.length === 1 && activeIndexes[0] === '__inputs__';
+      jobAppEl.disabled = onlyInputs;
+      if (onlyInputs) jobAppEl.value = '';
+      jobAppHint.style.display = onlyInputs ? 'block' : 'none';
 
       const typeChecks = Array.from(
         document.querySelectorAll('.filter-check input[type="checkbox"]'),
@@ -1382,7 +1456,8 @@ import Admin from '../../../layouts/Admin.astro';
       if (filters.channels.length)
         body.filters.source_channels = filters.channels;
       if (filters.poster) body.filters.poster = filters.poster;
-      body.filters.output_index = filters.outputIndex;
+      if (filters.outputIndexes.length)
+        body.filters.output_index = filters.outputIndexes;
       if (filters.colorGroups.length) {
         body.filters.color_group = filters.colorGroups;
       }
@@ -1420,8 +1495,12 @@ import Admin from '../../../layouts/Admin.astro';
         stateParams.set('rxn', String(filters.reactionsMin));
       if (filters.tagsMin > 0)
         stateParams.set('mintags', String(filters.tagsMin));
-      if (filters.outputIndex && filters.outputIndex !== '__inputs__')
-        stateParams.set('output_index', filters.outputIndex);
+      // Default = exactly ['__inputs__'] → omit param so URLs stay tidy.
+      const indexIsDefault =
+        filters.outputIndexes.length === 1 &&
+        filters.outputIndexes[0] === '__inputs__';
+      if (!indexIsDefault && filters.outputIndexes.length)
+        stateParams.set('output_index', filters.outputIndexes.join(','));
       if (filters.jobApp) stateParams.set('app', filters.jobApp);
       if (filters.hasTranscript)
         stateParams.set('transcript', filters.hasTranscript);
@@ -1826,12 +1905,9 @@ import Admin from '../../../layouts/Admin.astro';
           (data.uploaders || [])
             .map((u: string) => `<option value="${u}">${u}</option>`)
             .join('');
-        const outputIndexSelect = document.getElementById(
+        const outputIndexGroup = document.getElementById(
           'filter-output-index',
-        ) as HTMLSelectElement;
-        outputIndexSelect.innerHTML =
-          '<option value="__inputs__">Inputs</option>' +
-          '<option value="outputs">Outputs</option>';
+        ) as HTMLElement;
         const jobAppSelect = document.getElementById(
           'filter-job-app',
         ) as HTMLSelectElement;
@@ -1841,9 +1917,9 @@ import Admin from '../../../layouts/Admin.astro';
             .map((a: string) => `<option value="${a}">${a}</option>`)
             .join('');
         // Restore from URL after dropdowns are populated. Append unknown
-        // values as options so a link like ?output_index=rgz9-outputs or
-        // ?app=bullethole actually filters instead of silently falling
-        // back to the default when the value isn't in the hardcoded list.
+        // values as options so a link like ?app=bullethole actually filters
+        // instead of silently falling back to the default when the value
+        // isn't in the hardcoded list.
         const p = new URLSearchParams(window.location.search);
         const ensureOption = (sel: HTMLSelectElement, val: string) => {
           if (!val) return;
@@ -1857,14 +1933,55 @@ import Admin from '../../../layouts/Admin.astro';
           sel.value = val;
         };
         if (p.get('poster')) ensureOption(posterSelect, p.get('poster')!);
-        if (p.get('output_index'))
-          ensureOption(outputIndexSelect, p.get('output_index')!);
+
+        // Build the Index pill group: Inputs first, then one pill per
+        // distinct output_index returned from the facets API.
+        const urlIndexParam = p.get('output_index');
+        const urlIndexes = urlIndexParam
+          ? urlIndexParam.split(',').filter(Boolean)
+          : null;
+        const facetIndexes: string[] = data.output_indexes || [];
+        // Include any URL-supplied unknowns so a stale link still works.
+        const allIndexes = [
+          ...new Set([
+            ...facetIndexes,
+            ...(urlIndexes || []).filter((v) => v !== '__inputs__'),
+          ]),
+        ];
+        const pillLabel = (v: string) =>
+          v === '__inputs__'
+            ? 'Inputs'
+            : v.charAt(0).toUpperCase() + v.slice(1);
+        const pillsHtml = ['__inputs__', ...allIndexes]
+          .map((v) => {
+            const active = urlIndexes
+              ? urlIndexes.includes(v)
+              : v === '__inputs__';
+            return `<button type="button" class="pill${active ? ' active' : ''}" data-value="${v}" aria-pressed="${active}">${pillLabel(v)}</button>`;
+          })
+          .join('');
+        outputIndexGroup.innerHTML = pillsHtml;
+
         // App filter only applies to outputs (inputs have no job_app field).
-        // If URL has ?app=X but no explicit output_index, force Outputs so
-        // updateCrossFilterState() doesn't auto-clear the app selection.
+        // If URL has ?app=X but no explicit output_index, switch the Index
+        // selection to "outputs" so updateCrossFilterState() doesn't
+        // auto-clear the app selection.
         if (p.get('app')) {
-          if (!p.get('output_index')) {
-            outputIndexSelect.value = 'outputs';
+          if (!urlIndexes) {
+            const inputsPill = outputIndexGroup.querySelector<HTMLElement>(
+              '.pill[data-value="__inputs__"]',
+            );
+            const outputsPill = outputIndexGroup.querySelector<HTMLElement>(
+              '.pill[data-value="outputs"]',
+            );
+            if (inputsPill) {
+              inputsPill.classList.remove('active');
+              inputsPill.setAttribute('aria-pressed', 'false');
+            }
+            if (outputsPill) {
+              outputsPill.classList.add('active');
+              outputsPill.setAttribute('aria-pressed', 'true');
+            }
           }
           ensureOption(jobAppSelect, p.get('app')!);
         }
@@ -2052,6 +2169,17 @@ import Admin from '../../../layouts/Admin.astro';
               if (!input.name) input.checked = true;
             });
           break;
+        case 'output_index': {
+          // Reset to default: only Inputs active.
+          document
+            .querySelectorAll<HTMLElement>('#filter-output-index .pill')
+            .forEach((p) => {
+              const isInputs = p.dataset.value === '__inputs__';
+              p.classList.toggle('active', isInputs);
+              p.setAttribute('aria-pressed', isInputs ? 'true' : 'false');
+            });
+          break;
+        }
       }
       currentPage = 1;
       doSearch();
@@ -2117,6 +2245,17 @@ import Admin from '../../../layouts/Admin.astro';
       if (filters.jobApp) {
         chips.push(
           `<span class="active-filter">App: ${filters.jobApp} <button class="active-filter__remove" onclick="__clearFilter('app')">&times;</button></span>`,
+        );
+      }
+      const indexIsDefaultChip =
+        filters.outputIndexes.length === 1 &&
+        filters.outputIndexes[0] === '__inputs__';
+      if (filters.outputIndexes.length && !indexIsDefaultChip) {
+        const labels = filters.outputIndexes.map((v) =>
+          v === '__inputs__' ? 'Inputs' : v,
+        );
+        chips.push(
+          `<span class="active-filter">Index: ${labels.join(', ')} <button class="active-filter__remove" onclick="__clearFilter('output_index')">&times;</button></span>`,
         );
       }
       if (filters.hasTranscript) {

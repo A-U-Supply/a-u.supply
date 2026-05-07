@@ -74,7 +74,7 @@ class SearchFilters(BaseModel):
     date_range: dict | None = Field(None, description="Date range filter: `{\"from\": \"YYYY-MM-DD\", \"to\": \"YYYY-MM-DD\"}`. Both are optional.")
     reaction_count: dict | None = Field(None, description="Minimum reaction count: `{\"min\": 3}`.")
     tag_count: dict | None = Field(None, description="Tag count filter: `{\"min\": 1}` and/or `{\"max\": 5}`.")
-    output_index: str | None = Field(None, description="Filter by output index/collection name (e.g. `rgz9-outputs`).")
+    output_index: list[str] | None = Field(None, description="Filter by one or more output index/collection names. Use `__inputs__` for items not produced by a job. Pass a list to OR multiple together (e.g. `[\"__inputs__\", \"outputs\"]`).")
     has_transcript: bool | None = Field(None, description="Filter audio/video items by whether they have a transcript.")
     has_text: bool | None = Field(None, description="Filter images by whether they have OCR-extracted text.")
     job_app: str | None = Field(None, description="Filter outputs by app name (e.g. `rottengenizdat`).")
@@ -82,6 +82,13 @@ class SearchFilters(BaseModel):
     @field_validator("color_group", mode="before")
     @classmethod
     def coerce_color_group(cls, v):
+        if isinstance(v, str):
+            return [v] if v else None
+        return v
+
+    @field_validator("output_index", mode="before")
+    @classmethod
+    def coerce_output_index(cls, v):
         if isinstance(v, str):
             return [v] if v else None
         return v
@@ -454,12 +461,25 @@ def _build_meili_filter(filters: SearchFilters | None) -> str | None:
         if filters.tag_count.get("max") is not None:
             parts.append(f"tag_count <= {filters.tag_count['max']}")
 
-    if filters.output_index == "__inputs__":
-        parts.append("output_index IS NULL")
-    elif filters.output_index == "__outputs__":
-        parts.append("output_index IS NOT NULL")
-    elif filters.output_index:
-        parts.append(f'output_index = "{_escape_filter_value(filters.output_index)}"')
+    if filters.output_index:
+        wants_inputs = "__inputs__" in filters.output_index
+        wants_any_output = "__outputs__" in filters.output_index
+        # Inputs + any-output = everything → no filter needed.
+        if not (wants_inputs and wants_any_output):
+            clauses = []
+            if wants_inputs:
+                clauses.append("output_index IS NULL")
+            if wants_any_output:
+                # Subsumes any specific named output, so we skip the named list.
+                clauses.append("output_index IS NOT NULL")
+            else:
+                for name in filters.output_index:
+                    if name and name not in ("__inputs__", "__outputs__"):
+                        clauses.append(f'output_index = "{_escape_filter_value(name)}"')
+            if clauses:
+                parts.append(
+                    "(" + " OR ".join(clauses) + ")" if len(clauses) > 1 else clauses[0]
+                )
 
     if filters.has_transcript is not None:
         parts.append(f"has_transcript = {str(filters.has_transcript).lower()}")
@@ -734,10 +754,20 @@ def search_facets(
         except (ValueError, TypeError):
             pass
 
+    # Distinct output index names (excludes NULL — those are "inputs", surfaced
+    # in the UI as a synthetic `__inputs__` pill).
+    output_indexes = [
+        r[0] for r in
+        db.query(distinct(MediaItem.output_index))
+        .filter(MediaItem.output_index.isnot(None))
+        .all()
+    ]
+
     return {
         "channels": sorted(channels),
         "uploaders": sorted(uploaders),
         "job_apps": sorted(app_names_set),
+        "output_indexes": sorted(output_indexes),
     }
 
 
