@@ -265,10 +265,15 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         </table>
       </div>
 
-      <div class="pagination" id="pagination" style="display:none;">
-        <button class="action-btn" id="prev-page">Prev</button>
-        <span id="page-info">Page 1</span>
-        <button class="action-btn" id="next-page">Next</button>
+      <div
+        id="load-more-sentinel"
+        class="load-more-sentinel"
+        aria-hidden="true"
+      >
+      </div>
+      <div class="results-footer" id="results-footer" style="display:none;">
+        <span id="results-progress">0 of 0</span>
+        <span id="results-loading-more" hidden>Loading more…</span>
       </div>
     </div>
   </div>
@@ -675,8 +680,27 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     margin-right: auto;
   }
 
-  .pagination {
-    justify-content: center;
+  .load-more-sentinel {
+    height: 1px;
+    width: 100%;
+    pointer-events: none;
+  }
+  .results-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    padding: var(--space-sm);
+    margin-top: var(--space-sm);
+    border-top: 1px solid var(--color-border);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+  .results-footer #results-loading-more {
+    color: var(--color-text);
   }
 
   @media (max-width: 900px) {
@@ -1017,10 +1041,12 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     const gridEl = document.getElementById('results-grid')!;
     const tableEl = document.getElementById('results-table')!;
     const tbodyEl = document.getElementById('results-tbody')!;
-    const paginationEl = document.getElementById('pagination')!;
+    const footerEl = document.getElementById('results-footer')!;
+    const progressEl = document.getElementById('results-progress')!;
+    const sentinelEl = document.getElementById('load-more-sentinel')!;
     const batchBar = document.getElementById('batch-bar')!;
     const selectedCount = document.getElementById('selected-count')!;
-    const pageInfo = document.getElementById('page-info')!;
+    let isLoadingMore = false;
 
     // View toggle
     document.getElementById('grid-view-btn')?.addEventListener('click', () => {
@@ -1068,10 +1094,18 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         document.getElementById('insights-body')?.classList.toggle('collapsed');
       });
 
-    // Apply filters button
-    document.getElementById('apply-filters')?.addEventListener('click', () => {
+    // Reset scroll + page state when the user changes any filter.
+    // Without scrolling back up, switching filters from deep in an
+    // infinite-scroll list leaves them stranded in empty space.
+    function applyAndSearch() {
       currentPage = 1;
       doSearch();
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }
+
+    // Apply filters button
+    document.getElementById('apply-filters')?.addEventListener('click', () => {
+      applyAndSearch();
     });
 
     // Index filter (bits-ui Select multi). The Svelte island dispatches
@@ -1087,8 +1121,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         ];
         wrapper.dataset.selected = value.join(',');
         updateCrossFilterState();
-        currentPage = 1;
-        doSearch();
+        applyAndSearch();
       });
 
     // Cross-filter listeners: disable incompatible filters on the fly.
@@ -1112,22 +1145,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     // Search form
     searchForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      currentPage = 1;
-      doSearch();
-    });
-
-    // Pagination
-    document.getElementById('prev-page')?.addEventListener('click', () => {
-      if (currentPage > 1) {
-        currentPage--;
-        doSearch();
-      }
-    });
-    document.getElementById('next-page')?.addEventListener('click', () => {
-      if (currentPage * pageSize < totalResults) {
-        currentPage++;
-        doSearch();
-      }
+      applyAndSearch();
     });
 
     // Select all
@@ -1440,13 +1458,20 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         : 'block';
     }
 
-    async function doSearch() {
-      loadingEl.style.display = 'block';
-      errorEl.style.display = 'none';
-      emptyEl.style.display = 'none';
-      gridEl.style.display = 'none';
-      tableEl.style.display = 'none';
-      paginationEl.style.display = 'none';
+    async function doSearch({ append = false }: { append?: boolean } = {}) {
+      if (append) {
+        // Background load — keep existing results visible, show the
+        // bottom "Loading more…" indicator.
+        const moreEl = document.getElementById('results-loading-more');
+        if (moreEl) moreEl.removeAttribute('hidden');
+      } else {
+        loadingEl.style.display = 'block';
+        errorEl.style.display = 'none';
+        emptyEl.style.display = 'none';
+        gridEl.style.display = 'none';
+        tableEl.style.display = 'none';
+      }
+      footerEl.style.display = 'none';
 
       const filters = getFilters();
       const sortMap: Record<string, string> = {
@@ -1534,17 +1559,30 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         });
         if (!res.ok) throw new Error('Search failed');
         const data = await res.json();
-        allResults = data.results || data.hits || [];
+        const newItems = (data.results || data.hits || []).map((r: any) => ({
+          ...r,
+          _page: currentPage,
+        }));
+        if (append) {
+          allResults = [...allResults, ...newItems];
+        } else {
+          allResults = newItems;
+        }
         totalResults = data.total || allResults.length;
         loadingEl.style.display = 'none';
         renderResults();
         renderStatsBar(data.counts_by_type || {}, totalResults);
-        // Fetch full aggregation stats in background
-        fetchStats(body);
+        // Stats only depend on filters, not page — only fetch on the
+        // initial / replacing search, not on every appended page.
+        if (!append) fetchStats(body);
       } catch (err: any) {
         loadingEl.style.display = 'none';
         errorEl.textContent = err.message;
         errorEl.style.display = 'block';
+      } finally {
+        const moreEl = document.getElementById('results-loading-more');
+        if (moreEl) moreEl.setAttribute('hidden', '');
+        isLoadingMore = false;
       }
 
       showActiveFilters();
@@ -1565,9 +1603,92 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     }
 
+    // Infinite-scroll observers. Two jobs:
+    //   1. `loadMoreObserver` watches the sentinel below the results — when
+    //      it scrolls into view, we fetch the next page and append.
+    //   2. `pageStartObserver` watches every result tagged with
+    //      data-page-start="N" — whichever page-start is intersecting the
+    //      viewport drives the ?page=N value in the URL.
+    let loadMoreObserver: IntersectionObserver | null = null;
+    let pageStartObserver: IntersectionObserver | null = null;
+    const visiblePages = new Set<number>();
+
+    function maxLoadedPage(): number {
+      // Highest page we've already fetched. allResults is in fetch order.
+      return allResults.length
+        ? allResults[allResults.length - 1]._page || 1
+        : 1;
+    }
+
+    function hasMoreToLoad(): boolean {
+      return allResults.length < totalResults;
+    }
+
+    async function loadNextPage() {
+      if (isLoadingMore || !hasMoreToLoad()) return;
+      isLoadingMore = true;
+      currentPage = maxLoadedPage() + 1;
+      await doSearch({ append: true });
+    }
+
+    function updateUrlPage(page: number) {
+      const params = new URLSearchParams(window.location.search);
+      if (page > 1) params.set('page', String(page));
+      else params.delete('page');
+      const qs = params.toString();
+      const newUrl = window.location.pathname + (qs ? '?' + qs : '');
+      if (newUrl !== window.location.pathname + window.location.search) {
+        history.replaceState(null, '', newUrl);
+      }
+    }
+
+    function setupInfiniteScrollObservers() {
+      loadMoreObserver?.disconnect();
+      pageStartObserver?.disconnect();
+      visiblePages.clear();
+
+      if (hasMoreToLoad()) {
+        loadMoreObserver = new IntersectionObserver(
+          (entries) => {
+            if (entries.some((e) => e.isIntersecting)) loadNextPage();
+          },
+          // Pre-fetch a screenful before the user reaches the bottom so the
+          // grid feels continuous instead of stalling.
+          { rootMargin: '600px 0px' },
+        );
+        loadMoreObserver.observe(sentinelEl);
+      }
+
+      pageStartObserver = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            const page = +(entry.target as HTMLElement).dataset.pageStart!;
+            if (entry.isIntersecting) visiblePages.add(page);
+            else visiblePages.delete(page);
+          }
+          if (visiblePages.size === 0) return;
+          // Use the *highest* visible page so scrolling down feels right.
+          // When scrolling back up, the higher-page marker exits the
+          // viewport, the set shrinks, and the URL drops back accordingly.
+          const top = Math.max(...visiblePages);
+          if (top !== currentPage) {
+            currentPage = top;
+            updateUrlPage(top);
+          }
+        },
+        { rootMargin: '0px' },
+      );
+      document
+        .querySelectorAll<HTMLElement>('[data-page-start]')
+        .forEach((el) => pageStartObserver!.observe(el));
+    }
+
     function renderResults() {
       if (allResults.length === 0) {
         emptyEl.style.display = 'block';
+        footerEl.style.display = 'none';
+        loadMoreObserver?.disconnect();
+        pageStartObserver?.disconnect();
         return;
       }
       emptyEl.style.display = 'none';
@@ -1578,7 +1699,12 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         const playSvg = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
         const briefcaseSvg = `<svg viewBox="0 0 24 24"><path d="M20 7h-4V5c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zM10 5h4v2h-4V5z"/></svg>`;
         gridEl.innerHTML = allResults
-          .map((item) => {
+          .map((item, i) => {
+            const isPageStart =
+              i === 0 || allResults[i - 1]._page !== item._page;
+            const pageStartAttr = isPageStart
+              ? ` data-page-start="${item._page}"`
+              : '';
             const checked = selectedIds.has(item.id) ? 'checked' : '';
             const selectedClass = selectedIds.has(item.id) ? ' selected' : '';
             const thumbSrc = `/api/media/${item.id}/thumbnail`;
@@ -1610,7 +1736,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
                 .map((s: any) => s.uploader)
                 .filter(Boolean)[0] || '';
             const rxn = item.total_reaction_count ?? 0;
-            return `<div class="grid-item${selectedClass}" data-id="${item.id}">
+            return `<div class="grid-item${selectedClass}" data-id="${item.id}"${pageStartAttr}>
             <input type="checkbox" class="grid-item__check" data-select="${item.id}" ${checked} />
             <div class="grid-item__thumb">${thumb}${playBtn}${wsBtn}</div>
             <div class="grid-item__info">
@@ -1631,7 +1757,12 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         gridEl.style.display = 'none';
         tableEl.style.display = 'block';
         tbodyEl.innerHTML = allResults
-          .map((item) => {
+          .map((item, i) => {
+            const isPageStart =
+              i === 0 || allResults[i - 1]._page !== item._page;
+            const pageStartAttr = isPageStart
+              ? ` data-page-start="${item._page}"`
+              : '';
             const checked = selectedIds.has(item.id) ? 'checked' : '';
             const tags = (item.tags || []).join(', ') || '--';
             const date = item.created_at
@@ -1643,7 +1774,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
                 .filter(Boolean)[0] || '--';
             const channel = (item.source_channels || [])[0] || '--';
             const rxn = item.total_reaction_count ?? 0;
-            return `<tr>
+            return `<tr${pageStartAttr}>
             <td><input type="checkbox" data-select="${item.id}" ${checked} /></td>
             <td><a href="/admin/search/detail?id=${item.id}" style="color: var(--color-text); text-decoration: underline;">${item.filename || 'Untitled'}</a></td>
             <td>${item.media_type || '--'}</td>
@@ -1658,16 +1789,16 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
           .join('');
       }
 
-      // Pagination
-      const totalPages = Math.ceil(totalResults / pageSize);
-      if (totalPages > 1) {
-        paginationEl.style.display = 'flex';
-        pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
-        (document.getElementById('prev-page') as HTMLButtonElement).disabled =
-          currentPage <= 1;
-        (document.getElementById('next-page') as HTMLButtonElement).disabled =
-          currentPage >= totalPages;
-      }
+      // Footer with progress + sentinel for infinite scroll.
+      const loadedFirst = 1;
+      const loadedLast = allResults.length;
+      footerEl.style.display = totalResults > 0 ? 'flex' : 'none';
+      progressEl.textContent =
+        loadedLast >= totalResults
+          ? `${totalResults.toLocaleString()} of ${totalResults.toLocaleString()}`
+          : `${loadedFirst.toLocaleString()}–${loadedLast.toLocaleString()} of ${totalResults.toLocaleString()}`;
+
+      setupInfiniteScrollObservers();
 
       updateSelection();
 
@@ -2145,8 +2276,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
           return;
         }
       }
-      currentPage = 1;
-      doSearch();
+      applyAndSearch();
     }
     // Expose for inline onclick
     (window as any).__clearFilter = clearFilter;
@@ -2302,8 +2432,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
               const input = cb as HTMLInputElement;
               if (!input.name) input.checked = input.value === type;
             });
-          currentPage = 1;
-          doSearch();
+          applyAndSearch();
         });
       });
     }
@@ -2394,8 +2523,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
               document.getElementById('filter-poster') as HTMLSelectElement
             ).value = value;
           }
-          currentPage = 1;
-          doSearch();
+          applyAndSearch();
         });
       });
     }
@@ -2427,8 +2555,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
           (
             document.getElementById('filter-reactions-min') as HTMLInputElement
           ).value = minVal;
-          currentPage = 1;
-          doSearch();
+          applyAndSearch();
         });
       });
     }
@@ -2465,8 +2592,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
           (
             document.getElementById('filter-date-to') as HTMLInputElement
           ).value = `${month}-${String(lastDay).padStart(2, '0')}`;
-          currentPage = 1;
-          doSearch();
+          applyAndSearch();
         });
       });
     }
@@ -2519,8 +2645,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
           ).value = color;
           preservedMultiColors = [];
           updateColorMultiHint();
-          currentPage = 1;
-          doSearch();
+          applyAndSearch();
         });
       });
     }
