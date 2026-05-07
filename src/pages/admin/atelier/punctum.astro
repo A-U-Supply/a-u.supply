@@ -3968,6 +3968,491 @@ import Admin from '../../../layouts/Admin.astro';
       if (p['typ-cell'] != null) { (document.getElementById('typ-cell') as HTMLInputElement).value = String(p['typ-cell']); document.getElementById('typ-cell-val')!.textContent = String(p['typ-cell']); }
     }
 
+    // ─── Print Gallery (Escher Log-Spiral Warp) ──────────────────────────────
+
+    function logSpiralWarp(srcData: Uint8ClampedArray, W: number, H: number, beta: number, wrap: boolean): Uint8ClampedArray {
+      const out = new Uint8ClampedArray(W * H * 4);
+      const cx = W / 2, cy = H / 2;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const dx = x - cx, dy = y - cy;
+        const r = Math.sqrt(dx*dx + dy*dy);
+        const theta = Math.atan2(dy, dx);
+        const rIn = r * Math.exp(beta * theta);
+        const thetaIn = theta - beta * Math.log(Math.max(r, 1));
+        const xIn = cx + rIn * Math.cos(thetaIn);
+        const yIn = cy + rIn * Math.sin(thetaIn);
+        const oi = (y*W+x)*4;
+        let x0: number, x1: number, y0: number, y1: number, xf: number, yf: number;
+        if (wrap) {
+          xf = ((xIn % W) + W) % W; yf = ((yIn % H) + H) % H;
+          x0 = Math.floor(xf); x1 = (x0+1) % W;
+          y0 = Math.floor(yf); y1 = (y0+1) % H;
+        } else {
+          xf = Math.max(0, Math.min(W-1, xIn)); yf = Math.max(0, Math.min(H-1, yIn));
+          x0 = Math.floor(xf); x1 = Math.min(x0+1, W-1);
+          y0 = Math.floor(yf); y1 = Math.min(y0+1, H-1);
+        }
+        const wx = xf - Math.floor(xf), wy = yf - Math.floor(yf);
+        const i00=(y0*W+x0)*4, i10=(y0*W+x1)*4, i01=(y1*W+x0)*4, i11=(y1*W+x1)*4;
+        for (let ch = 0; ch < 3; ch++) {
+          out[oi+ch] = Math.round((1-wy)*((1-wx)*srcData[i00+ch]+wx*srcData[i10+ch])+wy*((1-wx)*srcData[i01+ch]+wx*srcData[i11+ch]));
+        }
+        out[oi+3] = 255;
+      }
+      return out;
+    }
+
+    function renderPrintGallery(imgs: (HTMLImageElement | null)[], params: Record<string, any>, _rng: () => number): Output[] {
+      const scale = params['pg-scale'] ?? 256;
+      const wrap = !!(params['pg-tile']);
+      const beta = Math.log(Math.max(Number(scale), 1.01)) / (2 * Math.PI);
+      return (imgs.filter(Boolean) as HTMLImageElement[]).map((img, idx) => {
+        const W = img.naturalWidth, H = img.naturalHeight;
+        const src = new OffscreenCanvas(W, H); src.getContext('2d')!.drawImage(img, 0, 0, W, H);
+        const raw = logSpiralWarp(src.getContext('2d')!.getImageData(0, 0, W, H).data as Uint8ClampedArray, W, H, beta, wrap);
+        const oc = new OffscreenCanvas(W, H);
+        const od = oc.getContext('2d')!.createImageData(W, H); od.data.set(raw);
+        oc.getContext('2d')!.putImageData(od, 0, 0);
+        return { canvas: ocToCanvas(oc), label: ['A','B','C'][idx] ?? String(idx+1), mimeType: 'image/jpeg' };
+      });
+    }
+
+    function buildPrintGalleryParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="pg-scale">Scale <span class="pt-val" id="pg-scale-val">256</span></label>
+          <input class="pt-range" type="range" id="pg-scale" min="8" max="512" step="8" value="256" />
+          <div class="pt-range-hints"><span>8</span><span>512</span></div>
+        </div>
+        <div class="pt-field pt-check-field">
+          <label class="pt-check-label"><input type="checkbox" id="pg-tile" /> Tile source</label>
+        </div>`;
+      enhanceSliders();
+      const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+      const dRender = debounce(() => doRender(), 200);
+      document.getElementById('pg-scale')!.addEventListener('input', (e) => { document.getElementById('pg-scale-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+      document.getElementById('pg-tile')!.addEventListener('change', () => dRender());
+    }
+    function getPrintGalleryParams(): Record<string, any> {
+      return {
+        'pg-scale': parseInt((document.getElementById('pg-scale') as HTMLInputElement).value, 10),
+        'pg-tile': (document.getElementById('pg-tile') as HTMLInputElement).checked,
+      };
+    }
+    function setPrintGalleryParams(p: Record<string, any>) {
+      if (p['pg-scale'] != null) { (document.getElementById('pg-scale') as HTMLInputElement).value = String(p['pg-scale']); document.getElementById('pg-scale-val')!.textContent = String(p['pg-scale']); }
+      if (p['pg-tile'] != null) (document.getElementById('pg-tile') as HTMLInputElement).checked = !!p['pg-tile'];
+    }
+
+    // ─── Iterative Warp ───────────────────────────────────────────────────────
+
+    function renderIterativeWarp(imgs: (HTMLImageElement | null)[], params: Record<string, any>, _rng: () => number): Output[] {
+      if (!imgs[0]) return [];
+      const W = imgs[0].naturalWidth, H = imgs[0].naturalHeight;
+      const scale = params['iw-scale'] ?? 256;
+      const iterations = Math.max(1, Math.min(8, params['iw-iter'] ?? 4));
+      const wrap = !!(params['iw-tile']);
+      const beta = Math.log(Math.max(Number(scale), 1.01)) / (2 * Math.PI);
+      const src0 = new OffscreenCanvas(W, H); src0.getContext('2d')!.drawImage(imgs[0]!, 0, 0, W, H);
+      let cur: Uint8ClampedArray = src0.getContext('2d')!.getImageData(0, 0, W, H).data as Uint8ClampedArray;
+      const out: Output[] = [];
+      for (let n = 0; n < iterations; n++) {
+        cur = logSpiralWarp(cur, W, H, beta, wrap);
+        const oc = new OffscreenCanvas(W, H);
+        const od = oc.getContext('2d')!.createImageData(W, H); od.data.set(cur);
+        oc.getContext('2d')!.putImageData(od, 0, 0);
+        out.push({ canvas: ocToCanvas(oc), label: `Pass ${n+1}`, mimeType: 'image/jpeg' });
+      }
+      return out;
+    }
+
+    function buildIterativeWarpParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="iw-scale">Scale <span class="pt-val" id="iw-scale-val">256</span></label>
+          <input class="pt-range" type="range" id="iw-scale" min="8" max="512" step="8" value="256" />
+          <div class="pt-range-hints"><span>8</span><span>512</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="iw-iter">Iterations <span class="pt-val" id="iw-iter-val">4</span></label>
+          <input class="pt-range" type="range" id="iw-iter" min="1" max="8" step="1" value="4" />
+          <div class="pt-range-hints"><span>1</span><span>8</span></div>
+        </div>
+        <div class="pt-field pt-check-field">
+          <label class="pt-check-label"><input type="checkbox" id="iw-tile" /> Tile source</label>
+        </div>`;
+      enhanceSliders();
+      const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+      const dRender = debounce(() => doRender(), 200);
+      document.getElementById('iw-scale')!.addEventListener('input', (e) => { document.getElementById('iw-scale-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+      document.getElementById('iw-iter')!.addEventListener('input', (e) => { document.getElementById('iw-iter-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+      document.getElementById('iw-tile')!.addEventListener('change', () => dRender());
+    }
+    function getIterativeWarpParams(): Record<string, any> {
+      return {
+        'iw-scale': parseInt((document.getElementById('iw-scale') as HTMLInputElement).value, 10),
+        'iw-iter': parseInt((document.getElementById('iw-iter') as HTMLInputElement).value, 10),
+        'iw-tile': (document.getElementById('iw-tile') as HTMLInputElement).checked,
+      };
+    }
+    function setIterativeWarpParams(p: Record<string, any>) {
+      if (p['iw-scale'] != null) { (document.getElementById('iw-scale') as HTMLInputElement).value = String(p['iw-scale']); document.getElementById('iw-scale-val')!.textContent = String(p['iw-scale']); }
+      if (p['iw-iter'] != null) { (document.getElementById('iw-iter') as HTMLInputElement).value = String(p['iw-iter']); document.getElementById('iw-iter-val')!.textContent = String(p['iw-iter']); }
+      if (p['iw-tile'] != null) (document.getElementById('iw-tile') as HTMLInputElement).checked = !!p['iw-tile'];
+    }
+
+    // ─── Block Letter (shared helpers) ────────────────────────────────────────
+
+    const BLOCK_LETTER_WORDS = [
+      'PULSE','WAVE','FLUX','ECHO','LOOP','VOID','APEX','NEON','GRID','HAZE',
+      'BEAM','CORE','EDGE','FLOW','GLOW','HEAT','IRIS','KNOT','LENS','NOVA',
+      'PRISM','SHIFT','SPARK','TRACE','VEIL',
+    ];
+
+    function blUvSample(srcData: Uint8ClampedArray, srcW: number, srcH: number,
+        u: number, v: number, xMin: number, xMax: number, yMin: number, yMax: number): [number, number, number] {
+      const sx = Math.max(0, Math.min(srcW-1, xMin + u * (xMax - xMin)));
+      const sy = Math.max(0, Math.min(srcH-1, yMin + v * (yMax - yMin)));
+      const x0 = Math.floor(sx), x1 = Math.min(x0+1, srcW-1);
+      const y0 = Math.floor(sy), y1 = Math.min(y0+1, srcH-1);
+      const wx = sx-x0, wy = sy-y0;
+      const i00=(y0*srcW+x0)*4, i10=(y0*srcW+x1)*4, i01=(y1*srcW+x0)*4, i11=(y1*srcW+x1)*4;
+      return [
+        (1-wy)*((1-wx)*srcData[i00]+wx*srcData[i10])+wy*((1-wx)*srcData[i01]+wx*srcData[i11]),
+        (1-wy)*((1-wx)*srcData[i00+1]+wx*srcData[i10+1])+wy*((1-wx)*srcData[i01+1]+wx*srcData[i11+1]),
+        (1-wy)*((1-wx)*srcData[i00+2]+wx*srcData[i10+2])+wy*((1-wx)*srcData[i01+2]+wx*srcData[i11+2]),
+      ];
+    }
+
+    function renderBlockWordJS(
+        word: string, srcData: Uint8ClampedArray, srcW: number, srcH: number,
+        fontSize: number, depthPx: number, angleDeg: number,
+        letterSpacing: number, fontFamily: string, rng: () => number): OffscreenCanvas {
+      const rad = angleDeg * Math.PI / 180;
+      const isoDx = Math.round(depthPx * Math.cos(rad));
+      const isoDy = Math.round(depthPx * Math.sin(rad));
+      const measureOC = new OffscreenCanvas(2, 2);
+      const mCtx = measureOC.getContext('2d')!;
+      mCtx.font = `bold ${fontSize}px ${fontFamily}`;
+      mCtx.textBaseline = 'alphabetic';
+      type CharInfo = { c: string; gW: number; gH: number; bL: number; bA: number; glyph: Uint8Array };
+      const charData: CharInfo[] = [];
+      for (const c of word.split('').filter(ch => ch.trim())) {
+        const m = mCtx.measureText(c);
+        const bL = Math.max(0, Math.ceil((m as any).actualBoundingBoxLeft ?? 0));
+        const bR = Math.max(1, Math.ceil((m as any).actualBoundingBoxRight ?? (m.width * 0.9)));
+        const bA = Math.max(1, Math.ceil((m as any).actualBoundingBoxAscent ?? (fontSize * 0.8)));
+        const bD = Math.max(0, Math.ceil((m as any).actualBoundingBoxDescent ?? (fontSize * 0.2)));
+        const gW = Math.max(2, bL + bR), gH = Math.max(2, bA + bD);
+        const glyphOC = new OffscreenCanvas(gW, gH);
+        const gCtx = glyphOC.getContext('2d')!;
+        gCtx.fillStyle = '#000'; gCtx.fillRect(0, 0, gW, gH);
+        gCtx.fillStyle = '#fff'; gCtx.font = `bold ${fontSize}px ${fontFamily}`; gCtx.textBaseline = 'alphabetic';
+        gCtx.fillText(c, bL, bA);
+        const gData = gCtx.getImageData(0, 0, gW, gH).data;
+        const glyph = new Uint8Array(gW * gH);
+        for (let j = 0; j < gW * gH; j++) glyph[j] = gData[j*4];
+        charData.push({ c, gW, gH, bL, bA, glyph });
+      }
+      if (!charData.length) return new OffscreenCanvas(100, 100);
+      const totalW = charData.reduce((s, d) => s + d.gW, 0) + letterSpacing * Math.max(0, charData.length - 1);
+      const maxH = Math.max(...charData.map(d => d.gH));
+      const pad = 40;
+      const outW = totalW + 2 * Math.abs(isoDx) + 2 * pad;
+      const outH = maxH + Math.abs(isoDy) + 2 * pad;
+      const output = new Uint8ClampedArray(outW * outH * 4);
+      // Tile assignment: find largest tile size giving enough tiles
+      const nLetters = charData.length;
+      let tileSize = Math.min(srcW, srcH);
+      while (tileSize > 1 && Math.floor(srcW / tileSize) * Math.floor(srcH / tileSize) < nLetters) {
+        tileSize = Math.max(1, Math.floor(tileSize * 0.85));
+      }
+      const tileCols = Math.max(1, Math.floor(srcW / tileSize));
+      const tileRows = Math.max(1, Math.floor(srcH / tileSize));
+      const tiles: [number, number][] = [];
+      for (let tr = 0; tr < tileRows; tr++) for (let tc = 0; tc < tileCols; tc++) tiles.push([tr * tileSize, tc * tileSize]);
+      for (let i = tiles.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i+1)); [tiles[i], tiles[j]] = [tiles[j], tiles[i]]; }
+      const x0base = Math.abs(isoDx) + pad, y0base = Math.abs(isoDy) + pad;
+      const nSteps = Math.max(Math.abs(isoDx), Math.abs(isoDy), 1) + 1;
+      let xCursor = x0base;
+      const frontQ: { x0: number; y0: number; d: CharInfo; xMin: number; xMax: number; yMin: number; yMax: number }[] = [];
+      for (let li = 0; li < charData.length; li++) {
+        const d = charData[li], { gW, gH, glyph } = d;
+        const x0 = xCursor, y0 = y0base;
+        const [ty, tx] = tiles[li % tiles.length];
+        const xMin = tx, xMax = Math.min(tx + tileSize - 1, srcW - 1);
+        const yMin = ty, yMax = Math.min(ty + tileSize - 1, srcH - 1);
+        // Right face
+        for (let gy = 0; gy < gH; gy++) {
+          let ec = -1;
+          if (isoDx >= 0) { for (let gx = gW-1; gx >= 0; gx--) { if (glyph[gy*gW+gx] > 128) { ec = gx; break; } } }
+          else            { for (let gx = 0; gx < gW; gx++)    { if (glyph[gy*gW+gx] > 128) { ec = gx; break; } } }
+          if (ec < 0) continue;
+          for (let s = 0; s <= nSteps; s++) {
+            const t = s / nSteps;
+            const px = Math.round(x0 + ec + t * isoDx), py = Math.round(y0 + gy - t * isoDy);
+            if (px < 0 || px >= outW || py < 0 || py >= outH) continue;
+            const [r, g, b] = blUvSample(srcData, srcW, srcH, t, gy / Math.max(gH-1,1), xMin, xMax, yMin, yMax);
+            const ri = (py*outW+px)*4;
+            output[ri]=Math.round(r*0.52); output[ri+1]=Math.round(g*0.52); output[ri+2]=Math.round(b*0.52); output[ri+3]=255;
+          }
+        }
+        // Top face
+        for (let gx = 0; gx < gW; gx++) {
+          let er = -1;
+          if (isoDy >= 0) { for (let gy = 0; gy < gH; gy++)    { if (glyph[gy*gW+gx] > 128) { er = gy; break; } } }
+          else            { for (let gy = gH-1; gy >= 0; gy--) { if (glyph[gy*gW+gx] > 128) { er = gy; break; } } }
+          if (er < 0) continue;
+          for (let s = 0; s <= nSteps; s++) {
+            const t = s / nSteps;
+            const px = Math.round(x0 + gx + t * isoDx), py = Math.round(y0 + er - t * isoDy);
+            if (px < 0 || px >= outW || py < 0 || py >= outH) continue;
+            const [r, g, b] = blUvSample(srcData, srcW, srcH, gx / Math.max(gW-1,1), t, xMin, xMax, yMin, yMax);
+            const ri = (py*outW+px)*4;
+            output[ri]=Math.round(r*0.78); output[ri+1]=Math.round(g*0.78); output[ri+2]=Math.round(b*0.78); output[ri+3]=255;
+          }
+        }
+        frontQ.push({ x0, y0, d, xMin, xMax, yMin, yMax });
+        xCursor += gW + letterSpacing;
+      }
+      // Front faces (overdraw)
+      for (const { x0, y0, d, xMin, xMax, yMin, yMax } of frontQ) {
+        const { gW, gH, glyph } = d;
+        for (let py = y0; py < y0 + gH && py < outH; py++) {
+          for (let px = x0; px < x0 + gW && px < outW; px++) {
+            if (px < 0 || py < 0) continue;
+            const gu = Math.min(gW-1, Math.round((px - x0) / gW * (gW-1)));
+            const gv = Math.min(gH-1, Math.round((py - y0) / gH * (gH-1)));
+            if (glyph[gv*gW+gu] < 128) continue;
+            const [r, g, b] = blUvSample(srcData, srcW, srcH, (px-x0)/gW, (py-y0)/gH, xMin, xMax, yMin, yMax);
+            const ri = (py*outW+px)*4;
+            output[ri]=Math.min(255,Math.round((r/255)**0.65*255));
+            output[ri+1]=Math.min(255,Math.round((g/255)**0.65*255));
+            output[ri+2]=Math.min(255,Math.round((b/255)**0.65*255));
+            output[ri+3]=255;
+          }
+        }
+      }
+      const oc = new OffscreenCanvas(outW, outH);
+      const od = oc.getContext('2d')!.createImageData(outW, outH);
+      od.data.set(output);
+      oc.getContext('2d')!.putImageData(od, 0, 0);
+      return oc;
+    }
+
+    // ─── Block Letter ─────────────────────────────────────────────────────────
+
+    function renderBlockLetter(imgs: (HTMLImageElement | null)[], params: Record<string, any>, rng: () => number): Output[] {
+      const rawWord = (params['bl-word'] as string | undefined)?.trim().toUpperCase();
+      const word = rawWord || BLOCK_LETTER_WORDS[Math.floor(rng() * BLOCK_LETTER_WORDS.length)];
+      const fontSize = params['bl-font-size'] ?? 200;
+      const depthPx = params['bl-depth'] ?? 70;
+      const angleDeg = params['bl-angle'] ?? 30;
+      const fontFamily = (params['bl-font'] as string | undefined) ?? 'Impact, sans-serif';
+      return (imgs.filter(Boolean) as HTMLImageElement[]).map((img, idx) => {
+        const W = img.naturalWidth, H = img.naturalHeight;
+        const srcOC = new OffscreenCanvas(W, H); srcOC.getContext('2d')!.drawImage(img, 0, 0, W, H);
+        const result = renderBlockWordJS(word, srcOC.getContext('2d')!.getImageData(0, 0, W, H).data as Uint8ClampedArray,
+          W, H, fontSize, depthPx, angleDeg, 12, fontFamily, rng);
+        return { canvas: ocToCanvas(result), label: `Block ${['A','B','C'][idx] ?? idx+1}`, mimeType: 'image/png' };
+      });
+    }
+
+    function buildBlockLetterParams() {
+      const initWord = BLOCK_LETTER_WORDS[Math.floor(Math.random() * BLOCK_LETTER_WORDS.length)];
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="bl-word">Word</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="text" class="pt-select" id="bl-word" value="${initWord}" placeholder="WORD"
+              style="text-transform:uppercase;flex:1;font-family:var(--font-mono,monospace)" />
+            <button id="bl-word-rnd" style="padding:3px 10px;background:var(--color-surface);border:1px solid var(--color-border);color:var(--color-text);border-radius:3px;cursor:pointer" title="Random word">↺</button>
+          </div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="bl-font">Font</label>
+          <select class="pt-select" id="bl-font">
+            <option value="Impact, sans-serif">Impact</option>
+            <option value="Arial Black, sans-serif">Arial Black</option>
+            <option value="Georgia, serif">Georgia</option>
+            <option value="Verdana, sans-serif">Verdana</option>
+            <option value="Courier New, monospace">Courier New</option>
+          </select>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="bl-font-size">Font Size <span class="pt-val" id="bl-font-size-val">200</span></label>
+          <input class="pt-range" type="range" id="bl-font-size" min="60" max="400" step="10" value="200" />
+          <div class="pt-range-hints"><span>60</span><span>400</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="bl-depth">Depth <span class="pt-val" id="bl-depth-val">70</span></label>
+          <input class="pt-range" type="range" id="bl-depth" min="10" max="150" step="5" value="70" />
+          <div class="pt-range-hints"><span>10</span><span>150</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="bl-angle">Angle <span class="pt-val" id="bl-angle-val">30</span>°</label>
+          <input class="pt-range" type="range" id="bl-angle" min="0" max="60" step="5" value="30" />
+          <div class="pt-range-hints"><span>0°</span><span>60°</span></div>
+        </div>`;
+      enhanceSliders();
+      const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+      const dRender = debounce(() => doRender(), 400);
+      document.getElementById('bl-word')!.addEventListener('input', () => dRender());
+      document.getElementById('bl-word-rnd')!.addEventListener('click', () => {
+        (document.getElementById('bl-word') as HTMLInputElement).value = BLOCK_LETTER_WORDS[Math.floor(Math.random() * BLOCK_LETTER_WORDS.length)];
+        doRender();
+      });
+      document.getElementById('bl-font')!.addEventListener('change', () => dRender());
+      document.getElementById('bl-font-size')!.addEventListener('input', (e) => { document.getElementById('bl-font-size-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+      document.getElementById('bl-depth')!.addEventListener('input', (e) => { document.getElementById('bl-depth-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+      document.getElementById('bl-angle')!.addEventListener('input', (e) => { document.getElementById('bl-angle-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+    }
+    function getBlockLetterParams(): Record<string, any> {
+      return {
+        'bl-word': (document.getElementById('bl-word') as HTMLInputElement).value.toUpperCase(),
+        'bl-font': (document.getElementById('bl-font') as HTMLSelectElement).value,
+        'bl-font-size': parseInt((document.getElementById('bl-font-size') as HTMLInputElement).value, 10),
+        'bl-depth': parseInt((document.getElementById('bl-depth') as HTMLInputElement).value, 10),
+        'bl-angle': parseInt((document.getElementById('bl-angle') as HTMLInputElement).value, 10),
+      };
+    }
+    function setBlockLetterParams(p: Record<string, any>) {
+      if (p['bl-word'] != null) (document.getElementById('bl-word') as HTMLInputElement).value = String(p['bl-word']);
+      if (p['bl-font'] != null) (document.getElementById('bl-font') as HTMLSelectElement).value = String(p['bl-font']);
+      if (p['bl-font-size'] != null) { (document.getElementById('bl-font-size') as HTMLInputElement).value = String(p['bl-font-size']); document.getElementById('bl-font-size-val')!.textContent = String(p['bl-font-size']); }
+      if (p['bl-depth'] != null) { (document.getElementById('bl-depth') as HTMLInputElement).value = String(p['bl-depth']); document.getElementById('bl-depth-val')!.textContent = String(p['bl-depth']); }
+      if (p['bl-angle'] != null) { (document.getElementById('bl-angle') as HTMLInputElement).value = String(p['bl-angle']); document.getElementById('bl-angle-val')!.textContent = String(p['bl-angle']); }
+    }
+
+    // ─── Circle Block Letter ──────────────────────────────────────────────────
+
+    function renderCircleBlockWord(
+        word: string, srcData: Uint8ClampedArray, srcW: number, srcH: number,
+        fontSize: number, depthPx: number, fontFamily: string, rng: () => number): OffscreenCanvas {
+      const letters = word.split('').filter(c => c.trim()).slice(0, 14);
+      if (!letters.length) return new OffscreenCanvas(100, 100);
+      const measureOC = new OffscreenCanvas(2, 2);
+      const mCtx = measureOC.getContext('2d')!;
+      mCtx.font = `bold ${fontSize}px ${fontFamily}`;
+      mCtx.textBaseline = 'alphabetic';
+      const widths = letters.map(c => {
+        const m = mCtx.measureText(c);
+        return Math.max(1, Math.ceil(((m as any).actualBoundingBoxLeft ?? 0) + ((m as any).actualBoundingBoxRight ?? m.width)));
+      });
+      const letterSpacing = 12;
+      const totalArc = widths.reduce((s, w) => s + w, 0) + letters.length * letterSpacing;
+      const circleRadius = Math.max(1, Math.round(totalArc / (2 * Math.PI)));
+      const arcCenters: number[] = [];
+      let cumulative = 0;
+      for (let i = 0; i < letters.length; i++) { arcCenters.push(cumulative + widths[i] / 2); cumulative += widths[i] + letterSpacing; }
+      const margin = fontSize * 2 + depthPx * 2 + 80;
+      const canvasSize = (circleRadius + margin) * 2;
+      const mainOC = new OffscreenCanvas(canvasSize, canvasSize);
+      const mainCtx = mainOC.getContext('2d')!;
+      const cx = canvasSize / 2, cy = canvasSize / 2;
+      for (let i = 0; i < letters.length; i++) {
+        const arcAngleRad = arcCenters[i] / circleRadius;
+        const theta = 90.0 - arcAngleRad * 180 / Math.PI;
+        const letterAngleDeg = 2.0 * theta - 30.0;
+        const letterOC = renderBlockWordJS(letters[i], srcData, srcW, srcH,
+          fontSize, depthPx, letterAngleDeg, 0, fontFamily, rng);
+        const rotAngleRad = (210.0 - theta) * Math.PI / 180;
+        const lx = cx + circleRadius * Math.cos(theta * Math.PI / 180);
+        const ly = cy - circleRadius * Math.sin(theta * Math.PI / 180);
+        mainCtx.save();
+        mainCtx.translate(lx, ly);
+        mainCtx.rotate(-rotAngleRad);
+        mainCtx.drawImage(letterOC, -letterOC.width / 2, -letterOC.height / 2);
+        mainCtx.restore();
+      }
+      // Auto-crop with padding
+      const imgData = mainCtx.getImageData(0, 0, canvasSize, canvasSize).data;
+      let r0 = canvasSize, r1 = 0, c0 = canvasSize, c1 = 0;
+      for (let y = 0; y < canvasSize; y++) for (let x = 0; x < canvasSize; x++) {
+        if (imgData[(y*canvasSize+x)*4+3] > 0) { if (y<r0) r0=y; if (y>r1) r1=y; if (x<c0) c0=x; if (x>c1) c1=x; }
+      }
+      if (r1 <= r0 || c1 <= c0) return mainOC;
+      const PAD = 40;
+      r0=Math.max(0,r0-PAD); r1=Math.min(canvasSize-1,r1+PAD); c0=Math.max(0,c0-PAD); c1=Math.min(canvasSize-1,c1+PAD);
+      const cropW = c1-c0, cropH = r1-r0;
+      const cropped = new OffscreenCanvas(cropW, cropH);
+      cropped.getContext('2d')!.drawImage(mainOC, c0, r0, cropW, cropH, 0, 0, cropW, cropH);
+      return cropped;
+    }
+
+    function renderCircleBlockLetter(imgs: (HTMLImageElement | null)[], params: Record<string, any>, rng: () => number): Output[] {
+      const rawWord = (params['cbl-word'] as string | undefined)?.trim().toUpperCase();
+      const word = rawWord || BLOCK_LETTER_WORDS[Math.floor(rng() * BLOCK_LETTER_WORDS.length)];
+      const fontSize = params['cbl-font-size'] ?? 120;
+      const depthPx = params['cbl-depth'] ?? 60;
+      const fontFamily = (params['cbl-font'] as string | undefined) ?? 'Impact, sans-serif';
+      return (imgs.filter(Boolean) as HTMLImageElement[]).map((img, idx) => {
+        const W = img.naturalWidth, H = img.naturalHeight;
+        const srcOC = new OffscreenCanvas(W, H); srcOC.getContext('2d')!.drawImage(img, 0, 0, W, H);
+        const result = renderCircleBlockWord(word, srcOC.getContext('2d')!.getImageData(0, 0, W, H).data as Uint8ClampedArray,
+          W, H, fontSize, depthPx, fontFamily, rng);
+        return { canvas: ocToCanvas(result), label: `Circle ${['A','B','C'][idx] ?? idx+1}`, mimeType: 'image/png' };
+      });
+    }
+
+    function buildCircleBlockLetterParams() {
+      const initWord = BLOCK_LETTER_WORDS[Math.floor(Math.random() * BLOCK_LETTER_WORDS.length)];
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="cbl-word">Word</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="text" class="pt-select" id="cbl-word" value="${initWord}" placeholder="WORD"
+              style="text-transform:uppercase;flex:1;font-family:var(--font-mono,monospace)" />
+            <button id="cbl-word-rnd" style="padding:3px 10px;background:var(--color-surface);border:1px solid var(--color-border);color:var(--color-text);border-radius:3px;cursor:pointer" title="Random word">↺</button>
+          </div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cbl-font">Font</label>
+          <select class="pt-select" id="cbl-font">
+            <option value="Impact, sans-serif">Impact</option>
+            <option value="Arial Black, sans-serif">Arial Black</option>
+            <option value="Georgia, serif">Georgia</option>
+            <option value="Verdana, sans-serif">Verdana</option>
+            <option value="Courier New, monospace">Courier New</option>
+          </select>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cbl-font-size">Font Size <span class="pt-val" id="cbl-font-size-val">120</span></label>
+          <input class="pt-range" type="range" id="cbl-font-size" min="40" max="200" step="10" value="120" />
+          <div class="pt-range-hints"><span>40</span><span>200</span></div>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cbl-depth">Depth <span class="pt-val" id="cbl-depth-val">60</span></label>
+          <input class="pt-range" type="range" id="cbl-depth" min="10" max="120" step="5" value="60" />
+          <div class="pt-range-hints"><span>10</span><span>120</span></div>
+        </div>`;
+      enhanceSliders();
+      const debounce = (fn: () => void, ms: number) => { let t: ReturnType<typeof setTimeout>; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+      const dRender = debounce(() => doRender(), 400);
+      document.getElementById('cbl-word')!.addEventListener('input', () => dRender());
+      document.getElementById('cbl-word-rnd')!.addEventListener('click', () => {
+        (document.getElementById('cbl-word') as HTMLInputElement).value = BLOCK_LETTER_WORDS[Math.floor(Math.random() * BLOCK_LETTER_WORDS.length)];
+        doRender();
+      });
+      document.getElementById('cbl-font')!.addEventListener('change', () => dRender());
+      document.getElementById('cbl-font-size')!.addEventListener('input', (e) => { document.getElementById('cbl-font-size-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+      document.getElementById('cbl-depth')!.addEventListener('input', (e) => { document.getElementById('cbl-depth-val')!.textContent = (e.target as HTMLInputElement).value; dRender(); });
+    }
+    function getCircleBlockLetterParams(): Record<string, any> {
+      return {
+        'cbl-word': (document.getElementById('cbl-word') as HTMLInputElement).value.toUpperCase(),
+        'cbl-font': (document.getElementById('cbl-font') as HTMLSelectElement).value,
+        'cbl-font-size': parseInt((document.getElementById('cbl-font-size') as HTMLInputElement).value, 10),
+        'cbl-depth': parseInt((document.getElementById('cbl-depth') as HTMLInputElement).value, 10),
+      };
+    }
+    function setCircleBlockLetterParams(p: Record<string, any>) {
+      if (p['cbl-word'] != null) (document.getElementById('cbl-word') as HTMLInputElement).value = String(p['cbl-word']);
+      if (p['cbl-font'] != null) (document.getElementById('cbl-font') as HTMLSelectElement).value = String(p['cbl-font']);
+      if (p['cbl-font-size'] != null) { (document.getElementById('cbl-font-size') as HTMLInputElement).value = String(p['cbl-font-size']); document.getElementById('cbl-font-size-val')!.textContent = String(p['cbl-font-size']); }
+      if (p['cbl-depth'] != null) { (document.getElementById('cbl-depth') as HTMLInputElement).value = String(p['cbl-depth']); document.getElementById('cbl-depth-val')!.textContent = String(p['cbl-depth']); }
+    }
+
     // ─── Halation Edge ────────────────────────────────────────────────────────
 
     function makeHalationMask(img: HTMLImageElement, W: number, H: number, params: Record<string, any>, rng: () => number): OffscreenCanvas {
@@ -5170,6 +5655,30 @@ import Admin from '../../../layouts/Admin.astro';
         inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
         render: renderCurlNoise,
         buildParams: buildCurlNoiseParams, getParams: getCurlNoiseParams, setParams: setCurlNoiseParams,
+      },
+      print_gallery: {
+        label: 'Print Gallery', desc: 'Escher/Lenstra log-spiral conformal warp — self-similar Print Gallery structure',
+        inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false,
+        render: renderPrintGallery,
+        buildParams: buildPrintGalleryParams, getParams: getPrintGalleryParams, setParams: setPrintGalleryParams,
+      },
+      iterative_warp: {
+        label: 'Iterative Warp', desc: 'Log-spiral warp applied N times — each pass builds on the last',
+        inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: false,
+        render: renderIterativeWarp,
+        buildParams: buildIterativeWarpParams, getParams: getIterativeWarpParams, setParams: setIterativeWarpParams,
+      },
+      block_letter: {
+        label: 'Block Letter', desc: 'Isometric 3D block letters textured with source images',
+        inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: renderBlockLetter,
+        buildParams: buildBlockLetterParams, getParams: getBlockLetterParams, setParams: setBlockLetterParams,
+      },
+      circle_block_letter: {
+        label: 'Circle Block Letter', desc: 'Block letters arranged radially around a circle',
+        inputs: 3, inputLabels: ['Image A', 'Image B', 'Image C'], hasRandomness: true,
+        render: renderCircleBlockLetter,
+        buildParams: buildCircleBlockLetterParams, getParams: getCircleBlockLetterParams, setParams: setCircleBlockLetterParams,
       },
       chromaticab: {
         label: 'Chromatic Aberration', desc: 'Split RGB channels apart — linear or radial lens-fringe effect',
@@ -12022,7 +12531,7 @@ import Admin from '../../../layouts/Admin.astro';
       },
       {
         label: 'Protease Bots',
-        bots: ['joukowski','spiralscreen','sinewarp','sinephase','circlelimit','curlnoise'],
+        bots: ['joukowski','spiralscreen','sinewarp','sinephase','circlelimit','curlnoise','print_gallery','iterative_warp','block_letter','circle_block_letter'],
       },
       {
         label: 'Sparagmos',
