@@ -23,6 +23,7 @@ import Admin from '../../../layouts/Admin.astro';
         <div id="ph-audio-meta" class="ph-audio-meta" style="display:none"></div>
         <input type="file" id="ph-file-input" accept="audio/*" style="display:none" />
       </div>
+      <button class="btn btn--secondary ph-lib-btn" id="ph-lib-btn">Pick from Library</button>
 
       <div class="ph-divider"></div>
 
@@ -217,7 +218,6 @@ import Admin from '../../../layouts/Admin.astro';
       justify-content: space-between;
     }
     .ph-val { opacity: 0.9; font-variant-numeric: tabular-nums; }
-    .ph-range { width: 100%; accent-color: var(--accent, #888); }
     .ph-select {
       font-size: 0.75rem;
       padding: 0.2rem 0.4rem;
@@ -255,11 +255,119 @@ import Admin from '../../../layouts/Admin.astro';
     /* Action bar */
     .ph-action-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 
-    @media (max-width: 800px) {
+    /* Library button */
+    .ph-lib-btn { width: 100%; font-size: 0.75rem; }
+
+    /* Library modal */
+    .ph-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.78);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .ph-modal {
+      background: var(--bg, #111);
+      border: 1px solid var(--border, #333);
+      border-radius: 6px;
+      width: min(560px, 100%);
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .ph-modal__header {
+      display: flex;
+      align-items: center;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border, #333);
+    }
+    .ph-modal__title { font-size: 0.9rem; margin: 0; flex: 1; }
+    .ph-modal__close {
+      background: none; border: none; color: inherit; cursor: pointer;
+      opacity: 0.5; font-size: 1rem; padding: 0.25rem 0.5rem;
+    }
+    .ph-modal__close:hover { opacity: 1; }
+    .ph-modal__tabs { display: flex; border-bottom: 1px solid var(--border, #333); }
+    .ph-modal__tab {
+      flex: 1; padding: 0.5rem; font-size: 0.7rem;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      background: none; border: none; color: inherit; cursor: pointer;
+      opacity: 0.45; border-bottom: 2px solid transparent; transition: opacity 0.1s;
+    }
+    .ph-modal__tab:hover { opacity: 0.8; }
+    .ph-modal__tab--active { opacity: 1; border-bottom-color: var(--accent, #888); }
+    .ph-modal__toolbar { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border, #222); }
+    .ph-modal__search {
+      width: 100%; box-sizing: border-box; font-size: 0.8rem; padding: 0.35rem 0.5rem;
+      background: var(--bg2, #1a1a1a); border: 1px solid var(--border, #333);
+      color: inherit; border-radius: 3px;
+    }
+    .ph-modal__grid {
+      flex: 1; overflow-y: auto; padding: 0.5rem;
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.4rem; align-content: start;
+    }
+    .ph-modal__loading {
+      grid-column: 1/-1; text-align: center;
+      padding: 2rem; font-size: 0.75rem; opacity: 0.4;
+    }
+    .ph-audio-card {
+      border: 1px solid var(--border, #333); border-radius: 4px;
+      padding: 0.6rem 0.7rem; cursor: pointer;
+      transition: border-color 0.1s, background 0.1s;
+      display: flex; flex-direction: column; gap: 0.2rem; min-width: 0;
+    }
+    .ph-audio-card:hover { border-color: var(--accent, #888); background: rgba(255,255,255,0.03); }
+    .ph-audio-card__icon { font-size: 1.1rem; opacity: 0.35; }
+    .ph-audio-card__name {
+      font-size: 0.65rem; opacity: 0.8;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ph-audio-card__meta { font-size: 0.6rem; opacity: 0.4; }
+
+    /* Range touch target */
+    .ph-range { width: 100%; accent-color: var(--accent, #888); cursor: pointer; }
+
+    /* Responsive */
+    @media (max-width: 700px) {
       .ph-shell { flex-direction: column; }
       .ph-controls { width: 100%; }
     }
+    @media (max-width: 500px) {
+      .ph-stage { order: -1; }
+      #ph-canvas { aspect-ratio: 1 / 1; }
+      .ph-pill { padding: 0.45rem 0.75rem; font-size: 0.8rem; }
+      .ph-range { height: 2.75rem; }
+      .ph-action-bar { flex-direction: column; }
+      .ph-action-bar .btn { width: 100%; }
+      .ph-label { font-size: 0.75rem; }
+    }
   </style>
+
+  <!-- ── Library modal ──────────────────────────────────────────── -->
+  <div class="ph-modal-overlay" id="ph-modal-overlay" style="display:none">
+    <div class="ph-modal">
+      <div class="ph-modal__header">
+        <h2 class="ph-modal__title">Pick Audio</h2>
+        <button class="ph-modal__close" id="ph-modal-close">✕</button>
+      </div>
+      <div class="ph-modal__tabs" id="ph-modal-tabs">
+        <button class="ph-modal__tab ph-modal__tab--active" data-tab="inputs">Inputs</button>
+        <button class="ph-modal__tab" data-tab="outputs">Outputs</button>
+        <button class="ph-modal__tab" data-tab="workspace">Workspace</button>
+      </div>
+      <div class="ph-modal__toolbar">
+        <input class="ph-modal__search" type="text" id="ph-modal-search" placeholder="Search…" />
+      </div>
+      <div class="ph-modal__grid" id="ph-modal-grid">
+        <div class="ph-modal__loading">Loading…</div>
+      </div>
+    </div>
+  </div>
 
   <script>
     // ─── Types ────────────────────────────────────────────────────────────────
@@ -278,6 +386,8 @@ import Admin from '../../../layouts/Admin.astro';
     let currentPalette = 'hot';
     let paletteLUT: Uint8ClampedArray = buildPaletteLUT('hot');
     let renderPending = false;
+    let lastArrayBuf: ArrayBuffer | null = null;
+    let lastFileName = 'audio';
 
     const canvas = document.getElementById('ph-canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d')!;
@@ -655,7 +765,7 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     // ─── Audio loading ────────────────────────────────────────────────────────
-    async function loadAudioFile(file: File) {
+    async function loadAudioData(arrayBuf: ArrayBuffer, name: string) {
       const busyEl = document.getElementById('ph-busy')!;
       const busyLabel = document.getElementById('ph-busy-label')!;
       const emptyEl = document.getElementById('ph-empty')!;
@@ -670,12 +780,13 @@ import Admin from '../../../layouts/Admin.astro';
       actionBar.style.display = 'none';
 
       try {
-        const arrayBuf = await file.arrayBuffer();
+        lastArrayBuf = arrayBuf.slice(0); // store a copy for FFT size recompute
+        lastFileName = name;
+
         const audioCtx = new OfflineAudioContext(1, 1, 44100);
         const audioBuffer = await audioCtx.decodeAudioData(arrayBuf);
 
         busyLabel.textContent = 'Analyzing…';
-
         const fftSize = parseInt((document.getElementById('ph-fft') as HTMLSelectElement).value);
         spectrogramData = await computeSpectrogram(audioBuffer, fftSize, (p) => {
           busyLabel.textContent = `Analyzing… ${Math.round(p * 100)}%`;
@@ -686,7 +797,7 @@ import Admin from '../../../layouts/Admin.astro';
         waveformCanvas.style.display = 'block';
         const mins = Math.floor(audioBuffer.duration / 60);
         const secs = Math.floor(audioBuffer.duration % 60);
-        metaEl.textContent = `${file.name} · ${mins}:${String(secs).padStart(2,'0')}`;
+        metaEl.textContent = `${name} · ${mins}:${String(secs).padStart(2,'0')}`;
         metaEl.style.display = 'block';
 
         busyEl.style.display = 'none';
@@ -695,9 +806,13 @@ import Admin from '../../../layouts/Admin.astro';
       } catch (err) {
         busyEl.style.display = 'none';
         emptyEl.style.display = 'flex';
-        emptyEl.textContent = 'Failed to decode audio file';
+        (emptyEl as HTMLElement).textContent = 'Failed to decode audio file';
         console.error(err);
       }
+    }
+
+    async function loadAudioFile(file: File) {
+      loadAudioData(await file.arrayBuffer(), file.name);
     }
 
     // ─── CRC-32 ───────────────────────────────────────────────────────────────
@@ -863,6 +978,120 @@ import Admin from '../../../layouts/Admin.astro';
       if (f && f.type.startsWith('audio/')) loadAudioFile(f);
     });
 
+    // ─── Library modal ────────────────────────────────────────────────────────
+    type LibTab = 'inputs' | 'outputs' | 'workspace';
+    let libCurrentTab: LibTab = 'inputs';
+    let libSearchTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const modalOverlay  = document.getElementById('ph-modal-overlay')!;
+    const modalGrid     = document.getElementById('ph-modal-grid')!;
+    const modalSearch   = document.getElementById('ph-modal-search') as HTMLInputElement;
+
+    function openLibrary() {
+      modalOverlay.style.display = 'flex';
+      modalSearch.value = '';
+      setLibTab('inputs');
+    }
+
+    function closeLibrary() { modalOverlay.style.display = 'none'; }
+
+    function setLibTab(tab: LibTab) {
+      libCurrentTab = tab;
+      document.querySelectorAll<HTMLElement>('.ph-modal__tab').forEach(b => {
+        b.classList.toggle('ph-modal__tab--active', b.dataset.tab === tab);
+      });
+      loadLibItems('');
+    }
+
+    async function loadLibItems(q: string) {
+      modalGrid.innerHTML = '<div class="ph-modal__loading">Loading…</div>';
+      try {
+        let items: { id: string; filename?: string; original_filename?: string; media_type?: string }[] = [];
+
+        if (libCurrentTab === 'workspace') {
+          // Fetch active workspace then its items
+          const wsRes = await fetch('/api/workspaces/active', { credentials: 'include' });
+          if (wsRes.ok) {
+            const ws = await wsRes.json();
+            const wsId = ws.id || ws.workspace_id;
+            if (wsId) {
+              const itemsRes = await fetch(`/api/workspaces/${wsId}/items?per_page=100`, { credentials: 'include' });
+              if (itemsRes.ok) {
+                const data = await itemsRes.json();
+                items = (data.items || []).filter((i: any) => i.media_type === 'audio');
+              }
+            }
+          }
+        } else {
+          const res = await fetch('/api/search', {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              query: q,
+              media_types: ['audio'],
+              sort: 'created_at:desc',
+              page: 1, per_page: 48,
+              filters: { output_index: libCurrentTab === 'inputs' ? '__inputs__' : '__outputs__' },
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            items = data.results ?? data.hits ?? [];
+          }
+        }
+
+        renderLibGrid(items);
+      } catch (err) {
+        modalGrid.innerHTML = '<div class="ph-modal__loading">Failed to load</div>';
+      }
+    }
+
+    function renderLibGrid(items: { id: string; filename?: string; original_filename?: string }[]) {
+      if (items.length === 0) {
+        modalGrid.innerHTML = '<div class="ph-modal__loading">No audio files found</div>';
+        return;
+      }
+      modalGrid.innerHTML = '';
+      for (const item of items) {
+        const name = item.filename || item.original_filename || item.id;
+        const card = document.createElement('div');
+        card.className = 'ph-audio-card';
+        card.innerHTML = `<div class="ph-audio-card__icon">♫</div>
+          <div class="ph-audio-card__name" title="${name}">${name}</div>`;
+        card.addEventListener('click', async () => {
+          closeLibrary();
+          const busyEl = document.getElementById('ph-busy')!;
+          const busyLabel = document.getElementById('ph-busy-label')!;
+          busyEl.style.display = 'flex';
+          busyLabel.textContent = 'Fetching…';
+          try {
+            const res = await fetch(`/api/media/${item.id}/file`, { credentials: 'include' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const arrayBuf = await res.arrayBuffer();
+            await loadAudioData(arrayBuf, name);
+          } catch (err: any) {
+            busyEl.style.display = 'none';
+            (window as any).toast?.error(`Load failed: ${err.message}`);
+          }
+        });
+        modalGrid.appendChild(card);
+      }
+    }
+
+    document.getElementById('ph-lib-btn')!.addEventListener('click', openLibrary);
+    document.getElementById('ph-modal-close')!.addEventListener('click', closeLibrary);
+    modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) closeLibrary(); });
+
+    document.getElementById('ph-modal-tabs')!.addEventListener('click', e => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.ph-modal__tab');
+      if (btn?.dataset.tab) setLibTab(btn.dataset.tab as LibTab);
+    });
+
+    modalSearch.addEventListener('input', () => {
+      if (libSearchTimer) clearTimeout(libSearchTimer);
+      libSearchTimer = setTimeout(() => loadLibItems(modalSearch.value.trim()), 300);
+    });
+
     // Mode buttons
     document.getElementById('ph-mode-group')!.addEventListener('click', e => {
       const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.ph-pill');
@@ -889,10 +1118,8 @@ import Admin from '../../../layouts/Admin.astro';
 
     // FFT size — recompute spectrogram
     document.getElementById('ph-fft')!.addEventListener('change', () => {
-      if (!spectrogramData) return;
-      // Need to re-decode; store the last file
-      const fi = fileInput.files?.[0];
-      if (fi) loadAudioFile(fi);
+      if (!lastArrayBuf) return;
+      loadAudioData(lastArrayBuf.slice(0), lastFileName);
     });
 
     // Sliders
