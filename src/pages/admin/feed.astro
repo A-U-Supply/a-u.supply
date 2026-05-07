@@ -32,7 +32,7 @@ import Admin from '../../layouts/Admin.astro';
     .ru-feed {
       display: flex;
       flex-direction: column;
-      max-width: 740px;
+      max-width: 640px;
       padding-bottom: 3rem;
     }
 
@@ -124,52 +124,55 @@ import Admin from '../../layouts/Admin.astro';
       cursor: zoom-in;
     }
     /* ── Inline audio player ── */
+    .ru-post__media:has(.ru-audio) {
+      padding: 0 1rem;
+    }
     .ru-audio {
       width: 100%;
-      padding: 0.6rem 0;
+      padding: 1rem 0;
     }
     .ru-audio__bar {
       display: flex;
       align-items: center;
-      gap: 0.6rem;
+      gap: 0.75rem;
     }
     .ru-audio__play {
       background: none;
-      border: 1px solid rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.2);
       border-radius: 50%;
-      width: 30px;
-      height: 30px;
+      width: 38px;
+      height: 38px;
       flex-shrink: 0;
       cursor: pointer;
-      font-size: 0.75rem;
+      font-size: 0.9rem;
       color: inherit;
       display: flex;
       align-items: center;
       justify-content: center;
       transition: border-color 0.15s;
     }
-    .ru-audio__play:hover { border-color: rgba(255,255,255,0.4); }
+    .ru-audio__play:hover { border-color: rgba(255,255,255,0.5); }
     .ru-audio__scrub-wrap {
       flex: 1;
       display: flex;
       flex-direction: column;
-      gap: 0.25rem;
+      gap: 0.35rem;
     }
     .ru-audio__scrub {
       width: 100%;
-      height: 3px;
+      height: 5px;
       -webkit-appearance: none;
       appearance: none;
-      background: rgba(255,255,255,0.1);
-      border-radius: 2px;
+      background: rgba(255,255,255,0.12);
+      border-radius: 3px;
       cursor: pointer;
-      accent-color: rgba(255,255,255,0.5);
+      accent-color: rgba(255,255,255,0.6);
     }
     .ru-audio__times {
       display: flex;
       justify-content: space-between;
-      font-size: 0.62rem;
-      opacity: 0.3;
+      font-size: 0.68rem;
+      opacity: 0.35;
       font-variant-numeric: tabular-nums;
     }
 
@@ -321,8 +324,6 @@ import Admin from '../../layouts/Admin.astro';
     }
     .ru-epicker {
       position: fixed; z-index: 500;
-      top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: min(360px, 96vw);
       background: var(--bg, #111); border: 1px solid var(--border, #333);
       border-radius: 8px; overflow: hidden;
       display: flex; flex-direction: column;
@@ -756,13 +757,44 @@ import Admin from '../../layouts/Admin.astro';
       renderEpickerGrid(matched.length > 0 ? matched : EMOJI_CATS.flatMap((c) => c.emoji));
     });
 
-    function openEpicker(mine: string[], onPick: (e: string) => void) {
+    function openEpicker(mine: string[], onPick: (e: string) => void, anchor: HTMLElement) {
       epickerMine = mine;
       epickerCallback = onPick;
       epickerSearch.value = '';
       setEpickerCat(epickerActiveCat);
       epicker.style.display = 'flex';
       epickerBackdrop.style.display = 'block';
+
+      // Position picker anchored to the post body, above the anchor button
+      const body = anchor.closest<HTMLElement>('.ru-post__body');
+      const bodyRect = body ? body.getBoundingClientRect() : anchor.getBoundingClientRect();
+      const btnRect = anchor.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const PICKER_W = Math.min(bodyRect.width, vw - 16);
+      const PICKER_H = 420;
+      const GAP = 6;
+
+      // Align left edge of picker to left edge of post body
+      let left = bodyRect.left;
+      if (left + PICKER_W > vw - 8) left = vw - PICKER_W - 8;
+      if (left < 8) left = 8;
+
+      // Prefer above the button; fall back to below if not enough room
+      let top: number;
+      if (btnRect.top - GAP >= PICKER_H || btnRect.top - GAP >= vh - btnRect.bottom - GAP) {
+        top = btnRect.top - GAP - PICKER_H;
+        if (top < 8) top = 8;
+      } else {
+        top = btnRect.bottom + GAP;
+        if (top + PICKER_H > vh - 8) top = vh - PICKER_H - 8;
+        if (top < 8) top = 8;
+      }
+
+      epicker.style.top = top + 'px';
+      epicker.style.left = left + 'px';
+      epicker.style.width = PICKER_W + 'px';
+
       requestAnimationFrame(() => epickerSearch.focus());
     }
 
@@ -804,7 +836,7 @@ import Admin from '../../layouts/Admin.astro';
         const data = (reactRow as any).__lastData ?? { mine: [] };
         openEpicker(data.mine, async (emoji) => {
           await toggleReaction(item.id, emoji, reactRow);
-        });
+        }, reactBtn);
       });
       row.appendChild(reactBtn);
 
