@@ -331,6 +331,7 @@ def _source_response(s) -> dict:
         "slack_message_text": s.slack_message_text,
         "slack_link": _slack_message_link(s.source_channel, s.slack_message_ts),
         "reaction_count": s.reaction_count,
+        "uploader_name": s.uploader.name if s.uploader else None,
         "source_url": s.source_url,
         "source_metadata": s.source_metadata,
         "created_at": s.created_at.isoformat() if s.created_at else None,
