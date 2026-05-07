@@ -203,6 +203,18 @@ class MediaSource(Base):
     uploader = relationship("User")
 
 
+class MediaSlackShare(Base):
+    __tablename__ = "media_slack_shares"
+    __table_args__ = (UniqueConstraint("media_item_id", "channel_name"),)
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    media_item_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False)
+    channel_name = Column(String, nullable=False)  # "img-junkyard" or "sample-sale"
+    slack_file_id = Column(String, nullable=True)
+    sent_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    sent_at = Column(DateTime, nullable=False, default=_utcnow)
+
+
 class MediaImageMeta(Base):
     __tablename__ = "media_image_meta"
 
