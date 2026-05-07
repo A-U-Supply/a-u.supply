@@ -123,10 +123,54 @@ import Admin from '../../layouts/Admin.astro';
       object-fit: contain;
       cursor: zoom-in;
     }
-    .ru-post__audio-placeholder {
-      padding: 2rem;
-      font-size: 2rem;
-      opacity: 0.18;
+    /* ── Inline audio player ── */
+    .ru-audio {
+      width: 100%;
+      padding: 0.6rem 0;
+    }
+    .ru-audio__bar {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+    .ru-audio__play {
+      background: none;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      flex-shrink: 0;
+      cursor: pointer;
+      font-size: 0.75rem;
+      color: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.15s;
+    }
+    .ru-audio__play:hover { border-color: rgba(255,255,255,0.4); }
+    .ru-audio__scrub-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .ru-audio__scrub {
+      width: 100%;
+      height: 3px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255,255,255,0.1);
+      border-radius: 2px;
+      cursor: pointer;
+      accent-color: rgba(255,255,255,0.5);
+    }
+    .ru-audio__times {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.62rem;
+      opacity: 0.3;
+      font-variant-numeric: tabular-nums;
     }
 
     /* ── Footer ── */
@@ -454,6 +498,101 @@ import Admin from '../../layouts/Admin.astro';
       }
     });
 
+    // ─── Inline audio player ──────────────────────────────────────────────────
+    function fmtTime(s: number): string {
+      if (!isFinite(s)) return '0:00';
+      return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+    }
+
+    function buildAudioPlayer(item: any): HTMLElement {
+      const wrap = document.createElement('div');
+      wrap.className = 'ru-audio';
+
+      const bar = document.createElement('div');
+      bar.className = 'ru-audio__bar';
+
+      const playBtn = document.createElement('button');
+      playBtn.className = 'ru-audio__play';
+      playBtn.textContent = '▶';
+      playBtn.title = 'Play';
+
+      const scrubWrap = document.createElement('div');
+      scrubWrap.className = 'ru-audio__scrub-wrap';
+
+      const scrub = document.createElement('input');
+      scrub.type = 'range';
+      scrub.className = 'ru-audio__scrub';
+      scrub.min = '0';
+      scrub.max = '100';
+      scrub.value = '0';
+      scrub.step = '0.1';
+
+      const times = document.createElement('div');
+      times.className = 'ru-audio__times';
+      const curEl = document.createElement('span');
+      curEl.className = 'ru-audio__cur';
+      curEl.textContent = '0:00';
+      const durEl = document.createElement('span');
+      durEl.className = 'ru-audio__dur';
+      durEl.textContent = item.audio_meta?.duration_seconds
+        ? fmtTime(item.audio_meta.duration_seconds)
+        : '';
+      times.appendChild(curEl);
+      times.appendChild(durEl);
+
+      scrubWrap.appendChild(scrub);
+      scrubWrap.appendChild(times);
+      bar.appendChild(playBtn);
+      bar.appendChild(scrubWrap);
+      wrap.appendChild(bar);
+
+      const audio = new Audio();
+      audio.preload = 'none';
+
+      playBtn.addEventListener('click', () => {
+        if (!audio.src) {
+          audio.src = `/api/media/${item.id}/file`;
+        }
+        if (audio.paused) {
+          audio.play();
+          playBtn.textContent = '⏸';
+          playBtn.title = 'Pause';
+        } else {
+          audio.pause();
+          playBtn.textContent = '▶';
+          playBtn.title = 'Play';
+        }
+      });
+
+      audio.ontimeupdate = () => {
+        if (audio.duration) {
+          scrub.value = String((audio.currentTime / audio.duration) * 100);
+          curEl.textContent = fmtTime(audio.currentTime);
+        }
+      };
+
+      audio.onloadedmetadata = () => {
+        if (!item.audio_meta?.duration_seconds) {
+          durEl.textContent = fmtTime(audio.duration);
+        }
+      };
+
+      audio.onended = () => {
+        playBtn.textContent = '▶';
+        playBtn.title = 'Play';
+        scrub.value = '0';
+        curEl.textContent = '0:00';
+      };
+
+      scrub.addEventListener('input', () => {
+        if (audio.duration) {
+          audio.currentTime = (Number(scrub.value) / 100) * audio.duration;
+        }
+      });
+
+      return wrap;
+    }
+
     // ─── Build a post ─────────────────────────────────────────────────────────
     function buildPost(item: any): HTMLElement {
       const creator = getCreatorName(item);
@@ -523,10 +662,12 @@ import Admin from '../../layouts/Admin.astro';
         img.loading = 'lazy';
         img.addEventListener('click', () => openLightbox(`/api/media/${item.id}/file`));
         mediaWrap.appendChild(img);
+      } else if (item.media_type === 'audio') {
+        mediaWrap.appendChild(buildAudioPlayer(item));
       } else {
         const icon = document.createElement('div');
-        icon.className = 'ru-post__audio-placeholder';
-        icon.textContent = item.media_type === 'audio' ? '♫' : '▶';
+        icon.style.cssText = 'padding:2rem;font-size:2rem;opacity:0.18;';
+        icon.textContent = '▶';
         mediaWrap.appendChild(icon);
       }
       body.appendChild(mediaWrap);
