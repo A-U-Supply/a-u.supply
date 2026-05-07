@@ -33,7 +33,10 @@ const { title, current } = Astro.props;
           <a href="/">A-U.SUPPLY</a>
         </div>
 
-        <div class="sidebar__section">Overture<span class="sidebar__section-hint">dashboard + bookmarks</span></div>
+        <div class="sidebar__section">
+          Overture<span class="sidebar__section-hint"
+            >dashboard + bookmarks</span>
+        </div>
         <ul class="sidebar__nav">
           <li>
             <a
@@ -52,13 +55,14 @@ const { title, current } = Astro.props;
           <li>
             <a
               href="/admin/feed"
-              aria-current={current === 'feed' ? 'page' : undefined}
-              >Feed</a
+              aria-current={current === 'feed' ? 'page' : undefined}>Feed</a
             >
           </li>
         </ul>
 
-        <div class="sidebar__section">The Canon<span class="sidebar__section-hint">releases catalog</span></div>
+        <div class="sidebar__section">
+          The Canon<span class="sidebar__section-hint">releases catalog</span>
+        </div>
         <ul class="sidebar__nav">
           <li>
             <a
@@ -76,7 +80,9 @@ const { title, current } = Astro.props;
           </li>
         </ul>
 
-        <div class="sidebar__section">The Larder<span class="sidebar__section-hint">media library</span></div>
+        <div class="sidebar__section">
+          The Larder<span class="sidebar__section-hint">media library</span>
+        </div>
         <ul class="sidebar__nav">
           <li>
             <a
@@ -101,7 +107,10 @@ const { title, current } = Astro.props;
           </li>
         </ul>
 
-        <div class="sidebar__section">The Winnowing<span class="sidebar__section-hint">rejected + flagged media</span></div>
+        <div class="sidebar__section">
+          The Winnowing<span class="sidebar__section-hint"
+            >rejected + flagged media</span>
+        </div>
         <ul class="sidebar__nav">
           <li>
             <a
@@ -126,7 +135,10 @@ const { title, current } = Astro.props;
           </li>
         </ul>
 
-        <div class="sidebar__section">The Altar<span class="sidebar__section-hint">workspace, jobs, bulk ops</span></div>
+        <div class="sidebar__section">
+          The Altar<span class="sidebar__section-hint"
+            >workspace, jobs, bulk ops</span>
+        </div>
         <ul class="sidebar__nav">
           <li>
             <a
@@ -151,7 +163,10 @@ const { title, current } = Astro.props;
           </li>
         </ul>
 
-        <div class="sidebar__section">The Atelier<span class="sidebar__section-hint">generative image tools</span></div>
+        <div class="sidebar__section">
+          The Atelier<span class="sidebar__section-hint"
+            >generative image tools</span>
+        </div>
         <ul class="sidebar__nav">
           <li>
             <a
@@ -169,7 +184,10 @@ const { title, current } = Astro.props;
           </li>
         </ul>
 
-        <div class="sidebar__section">The Sacristy<span class="sidebar__section-hint">files, keys, settings</span></div>
+        <div class="sidebar__section">
+          The Sacristy<span class="sidebar__section-hint"
+            >files, keys, settings</span>
+        </div>
         <ul class="sidebar__nav">
           <li>
             <a
@@ -214,6 +232,7 @@ const { title, current } = Astro.props;
 </html>
 
 <style is:global>
+  @import '../styles/tailwind.css';
   @import '../styles/global.css';
   @import '../styles/admin.css';
 </style>
@@ -240,7 +259,6 @@ const { title, current } = Astro.props;
   document.addEventListener('astro:page-load', applyPageBackground);
 
   document.addEventListener('astro:page-load', () => {
-
     const loader = document.getElementById('page-loading');
     if (loader) loader.style.display = 'none';
 

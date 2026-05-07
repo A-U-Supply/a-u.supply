@@ -1,5 +1,6 @@
 ---
 import Admin from '../../../layouts/Admin.astro';
+import IndexFilter from '../../../components/IndexFilter.svelte';
 ---
 
 <Admin title="The Stacks" current="search">
@@ -42,25 +43,25 @@ import Admin from '../../../layouts/Admin.astro';
 
   <div class="search-layout">
     <aside class="filter-panel" id="filter-panel">
-      <button class="filter-toggle" id="filter-toggle">Filters</button>
+      <button
+        class="filter-toggle"
+        id="filter-toggle"
+        type="button"
+        aria-expanded="false"
+        aria-controls="filter-body"
+      >
+        <span>Filters</span>
+        <span class="filter-toggle__count" id="filter-toggle-count" hidden
+          >0</span
+        >
+      </button>
 
       <div class="filter-body" id="filter-body">
         <div class="filter-group">
           <label class="filter-label">Index</label>
-          <div
-            class="pill-group"
-            id="filter-output-index"
-            role="group"
-            aria-label="Index"
-          >
-            <button
-              type="button"
-              class="pill active"
-              data-value="__inputs__"
-              aria-pressed="true">Inputs</button
-            >
+          <div id="filter-output-index" data-selected="__inputs__">
+            <IndexFilter client:load />
           </div>
-          <div class="pill-hint">shift-click to combine</div>
         </div>
 
         <div class="filter-group">
@@ -417,22 +418,65 @@ import Admin from '../../../layouts/Admin.astro';
     gap: var(--space-md);
     align-items: start;
   }
+  /* Filters hidden by default → results expand to full width.
+     Reopens the 220px column when the body is open. */
+  .search-layout:has(.filter-body:not(.open)) {
+    grid-template-columns: auto 1fr;
+  }
 
   .filter-panel {
     border: 1px solid var(--color-border);
     padding: var(--space-sm);
   }
+  .filter-panel:has(.filter-body:not(.open)) {
+    border: none;
+    padding: 0;
+  }
   .filter-toggle {
-    display: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     width: 100%;
-    padding: var(--space-xs);
+    padding: 5px 10px;
     font-family: var(--font-mono);
-    font-size: var(--text-sm);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.5pt;
     text-transform: uppercase;
-    background: none;
-    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    border: 2px solid var(--color-text);
+    box-shadow: 2px 2px 0 var(--color-text);
     cursor: pointer;
     color: var(--color-text);
+    transition:
+      transform 60ms ease,
+      box-shadow 60ms ease;
+  }
+  .filter-toggle:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--color-text);
+  }
+  .filter-toggle:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--color-text);
+  }
+  .filter-toggle .filter-toggle__count {
+    color: var(--color-bg);
+    background: var(--color-accent);
+    padding: 1px 6px;
+    font-size: 0.65rem;
+  }
+  .filter-toggle .filter-toggle__count[hidden] {
+    display: none;
+  }
+  /* Hidden by default — toggled open by JS. */
+  .filter-body {
+    display: none;
+    margin-top: var(--space-sm);
+  }
+  .filter-body.open {
+    display: block;
   }
   .filter-group {
     margin-bottom: var(--space-sm);
@@ -453,51 +497,6 @@ import Admin from '../../../layouts/Admin.astro';
   }
   .filter-check input {
     margin-right: 4px;
-  }
-  .pill-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 4px;
-  }
-  .pill {
-    padding: 5px 10px;
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    background: var(--color-bg);
-    border: 2px solid var(--color-text);
-    color: var(--color-text);
-    cursor: pointer;
-    box-shadow: 2px 2px 0 var(--color-text);
-    transform: translate(0, 0);
-    transition:
-      transform 60ms ease,
-      box-shadow 60ms ease,
-      background 80ms,
-      color 80ms;
-    user-select: none;
-  }
-  .pill:hover {
-    transform: translate(-1px, -1px);
-    box-shadow: 3px 3px 0 var(--color-text);
-  }
-  .pill:active {
-    transform: translate(2px, 2px);
-    box-shadow: 0 0 0 var(--color-text);
-  }
-  .pill.active {
-    background: var(--color-text);
-    color: var(--color-bg);
-  }
-  .pill-hint {
-    font-size: 0.6rem;
-    color: var(--color-muted);
-    text-transform: none;
-    letter-spacing: 0;
-    margin-top: 2px;
   }
   .filter-group input[type='text'],
   .filter-group input[type='number'],
@@ -683,16 +682,6 @@ import Admin from '../../../layouts/Admin.astro';
   @media (max-width: 900px) {
     .search-layout {
       grid-template-columns: 1fr;
-    }
-    .filter-toggle {
-      display: block;
-    }
-    .filter-body {
-      display: none;
-    }
-    .filter-body.open {
-      display: block;
-      margin-top: var(--space-sm);
     }
   }
   @media (max-width: 640px) {
@@ -1047,10 +1036,30 @@ import Admin from '../../../layouts/Admin.astro';
       renderResults();
     });
 
-    // Filter toggle (mobile)
-    document.getElementById('filter-toggle')?.addEventListener('click', () => {
-      document.getElementById('filter-body')?.classList.toggle('open');
+    // Filter toggle — collapsed by default on every viewport. Persisted
+    // across in-tab navigations via sessionStorage so a user who opens it
+    // doesn't have to re-open after every page change.
+    const filterToggleEl = document.getElementById(
+      'filter-toggle',
+    ) as HTMLButtonElement | null;
+    const filterBodyEl = document.getElementById('filter-body');
+    function setFilterPanelOpen(open: boolean) {
+      if (!filterBodyEl || !filterToggleEl) return;
+      filterBodyEl.classList.toggle('open', open);
+      filterToggleEl.setAttribute('aria-expanded', open ? 'true' : 'false');
+      try {
+        sessionStorage.setItem('au.filterPanelOpen', open ? '1' : '0');
+      } catch {}
+    }
+    filterToggleEl?.addEventListener('click', () => {
+      setFilterPanelOpen(!filterBodyEl?.classList.contains('open'));
     });
+    // Restore state on load (default = closed).
+    try {
+      if (sessionStorage.getItem('au.filterPanelOpen') === '1') {
+        setFilterPanelOpen(true);
+      }
+    } catch {}
 
     // Insights toggle
     document
@@ -1065,47 +1074,18 @@ import Admin from '../../../layouts/Admin.astro';
       doSearch();
     });
 
-    // Index pills:
-    //   plain click   → switch to that pill (deactivate all others)
-    //   shift / cmd / ctrl-click → toggle this pill (multi-select)
-    // Always guarantees at least one pill is active. Runs the search
-    // immediately so the URL updates via doSearch().
+    // Index filter (bits-ui Select multi). The Svelte island dispatches
+    // `index-change` events with detail.value when the selection changes.
+    // We mirror the value into `data-selected` on this wrapper so
+    // getFilters() can read it synchronously.
     document
       .getElementById('filter-output-index')
-      ?.addEventListener('click', (e) => {
-        const pill = (e.target as HTMLElement).closest(
-          '.pill',
-        ) as HTMLElement | null;
-        if (!pill) return;
-        const group = pill.parentElement!;
-        const allPills = Array.from(
-          group.querySelectorAll<HTMLElement>('.pill'),
-        );
-        const isMulti = e.shiftKey || e.metaKey || e.ctrlKey;
-        const wasActive = pill.classList.contains('active');
-        const activeCount = allPills.filter((p) =>
-          p.classList.contains('active'),
-        ).length;
-
-        if (isMulti) {
-          // Toggle this pill, but never allow zero active.
-          if (wasActive && activeCount === 1) {
-            return; // would leave nothing selected — ignore
-          }
-          pill.classList.toggle('active');
-        } else {
-          // Replace selection: this pill becomes the only active one.
-          // Clicking the only-active pill is a no-op.
-          if (wasActive && activeCount === 1) return;
-          allPills.forEach((p) => p.classList.remove('active'));
-          pill.classList.add('active');
-        }
-        allPills.forEach((p) =>
-          p.setAttribute(
-            'aria-pressed',
-            p.classList.contains('active') ? 'true' : 'false',
-          ),
-        );
+      ?.addEventListener('index-change', (e) => {
+        const wrapper = document.getElementById('filter-output-index')!;
+        const value: string[] = (e as CustomEvent).detail?.value || [
+          '__inputs__',
+        ];
+        wrapper.dataset.selected = value.join(',');
         updateCrossFilterState();
         currentPage = 1;
         doSearch();
@@ -1356,11 +1336,12 @@ import Admin from '../../../layouts/Admin.astro';
       const colorGroups = colorGroupVal
         ? [colorGroupVal]
         : preservedMultiColors.slice();
+      // The Svelte IndexFilter island writes the selection to the wrapper
+      // div's `data-selected` attribute (comma-joined). Falls back to the
+      // default if the island hasn't mounted yet.
       const outputIndexEl = document.getElementById('filter-output-index')!;
-      const outputIndexes = Array.from(
-        outputIndexEl.querySelectorAll<HTMLElement>('.pill.active'),
-      )
-        .map((p) => p.dataset.value || '')
+      const outputIndexes = (outputIndexEl.dataset.selected || '__inputs__')
+        .split(',')
         .filter(Boolean);
       const tags = (document.getElementById('filter-tags') as HTMLInputElement)
         .value;
@@ -1411,11 +1392,10 @@ import Admin from '../../../layouts/Admin.astro';
     // - Transcript requires audio or video checked.
     // - OCR Text requires image checked.
     function updateCrossFilterState() {
-      const activeIndexes = Array.from(
-        document.querySelectorAll<HTMLElement>(
-          '#filter-output-index .pill.active',
-        ),
-      ).map((p) => p.dataset.value || '');
+      const indexWrapper = document.getElementById('filter-output-index')!;
+      const activeIndexes = (indexWrapper.dataset.selected || '__inputs__')
+        .split(',')
+        .filter(Boolean);
       const jobAppEl = document.getElementById(
         'filter-job-app',
       ) as HTMLSelectElement;
@@ -1937,9 +1917,6 @@ import Admin from '../../../layouts/Admin.astro';
           (data.uploaders || [])
             .map((u: string) => `<option value="${u}">${u}</option>`)
             .join('');
-        const outputIndexGroup = document.getElementById(
-          'filter-output-index',
-        ) as HTMLElement;
         const jobAppSelect = document.getElementById(
           'filter-job-app',
         ) as HTMLSelectElement;
@@ -1948,10 +1925,11 @@ import Admin from '../../../layouts/Admin.astro';
           (data.job_apps || [])
             .map((a: string) => `<option value="${a}">${a}</option>`)
             .join('');
-        // Restore from URL after dropdowns are populated. Append unknown
-        // values as options so a link like ?app=bullethole actually filters
-        // instead of silently falling back to the default when the value
-        // isn't in the hardcoded list.
+        // Restore other dropdowns from URL after they're populated. Append
+        // unknown values as options so a link like ?app=bullethole actually
+        // filters instead of silently falling back to the default.
+        // (The Index filter is owned by the IndexFilter Svelte island —
+        // it reads the URL itself.)
         const p = new URLSearchParams(window.location.search);
         const ensureOption = (sel: HTMLSelectElement, val: string) => {
           if (!val) return;
@@ -1965,58 +1943,7 @@ import Admin from '../../../layouts/Admin.astro';
           sel.value = val;
         };
         if (p.get('poster')) ensureOption(posterSelect, p.get('poster')!);
-
-        // Build the Index pill group: Inputs first, then one pill per
-        // distinct output_index returned from the facets API.
-        const urlIndexParam = p.get('output_index');
-        const urlIndexes = urlIndexParam
-          ? urlIndexParam.split(',').filter(Boolean)
-          : null;
-        const facetIndexes: string[] = data.output_indexes || [];
-        // Include any URL-supplied unknowns so a stale link still works.
-        const allIndexes = [
-          ...new Set([
-            ...facetIndexes,
-            ...(urlIndexes || []).filter((v) => v !== '__inputs__'),
-          ]),
-        ];
-        const pillLabel = (v: string) =>
-          v === '__inputs__'
-            ? 'Inputs'
-            : v.charAt(0).toUpperCase() + v.slice(1);
-        const pillsHtml = ['__inputs__', ...allIndexes]
-          .map((v) => {
-            const active = urlIndexes
-              ? urlIndexes.includes(v)
-              : v === '__inputs__';
-            return `<button type="button" class="pill${active ? ' active' : ''}" data-value="${v}" aria-pressed="${active}">${pillLabel(v)}</button>`;
-          })
-          .join('');
-        outputIndexGroup.innerHTML = pillsHtml;
-
-        // App filter only applies to outputs (inputs have no job_app field).
-        // If URL has ?app=X but no explicit output_index, switch the Index
-        // selection to "outputs" so updateCrossFilterState() doesn't
-        // auto-clear the app selection.
-        if (p.get('app')) {
-          if (!urlIndexes) {
-            const inputsPill = outputIndexGroup.querySelector<HTMLElement>(
-              '.pill[data-value="__inputs__"]',
-            );
-            const outputsPill = outputIndexGroup.querySelector<HTMLElement>(
-              '.pill[data-value="outputs"]',
-            );
-            if (inputsPill) {
-              inputsPill.classList.remove('active');
-              inputsPill.setAttribute('aria-pressed', 'false');
-            }
-            if (outputsPill) {
-              outputsPill.classList.add('active');
-              outputsPill.setAttribute('aria-pressed', 'true');
-            }
-          }
-          ensureOption(jobAppSelect, p.get('app')!);
-        }
+        if (p.get('app')) ensureOption(jobAppSelect, p.get('app')!);
         if (p.get('channel')) {
           const chs = p.get('channel')!.split(',');
           Array.from(channelSelect.options).forEach((o) => {
@@ -2202,15 +2129,20 @@ import Admin from '../../../layouts/Admin.astro';
             });
           break;
         case 'output_index': {
-          // Reset to default: only Inputs active.
-          document
-            .querySelectorAll<HTMLElement>('#filter-output-index .pill')
-            .forEach((p) => {
-              const isInputs = p.dataset.value === '__inputs__';
-              p.classList.toggle('active', isInputs);
-              p.setAttribute('aria-pressed', isInputs ? 'true' : 'false');
-            });
-          break;
+          // Tell the IndexFilter island to reset to default (Inputs only).
+          // The island's `index-set` listener updates its internal state and
+          // re-emits `index-change`, which the wrapper listener picks up.
+          const wrapper = document.getElementById('filter-output-index');
+          if (wrapper) {
+            wrapper.dispatchEvent(
+              new CustomEvent('index-set', {
+                detail: { value: ['__inputs__'] },
+              }),
+            );
+          }
+          // Don't fall through to the generic doSearch() at the bottom —
+          // the island's emitted index-change already triggers a search.
+          return;
         }
       }
       currentPage = 1;
@@ -2305,6 +2237,17 @@ import Admin from '../../../layouts/Admin.astro';
         );
       }
 
+      // Active-filter count drives the badge on the Filters toggle button.
+      const activeCount = chips.length;
+      const countEl = document.getElementById('filter-toggle-count');
+      if (countEl) {
+        if (activeCount > 0) {
+          countEl.textContent = String(activeCount);
+          countEl.removeAttribute('hidden');
+        } else {
+          countEl.setAttribute('hidden', '');
+        }
+      }
       if (chips.length > 0) {
         chips.push(
           `<button class="action-btn" onclick="location.href='/admin/search'" style="margin-left:auto;">Clear All</button>`,
