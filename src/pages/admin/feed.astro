@@ -88,6 +88,7 @@ import Admin from '../../layouts/Admin.astro';
     }
     .ru-post__filename {
       font-size: 0.7rem;
+      font-weight: 600;
       font-family: monospace;
       opacity: 0.4;
       overflow: hidden;
@@ -95,7 +96,7 @@ import Admin from '../../layouts/Admin.astro';
       white-space: nowrap;
     }
     .ru-post__tag-dot { font-size: 0.65rem; opacity: 0.2; }
-    .ru-post__tag    { font-size: 0.65rem; opacity: 0.32; white-space: nowrap; }
+    .ru-post__tag    { font-size: 0.65rem; font-weight: 500; opacity: 0.32; white-space: nowrap; }
     .ru-post__time {
       font-size: 0.65rem;
       opacity: 0.28;
@@ -107,6 +108,7 @@ import Admin from '../../layouts/Admin.astro';
 
     /* ── Media ── */
     .ru-post__media {
+      width: 100%;
       background: #080808;
       border-radius: 4px;
       overflow: hidden;
@@ -123,10 +125,14 @@ import Admin from '../../layouts/Admin.astro';
       object-fit: contain;
       cursor: zoom-in;
     }
-    /* ── Inline audio player ── */
-    .ru-post__media:has(.ru-audio) {
-      padding: 0 1rem;
+    .ru-post__video {
+      display: block;
+      width: 100%;
+      max-height: 460px;
+      object-fit: contain;
+      background: #000;
     }
+    /* ── Inline audio player ── */
     .ru-audio {
       width: 100%;
       padding: 1rem 0;
@@ -135,6 +141,7 @@ import Admin from '../../layouts/Admin.astro';
       display: flex;
       align-items: center;
       gap: 0.75rem;
+      padding: 0 0.75rem;
     }
     .ru-audio__play {
       background: none;
@@ -263,7 +270,7 @@ import Admin from '../../layouts/Admin.astro';
     .ru-compose-input {
       flex: 1; font-size: 0.78rem; padding: 0.35rem 0.5rem;
       background: var(--bg2, #1a1a1a); border: 1px solid var(--border, #2a2a2a);
-      color: inherit; border-radius: 3px; resize: none; min-height: 34px;
+      color: inherit; border-radius: 3px; resize: vertical; min-height: 70px;
       font-family: inherit;
     }
     .ru-compose-input:focus { outline: none; border-color: var(--accent, #555); }
@@ -359,6 +366,7 @@ import Admin from '../../layouts/Admin.astro';
     .ru-epicker__emoji {
       font-size: 2.2rem; text-align: center; padding: 0.45rem;
       cursor: pointer; border-radius: 4px; border: none; background: transparent;
+      -webkit-appearance: none; appearance: none;
       transition: background 0.1s; line-height: 1.4;
     }
     .ru-epicker__emoji:hover { background: rgba(255,255,255,0.1); }
@@ -675,6 +683,13 @@ import Admin from '../../layouts/Admin.astro';
         mediaWrap.appendChild(img);
       } else if (item.media_type === 'audio') {
         mediaWrap.appendChild(buildAudioPlayer(item));
+      } else if (item.media_type === 'video') {
+        const vid = document.createElement('video');
+        vid.className = 'ru-post__video';
+        vid.src = `/api/media/${item.id}/file`;
+        vid.controls = true;
+        vid.preload = 'none';
+        mediaWrap.appendChild(vid);
       } else {
         const icon = document.createElement('div');
         icon.style.cssText = 'padding:2rem;font-size:2rem;opacity:0.18;';
@@ -1074,7 +1089,7 @@ import Admin from '../../layouts/Admin.astro';
       const input = document.createElement('textarea');
       input.className = 'ru-compose-input';
       input.placeholder = parentId !== null ? 'Write a reply…' : 'Add a comment…';
-      input.rows = 1;
+      input.rows = 3;
       input.addEventListener('input', () => {
         input.style.height = 'auto';
         input.style.height = input.scrollHeight + 'px';
