@@ -25,6 +25,7 @@ from server.models import (
     Job,
     JobOutput,
     MediaItem,
+    MediaSlackShare,
     MediaSource,
     MediaTag,
     TagVocabulary,
@@ -301,6 +302,11 @@ def _get_media_item_or_404(db: Session, media_id: str) -> MediaItem:
 _SLACK_CHANNEL_IDS: dict[str, str] = {
     "image-gen": os.environ.get("SLACK_CHANNEL_IMAGE_GEN", ""),
     "sample-sale": os.environ.get("SLACK_CHANNEL_SAMPLE_SALE", ""),
+}
+
+_SHARE_CHANNEL_MAP: dict[str, tuple[str, str]] = {
+    "image": ("img-junkyard", os.environ.get("SLACK_CHANNEL_IMG_JUNKYARD", "")),
+    "audio": ("sample-sale",  os.environ.get("SLACK_CHANNEL_SAMPLE_SALE", "")),
 }
 
 
@@ -1360,6 +1366,109 @@ def get_media_thumbnail(
     response = _thumbnail_response(item, "private, max-age=86400", size=size)
     db.close()
     return response
+
+
+@router.post("/media/{media_id}/slack-share", tags=["Media Items"], summary="Share media to Slack")
+async def slack_share_media(
+    media_id: str,
+    auth=Depends(require_scope("write")),
+    db: Session = Depends(get_db),
+):
+    """Upload the media file to its target Slack channel.
+
+    Images go to #img-junkyard, audio to #sample-sale. Video is unsupported.
+    Returns 200 with already_shared=true if already sent to that channel.
+
+    **Scope required:** `write`
+    """
+    import httpx
+
+    item = _get_media_item_or_404(db, media_id)
+
+    if item.media_type not in _SHARE_CHANNEL_MAP:
+        raise HTTPException(status_code=422, detail="Video sharing not supported")
+
+    channel_name, channel_id = _SHARE_CHANNEL_MAP[item.media_type]
+
+    if not channel_id:
+        raise HTTPException(status_code=503, detail=f"Slack channel not configured for {channel_name}")
+
+    existing = db.query(MediaSlackShare).filter_by(
+        media_item_id=media_id, channel_name=channel_name
+    ).first()
+    if existing:
+        return {"already_shared": True, "channel": channel_name, "sent_at": existing.sent_at}
+
+    file_path = _get_search_media_dir() / item.file_path
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found on disk")
+
+    token = os.environ.get("SLACK_BOT_TOKEN", "")
+    if not token:
+        raise HTTPException(status_code=503, detail="Slack not configured")
+
+    file_bytes = file_path.read_bytes()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        r1 = await client.get(
+            "https://slack.com/api/files.getUploadURLExternal",
+            headers=headers,
+            params={"filename": item.filename, "length": len(file_bytes)},
+        )
+        d1 = r1.json()
+        if not d1.get("ok"):
+            raise HTTPException(status_code=502, detail=f"Slack upload URL error: {d1.get('error')}")
+
+        upload_url = d1["upload_url"]
+        file_id = d1["file_id"]
+
+        r2 = await client.post(
+            upload_url,
+            content=file_bytes,
+            headers={"Content-Type": item.mime_type or "application/octet-stream"},
+        )
+        if r2.status_code not in (200, 201):
+            raise HTTPException(status_code=502, detail="Slack file upload failed")
+
+        app_name = None
+        for src in item.sources:
+            if src.source_type == "job_output" and src.source_metadata:
+                meta = json.loads(src.source_metadata or "{}")
+                app_name = meta.get("app_display_name") or meta.get("app_name")
+                break
+
+        site_url = os.environ.get("SITE_URL", "https://a-u.supply")
+        detail_url = f"{site_url}/admin/search/detail?id={media_id}"
+        caption_parts = [f"`{item.filename}`"]
+        if app_name:
+            caption_parts.append(f"from *{app_name}*")
+        caption_parts.append(f"<{detail_url}|view in stacks>")
+        initial_comment = " · ".join(caption_parts)
+
+        r3 = await client.post(
+            "https://slack.com/api/files.completeUploadExternal",
+            headers=headers,
+            json={
+                "files": [{"id": file_id}],
+                "channel_id": channel_id,
+                "initial_comment": initial_comment,
+            },
+        )
+        d3 = r3.json()
+        if not d3.get("ok"):
+            raise HTTPException(status_code=502, detail=f"Slack complete error: {d3.get('error')}")
+
+    share = MediaSlackShare(
+        media_item_id=media_id,
+        channel_name=channel_name,
+        slack_file_id=file_id,
+        sent_by_user_id=getattr(auth, "id", None),
+    )
+    db.add(share)
+    db.commit()
+
+    return {"already_shared": False, "channel": channel_name, "sent_at": share.sent_at}
 
 
 @router.put("/media/{media_id}", tags=["Media Items"], summary="Update media description")
