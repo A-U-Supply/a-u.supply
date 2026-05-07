@@ -1796,15 +1796,18 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     }
 
-    // Infinite-scroll observers. Two jobs:
-    //   1. `loadMoreObserver` watches the sentinel below the results — when
-    //      it scrolls into view, we fetch the next page and append.
-    //   2. `pageStartObserver` watches every result tagged with
-    //      data-page-start="N" — whichever page-start is intersecting the
-    //      viewport drives the ?page=N value in the URL.
+    // Infinite-scroll wiring (feed view only):
+    //   - `loadMoreObserver` is an IntersectionObserver on the sentinel
+    //     below the results. When it scrolls into view, we fetch the next
+    //     page. IO works fine for this — we only need a single boolean
+    //     "is this thing visible".
+    //   - URL page tracking uses a scroll event listener (NOT IntersectionObserver).
+    //     iOS Safari's IO has known glitches where elements report
+    //     isIntersecting:false during fast scroll, which manifested here as
+    //     the URL flickering back to ?page=1 mid-scroll. Reading scrollY +
+    //     measuring marker positions is deterministic on every browser.
     let loadMoreObserver: IntersectionObserver | null = null;
-    let pageStartObserver: IntersectionObserver | null = null;
-    const visiblePages = new Set<number>();
+    let scrollPageDetectHandler: (() => void) | null = null;
 
     function maxLoadedPage(): number {
       // Highest page we've already fetched. allResults is in fetch order.
@@ -1838,10 +1841,34 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       }
     }
 
+    // Pick the page whose start-marker is currently closest to (but not
+    // below) the top of the viewport. Stable on every browser — no
+    // IntersectionObserver state-machine quirks to worry about.
+    function detectVisiblePageFromScroll(): number {
+      const markers =
+        document.querySelectorAll<HTMLElement>('[data-page-start]');
+      if (!markers.length) return 1;
+      // Threshold is a quarter of the viewport from the top. As soon as a
+      // marker passes that line on the way up, that page becomes "current".
+      const threshold = window.innerHeight * 0.25;
+      let topPage = +(markers[0].dataset.pageStart || '1');
+      for (const m of markers) {
+        const rect = m.getBoundingClientRect();
+        if (rect.top <= threshold) {
+          topPage = +(m.dataset.pageStart || '1');
+        } else {
+          break; // markers are in DOM order; once we pass the threshold we're done
+        }
+      }
+      return topPage;
+    }
+
     function setupInfiniteScrollObservers() {
       loadMoreObserver?.disconnect();
-      pageStartObserver?.disconnect();
-      visiblePages.clear();
+      if (scrollPageDetectHandler) {
+        window.removeEventListener('scroll', scrollPageDetectHandler);
+        scrollPageDetectHandler = null;
+      }
 
       // Infinite scroll is feed-only. Grid + List use prev/next pagination
       // because tile density makes scroll-driven loading feel chaotic on
@@ -1860,28 +1887,28 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         loadMoreObserver.observe(sentinelEl);
       }
 
-      pageStartObserver = new IntersectionObserver(
-        (entries) => {
-          for (const entry of entries) {
-            const page = +(entry.target as HTMLElement).dataset.pageStart!;
-            if (entry.isIntersecting) visiblePages.add(page);
-            else visiblePages.delete(page);
+      // Scroll listener for URL <-> page sync. Throttled with rAF so it
+      // costs ~one DOM read per frame at most. `passive: true` so it never
+      // blocks scroll on mobile.
+      let scrollPending = false;
+      scrollPageDetectHandler = () => {
+        if (scrollPending) return;
+        scrollPending = true;
+        requestAnimationFrame(() => {
+          scrollPending = false;
+          const page = detectVisiblePageFromScroll();
+          if (page !== currentPage) {
+            currentPage = page;
+            updateUrlPage(page);
           }
-          if (visiblePages.size === 0) return;
-          // Use the *highest* visible page so scrolling down feels right.
-          // When scrolling back up, the higher-page marker exits the
-          // viewport, the set shrinks, and the URL drops back accordingly.
-          const top = Math.max(...visiblePages);
-          if (top !== currentPage) {
-            currentPage = top;
-            updateUrlPage(top);
-          }
-        },
-        { rootMargin: '0px' },
-      );
-      document
-        .querySelectorAll<HTMLElement>('[data-page-start]')
-        .forEach((el) => pageStartObserver!.observe(el));
+        });
+      };
+      window.addEventListener('scroll', scrollPageDetectHandler, {
+        passive: true,
+      });
+      // Run once now so the URL reflects the post-render page even before
+      // the user starts scrolling (e.g., after a load-more append).
+      scrollPageDetectHandler();
     }
 
     function renderResults() {
@@ -1889,7 +1916,10 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         emptyEl.style.display = 'block';
         footerEl.style.display = 'none';
         loadMoreObserver?.disconnect();
-        pageStartObserver?.disconnect();
+        if (scrollPageDetectHandler) {
+          window.removeEventListener('scroll', scrollPageDetectHandler);
+          scrollPageDetectHandler = null;
+        }
         return;
       }
       emptyEl.style.display = 'none';
