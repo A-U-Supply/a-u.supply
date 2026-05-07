@@ -34,6 +34,7 @@ from server.bookmarks_api import router as bookmarks_router
 from server.catalog import router as catalog_router
 from server.jobs_api import router as jobs_router
 from server.search_api import router as search_router
+from server.ruminatio_api import router as ruminatio_router
 from server.models import Base, User, engine
 
 logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
@@ -78,6 +79,16 @@ if "category" not in _release_cols:
 if "activity_log" not in _sa_inspect(engine).get_table_names():
     from server.models import ActivityLog as _ActivityLog
     _ActivityLog.__table__.create(bind=engine)
+
+# Migrate existing DB: create comments table if missing
+if "comments" not in _sa_inspect(engine).get_table_names():
+    from server.models import Comment as _Comment
+    _Comment.__table__.create(bind=engine)
+
+# Migrate existing DB: create reactions table if missing
+if "reactions" not in _sa_inspect(engine).get_table_names():
+    from server.models import Reaction as _Reaction
+    _Reaction.__table__.create(bind=engine)
 
 
 # ---------------------------------------------------------------------------
@@ -483,6 +494,7 @@ app.include_router(bookmarks_router)
 app.include_router(catalog_router)
 app.include_router(jobs_router)
 app.include_router(search_router)
+app.include_router(ruminatio_router)
 
 IS_PRODUCTION = os.environ.get("PRODUCTION", "").lower() in ("1", "true", "yes")
 
