@@ -442,7 +442,7 @@ class Reaction(Base):
     id = Column(Integer, primary_key=True, index=True)
     media_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    emoji = Column(String(8), nullable=False)
+    emoji = Column(String(64), nullable=False)
     created_at = Column(DateTime, nullable=False, default=_utcnow)
 
     __table_args__ = (UniqueConstraint("media_id", "user_id", "emoji"),)

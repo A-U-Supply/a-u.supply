@@ -9,7 +9,7 @@ from server.models import Comment, Reaction, User
 
 router = APIRouter(prefix="/api", tags=["Ruminatio"])
 
-ALLOWED_EMOJI = {"🔥", "👀", "✨", "💀", "🎲", "❤️"}
+MAX_EMOJI_LEN = 64  # accommodate ZWJ sequences
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────────
@@ -38,6 +38,20 @@ def _comment_dict(c: Comment, current_user_id: int) -> dict:
 
 
 # ── Comments ───────────────────────────────────────────────────────────────────
+
+@router.get("/media/{media_id}/comments/count", summary="Count top-level comments for a media item")
+def count_comments(
+    media_id: str,
+    _auth=Depends(require_scope("read")),
+    db: Session = Depends(get_db),
+):
+    count = (
+        db.query(Comment)
+        .filter(Comment.media_id == media_id, Comment.parent_id.is_(None))
+        .count()
+    )
+    return {"count": count}
+
 
 @router.get("/media/{media_id}/comments", summary="List comments for a media item")
 def list_comments(
@@ -118,7 +132,7 @@ def get_reactions(
         counts[r.emoji] = counts.get(r.emoji, 0) + 1
         if r.user_id == user.id:
             mine.append(r.emoji)
-    return {"counts": counts, "mine": mine, "allowed": sorted(ALLOWED_EMOJI)}
+    return {"counts": counts, "mine": mine}
 
 
 @router.post("/media/{media_id}/reactions", summary="Toggle a reaction on a media item")
@@ -129,8 +143,8 @@ def toggle_reaction(
     db: Session = Depends(get_db),
 ):
     user, _ = _auth
-    if body.emoji not in ALLOWED_EMOJI:
-        raise HTTPException(status_code=400, detail="Emoji not allowed")
+    if not body.emoji or len(body.emoji) > MAX_EMOJI_LEN:
+        raise HTTPException(status_code=400, detail="Invalid emoji")
     existing = db.query(Reaction).filter(
         Reaction.media_id == media_id,
         Reaction.user_id == user.id,
