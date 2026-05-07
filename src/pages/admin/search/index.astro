@@ -21,8 +21,11 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       >
       <span class="sync-status" id="sync-status"></span>
       <div class="view-toggle">
-        <button class="toggle-btn active" id="grid-view-btn" title="Grid view"
+        <button class="toggle-btn" id="grid-view-btn" title="Grid view"
           >Grid</button
+        >
+        <button class="toggle-btn active" id="feed-view-btn" title="Feed view"
+          >Feed</button
         >
         <button class="toggle-btn" id="list-view-btn" title="List view"
           >List</button
@@ -31,250 +34,234 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     </div>
   </div>
 
-  <form id="search-form" class="search-bar">
-    <input
-      type="text"
-      id="search-input"
-      placeholder="Search media..."
-      autocomplete="off"
-    />
-    <button type="submit" class="search-submit">Search</button>
-  </form>
-
-  <div class="search-layout">
-    <aside class="filter-panel" id="filter-panel">
-      <button
-        class="filter-toggle"
-        id="filter-toggle"
-        type="button"
-        aria-expanded="false"
-        aria-controls="filter-body"
+  <div class="search-row">
+    <button
+      class="filter-toggle"
+      id="filter-toggle"
+      type="button"
+      aria-expanded="false"
+      aria-controls="filter-body"
+    >
+      <span>Filters</span>
+      <span class="filter-toggle__count" id="filter-toggle-count" hidden>0</span
       >
-        <span>Filters</span>
-        <span class="filter-toggle__count" id="filter-toggle-count" hidden
-          >0</span
-        >
-      </button>
+    </button>
+    <form id="search-form" class="search-bar">
+      <input
+        type="text"
+        id="search-input"
+        placeholder="Search media..."
+        autocomplete="off"
+      />
+      <button type="submit" class="search-submit">Search</button>
+    </form>
+  </div>
 
-      <div class="filter-body" id="filter-body">
-        <div class="filter-group">
-          <label class="filter-label">Index</label>
-          <div id="filter-output-index" data-selected="__inputs__">
-            <IndexFilter client:load />
-          </div>
-        </div>
-
-        <div class="filter-group">
-          <label class="filter-label">Media Type</label>
-          <label class="filter-check"
-            ><input type="checkbox" value="image" checked /> Image</label
-          >
-          <label class="filter-check"
-            ><input type="checkbox" value="audio" checked /> Audio</label
-          >
-          <label class="filter-check"
-            ><input type="checkbox" value="video" checked /> Video</label
-          >
-        </div>
-
-        <div class="filter-group">
-          <label class="filter-label">Source Channel</label>
-          <select id="filter-channel" multiple size="4">
-            <option value="">Loading...</option>
-          </select>
-        </div>
-
-        <div class="filter-group">
-          <label class="filter-label">Date Range</label>
-          <input type="date" id="filter-date-from" placeholder="From" />
-          <input type="date" id="filter-date-to" placeholder="To" />
-        </div>
-
-        <div class="filter-group">
-          <label class="filter-label">Color</label>
-          <select id="filter-color-group">
-            <option value="">Any color</option>
-            <option value="red">Red</option>
-            <option value="orange">Orange</option>
-            <option value="yellow">Yellow</option>
-            <option value="green">Green</option>
-            <option value="teal">Teal</option>
-            <option value="blue">Blue</option>
-            <option value="purple">Purple</option>
-            <option value="pink">Pink</option>
-            <option value="brown">Brown</option>
-            <option value="beige">Beige</option>
-            <option value="gray">Gray</option>
-            <option value="black">Black</option>
-            <option value="white">White</option>
-          </select>
-          <div
-            id="color-multi-hint"
-            style="display:none; font-size:0.6rem; color: var(--color-muted); margin-top:2px;"
-          >
-          </div>
-        </div>
-
-        <div class="filter-group">
-          <label class="filter-label">Posted By</label>
-          <select id="filter-poster">
-            <option value="">All</option>
-          </select>
-        </div>
-
-        <div class="filter-group" id="filter-group-job-app">
-          <label class="filter-label">Job App</label>
-          <select id="filter-job-app">
-            <option value="">All</option>
-          </select>
-          <div
-            id="job-app-hint"
-            style="display:none; font-size:0.6rem; color: var(--color-muted); margin-top:2px;"
-          >
-            Outputs only — switch Index to Outputs.
-          </div>
-        </div>
-
-        <div class="filter-group">
-          <label class="filter-label">Tags</label>
-          <input
-            type="text"
-            id="filter-tags"
-            placeholder="Comma-separated tags"
-          />
-        </div>
-
-        <div class="filter-group">
-          <label class="filter-label">Min Reactions</label>
-          <input type="number" id="filter-reactions-min" min="0" value="0" />
-        </div>
-
-        <div class="filter-group">
-          <label class="filter-label">Min Tags</label>
-          <input type="number" id="filter-tags-min" min="0" value="0" />
-        </div>
-
-        <div class="filter-group" id="filter-group-transcript">
-          <label class="filter-label">Transcript</label>
-          <select id="filter-has-transcript">
-            <option value="">Any</option>
-            <option value="yes">With transcript</option>
-            <option value="no">Without transcript</option>
-          </select>
-          <div
-            id="transcript-hint"
-            style="display:none; font-size:0.6rem; color: var(--color-muted); margin-top:2px;"
-          >
-            Audio/video only.
-          </div>
-        </div>
-
-        <div class="filter-group" id="filter-group-ocr">
-          <label class="filter-label">OCR Text</label>
-          <select id="filter-has-text">
-            <option value="">Any</option>
-            <option value="yes">With OCR text</option>
-            <option value="no">Without OCR text</option>
-          </select>
-          <div
-            id="ocr-hint"
-            style="display:none; font-size:0.6rem; color: var(--color-muted); margin-top:2px;"
-          >
-            Images only.
-          </div>
-        </div>
-
-        <div class="filter-group">
-          <label class="filter-label">Sort By</label>
-          <select id="sort-by">
-            <option value="newest">Newest</option>
-            <option value="oldest">Oldest</option>
-            <option value="random">Random</option>
-            <option value="most_reactions">Most Reactions</option>
-            <option value="largest">Largest</option>
-            <option value="longest">Longest</option>
-          </select>
-        </div>
-
-        <button
-          class="action-btn"
-          id="apply-filters"
-          style="width:100%; margin-top: var(--space-xs);">Apply Filters</button
-        >
-
-        <div
-          class="insights-section"
-          id="insights-section"
-          style="display:none;"
-        >
-          <button class="insights-toggle" id="insights-toggle">Insights</button>
-          <div class="insights-body" id="insights-body">
-            <div class="insight-group" id="insight-uploaders"></div>
-            <div class="insight-group" id="insight-tags"></div>
-            <div class="insight-group" id="insight-reactions"></div>
-            <div class="insight-group" id="insight-timeline"></div>
-            <div class="insight-group" id="insight-colors"></div>
-          </div>
-        </div>
+  <div class="filter-body" id="filter-body">
+    <div class="filter-group">
+      <label class="filter-label">Index</label>
+      <div id="filter-output-index" data-selected="__inputs__">
+        <IndexFilter client:load />
       </div>
-    </aside>
+    </div>
 
-    <div class="results-area">
-      <div class="stats-bar" id="stats-bar" style="display:none;"></div>
-      <div id="active-filters" class="active-filters" style="display:none;">
-      </div>
-      <div class="batch-bar" id="batch-bar" style="display:none;">
-        <span id="selected-count">0 selected</span>
-        <button class="action-btn" data-batch="tag">Tag</button>
-        <button class="action-btn" data-batch="workspace">+ Workspace</button>
-        <button class="action-btn" data-batch="re-extract">Re-extract</button>
-        <button class="action-btn" data-batch="export">Export</button>
-        <button class="action-btn action-btn--danger" data-batch="delete"
-          >Delete</button
-        >
-        <button class="action-btn" id="clear-selection">Clear</button>
-      </div>
+    <div class="filter-group">
+      <label class="filter-label">Media Type</label>
+      <label class="filter-check"
+        ><input type="checkbox" value="image" checked /> Image</label
+      >
+      <label class="filter-check"
+        ><input type="checkbox" value="audio" checked /> Audio</label
+      >
+      <label class="filter-check"
+        ><input type="checkbox" value="video" checked /> Video</label
+      >
+    </div>
 
-      <div id="loading" style="color: var(--color-muted);">
-        <span class="loading-dots">Loading</span>
-      </div>
-      <div id="error" class="login-error" style="display:none;"></div>
-      <div id="empty" class="empty-state" style="display:none;">
-        <div class="empty-state__icon">&#128269;</div>
-        No media found.
-      </div>
+    <div class="filter-group">
+      <label class="filter-label">Source Channel</label>
+      <select id="filter-channel" multiple size="4">
+        <option value="">Loading...</option>
+      </select>
+    </div>
 
-      <div id="results-grid" class="results-grid" style="display:none;"></div>
+    <div class="filter-group">
+      <label class="filter-label">Date Range</label>
+      <input type="date" id="filter-date-from" placeholder="From" />
+      <input type="date" id="filter-date-to" placeholder="To" />
+    </div>
 
-      <div class="table-wrap" id="results-table" style="display:none;">
-        <table class="release-table">
-          <thead>
-            <tr>
-              <th><input type="checkbox" id="select-all" /></th>
-              <th>Filename</th>
-              <th>Type</th>
-              <th>Posted By</th>
-              <th>Channel</th>
-              <th>Size</th>
-              <th>Reactions</th>
-              <th>Tags</th>
-              <th>Created</th>
-            </tr>
-          </thead>
-          <tbody id="results-tbody"></tbody>
-        </table>
-      </div>
-
+    <div class="filter-group">
+      <label class="filter-label">Color</label>
+      <select id="filter-color-group">
+        <option value="">Any color</option>
+        <option value="red">Red</option>
+        <option value="orange">Orange</option>
+        <option value="yellow">Yellow</option>
+        <option value="green">Green</option>
+        <option value="teal">Teal</option>
+        <option value="blue">Blue</option>
+        <option value="purple">Purple</option>
+        <option value="pink">Pink</option>
+        <option value="brown">Brown</option>
+        <option value="beige">Beige</option>
+        <option value="gray">Gray</option>
+        <option value="black">Black</option>
+        <option value="white">White</option>
+      </select>
       <div
-        id="load-more-sentinel"
-        class="load-more-sentinel"
-        aria-hidden="true"
+        id="color-multi-hint"
+        style="display:none; font-size:0.6rem; color: var(--color-muted); margin-top:2px;"
       >
       </div>
-      <div class="results-footer" id="results-footer" style="display:none;">
-        <span id="results-progress">0 of 0</span>
-        <span id="results-loading-more" hidden>Loading more…</span>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Posted By</label>
+      <select id="filter-poster">
+        <option value="">All</option>
+      </select>
+    </div>
+
+    <div class="filter-group" id="filter-group-job-app">
+      <label class="filter-label">Job App</label>
+      <select id="filter-job-app">
+        <option value="">All</option>
+      </select>
+      <div
+        id="job-app-hint"
+        style="display:none; font-size:0.6rem; color: var(--color-muted); margin-top:2px;"
+      >
+        Outputs only — switch Index to Outputs.
       </div>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Tags</label>
+      <input type="text" id="filter-tags" placeholder="Comma-separated tags" />
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Min Reactions</label>
+      <input type="number" id="filter-reactions-min" min="0" value="0" />
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Min Tags</label>
+      <input type="number" id="filter-tags-min" min="0" value="0" />
+    </div>
+
+    <div class="filter-group" id="filter-group-transcript">
+      <label class="filter-label">Transcript</label>
+      <select id="filter-has-transcript">
+        <option value="">Any</option>
+        <option value="yes">With transcript</option>
+        <option value="no">Without transcript</option>
+      </select>
+      <div
+        id="transcript-hint"
+        style="display:none; font-size:0.6rem; color: var(--color-muted); margin-top:2px;"
+      >
+        Audio/video only.
+      </div>
+    </div>
+
+    <div class="filter-group" id="filter-group-ocr">
+      <label class="filter-label">OCR Text</label>
+      <select id="filter-has-text">
+        <option value="">Any</option>
+        <option value="yes">With OCR text</option>
+        <option value="no">Without OCR text</option>
+      </select>
+      <div
+        id="ocr-hint"
+        style="display:none; font-size:0.6rem; color: var(--color-muted); margin-top:2px;"
+      >
+        Images only.
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Sort By</label>
+      <select id="sort-by">
+        <option value="newest">Newest</option>
+        <option value="oldest">Oldest</option>
+        <option value="random">Random</option>
+        <option value="most_reactions">Most Reactions</option>
+        <option value="largest">Largest</option>
+        <option value="longest">Longest</option>
+      </select>
+    </div>
+
+    <button
+      class="action-btn"
+      id="apply-filters"
+      style="width:100%; margin-top: var(--space-xs);">Apply Filters</button
+    >
+
+    <div class="insights-section" id="insights-section" style="display:none;">
+      <button class="insights-toggle" id="insights-toggle">Insights</button>
+      <div class="insights-body" id="insights-body">
+        <div class="insight-group" id="insight-uploaders"></div>
+        <div class="insight-group" id="insight-tags"></div>
+        <div class="insight-group" id="insight-reactions"></div>
+        <div class="insight-group" id="insight-timeline"></div>
+        <div class="insight-group" id="insight-colors"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="results-area">
+    <div class="stats-bar" id="stats-bar" style="display:none;"></div>
+    <div id="active-filters" class="active-filters" style="display:none;"></div>
+    <div class="batch-bar" id="batch-bar" style="display:none;">
+      <span id="selected-count">0 selected</span>
+      <button class="action-btn" data-batch="tag">Tag</button>
+      <button class="action-btn" data-batch="workspace">+ Workspace</button>
+      <button class="action-btn" data-batch="re-extract">Re-extract</button>
+      <button class="action-btn" data-batch="export">Export</button>
+      <button class="action-btn action-btn--danger" data-batch="delete"
+        >Delete</button
+      >
+      <button class="action-btn" id="clear-selection">Clear</button>
+    </div>
+
+    <div id="loading" style="color: var(--color-muted);">
+      <span class="loading-dots">Loading</span>
+    </div>
+    <div id="error" class="login-error" style="display:none;"></div>
+    <div id="empty" class="empty-state" style="display:none;">
+      <div class="empty-state__icon">&#128269;</div>
+      No media found.
+    </div>
+
+    <div id="results-grid" class="results-grid" style="display:none;"></div>
+    <div id="results-feed" class="results-feed" style="display:none;"></div>
+
+    <div class="table-wrap" id="results-table" style="display:none;">
+      <table class="release-table">
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="select-all" /></th>
+            <th>Filename</th>
+            <th>Type</th>
+            <th>Posted By</th>
+            <th>Channel</th>
+            <th>Size</th>
+            <th>Reactions</th>
+            <th>Tags</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody id="results-tbody"></tbody>
+      </table>
+    </div>
+
+    <div id="load-more-sentinel" class="load-more-sentinel" aria-hidden="true">
+    </div>
+    <div class="results-footer" id="results-footer" style="display:none;">
+      <span id="results-progress">0 of 0</span>
+      <span id="results-loading-more" hidden>Loading more…</span>
     </div>
   </div>
 
@@ -417,54 +404,40 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     border-color: #333;
   }
 
-  .search-layout {
-    display: grid;
-    grid-template-columns: 220px 1fr;
-    gap: var(--space-md);
-    align-items: start;
-  }
-  /* Filters hidden by default → results expand to full width.
-     Reopens the 220px column when the body is open. */
-  .search-layout:has(.filter-body:not(.open)) {
-    grid-template-columns: auto 1fr;
-  }
-
-  .filter-panel {
-    border: 1px solid var(--color-border);
-    padding: var(--space-sm);
-  }
-  .filter-panel:has(.filter-body:not(.open)) {
-    border: none;
-    padding: 0;
+  /* Search row: filter toggle button + search bar, side by side.
+     The filter body collapses inline below this row when toggled. */
+  .search-row {
+    display: flex;
+    gap: var(--space-sm);
+    margin: var(--space-md) 0;
+    align-items: stretch;
   }
   .filter-toggle {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 8px;
-    width: 100%;
-    padding: 5px 10px;
+    flex-shrink: 0;
+    padding: 0 var(--space-md);
     font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-size: var(--text-base);
     font-weight: 700;
-    letter-spacing: 0.5pt;
+    letter-spacing: 1pt;
     text-transform: uppercase;
     background: var(--color-bg);
     border: 2px solid var(--color-text);
-    box-shadow: 2px 2px 0 var(--color-text);
     cursor: pointer;
     color: var(--color-text);
     transition:
-      transform 60ms ease,
-      box-shadow 60ms ease;
+      background 80ms,
+      color 80ms;
   }
   .filter-toggle:hover {
-    transform: translate(-1px, -1px);
-    box-shadow: 3px 3px 0 var(--color-text);
+    background: var(--color-text);
+    color: var(--color-bg);
   }
-  .filter-toggle:active {
-    transform: translate(2px, 2px);
-    box-shadow: 0 0 0 var(--color-text);
+  .filter-toggle[aria-expanded='true'] {
+    background: var(--color-text);
+    color: var(--color-bg);
   }
   .filter-toggle .filter-toggle__count {
     color: var(--color-bg);
@@ -472,16 +445,41 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     padding: 1px 6px;
     font-size: 0.65rem;
   }
+  .filter-toggle:hover .filter-toggle__count,
+  .filter-toggle[aria-expanded='true'] .filter-toggle__count {
+    color: var(--color-text);
+    background: var(--color-bg);
+  }
   .filter-toggle .filter-toggle__count[hidden] {
     display: none;
   }
-  /* Hidden by default — toggled open by JS. */
+  /* The search-bar inside .search-row: remove its old top margin since
+     .search-row owns spacing now. */
+  .search-row .search-bar {
+    flex: 1;
+    margin: 0;
+    min-width: 0;
+  }
+  /* Filter body: hidden by default, expands inline (pushes results down)
+     when the toggle is opened. Two-column on wide screens, stacked on
+     narrow ones, so the form fields don't get cramped. */
   .filter-body {
     display: none;
-    margin-top: var(--space-sm);
+    border: 1px solid var(--color-border);
+    padding: var(--space-md);
+    margin-bottom: var(--space-md);
   }
   .filter-body.open {
-    display: block;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--space-sm) var(--space-md);
+    align-items: start;
+  }
+  .filter-body.open #apply-filters {
+    grid-column: 1 / -1;
+  }
+  .filter-body.open .insights-section {
+    grid-column: 1 / -1;
   }
   .filter-group {
     margin-bottom: var(--space-sm);
@@ -703,11 +701,6 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     color: var(--color-text);
   }
 
-  @media (max-width: 900px) {
-    .search-layout {
-      grid-template-columns: 1fr;
-    }
-  }
   @media (max-width: 640px) {
     .page-header {
       flex-direction: column;
@@ -719,6 +712,13 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     .search-bar input {
       font-size: 16px;
     } /* prevent iOS zoom */
+    .search-row {
+      flex-direction: column;
+    }
+    .filter-toggle {
+      padding: var(--space-xs) var(--space-md);
+      justify-content: space-between;
+    }
     .stats-bar {
       font-size: 0.6rem;
       gap: var(--space-xs);
@@ -903,6 +903,120 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     justify-content: space-between;
   }
 
+  /* Feed view: tall cards, one item per row, max-width for readability.
+     Each tile = clean image, then meta row + action row below (the same
+     content the grid hides behind hover overlays). Future comments slot
+     in directly under the action row. */
+  .results-feed {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  .results-feed .feed-item {
+    border: 2px solid var(--color-text);
+    background: var(--color-bg);
+    box-shadow: 4px 4px 0 var(--color-text);
+    overflow: hidden;
+    position: relative;
+  }
+  .results-feed .feed-item.selected {
+    border-color: var(--color-accent);
+    box-shadow: 4px 4px 0 var(--color-accent);
+  }
+  .results-feed .feed-item__check {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 2;
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+  }
+  .results-feed .feed-item__media {
+    background: #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    /* Don't force a fixed aspect ratio — let images breathe within a
+       reasonable cap so portrait shots aren't clipped to squares. */
+    max-height: 80vh;
+  }
+  .results-feed .feed-item__media img {
+    width: 100%;
+    height: auto;
+    max-height: 80vh;
+    object-fit: contain;
+    display: block;
+  }
+  .results-feed .feed-item__media video,
+  .results-feed .feed-item__media audio {
+    width: 100%;
+    display: block;
+  }
+  .results-feed .feed-item__media .feed-item__placeholder {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-muted);
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5pt;
+  }
+  .results-feed .feed-item__body {
+    padding: var(--space-sm) var(--space-md);
+    border-top: 2px solid var(--color-text);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+  .results-feed .feed-item__title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-family: var(--font-mono);
+    font-size: var(--text-base);
+    font-weight: 700;
+  }
+  .results-feed .feed-item__name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .results-feed .feed-item__name a {
+    color: var(--color-text);
+    text-decoration: none;
+  }
+  .results-feed .feed-item__name a:hover {
+    text-decoration: underline;
+  }
+  .results-feed .feed-item__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3pt;
+  }
+  .results-feed .feed-item__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: var(--space-xs);
+  }
+  .results-feed .feed-item__actions .action-btn {
+    padding: 4px 10px;
+    font-size: 0.7rem;
+  }
+
   /* Touch devices: reveal grid action buttons without hover */
   @media (hover: none) {
     .results-grid .grid-item__play,
@@ -1025,7 +1139,18 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       setTimeout(poll, 2000);
     }
 
-    let currentView = 'grid';
+    // Default view: feed on mobile, grid on desktop. User's explicit
+    // choice (saved in localStorage) wins over both defaults.
+    type ViewMode = 'grid' | 'feed' | 'list';
+    function pickInitialView(): ViewMode {
+      try {
+        const saved = localStorage.getItem('au.searchView');
+        if (saved === 'grid' || saved === 'feed' || saved === 'list')
+          return saved;
+      } catch {}
+      return window.matchMedia('(max-width: 640px)').matches ? 'feed' : 'grid';
+    }
+    let currentView: ViewMode = pickInitialView();
     let currentPage = 1;
     const pageSize = 24;
     let totalResults = 0;
@@ -1039,6 +1164,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     const errorEl = document.getElementById('error')!;
     const emptyEl = document.getElementById('empty')!;
     const gridEl = document.getElementById('results-grid')!;
+    const feedEl = document.getElementById('results-feed')!;
     const tableEl = document.getElementById('results-table')!;
     const tbodyEl = document.getElementById('results-tbody')!;
     const footerEl = document.getElementById('results-footer')!;
@@ -1048,19 +1174,35 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     const selectedCount = document.getElementById('selected-count')!;
     let isLoadingMore = false;
 
-    // View toggle
-    document.getElementById('grid-view-btn')?.addEventListener('click', () => {
-      currentView = 'grid';
-      document.getElementById('grid-view-btn')!.classList.add('active');
-      document.getElementById('list-view-btn')!.classList.remove('active');
+    // View toggle. Choice persists in localStorage (long-lived) so users
+    // don't have to re-pick on every visit. Mobile vs desktop default is
+    // handled in pickInitialView() above.
+    function syncViewButtons() {
+      for (const v of ['grid', 'feed', 'list'] as ViewMode[]) {
+        const btn = document.getElementById(`${v}-view-btn`);
+        if (!btn) continue;
+        btn.classList.toggle('active', currentView === v);
+      }
+    }
+    function setView(next: ViewMode) {
+      if (currentView === next) return;
+      currentView = next;
+      try {
+        localStorage.setItem('au.searchView', next);
+      } catch {}
+      syncViewButtons();
       renderResults();
-    });
-    document.getElementById('list-view-btn')?.addEventListener('click', () => {
-      currentView = 'list';
-      document.getElementById('list-view-btn')!.classList.add('active');
-      document.getElementById('grid-view-btn')!.classList.remove('active');
-      renderResults();
-    });
+    }
+    syncViewButtons();
+    document
+      .getElementById('grid-view-btn')
+      ?.addEventListener('click', () => setView('grid'));
+    document
+      .getElementById('feed-view-btn')
+      ?.addEventListener('click', () => setView('feed'));
+    document
+      .getElementById('list-view-btn')
+      ?.addEventListener('click', () => setView('list'));
 
     // Filter toggle — collapsed by default on every viewport. Persisted
     // across in-tab navigations via sessionStorage so a user who opens it
@@ -1469,6 +1611,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         errorEl.style.display = 'none';
         emptyEl.style.display = 'none';
         gridEl.style.display = 'none';
+        feedEl.style.display = 'none';
         tableEl.style.display = 'none';
       }
       footerEl.style.display = 'none';
@@ -1693,8 +1836,13 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       }
       emptyEl.style.display = 'none';
 
+      // Hide all non-active view containers up-front so renderResults
+      // doesn't accidentally leave a stale view visible underneath.
+      gridEl.style.display = 'none';
+      feedEl.style.display = 'none';
+      tableEl.style.display = 'none';
+
       if (currentView === 'grid') {
-        tableEl.style.display = 'none';
         gridEl.style.display = 'grid';
         const playSvg = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
         const briefcaseSvg = `<svg viewBox="0 0 24 24"><path d="M20 7h-4V5c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zM10 5h4v2h-4V5z"/></svg>`;
@@ -1753,8 +1901,91 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
           </div>`;
           })
           .join('');
+      } else if (currentView === 'feed') {
+        feedEl.style.display = 'flex';
+        feedEl.innerHTML = allResults
+          .map((item, i) => {
+            const isPageStart =
+              i === 0 || allResults[i - 1]._page !== item._page;
+            const pageStartAttr = isPageStart
+              ? ` data-page-start="${item._page}"`
+              : '';
+            const checked = selectedIds.has(item.id) ? 'checked' : '';
+            const selectedClass = selectedIds.has(item.id) ? ' selected' : '';
+
+            // Media element. Images render their full thumbnail. Audio
+            // shows a small placeholder card (the persistent Player owns
+            // playback). Video plays inline via a controls element.
+            let media = '';
+            const thumbSrc = `/api/media/${item.id}/thumbnail`;
+            const fileSrc = `/api/media/${item.id}/file`;
+            if (item.media_type === 'image') {
+              media = `<img src="${thumbSrc}" alt="" loading="lazy" decoding="async" />`;
+            } else if (item.media_type === 'video') {
+              media = `<video src="${fileSrc}" poster="${thumbSrc}" controls preload="metadata" playsinline></video>`;
+            } else if (item.media_type === 'audio') {
+              media = `<div class="feed-item__placeholder">audio</div>`;
+            } else {
+              media = `<div class="feed-item__placeholder">${item.media_type || 'file'}</div>`;
+            }
+
+            const canPlay =
+              item.media_type === 'audio' || item.media_type === 'video';
+            const poster =
+              (item.sources || [])
+                .map((s: any) => s.uploader)
+                .filter(Boolean)[0] || '';
+            const rxn = item.total_reaction_count ?? 0;
+            const date = item.created_at
+              ? new Date(item.created_at * 1000).toLocaleDateString()
+              : '';
+
+            // Action row mirrors what the grid hides behind hover overlays,
+            // but visible. Class names parallel `grid-item__*` so the existing
+            // delegated click handlers (broadened to match both views) work
+            // without a separate listener wiring per view.
+            const actions: string[] = [];
+            if (canPlay) {
+              actions.push(
+                `<button class="action-btn feed-item__play" data-play-id="${item.id}" data-play-type="${item.media_type}">Play</button>`,
+              );
+              if (item.media_type === 'audio') {
+                actions.push(
+                  `<button class="action-btn feed-item__add" data-play-id="${item.id}" data-play-type="${item.media_type}">+ Queue</button>`,
+                );
+              }
+            }
+            actions.push(
+              `<a class="action-btn feed-item__dl" href="${fileSrc}" download>Download</a>`,
+            );
+            actions.push(
+              `<button class="action-btn feed-item__ws" data-ws-id="${item.id}">+ Workspace</button>`,
+            );
+            actions.push(
+              `<a class="action-btn" href="/admin/search/detail?id=${item.id}">Details</a>`,
+            );
+
+            return `<article class="feed-item${selectedClass}" data-id="${item.id}"${pageStartAttr}>
+              <input type="checkbox" class="feed-item__check" data-select="${item.id}" ${checked} aria-label="Select" />
+              <div class="feed-item__media">${media}</div>
+              <div class="feed-item__body">
+                <div class="feed-item__title-row">
+                  <button class="bm-star bm-star--sm" data-bm-type="media_item" data-bm-id="${item.id}" title="Bookmark"></button>
+                  <span class="feed-item__name" title="${item.filename || ''}"
+                    ><a href="/admin/search/detail?id=${item.id}">${item.filename || 'Untitled'}</a></span>
+                </div>
+                <div class="feed-item__meta">
+                  ${poster ? `<span>${poster}</span>` : ''}
+                  ${rxn > 0 ? `<span>${rxn} rxn</span>` : ''}
+                  <span>${item.tag_count ?? 0} tags</span>
+                  ${date ? `<span>${date}</span>` : ''}
+                </div>
+                <div class="feed-item__actions">${actions.join('')}</div>
+              </div>
+            </article>`;
+          })
+          .join('');
       } else {
-        gridEl.style.display = 'none';
         tableEl.style.display = 'block';
         tbodyEl.innerHTML = allResults
           .map((item, i) => {
@@ -1837,7 +2068,9 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       // Play button click
       // Video → open viewer for inline playback (handles the full reel).
       // Audio → queue in the persistent Player.
-      const playBtn = target.closest('.grid-item__play') as HTMLElement | null;
+      const playBtn = target.closest(
+        '.grid-item__play, .feed-item__play',
+      ) as HTMLElement | null;
       if (playBtn) {
         e.stopPropagation();
         e.preventDefault();
@@ -1876,7 +2109,9 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       }
 
       // Add to queue button click
-      const addBtn = target.closest('.grid-item__add') as HTMLElement | null;
+      const addBtn = target.closest(
+        '.grid-item__add, .feed-item__add',
+      ) as HTMLElement | null;
       if (addBtn) {
         e.stopPropagation();
         e.preventDefault();
@@ -1910,7 +2145,9 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       }
 
       // Add to workspace button click
-      const wsBtn = target.closest('.grid-item__ws') as HTMLElement | null;
+      const wsBtn = target.closest(
+        '.grid-item__ws, .feed-item__ws',
+      ) as HTMLElement | null;
       if (wsBtn) {
         e.stopPropagation();
         e.preventDefault();
