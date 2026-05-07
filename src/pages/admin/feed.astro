@@ -798,7 +798,7 @@ import Admin from '../../layouts/Admin.astro';
       row.className = 'ru-post__actions';
 
       // React
-      const reactBtn = makeActionBtn('☺', ' React', 'Add reaction');
+      const reactBtn = makeActionBtn('🙂', '', 'Add reaction');
       reactBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         const data = (reactRow as any).__lastData ?? { mine: [] };
@@ -824,11 +824,11 @@ import Admin from '../../layouts/Admin.astro';
       dlBtn.href = `/api/media/${item.id}/file`;
       dlBtn.download = item.filename ?? '';
       dlBtn.title = 'Download file';
-      dlBtn.innerHTML = `<span class="ru-action-icon">↓</span> Download`;
+      dlBtn.innerHTML = `<span class="ru-action-icon">⬇</span>`;
       row.appendChild(dlBtn);
 
       // Copy link
-      const linkBtn = makeActionBtn('⛓', ' Link', 'Copy link to this item in The Stacks');
+      const linkBtn = makeActionBtn(`<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`, ' Copy link', 'Copy link to this item in The Stacks');
       linkBtn.addEventListener('click', async () => {
         const url = `${window.location.origin}/admin/search/detail?id=${item.id}`;
         try {
@@ -841,7 +841,7 @@ import Admin from '../../layouts/Admin.astro';
       row.appendChild(linkBtn);
 
       // Add to workspace
-      const wsBtn = makeActionBtn('⊞', ' Workspace', 'Add to workspace');
+      const wsBtn = makeActionBtn('💼', '', 'Add to workspace');
       wsBtn.addEventListener('click', async () => {
         wsBtn.disabled = true;
         const result = await addItemsToWorkspace([item.id]);
