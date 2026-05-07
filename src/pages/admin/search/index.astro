@@ -60,6 +60,7 @@ import Admin from '../../../layouts/Admin.astro';
               aria-pressed="true">Inputs</button
             >
           </div>
+          <div class="pill-hint">shift-click to combine</div>
         </div>
 
         <div class="filter-group">
@@ -456,32 +457,47 @@ import Admin from '../../../layouts/Admin.astro';
   .pill-group {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 6px;
+    margin-bottom: 4px;
   }
   .pill {
-    padding: 3px 8px;
+    padding: 5px 10px;
     font-family: var(--font-mono);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
+    font-weight: bold;
     text-transform: uppercase;
     letter-spacing: 0.5pt;
-    background: none;
-    border: 1px solid var(--color-border);
-    color: var(--color-muted);
+    background: var(--color-bg);
+    border: 2px solid var(--color-text);
+    color: var(--color-text);
     cursor: pointer;
+    box-shadow: 2px 2px 0 var(--color-text);
+    transform: translate(0, 0);
     transition:
+      transform 60ms ease,
+      box-shadow 60ms ease,
       background 80ms,
-      color 80ms,
-      border-color 80ms;
+      color 80ms;
+    user-select: none;
   }
   .pill:hover {
-    border-color: var(--color-text);
-    color: var(--color-text);
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--color-text);
+  }
+  .pill:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--color-text);
   }
   .pill.active {
     background: var(--color-text);
     color: var(--color-bg);
-    border-color: var(--color-text);
-    font-weight: bold;
+  }
+  .pill-hint {
+    font-size: 0.6rem;
+    color: var(--color-muted);
+    text-transform: none;
+    letter-spacing: 0;
+    margin-top: 2px;
   }
   .filter-group input[type='text'],
   .filter-group input[type='number'],
@@ -1049,8 +1065,11 @@ import Admin from '../../../layouts/Admin.astro';
       doSearch();
     });
 
-    // Index pills: clicking toggles selection, runs the search immediately,
-    // and updates the URL (doSearch writes the URL at the end).
+    // Index pills:
+    //   plain click   → switch to that pill (deactivate all others)
+    //   shift / cmd / ctrl-click → toggle this pill (multi-select)
+    // Always guarantees at least one pill is active. Runs the search
+    // immediately so the URL updates via doSearch().
     document
       .getElementById('filter-output-index')
       ?.addEventListener('click', (e) => {
@@ -1058,22 +1077,35 @@ import Admin from '../../../layouts/Admin.astro';
           '.pill',
         ) as HTMLElement | null;
         if (!pill) return;
-        pill.classList.toggle('active');
-        pill.setAttribute(
-          'aria-pressed',
-          pill.classList.contains('active') ? 'true' : 'false',
-        );
         const group = pill.parentElement!;
-        // Never allow zero pills active — fall back to Inputs.
-        if (!group.querySelector('.pill.active')) {
-          const fallback = group.querySelector<HTMLElement>(
-            '.pill[data-value="__inputs__"]',
-          );
-          if (fallback) {
-            fallback.classList.add('active');
-            fallback.setAttribute('aria-pressed', 'true');
+        const allPills = Array.from(
+          group.querySelectorAll<HTMLElement>('.pill'),
+        );
+        const isMulti = e.shiftKey || e.metaKey || e.ctrlKey;
+        const wasActive = pill.classList.contains('active');
+        const activeCount = allPills.filter((p) =>
+          p.classList.contains('active'),
+        ).length;
+
+        if (isMulti) {
+          // Toggle this pill, but never allow zero active.
+          if (wasActive && activeCount === 1) {
+            return; // would leave nothing selected — ignore
           }
+          pill.classList.toggle('active');
+        } else {
+          // Replace selection: this pill becomes the only active one.
+          // Clicking the only-active pill is a no-op.
+          if (wasActive && activeCount === 1) return;
+          allPills.forEach((p) => p.classList.remove('active'));
+          pill.classList.add('active');
         }
+        allPills.forEach((p) =>
+          p.setAttribute(
+            'aria-pressed',
+            p.classList.contains('active') ? 'true' : 'false',
+          ),
+        );
         updateCrossFilterState();
         currentPage = 1;
         doSearch();
