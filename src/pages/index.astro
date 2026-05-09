@@ -14,12 +14,18 @@ import Base from '../layouts/Base.astro';
   <main class="back-cover">
     <div class="back-cover__content">
       <div class="back-cover__image">
-        <a href="/catalog"
-          ><img
+        <a href="/catalog">
+          <img
             src="/assets/aedas-800.jpg"
             alt="An Electronically Deduced Aural Syllomis"
-          /></a
-        >
+          />
+          <img
+            src="/assets/box-logo.gif"
+            alt=""
+            class="back-cover__overlay"
+            aria-hidden="true"
+          />
+        </a>
       </div>
 
       <div class="back-cover__brand">
@@ -111,10 +117,34 @@ import Base from '../layouts/Base.astro';
     gap: var(--space-md);
   }
 
+  .back-cover__image {
+    position: relative;
+    display: inline-block;
+  }
+
+  .back-cover__image a {
+    display: block;
+    position: relative;
+  }
+
   .back-cover__image img {
     max-height: min(35vh, 280px);
     width: auto;
+    display: block;
     border: 1px solid var(--color-border);
+  }
+
+  .back-cover__overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    border: none !important;
+    pointer-events: none;
   }
 
   .back-cover__title {
