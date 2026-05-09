@@ -52,12 +52,6 @@ const { title, current } = Astro.props;
               >Marginalia</a
             >
           </li>
-          <li>
-            <a
-              href="/admin/feed"
-              aria-current={current === 'feed' ? 'page' : undefined}>Feed</a
-            >
-          </li>
         </ul>
 
         <div class="sidebar__section">
@@ -249,8 +243,6 @@ const { title, current } = Astro.props;
   function applyPageBackground() {
     if (window.location.pathname === '/admin/atelier/punctum') {
       document.body.style.background = '#221c00';
-    } else if (window.location.pathname === '/admin/feed') {
-      document.body.style.background = '#f0e4b8';
     } else {
       document.body.style.removeProperty('background');
     }
