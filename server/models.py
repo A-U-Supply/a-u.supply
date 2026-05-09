@@ -420,31 +420,3 @@ class ActivityLog(Base):
     posted_at = Column(DateTime, nullable=True, index=True)  # null until posted to Slack
 
     user = relationship("User")
-
-
-class Comment(Base):
-    __tablename__ = "comments"
-
-    id = Column(Integer, primary_key=True, index=True)
-    media_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    parent_id = Column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=True)
-    text = Column(String, nullable=False)
-    created_at = Column(DateTime, nullable=False, default=_utcnow)
-
-    user = relationship("User")
-    replies = relationship("Comment", foreign_keys="Comment.parent_id", cascade="all, delete-orphan")
-
-
-class Reaction(Base):
-    __tablename__ = "reactions"
-
-    id = Column(Integer, primary_key=True, index=True)
-    media_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    emoji = Column(String(64), nullable=False)
-    created_at = Column(DateTime, nullable=False, default=_utcnow)
-
-    __table_args__ = (UniqueConstraint("media_id", "user_id", "emoji"),)
-
-    user = relationship("User")
