@@ -12739,7 +12739,7 @@ import Admin from '../../../layouts/Admin.astro';
     async function fillSlotsRandom(onlyEmpty = false) {
       const bot = BOTS[currentBot];
       const slots = Array.from({ length: bot.inputs }, (_, i) => i)
-        .filter(i => onlyEmpty ? !sourceImgs[i] : !slotUserSet[i]);
+        .filter(i => !slotLocked[i] && (onlyEmpty ? !sourceImgs[i] : !slotUserSet[i]));
       if (slots.length === 0) return;
       const btn = document.getElementById('pt-random-btn') as HTMLButtonElement | null;
       btn?.classList.add('busy');
