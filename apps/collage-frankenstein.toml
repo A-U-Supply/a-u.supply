@@ -1,0 +1,65 @@
+name = "collage-frankenstein"
+display_name = "Collage Frankenstein"
+description = "Slice 9 images into 3×3 grids, shuffle quadrants across a Latin square, and reassemble with edge-following seams. Produces 9 unique collage variants."
+image = "ghcr.io/a-u-supply/collage-frankenstein:latest"
+timeout_seconds = 300
+input_mode = "flag"
+input_flag = "--input"
+
+[output]
+index = "outputs"
+
+[input]
+min_items = 9
+max_items = 9
+media_types = ["image"]
+allow_random_fill = false
+
+[params.style]
+type = "select"
+label = "Style"
+description = "Visual style applied to source images before slicing. Affects both the final look and how seams are cut."
+options = ["color", "rgb", "grayscale", "stencil", "sobel", "canny", "invert", "posterize", "solarize"]
+default = "color"
+flag = "--style"
+
+[params.seams]
+type = "select"
+label = "Seams"
+description = "edge: seam follows object contours for organic joins; smooth: minimum pixel-difference blend; off: hard grid edges."
+options = ["edge", "smooth", "off"]
+default = "edge"
+flag = "--seams"
+
+[params.layout]
+type = "select"
+label = "Layout"
+description = "grid: uniform 3×3 tile grid; mondrian: non-uniform recursive partitions of varying size."
+options = ["grid", "mondrian"]
+default = "grid"
+flag = "--layout"
+
+[params.regions]
+type = "int"
+label = "Regions"
+description = "Number of regions in the Mondrian partition (1–9). Only applies when Layout is mondrian."
+min = 1
+max = 9
+default = 9
+flag = "--regions"
+
+[params.warp]
+type = "bool"
+label = "Warp"
+description = "Apply a geometric warp at each tile boundary, bending content toward its neighbour."
+default = false
+flag = "--warp"
+hidden = true
+
+[params.refine]
+type = "bool"
+label = "Refine"
+description = "Run simulated annealing after greedy placement to improve tile arrangement quality."
+default = false
+flag = "--refine"
+hidden = true

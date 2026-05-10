@@ -11,6 +11,7 @@ import Admin from '../../../layouts/Admin.astro';
         <button class="pt-bot-trigger" id="bot-trigger">Bullet Hole ▾</button>
         <select id="bot-select" style="display:none" aria-hidden="true">
           <option value="bullethole">Bullet Hole</option>
+          <option value="collage-frankenstein">Collage Frankenstein</option>
           <option value="stencil">Stencil</option>
           <option value="bw">BW</option>
           <option value="cyanotype">Cyanotype</option>
@@ -5458,6 +5459,14 @@ import Admin from '../../../layouts/Admin.astro';
         getParams: getBulletholeParams,
         setParams: setBulletholeParams,
       },
+      'collage-frankenstein': {
+        label: 'Collage Frankenstein', desc: 'Slice 9 images into grids, shuffle quadrants across a Latin square, and reassemble with edge-following seams. Produces 9 collage variants.',
+        inputs: 9, inputLabels: ['Image 1','Image 2','Image 3','Image 4','Image 5','Image 6','Image 7','Image 8','Image 9'], hasRandomness: false,
+        renderAsync: (imgs, params) => runCollageFrankensteinJob(imgs, params),
+        buildParams: buildCollageFrankensteinParams,
+        getParams: getCollageFrankensteinParams,
+        setParams: setCollageFrankensteinParams,
+      },
       stencil: {
         label: 'Stencil', desc: 'Threshold mask with two fill images — swap to see both versions',
         inputs: 3, inputLabels: ['Stencil', 'Fill A', 'Fill B'], hasRandomness: false, isStencil: true,
@@ -7130,6 +7139,149 @@ import Admin from '../../../layouts/Admin.astro';
     let randOutputsPool: any[] = [];
 
     // ─── Bullethole params ─────────────────────────────────────────────────────
+
+    // ─── Collage Frankenstein async helpers ──────────────────────────────────────
+
+    async function runCollageFrankensteinJob(imgs: (HTMLImageElement | null)[], params: Record<string, any>): Promise<Output[]> {
+      processingStatusEl.classList.add('loading-dots');
+      processingStatusEl.textContent = 'Uploading';
+      const tempIds: string[] = [];
+      const ids = await Promise.all(imgs.map(async (img, i) => {
+        if (!img) return '';
+        const sid = sourceIds[i];
+        if (sid && effectiveImgs[i] === sourceImgs[i]) return sid;
+        const newId = await uploadImgToLibrary(img);
+        tempIds.push(newId);
+        return newId;
+      }));
+
+      try {
+        processingStatusEl.textContent = 'Submitting';
+        const jobRes = await fetch('/api/jobs', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ app_name: 'collage-frankenstein', media_item_ids: ids, params }),
+        });
+        if (!jobRes.ok) throw new Error(await jobRes.text());
+        const { id: jobId } = await jobRes.json();
+
+        processingJobLinkEl.href = `/admin/jobs?id=${jobId}`;
+        processingJobLinkEl.textContent = `job:${jobId.slice(0, 8)}`;
+        processingJobLinkEl.style.display = '';
+
+        let cancelled = false;
+        cancelCurrentJob = async () => {
+          cancelled = true;
+          await fetch(`/api/jobs/${jobId}/cancel`, { method: 'POST', credentials: 'include' });
+        };
+
+        processingStatusEl.textContent = 'Queued';
+        const deadline = Date.now() + 6 * 60 * 1000;
+        let timedOut = true;
+        while (Date.now() < deadline) {
+          if (cancelled) throw new Error('Job was cancelled');
+          await new Promise(r => setTimeout(r, 2000));
+          const jobResp = await fetch(`/api/jobs/${jobId}`, { credentials: 'include' });
+          if (!jobResp.ok) throw new Error(`Job status check failed (${jobResp.status})`);
+          const job = await jobResp.json();
+          if (job.status === 'completed') { timedOut = false; break; }
+          if (job.status === 'failed')    throw new Error(job.error_message ?? 'Job failed');
+          if (job.status === 'cancelled') throw new Error('Job was cancelled');
+          processingStatusEl.textContent = job.started_at ? 'Running' : 'Queued';
+        }
+        if (timedOut) throw new Error('Job timed out');
+
+        cancelCurrentJob = null;
+        const outs: any[] = await (await fetch(`/api/jobs/${jobId}/outputs`, { credentials: 'include' })).json();
+        if (!outs.length) throw new Error('Job completed but produced no outputs');
+        return await Promise.all(outs.map(async (out, i) => {
+          const blob = await (await fetch(`/api/jobs/${jobId}/outputs/${out.id}/download`, { credentials: 'include' })).blob();
+          const url = URL.createObjectURL(blob);
+          const img = await new Promise<HTMLImageElement>(res => { const el = new Image(); el.onload = () => res(el); el.src = url; });
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+          canvas.getContext('2d')!.drawImage(img, 0, 0);
+          URL.revokeObjectURL(url);
+          return { canvas, label: `Output ${i + 1}`, mimeType: 'image/jpeg' } as Output;
+        }));
+      } finally {
+        for (const id of tempIds) {
+          fetch(`/api/media/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {});
+        }
+        processingStatusEl.classList.remove('loading-dots');
+      }
+    }
+
+    function buildCollageFrankensteinParams() {
+      paramsEl.innerHTML = `
+        <div class="pt-field">
+          <label class="pt-label" for="cf-style">Style</label>
+          <select class="pt-select" id="cf-style">
+            <option value="color">Color</option>
+            <option value="rgb">RYB</option>
+            <option value="grayscale">Grayscale</option>
+            <option value="stencil">Stencil</option>
+            <option value="sobel">Sobel</option>
+            <option value="canny">Canny</option>
+            <option value="invert">Invert</option>
+            <option value="posterize">Posterize</option>
+            <option value="solarize">Solarize</option>
+          </select>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cf-seams">Seams</label>
+          <select class="pt-select" id="cf-seams">
+            <option value="edge">Edge (organic)</option>
+            <option value="smooth">Smooth (diff)</option>
+            <option value="off">Off (hard grid)</option>
+          </select>
+        </div>
+        <div class="pt-field">
+          <label class="pt-label" for="cf-layout">Layout</label>
+          <select class="pt-select" id="cf-layout">
+            <option value="grid">Grid (3×3)</option>
+            <option value="mondrian">Mondrian</option>
+          </select>
+        </div>
+        <div class="pt-field" id="cf-regions-field" style="display:none">
+          <label class="pt-label" for="cf-regions">Regions <span class="pt-val" id="cf-regions-val">9</span></label>
+          <input class="pt-range" type="range" id="cf-regions" min="1" max="9" step="1" value="9" />
+        </div>`;
+
+      const layoutEl  = document.getElementById('cf-layout') as HTMLSelectElement;
+      const regionsEl = document.getElementById('cf-regions') as HTMLInputElement;
+      const regionsValEl = document.getElementById('cf-regions-val') as HTMLSpanElement;
+      const regionsField = document.getElementById('cf-regions-field') as HTMLDivElement;
+
+      function updateRegionsVis() {
+        regionsField.style.display = layoutEl.value === 'mondrian' ? '' : 'none';
+      }
+      layoutEl.addEventListener('change', updateRegionsVis);
+      regionsEl.addEventListener('input', () => { regionsValEl.textContent = regionsEl.value; });
+      updateRegionsVis();
+    }
+
+    function getCollageFrankensteinParams(): Record<string, any> {
+      return {
+        style:   (document.getElementById('cf-style')   as HTMLSelectElement)?.value  ?? 'color',
+        seams:   (document.getElementById('cf-seams')   as HTMLSelectElement)?.value  ?? 'edge',
+        layout:  (document.getElementById('cf-layout')  as HTMLSelectElement)?.value  ?? 'grid',
+        regions: parseInt((document.getElementById('cf-regions') as HTMLInputElement)?.value ?? '9', 10),
+      };
+    }
+
+    function setCollageFrankensteinParams(p: Record<string, any>) {
+      const styleEl   = document.getElementById('cf-style')   as HTMLSelectElement;
+      const seamsEl   = document.getElementById('cf-seams')   as HTMLSelectElement;
+      const layoutEl  = document.getElementById('cf-layout')  as HTMLSelectElement;
+      const regionsEl = document.getElementById('cf-regions') as HTMLInputElement;
+      const regionsValEl = document.getElementById('cf-regions-val') as HTMLSpanElement;
+      const regionsField = document.getElementById('cf-regions-field') as HTMLDivElement;
+      if (styleEl  && p.style)   styleEl.value  = p.style;
+      if (seamsEl  && p.seams)   seamsEl.value  = p.seams;
+      if (layoutEl && p.layout)  { layoutEl.value = p.layout; regionsField.style.display = p.layout === 'mondrian' ? '' : 'none'; }
+      if (regionsEl && p.regions !== undefined) { regionsEl.value = String(p.regions); regionsValEl.textContent = String(p.regions); }
+    }
 
     function buildBulletholeParams() {
       paramsEl.innerHTML = `
@@ -12523,7 +12675,7 @@ import Admin from '../../../layouts/Admin.astro';
     const BOT_ORIGINS: BotOrigin[] = [
       {
         label: 'Collage Bot',
-        bots: ['bullethole','stencil','bw','cyanotype','wobbleeye','lathe','bullseye',
+        bots: ['bullethole','collage-frankenstein','stencil','bw','cyanotype','wobbleeye','lathe','bullseye',
                'sixshooter','lattice','stencilburn','zellij','zellij_medium','halftone',
                'linescreen','penrose','monochrome','silver','quad','kaleidoscope',
                'displacement','oilspiral','soapyspiral','oilspiralcells','oilspiralcellsbleed',
