@@ -5462,7 +5462,7 @@ import Admin from '../../../layouts/Admin.astro';
       },
       'collage-frankenstein': {
         label: 'Collage Frankenstein', desc: 'Slice 9 images into grids, shuffle quadrants across a Latin square, and reassemble with edge-following seams. Produces 9 collage variants.',
-        inputs: 9, inputLabels: ['Image 1','Image 2','Image 3','Image 4','Image 5','Image 6','Image 7','Image 8','Image 9'], hasRandomness: false,
+        inputs: 9, inputLabels: ['Image 1','Image 2','Image 3','Image 4','Image 5','Image 6','Image 7','Image 8','Image 9'], hasRandomness: false, hasNativeBW: true,
         render: renderCollageFrankensteinNative,
         buildParams: buildCollageFrankensteinParams,
         getParams: getCollageFrankensteinParams,
@@ -7794,9 +7794,9 @@ import Admin from '../../../layouts/Admin.astro';
       let cfDebounce: ReturnType<typeof setTimeout>;
       const cfRerender = () => { if (allSlotsReady()) doRender(); };
       const cfDebouncedRerender = () => { clearTimeout(cfDebounce); cfDebounce = setTimeout(cfRerender, 60); };
-      styleEl2.addEventListener('change', cfRerender);
-      seamsEl2.addEventListener('change', cfRerender);
-      layoutEl.addEventListener('change', () => { updateRegionsVis(); cfRerender(); });
+      styleEl2.addEventListener('change', cfDebouncedRerender);
+      seamsEl2.addEventListener('change', cfDebouncedRerender);
+      layoutEl.addEventListener('change', () => { updateRegionsVis(); cfDebouncedRerender(); });
       regionsEl.addEventListener('input', () => { regionsValEl.textContent = regionsEl.value; cfDebouncedRerender(); });
       updateRegionsVis();
     }
