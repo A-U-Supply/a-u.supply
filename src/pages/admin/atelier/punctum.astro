@@ -7743,8 +7743,15 @@ import Admin from '../../../layouts/Admin.astro';
       function updateRegionsVis() {
         regionsField.style.display = layoutEl.value === 'mondrian' ? '' : 'none';
       }
-      layoutEl.addEventListener('change', updateRegionsVis);
-      regionsEl.addEventListener('input', () => { regionsValEl.textContent = regionsEl.value; });
+      const styleEl2 = document.getElementById('cf-style') as HTMLSelectElement;
+      const seamsEl2 = document.getElementById('cf-seams') as HTMLSelectElement;
+      let cfDebounce: ReturnType<typeof setTimeout>;
+      const cfRerender = () => { if (allSlotsReady()) doRender(); };
+      const cfDebouncedRerender = () => { clearTimeout(cfDebounce); cfDebounce = setTimeout(cfRerender, 60); };
+      styleEl2.addEventListener('change', cfRerender);
+      seamsEl2.addEventListener('change', cfRerender);
+      layoutEl.addEventListener('change', () => { updateRegionsVis(); cfRerender(); });
+      regionsEl.addEventListener('input', () => { regionsValEl.textContent = regionsEl.value; cfDebouncedRerender(); });
       updateRegionsVis();
     }
 
