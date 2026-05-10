@@ -5463,8 +5463,7 @@ import Admin from '../../../layouts/Admin.astro';
       'collage-frankenstein': {
         label: 'Collage Frankenstein', desc: 'Slice 9 images into grids, shuffle quadrants across a Latin square, and reassemble with edge-following seams. Produces 9 collage variants.',
         inputs: 9, inputLabels: ['Image 1','Image 2','Image 3','Image 4','Image 5','Image 6','Image 7','Image 8','Image 9'], hasRandomness: false,
-        renderAsync: (imgs, params) => runCollageFrankensteinJob(imgs, params),
-        autoRun: true,
+        render: renderCollageFrankensteinNative,
         buildParams: buildCollageFrankensteinParams,
         getParams: getCollageFrankensteinParams,
         setParams: setCollageFrankensteinParams,
@@ -7142,76 +7141,562 @@ import Admin from '../../../layouts/Admin.astro';
 
     // ─── Bullethole params ─────────────────────────────────────────────────────
 
-    // ─── Collage Frankenstein async helpers ──────────────────────────────────────
+    // ─── Collage Frankenstein (native) ──────────────────────────────────────────
 
-    async function runCollageFrankensteinJob(imgs: (HTMLImageElement | null)[], params: Record<string, any>): Promise<Output[]> {
-      processingStatusEl.classList.add('loading-dots');
-      processingStatusEl.textContent = 'Uploading';
-      const tempIds: string[] = [];
-      const ids = await Promise.all(imgs.map(async (img, i) => {
-        if (!img) return '';
-        const sid = sourceIds[i];
-        if (sid && effectiveImgs[i] === sourceImgs[i]) return sid;
-        const newId = await uploadImgToLibrary(img);
-        tempIds.push(newId);
-        return newId;
-      }));
+    const CF_SIZE    = 600;   // standardize size (quad = 200px)
+    const CF_OVERLAP = 70;    // seam zone half-width in pixels
+    const CF_DEPTH   = 8;     // edge-score comparison depth
 
-      try {
-        processingStatusEl.textContent = 'Submitting';
-        const jobRes = await fetch('/api/jobs', {
-          method: 'POST', credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ app_name: 'collage-frankenstein', media_item_ids: ids, params }),
-        });
-        if (!jobRes.ok) throw new Error(await jobRes.text());
-        const { id: jobId } = await jobRes.json();
+    // 16 transforms: 4 rotations × 2 flips × 2 invert
+    const CF_TRANSFORMS: { rot: number; flipH: boolean; inv: boolean }[] = [];
+    for (const rot of [0, 90, 180, 270])
+      for (const flipH of [false, true])
+        for (const inv of [false, true])
+          CF_TRANSFORMS.push({ rot, flipH, inv });
 
-        processingJobLinkEl.href = `/admin/jobs?id=${jobId}`;
-        processingJobLinkEl.textContent = `job:${jobId.slice(0, 8)}`;
-        processingJobLinkEl.style.display = '';
-
-        let cancelled = false;
-        cancelCurrentJob = async () => {
-          cancelled = true;
-          await fetch(`/api/jobs/${jobId}/cancel`, { method: 'POST', credentials: 'include' });
-        };
-
-        processingStatusEl.textContent = 'Queued';
-        const deadline = Date.now() + 6 * 60 * 1000;
-        let timedOut = true;
-        while (Date.now() < deadline) {
-          if (cancelled) throw new Error('Job was cancelled');
-          await new Promise(r => setTimeout(r, 2000));
-          const jobResp = await fetch(`/api/jobs/${jobId}`, { credentials: 'include' });
-          if (!jobResp.ok) throw new Error(`Job status check failed (${jobResp.status})`);
-          const job = await jobResp.json();
-          if (job.status === 'completed') { timedOut = false; break; }
-          if (job.status === 'failed')    throw new Error(job.error_message ?? 'Job failed');
-          if (job.status === 'cancelled') throw new Error('Job was cancelled');
-          processingStatusEl.textContent = job.started_at ? 'Running' : 'Queued';
+    // Pure-JS pixel transform — no canvas overhead
+    function cfXform(d: Uint8ClampedArray, q: number, rot: number, flipH: boolean, inv: boolean): Uint8ClampedArray {
+      if (rot === 0 && !flipH && !inv) return d;
+      const out = new Uint8ClampedArray(q * q * 4);
+      for (let y = 0; y < q; y++) {
+        for (let x = 0; x < q; x++) {
+          let sx = x, sy = y;
+          if (rot === 90)  { sx = q - 1 - y; sy = x; }
+          if (rot === 180) { sx = q - 1 - x; sy = q - 1 - y; }
+          if (rot === 270) { sx = y; sy = q - 1 - x; }
+          if (flipH) sx = q - 1 - sx;
+          const si = (sy * q + sx) * 4;
+          const di = (y * q + x) * 4;
+          out[di]   = inv ? 255 - d[si]   : d[si];
+          out[di+1] = inv ? 255 - d[si+1] : d[si+1];
+          out[di+2] = inv ? 255 - d[si+2] : d[si+2];
+          out[di+3] = 255;
         }
-        if (timedOut) throw new Error('Job timed out');
-
-        cancelCurrentJob = null;
-        const outs: any[] = await (await fetch(`/api/jobs/${jobId}/outputs`, { credentials: 'include' })).json();
-        if (!outs.length) throw new Error('Job completed but produced no outputs');
-        return await Promise.all(outs.map(async (out, i) => {
-          const blob = await (await fetch(`/api/jobs/${jobId}/outputs/${out.id}/download`, { credentials: 'include' })).blob();
-          const url = URL.createObjectURL(blob);
-          const img = await new Promise<HTMLImageElement>(res => { const el = new Image(); el.onload = () => res(el); el.src = url; });
-          const canvas = document.createElement('canvas');
-          canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
-          canvas.getContext('2d')!.drawImage(img, 0, 0);
-          URL.revokeObjectURL(url);
-          return { canvas, label: `Output ${i + 1}`, mimeType: 'image/jpeg' } as Output;
-        }));
-      } finally {
-        for (const id of tempIds) {
-          fetch(`/api/media/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {});
-        }
-        processingStatusEl.classList.remove('loading-dots');
       }
+      return out;
+    }
+
+    // Standardize: center-crop to square, then resize to size×size
+    function cfStandardize(img: HTMLImageElement, size: number): Uint8ClampedArray {
+      const nw = img.naturalWidth, nh = img.naturalHeight;
+      const side = Math.min(nw, nh);
+      const sx = Math.floor((nw - side) / 2), sy = Math.floor((nh - side) / 2);
+      const crop = document.createElement('canvas'); crop.width = crop.height = side;
+      crop.getContext('2d')!.drawImage(img, -sx, -sy);
+      const out = document.createElement('canvas'); out.width = out.height = size;
+      out.getContext('2d')!.drawImage(crop, 0, 0, size, size);
+      return out.getContext('2d')!.getImageData(0, 0, size, size).data;
+    }
+
+    // Slice a size×size image into 9 equal quadrants
+    function cfSliceQuadrants(d: Uint8ClampedArray, size: number): Uint8ClampedArray[] {
+      const q = size / 3;
+      const quads: Uint8ClampedArray[] = [];
+      for (let row = 0; row < 3; row++) {
+        for (let col = 0; col < 3; col++) {
+          const buf = new Uint8ClampedArray(q * q * 4);
+          for (let y = 0; y < q; y++) {
+            const srcRow = row * q + y;
+            const src = (srcRow * size + col * q) * 4;
+            buf.set(d.subarray(src, src + q * 4), y * q * 4);
+          }
+          quads.push(buf);
+        }
+      }
+      return quads;
+    }
+
+    // Canny edge detector: returns Uint8Array (1 = edge, 0 = not), OR'd across RGB channels
+    function cfCanny(d: Uint8ClampedArray, w: number, h: number): Uint8Array {
+      const n = w * h;
+      const edges = new Uint8Array(n);
+      for (let ch = 0; ch < 3; ch++) {
+        // Build single-channel float image
+        const gray = new Float32Array(n);
+        for (let i = 0; i < n; i++) gray[i] = d[i * 4 + ch];
+        // Gaussian blur via existing blurFloat
+        const bl = blurFloat(gray, w, h, 1.5);
+        // Sobel via existing sobelGradients (needs RGBA)
+        const rgba = new Uint8ClampedArray(n * 4);
+        for (let i = 0; i < n; i++) { const v = Math.round(Math.min(255, Math.max(0, bl[i]))); rgba[i*4]=rgba[i*4+1]=rgba[i*4+2]=v; rgba[i*4+3]=255; }
+        const { gx, gy, mag } = sobelGradients(rgba, w, h);
+        let peak = 0; for (let i = 0; i < n; i++) if (mag[i] > peak) peak = mag[i];
+        if (peak < 1e-6) continue;
+        // Non-max suppression
+        const nms = new Float32Array(n);
+        for (let y = 1; y < h - 1; y++) {
+          for (let x = 1; x < w - 1; x++) {
+            const i = y * w + x, m = mag[i];
+            if (m === 0) continue;
+            const angle = ((Math.atan2(gy[i], gx[i]) * 180 / Math.PI) + 360) % 180;
+            let m1: number, m2: number;
+            if (angle < 22.5 || angle >= 157.5)     { m1 = mag[i-1];           m2 = mag[i+1]; }
+            else if (angle < 67.5)                   { m1 = mag[(y-1)*w+x+1];   m2 = mag[(y+1)*w+x-1]; }
+            else if (angle < 112.5)                  { m1 = mag[(y-1)*w+x];     m2 = mag[(y+1)*w+x]; }
+            else                                     { m1 = mag[(y-1)*w+x-1];   m2 = mag[(y+1)*w+x+1]; }
+            if (m >= m1 && m >= m2) nms[i] = m;
+          }
+        }
+        // BFS hysteresis
+        const strong = peak * 0.15, weak = peak * 0.05;
+        const vis = new Uint8Array(n);
+        const q2: number[] = [];
+        for (let i = 0; i < n; i++) if (nms[i] >= strong) { vis[i] = 1; q2.push(i); }
+        let qi2 = 0;
+        while (qi2 < q2.length) {
+          const idx = q2[qi2++];
+          edges[idx] = 1;
+          const ey = Math.floor(idx / w), ex = idx % w;
+          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+            if (!dy && !dx) continue;
+            const ny = ey + dy, nx = ex + dx;
+            if (ny < 0 || ny >= h || nx < 0 || nx >= w) continue;
+            const ni = ny * w + nx;
+            if (!vis[ni] && nms[ni] >= weak) { vis[ni] = 1; q2.push(ni); }
+          }
+        }
+      }
+      return edges;
+    }
+
+    // BFS distance from edge pixels, normalized to [0,1]
+    function cfBfsDist(edges: Uint8Array, w: number, h: number): Float32Array {
+      const n = w * h;
+      const dist = new Float32Array(n).fill(1e9);
+      const queue = new Int32Array(n); let head = 0, tail = 0;
+      for (let i = 0; i < n; i++) if (edges[i]) { dist[i] = 0; queue[tail++] = i; }
+      const DY = [-1,-1,-1,0,0,1,1,1], DX = [-1,0,1,-1,1,-1,0,1];
+      const DC = [Math.SQRT2,1,Math.SQRT2,1,1,Math.SQRT2,1,Math.SQRT2];
+      while (head < tail) {
+        const idx = queue[head++];
+        const y = (idx / w) | 0, x = idx % w;
+        for (let d = 0; d < 8; d++) {
+          const ny = y + DY[d], nx = x + DX[d];
+          if (ny < 0 || ny >= h || nx < 0 || nx >= w) continue;
+          const ni = ny * w + nx, nd = dist[idx] + DC[d];
+          if (nd < dist[ni]) { dist[ni] = nd; queue[tail++] = ni; }
+        }
+      }
+      const maxD = Math.max(w, h);
+      for (let i = 0; i < n; i++) dist[i] = Math.min(1, dist[i] / maxD);
+      return dist;
+    }
+
+    // Per-channel linear normalization to target mean/std
+    function cfNormChannels(d: Uint8ClampedArray, w: number, h: number, tMean: Float32Array, tStd: Float32Array): Uint8ClampedArray {
+      const n = w * h;
+      const out = new Uint8ClampedArray(n * 4);
+      for (let ch = 0; ch < 3; ch++) {
+        let sum = 0; for (let i = 0; i < n; i++) sum += d[i*4+ch];
+        const mean = sum / n;
+        let sq = 0; for (let i = 0; i < n; i++) { const v = d[i*4+ch] - mean; sq += v*v; }
+        const std = Math.sqrt(sq / n);
+        for (let i = 0; i < n; i++) {
+          const v = std < 1e-6 ? tMean[ch] : (d[i*4+ch] - mean) / std * tStd[ch] + tMean[ch];
+          out[i*4+ch] = Math.max(0, Math.min(255, Math.round(v)));
+        }
+      }
+      for (let i = 0; i < n; i++) out[i*4+3] = 255;
+      return out;
+    }
+
+    // Apply visual style to a size×size RGBA buffer
+    function cfApplyStyle(d: Uint8ClampedArray, size: number, style: string): Uint8ClampedArray {
+      if (style === 'color') return d;
+      const n = size * size;
+      const out = new Uint8ClampedArray(n * 4);
+      if (style === 'rgb') {
+        const pal = [[0,0,0],[255,255,255],[255,0,0],[255,255,0],[0,0,255]];
+        for (let i = 0; i < n; i++) {
+          const r = d[i*4], g = d[i*4+1], b = d[i*4+2];
+          let bd = Infinity, bi = 0;
+          for (let p = 0; p < pal.length; p++) {
+            const dr=r-pal[p][0], dg=g-pal[p][1], db=b-pal[p][2];
+            const dd = dr*dr+dg*dg+db*db;
+            if (dd < bd) { bd = dd; bi = p; }
+          }
+          out[i*4]=pal[bi][0]; out[i*4+1]=pal[bi][1]; out[i*4+2]=pal[bi][2]; out[i*4+3]=255;
+        }
+      } else if (style === 'grayscale') {
+        for (let i = 0; i < n; i++) { const v=Math.round(0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2]); out[i*4]=out[i*4+1]=out[i*4+2]=v; out[i*4+3]=255; }
+      } else if (style === 'stencil') {
+        const mag = sobelEdges(d, size, size);
+        for (let i = 0; i < n; i++) { const v=mag[i]>=30?0:255; out[i*4]=out[i*4+1]=out[i*4+2]=v; out[i*4+3]=255; }
+      } else if (style === 'invert') {
+        for (let i = 0; i < n; i++) { out[i*4]=255-d[i*4]; out[i*4+1]=255-d[i*4+1]; out[i*4+2]=255-d[i*4+2]; out[i*4+3]=255; }
+      } else if (style === 'posterize') {
+        for (let i = 0; i < n; i++) { out[i*4]=d[i*4]&0xC0; out[i*4+1]=d[i*4+1]&0xC0; out[i*4+2]=d[i*4+2]&0xC0; out[i*4+3]=255; }
+      } else if (style === 'solarize') {
+        for (let i = 0; i < n; i++) { const r=d[i*4],g=d[i*4+1],b=d[i*4+2]; out[i*4]=r<128?r:255-r; out[i*4+1]=g<128?g:255-g; out[i*4+2]=b<128?b:255-b; out[i*4+3]=255; }
+      } else if (style === 'sobel') {
+        const mag = sobelEdges(d, size, size);
+        for (let i = 0; i < n; i++) { const v=Math.round(Math.min(255,mag[i])); out[i*4]=out[i*4+1]=out[i*4+2]=v; out[i*4+3]=255; }
+      } else if (style === 'canny') {
+        const e = cfCanny(d, size, size);
+        for (let i = 0; i < n; i++) { const v=e[i]?255:0; out[i*4]=out[i*4+1]=out[i*4+2]=v; out[i*4+3]=255; }
+      } else { return d; }
+      return out;
+    }
+
+    // Weighted MAE across shared boundaries between candidate tile and above/left neighbours
+    function cfEdgeScore(
+      cand: Uint8ClampedArray, candW: number, candH: number,
+      above: Uint8ClampedArray | null, aboveW: number, aboveH: number,
+      left: Uint8ClampedArray | null, leftW: number, leftH: number,
+    ): number {
+      let total = 0, norm = 0;
+      if (above) {
+        const dep = Math.min(CF_DEPTH, aboveH, candH);
+        for (let d = 0; d < dep; d++) {
+          const w = dep - d;
+          norm += w;
+          const aboveRow = aboveH - 1 - d;
+          let s = 0;
+          for (let x = 0; x < candW; x++) {
+            const ci = (d * candW + x) * 4, ai = (aboveRow * aboveW + x) * 4;
+            s += (Math.abs(cand[ci]-above[ai]) + Math.abs(cand[ci+1]-above[ai+1]) + Math.abs(cand[ci+2]-above[ai+2])) / 3;
+          }
+          total += w * s / candW;
+        }
+      }
+      if (left) {
+        const dep = Math.min(CF_DEPTH, leftW, candW);
+        for (let d = 0; d < dep; d++) {
+          const w = dep - d;
+          norm += w;
+          const leftCol = leftW - 1 - d;
+          let s = 0;
+          for (let y = 0; y < candH; y++) {
+            const ci = (y * candW + d) * 4, li = (y * leftW + leftCol) * 4;
+            s += (Math.abs(cand[ci]-left[li]) + Math.abs(cand[ci+1]-left[li+1]) + Math.abs(cand[ci+2]-left[li+2])) / 3;
+          }
+          total += w * s / candH;
+        }
+      }
+      return norm > 0 ? total / norm : 0;
+    }
+
+    // Dynamic-programming minimum-cost seam carving (returns column index per row)
+    function cfMinSeam(cost: Float32Array, W: number, H: number): number[] {
+      const dp = new Float32Array(W * H);
+      for (let x = 0; x < W; x++) dp[x] = cost[x];
+      for (let y = 1; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const p = dp[(y-1)*W+x];
+          const pl = x > 0     ? dp[(y-1)*W+x-1] : Infinity;
+          const pr = x < W-1   ? dp[(y-1)*W+x+1] : Infinity;
+          dp[y*W+x] = cost[y*W+x] + Math.min(p, pl, pr);
+        }
+      }
+      const seam: number[] = new Array(H);
+      let mx = 0; for (let x = 1; x < W; x++) if (dp[(H-1)*W+x] < dp[(H-1)*W+mx]) mx = x;
+      seam[H-1] = mx;
+      for (let y = H-2; y >= 0; y--) {
+        const cx = seam[y+1]; let bx = cx;
+        if (cx > 0   && dp[y*W+cx-1] < dp[y*W+bx]) bx = cx-1;
+        if (cx < W-1 && dp[y*W+cx+1] < dp[y*W+bx]) bx = cx+1;
+        seam[y] = bx;
+      }
+      return seam;
+    }
+
+    // Smooth a seam path with a box filter, clamped to [lo, hi]
+    function cfSmoothSeam(seam: number[], lo: number, hi: number): number[] {
+      const r = 6, out: number[] = new Array(seam.length);
+      for (let y = 0; y < seam.length; y++) {
+        let s = 0, c = 0;
+        for (let dy = -r; dy <= r; dy++) { const ny = y+dy; if (ny >= 0 && ny < seam.length) { s += seam[ny]; c++; } }
+        out[y] = Math.max(lo, Math.min(hi, Math.round(s / c)));
+      }
+      return out;
+    }
+
+    // Build seam cost matrix for a vertical boundary zone (q rows × 2*overlap cols)
+    function cfVerticalCost(leftD: Uint8ClampedArray, rightD: Uint8ClampedArray, q: number, overlap: number, mode: string, cannyNorm?: { mean: Float32Array; std: Float32Array }): Float32Array {
+      const zW = 2 * overlap;
+      const cost = new Float32Array(q * zW);
+      if (mode === 'smooth') {
+        for (let y = 0; y < q; y++) for (let z = 0; z < zW; z++) {
+          const lx = Math.min(q-1, q-overlap+z), rx = Math.max(0, z-overlap);
+          const li = (y*q+lx)*4, ri = (y*q+rx)*4;
+          const dr=leftD[li]-rightD[ri], dg=leftD[li+1]-rightD[ri+1], db=leftD[li+2]-rightD[ri+2];
+          cost[y*zW+z] = (dr*dr+dg*dg+db*db)/3;
+        }
+      } else {
+        const lN = cannyNorm ? cfNormChannels(leftD,  q, q, cannyNorm.mean, cannyNorm.std) : leftD;
+        const rN = cannyNorm ? cfNormChannels(rightD, q, q, cannyNorm.mean, cannyNorm.std) : rightD;
+        const lE = cfCanny(lN, q, q), rE = cfCanny(rN, q, q);
+        const lD = cfBfsDist(lE, q, q), rD = cfBfsDist(rE, q, q);
+        for (let y = 0; y < q; y++) for (let z = 0; z < overlap; z++) {
+          cost[y*zW+z]          = lD[y*q + (q-overlap+z)];
+          cost[y*zW+overlap+z]  = rD[y*q + z];
+        }
+      }
+      return cost;
+    }
+
+    // Apply a vertical seam cut between two adjacent tiles into the full canvas buffer
+    function cfQuiltV(buf: Uint8ClampedArray, leftD: Uint8ClampedArray, rightD: Uint8ClampedArray, cW: number, q: number, canvasY: number, xBound: number, overlap: number, mode: string, cn?: { mean: Float32Array; std: Float32Array }): void {
+      const zW = 2 * overlap;
+      const cost = cfVerticalCost(leftD, rightD, q, overlap, mode, cn);
+      const seam = cfSmoothSeam(cfMinSeam(cost, zW, q), 0, zW-1);
+      const zStartX = xBound - overlap;
+      for (let y = 0; y < q; y++) {
+        const sy = seam[y];
+        for (let z = 0; z < zW; z++) {
+          const cx = zStartX + z, cy = canvasY + y;
+          if (cx < 0 || cx >= cW) continue;
+          const alpha = Math.max(0, Math.min(1, z - sy + 0.5));
+          const bi = (cy * cW + cx) * 4;
+          const lx = Math.min(q-1, q-overlap+z), rx = Math.max(0, z-overlap);
+          const li = (y*q+lx)*4, ri = (y*q+rx)*4;
+          buf[bi]  =Math.round(leftD[li]  *(1-alpha)+rightD[ri]  *alpha);
+          buf[bi+1]=Math.round(leftD[li+1]*(1-alpha)+rightD[ri+1]*alpha);
+          buf[bi+2]=Math.round(leftD[li+2]*(1-alpha)+rightD[ri+2]*alpha);
+          buf[bi+3]=255;
+        }
+      }
+    }
+
+    // Apply a horizontal seam cut between two vertically adjacent tiles
+    function cfQuiltH(buf: Uint8ClampedArray, topD: Uint8ClampedArray, botD: Uint8ClampedArray, cW: number, q: number, canvasX: number, yBound: number, overlap: number, mode: string, cn?: { mean: Float32Array; std: Float32Array }): void {
+      // Transpose to reuse vertical cost logic: treat cols as "rows"
+      // Build transposed tiles: topT[x, y] = topD[y, x]
+      const n = q * q;
+      const topT = new Uint8ClampedArray(n*4), botT = new Uint8ClampedArray(n*4);
+      for (let y = 0; y < q; y++) for (let x = 0; x < q; x++) {
+        const s=(y*q+x)*4, dt=(x*q+y)*4;
+        topT[dt]=topD[s]; topT[dt+1]=topD[s+1]; topT[dt+2]=topD[s+2]; topT[dt+3]=255;
+        botT[dt]=botD[s]; botT[dt+1]=botD[s+1]; botT[dt+2]=botD[s+2]; botT[dt+3]=255;
+      }
+      const zH = 2 * overlap;
+      const cost = cfVerticalCost(topT, botT, q, overlap, mode, cn);
+      // seam[x] = row offset within zone (0..zH-1) for each column x
+      const seam = cfSmoothSeam(cfMinSeam(cost, zH, q), 0, zH-1);
+      const zStartY = yBound - overlap;
+      for (let x = 0; x < q; x++) {
+        const sy = seam[x];
+        for (let z = 0; z < zH; z++) {
+          const cx = canvasX + x, cy = zStartY + z;
+          if (cy < 0 || cy >= cW) continue;
+          const alpha = Math.max(0, Math.min(1, z - sy + 0.5));
+          const bi = (cy * cW + cx) * 4;
+          const ty = Math.min(q-1, q-overlap+z), by2 = Math.max(0, z-overlap);
+          const ti = (ty*q+x)*4, boi = (by2*q+x)*4;
+          buf[bi]  =Math.round(topD[ti]  *(1-alpha)+botD[boi]  *alpha);
+          buf[bi+1]=Math.round(topD[ti+1]*(1-alpha)+botD[boi+1]*alpha);
+          buf[bi+2]=Math.round(topD[ti+2]*(1-alpha)+botD[boi+2]*alpha);
+          buf[bi+3]=255;
+        }
+      }
+    }
+
+    // Randomized Latin square: cyclic base, shuffle rows then cols
+    function cfLatinSquare(n: number, rng: () => number): number[][] {
+      const sq = Array.from({length: n}, (_,i) => Array.from({length: n}, (_,j) => (i+j)%n));
+      for (let i = n-1; i > 0; i--) { const j=(rng()*(i+1))|0; [sq[i],sq[j]]=[sq[j],sq[i]]; }
+      for (let i = n-1; i > 0; i--) { const j=(rng()*(i+1))|0; for (let r=0;r<n;r++) { const t=sq[r][i]; sq[r][i]=sq[r][j]; sq[r][j]=t; } }
+      return sq;
+    }
+
+    // Recursive Mondrian partition into nRegions rectangles, raster-ordered
+    function cfMondrian(size: number, nR: number, rng: () => number): {x:number;y:number;w:number;h:number}[] {
+      const minD = 80;
+      let rects = [{x:0,y:0,w:size,h:size}];
+      while (rects.length < nR) {
+        let bi = -1, ba = -1;
+        for (let i=0;i<rects.length;i++) { const r=rects[i]; if ((r.w>=2*minD||r.h>=2*minD)&&r.w*r.h>ba) { ba=r.w*r.h; bi=i; } }
+        if (bi<0) break;
+        const r=rects.splice(bi,1)[0];
+        if (r.w>=r.h && r.w>=2*minD) {
+          const lo=(r.w*0.25)|0, hi=(r.w*0.75)|0;
+          const c=lo+((rng()*(hi-lo))|0);
+          rects.push({x:r.x,y:r.y,w:c,h:r.h},{x:r.x+c,y:r.y,w:r.w-c,h:r.h});
+        } else {
+          const lo=(r.h*0.25)|0, hi=(r.h*0.75)|0;
+          const c=lo+((rng()*(hi-lo))|0);
+          rects.push({x:r.x,y:r.y,w:r.w,h:c},{x:r.x,y:r.y+c,w:r.w,h:r.h-c});
+        }
+      }
+      return rects.sort((a,b)=>a.y!==b.y?a.y-b.y:a.x-b.x);
+    }
+
+    // Assemble one 3×3 grid output (greedy placement + optional quilting)
+    function cfAssembleGrid(
+      pieces: [number, [number, Uint8ClampedArray][]][],
+      rng: () => number,
+      q: number, overlap: number, seamsMode: string,
+      cn: { mean: Float32Array; std: Float32Array },
+    ): { data: Uint8ClampedArray; chosenQis: Map<number,number> } {
+      const size = q * 3;
+      const buf = new Uint8ClampedArray(size * size * 4);
+      const placed: (Uint8ClampedArray | null)[] = new Array(9).fill(null);
+      const chosenQis = new Map<number,number>();
+      const usedSrcs = new Set<number>();
+
+      for (let slot = 0; slot < 9; slot++) {
+        const row = (slot/3)|0, col = slot%3;
+        const above = slot >= 3 ? placed[slot-3] : null;
+        const left  = col  > 0 ? placed[slot-1]  : null;
+
+        let bestScore = Infinity, bestSrcJ = -1, bestQi = -1;
+        let bestData: Uint8ClampedArray | null = null;
+
+        for (const [srcJ, avail] of pieces) {
+          if (usedSrcs.has(srcJ)) continue;
+          for (const [qi, tile] of avail) {
+            for (const {rot,flipH,inv} of CF_TRANSFORMS) {
+              const td = cfXform(tile, q, rot, flipH, inv);
+              const sc = cfEdgeScore(td, q, q, above, q, q, left, q, q);
+              if (sc < bestScore) { bestScore=sc; bestSrcJ=srcJ; bestQi=qi; bestData=td; }
+            }
+          }
+        }
+
+        placed[slot] = bestData!;
+        usedSrcs.add(bestSrcJ);
+        chosenQis.set(bestSrcJ, bestQi);
+
+        // Paint tile into canvas
+        const cx0 = col * q, cy0 = row * q;
+        for (let y = 0; y < q; y++) {
+          const dst = ((cy0+y)*size+cx0)*4;
+          buf.set(bestData!.subarray(y*q*4, (y*q+q)*4), dst);
+        }
+      }
+
+      // Quilt seams
+      if (seamsMode !== 'off') {
+        const mode = seamsMode === 'smooth' ? 'smooth' : 'edge';
+        for (let col = 1; col < 3; col++)
+          for (let row = 0; row < 3; row++)
+            cfQuiltV(buf, placed[row*3+col-1]!, placed[row*3+col]!, size, q, row*q, col*q, overlap, mode, cn);
+        for (let row = 1; row < 3; row++)
+          for (let col = 0; col < 3; col++)
+            cfQuiltH(buf, placed[(row-1)*3+col]!, placed[row*3+col]!, size, q, col*q, row*q, overlap, mode, cn);
+      }
+
+      return { data: buf, chosenQis };
+    }
+
+    // Assemble one Mondrian output (no quilting, variable-size regions)
+    function cfAssembleMondrian(
+      pieces: [number, [number, Uint8ClampedArray][]][],
+      rng: () => number,
+      size: number, q: number, nRegions: number,
+    ): { data: Uint8ClampedArray; chosenQis: Map<number,number> } {
+      const buf = new Uint8ClampedArray(size * size * 4);
+      const regions = cfMondrian(size, nRegions, rng);
+      const chosenQis = new Map<number,number>();
+      const usedSrcs = new Set<number>();
+
+      for (const reg of regions) {
+        const { x: rx, y: ry, w: rw, h: rh } = reg;
+
+        // Extract context strips from already-painted canvas
+        const aboveH = Math.min(CF_DEPTH, ry);
+        const leftW  = Math.min(CF_DEPTH, rx);
+        let aboveStrip: Uint8ClampedArray | null = null;
+        let leftStrip: Uint8ClampedArray | null = null;
+        if (aboveH > 0) {
+          aboveStrip = new Uint8ClampedArray(aboveH * rw * 4);
+          for (let dy = 0; dy < aboveH; dy++) for (let dx = 0; dx < rw; dx++) {
+            const si=((ry-aboveH+dy)*size+rx+dx)*4, di=(dy*rw+dx)*4;
+            aboveStrip[di]=buf[si]; aboveStrip[di+1]=buf[si+1]; aboveStrip[di+2]=buf[si+2]; aboveStrip[di+3]=255;
+          }
+        }
+        if (leftW > 0) {
+          leftStrip = new Uint8ClampedArray(rh * leftW * 4);
+          for (let dy = 0; dy < rh; dy++) for (let dx = 0; dx < leftW; dx++) {
+            const si=((ry+dy)*size+rx-leftW+dx)*4, di=(dy*leftW+dx)*4;
+            leftStrip[di]=buf[si]; leftStrip[di+1]=buf[si+1]; leftStrip[di+2]=buf[si+2]; leftStrip[di+3]=255;
+          }
+        }
+
+        let bestScore = Infinity, bestSrcJ = -1, bestQi = -1;
+        let bestData: Uint8ClampedArray | null = null;
+
+        for (const [srcJ, avail] of pieces) {
+          if (usedSrcs.has(srcJ)) continue;
+          for (const [qi, tile] of avail) {
+            for (const {rot,flipH,inv} of CF_TRANSFORMS) {
+              const td = cfXform(tile, q, rot, flipH, inv);
+              // Resize to region dims for scoring
+              const rd = resizeToMatch(td, q, q, rw, rh);
+              const sc = cfEdgeScore(rd, rw, rh,
+                aboveStrip, rw, aboveH || 1,
+                leftStrip, leftW || 1, rh);
+              if (sc < bestScore) { bestScore=sc; bestSrcJ=srcJ; bestQi=qi;
+                bestData = resizeToMatch(td, q, q, rw, rh); }
+            }
+          }
+        }
+
+        usedSrcs.add(bestSrcJ);
+        chosenQis.set(bestSrcJ, bestQi);
+
+        // Paint region into canvas
+        for (let dy = 0; dy < rh; dy++) for (let dx = 0; dx < rw; dx++) {
+          const si=(dy*rw+dx)*4, di=((ry+dy)*size+rx+dx)*4;
+          buf[di]=bestData![si]; buf[di+1]=bestData![si+1]; buf[di+2]=bestData![si+2]; buf[di+3]=255;
+        }
+      }
+
+      return { data: buf, chosenQis };
+    }
+
+    // Main render: 9 images → 9 collage outputs
+    function renderCollageFrankensteinNative(imgs: (HTMLImageElement | null)[], params: Record<string, any>, _rng: () => number): Output[] {
+      const size = CF_SIZE, q = size / 3, overlap = CF_OVERLAP;
+      const style   = (params.style   ?? 'color') as string;
+      const seams   = (params.seams   ?? 'edge')  as string;
+      const layout  = (params.layout  ?? 'grid')  as string;
+      const regions = Math.max(1, Math.min(9, (params.regions ?? 9) as number));
+
+      // Seeded rng from Math.random (no seed param for CF)
+      const rng = Math.random.bind(Math);
+
+      // Standardize + style
+      let std: Uint8ClampedArray[] = imgs.map(img => cfStandardize(img!, size));
+      if (style !== 'color') std = std.map(d => cfApplyStyle(d, size, style));
+
+      // Slice into quadrants
+      const quads: Uint8ClampedArray[][] = std.map(d => cfSliceQuadrants(d, size));
+
+      // Global mean/std across all 81 quadrant arrays for Canny normalization
+      const allN = 9 * 9, qN = q * q;
+      const tMean = new Float32Array(3), tStd = new Float32Array(3);
+      for (let ch = 0; ch < 3; ch++) {
+        let s = 0; for (let i = 0; i < allN; i++) { const d=quads[i/9|0][i%9]; for (let j=0;j<qN;j++) s+=d[j*4+ch]; }
+        tMean[ch] = s / (allN * qN);
+        let sq = 0; for (let i = 0; i < allN; i++) { const d=quads[i/9|0][i%9]; for (let j=0;j<qN;j++) { const v=d[j*4+ch]-tMean[ch]; sq+=v*v; } }
+        tStd[ch] = Math.sqrt(sq / (allN * qN));
+      }
+      const cn = { mean: tMean, std: tStd };
+
+      // Latin-square usage tracking
+      const usedPerSrc: Set<number>[] = Array.from({length: 9}, () => new Set<number>());
+      const outputs: Output[] = [];
+
+      for (let outI = 0; outI < 9; outI++) {
+        const pieces: [number, [number, Uint8ClampedArray][]][] = quads.map((qs, srcJ) => [
+          srcJ, qs.map((q2, qi) => [qi, q2] as [number, Uint8ClampedArray]).filter(([qi]) => !usedPerSrc[srcJ].has(qi)),
+        ]);
+
+        let data: Uint8ClampedArray, chosenQis: Map<number,number>;
+        if (layout === 'mondrian') {
+          ({ data, chosenQis } = cfAssembleMondrian(pieces, rng, size, q, regions));
+        } else {
+          ({ data, chosenQis } = cfAssembleGrid(pieces, rng, q, overlap, seams, cn));
+        }
+
+        for (const [srcJ, qi] of chosenQis) usedPerSrc[srcJ].add(qi);
+
+        const label = String(outI + 1).padStart(2, '0');
+        outputs.push({ canvas: pixelsToCanvas(data, size, size), label, mimeType: 'image/jpeg' });
+      }
+
+      return outputs;
     }
 
     function buildCollageFrankensteinParams() {
