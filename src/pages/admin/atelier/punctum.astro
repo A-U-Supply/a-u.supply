@@ -5444,6 +5444,7 @@ import Admin from '../../../layouts/Admin.astro';
       hasNativeBW?: boolean;
       render?: (imgs: (HTMLImageElement | null)[], params: Record<string, any>, rng: () => number) => Output[] | Promise<Output[]>;
       renderAsync?: (imgs: (HTMLImageElement | null)[], params: Record<string, any>, seed?: number) => Promise<Output[]>;
+      autoRun?: boolean; // async bot that fires automatically like a sync bot
       buildParams?: () => void;
       getParams?: () => Record<string, any>;
       setParams?: (p: Record<string, any>) => void;
@@ -5463,6 +5464,7 @@ import Admin from '../../../layouts/Admin.astro';
         label: 'Collage Frankenstein', desc: 'Slice 9 images into grids, shuffle quadrants across a Latin square, and reassemble with edge-following seams. Produces 9 collage variants.',
         inputs: 9, inputLabels: ['Image 1','Image 2','Image 3','Image 4','Image 5','Image 6','Image 7','Image 8','Image 9'], hasRandomness: false,
         renderAsync: (imgs, params) => runCollageFrankensteinJob(imgs, params),
+        autoRun: true,
         buildParams: buildCollageFrankensteinParams,
         getParams: getCollageFrankensteinParams,
         setParams: setCollageFrankensteinParams,
@@ -11808,7 +11810,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     function maybeAutoRun() {
       if (!allSlotsReady()) return;
-      if (BOTS[currentBot].renderAsync) {
+      if (BOTS[currentBot].renderAsync && !BOTS[currentBot].autoRun) {
         runBtn.disabled = false;
       } else {
         doReroll();
@@ -11940,7 +11942,7 @@ import Admin from '../../../layouts/Admin.astro';
 
     function enableActions(on: boolean) {
       const bot = BOTS[currentBot];
-      rerollBtn.disabled   = !on || !bot.hasRandomness;
+      rerollBtn.disabled   = !on || (!bot.hasRandomness && !bot.autoRun);
       runBtn.disabled      = !on && !bot.renderAsync;
       downloadBtn.disabled = !on;
       saveBtn.disabled     = !on;
@@ -12019,10 +12021,11 @@ import Admin from '../../../layouts/Admin.astro';
       seedInput.style.display = (bot.hasRandomness || bot.renderAsync) ? '' : 'none';
       seedInput.placeholder   = bot.renderAsync ? 'seed (opt.)' : 'seed';
 
-      // Async bots use Run button; sync bots use Re-roll
-      rerollBtn.style.display = bot.renderAsync ? 'none' : '';
-      runBtn.style.display    = bot.renderAsync ? '' : 'none';
-      rerollBtn.disabled = !bot.hasRandomness;
+      // Async bots use Run button; sync bots and autoRun async bots use Re-roll
+      const useRunBtn = bot.renderAsync && !bot.autoRun;
+      rerollBtn.style.display = useRunBtn ? 'none' : '';
+      runBtn.style.display    = useRunBtn ? '' : 'none';
+      rerollBtn.disabled = true; // enabled once slots are ready (or by enableActions)
       runBtn.disabled    = true; // enabled once slots are ready
     }
 
