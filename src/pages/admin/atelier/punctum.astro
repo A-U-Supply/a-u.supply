@@ -7148,11 +7148,10 @@ import Admin from '../../../layouts/Admin.astro';
     const CF_DEPTH   = 8;     // edge-score comparison depth
 
     // 16 transforms: 4 rotations × 2 flips × 2 invert
-    const CF_TRANSFORMS: { rot: number; flipH: boolean; inv: boolean }[] = [];
+    const CF_TRANSFORMS: { rot: number; flipH: boolean }[] = [];
     for (const rot of [0, 90, 180, 270])
       for (const flipH of [false, true])
-        for (const inv of [false, true])
-          CF_TRANSFORMS.push({ rot, flipH, inv });
+        CF_TRANSFORMS.push({ rot, flipH });
 
     // Pure-JS pixel transform — no canvas overhead
     function cfXform(d: Uint8ClampedArray, q: number, rot: number, flipH: boolean, inv: boolean): Uint8ClampedArray {
@@ -7376,6 +7375,52 @@ import Admin from '../../../layouts/Admin.astro';
       return norm > 0 ? total / norm : 0;
     }
 
+    // Fast border-only edge score for grid mode — no cfXform allocation, reads source pixels directly
+    // Computes the same metric as cfEdgeScore but applies the transform on-the-fly for border pixels only
+    function cfBorderScore(
+      d: Uint8ClampedArray, q: number, rot: number, flipH: boolean,
+      above: Uint8ClampedArray | null, left: Uint8ClampedArray | null,
+    ): number {
+      let total = 0, norm = 0;
+      const dep = CF_DEPTH;
+
+      if (above) {
+        for (let ty = 0; ty < dep; ty++) {
+          const w = dep - ty, aboveOff = (q - 1 - ty) * q * 4;
+          norm += w; let s = 0;
+          for (let tx = 0; tx < q; tx++) {
+            let sx = tx, sy = ty;
+            if (rot === 90)       { sx = q-1-ty; sy = tx; }
+            else if (rot === 180) { sx = q-1-tx; sy = q-1-ty; }
+            else if (rot === 270) { sx = ty;     sy = q-1-tx; }
+            if (flipH) sx = q-1-sx;
+            const ci = (sy*q+sx)*4, ai = aboveOff + tx*4;
+            s += Math.abs(d[ci]-above[ai]) + Math.abs(d[ci+1]-above[ai+1]) + Math.abs(d[ci+2]-above[ai+2]);
+          }
+          total += w * s / (q * 3);
+        }
+      }
+
+      if (left) {
+        for (let tx = 0; tx < dep; tx++) {
+          const w = dep - tx, leftOff = (q - 1 - tx) * 4;
+          norm += w; let s = 0;
+          for (let ty = 0; ty < q; ty++) {
+            let sx = tx, sy = ty;
+            if (rot === 90)       { sx = q-1-ty; sy = tx; }
+            else if (rot === 180) { sx = q-1-tx; sy = q-1-ty; }
+            else if (rot === 270) { sx = ty;     sy = q-1-tx; }
+            if (flipH) sx = q-1-sx;
+            const ci = (sy*q+sx)*4, li = ty*q*4 + leftOff;
+            s += Math.abs(d[ci]-left[li]) + Math.abs(d[ci+1]-left[li+1]) + Math.abs(d[ci+2]-left[li+2]);
+          }
+          total += w * s / (q * 3);
+        }
+      }
+
+      return norm > 0 ? total / norm : 0;
+    }
+
     // Dynamic-programming minimum-cost seam carving (returns column index per row)
     function cfMinSeam(cost: Float32Array, W: number, H: number): number[] {
       const dp = new Float32Array(W * H);
@@ -7423,13 +7468,12 @@ import Admin from '../../../layouts/Admin.astro';
           cost[y*zW+z] = (dr*dr+dg*dg+db*db)/3;
         }
       } else {
-        const lN = cannyNorm ? cfNormChannels(leftD,  q, q, cannyNorm.mean, cannyNorm.std) : leftD;
-        const rN = cannyNorm ? cfNormChannels(rightD, q, q, cannyNorm.mean, cannyNorm.std) : rightD;
-        const lE = cfCanny(lN, q, q), rE = cfCanny(rN, q, q);
-        const lD = cfBfsDist(lE, q, q), rD = cfBfsDist(rE, q, q);
+        // Sobel magnitude inverted: seam prefers to cut along edges (pure JS, no canvas round-trip)
+        const lMag = sobelEdges(leftD,  q, q);
+        const rMag = sobelEdges(rightD, q, q);
         for (let y = 0; y < q; y++) for (let z = 0; z < overlap; z++) {
-          cost[y*zW+z]          = lD[y*q + (q-overlap+z)];
-          cost[y*zW+overlap+z]  = rD[y*q + z];
+          cost[y*zW+z]         = 1 - lMag[y*q + (q-overlap+z)] / 255;
+          cost[y*zW+overlap+z] = 1 - rMag[y*q + z] / 255;
         }
       }
       return cost;
@@ -7540,18 +7584,21 @@ import Admin from '../../../layouts/Admin.astro';
         const left  = col  > 0 ? placed[slot-1]  : null;
 
         let bestScore = Infinity, bestSrcJ = -1, bestQi = -1;
-        let bestData: Uint8ClampedArray | null = null;
+        let bestRot = 0, bestFlipH = false;
 
         for (const [srcJ, avail] of pieces) {
           if (usedSrcs.has(srcJ)) continue;
           for (const [qi, tile] of avail) {
-            for (const {rot,flipH,inv} of CF_TRANSFORMS) {
-              const td = cfXform(tile, q, rot, flipH, inv);
-              const sc = cfEdgeScore(td, q, q, above, q, q, left, q, q);
-              if (sc < bestScore) { bestScore=sc; bestSrcJ=srcJ; bestQi=qi; bestData=td; }
+            for (const {rot,flipH} of CF_TRANSFORMS) {
+              const sc = cfBorderScore(tile, q, rot, flipH, above, left);
+              if (sc < bestScore) { bestScore=sc; bestSrcJ=srcJ; bestQi=qi; bestRot=rot; bestFlipH=flipH; }
             }
           }
         }
+
+        // Only compute full transform for the winning tile
+        const winTile = (pieces.find(([s]) => s === bestSrcJ)![1].find(([i]) => i === bestQi)![1]);
+        const bestData = cfXform(winTile, q, bestRot, bestFlipH, false);
 
         placed[slot] = bestData!;
         usedSrcs.add(bestSrcJ);
@@ -7619,15 +7666,14 @@ import Admin from '../../../layouts/Admin.astro';
         for (const [srcJ, avail] of pieces) {
           if (usedSrcs.has(srcJ)) continue;
           for (const [qi, tile] of avail) {
-            for (const {rot,flipH,inv} of CF_TRANSFORMS) {
-              const td = cfXform(tile, q, rot, flipH, inv);
+            for (const {rot,flipH} of CF_TRANSFORMS) {
+              const td = cfXform(tile, q, rot, flipH, false);
               // Resize to region dims for scoring
               const rd = resizeToMatch(td, q, q, rw, rh);
               const sc = cfEdgeScore(rd, rw, rh,
                 aboveStrip, rw, aboveH || 1,
                 leftStrip, leftW || 1, rh);
-              if (sc < bestScore) { bestScore=sc; bestSrcJ=srcJ; bestQi=qi;
-                bestData = resizeToMatch(td, q, q, rw, rh); }
+              if (sc < bestScore) { bestScore=sc; bestSrcJ=srcJ; bestQi=qi; bestData=rd; }
             }
           }
         }
