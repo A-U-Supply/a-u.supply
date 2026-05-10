@@ -7319,8 +7319,23 @@ import Admin from '../../../layouts/Admin.astro';
       } else if (style === 'grayscale') {
         for (let i = 0; i < n; i++) { const v=Math.round(0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2]); out[i*4]=out[i*4+1]=out[i*4+2]=v; out[i*4+3]=255; }
       } else if (style === 'stencil') {
-        const mag = sobelEdges(d, size, size);
-        for (let i = 0; i < n; i++) { const v=mag[i]>=30?0:255; out[i*4]=out[i*4+1]=out[i*4+2]=v; out[i*4+3]=255; }
+        // Otsu threshold on luminance — matches stencil_transform.py make_stencil
+        const hist = new Int32Array(256);
+        for (let i = 0; i < n; i++) hist[Math.round(0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2])]++;
+        let sum = 0; for (let t = 0; t < 256; t++) sum += t * hist[t];
+        let sumB = 0, wB = 0, maxVar = 0, thresh = 128;
+        for (let t = 0; t < 256; t++) {
+          wB += hist[t]; if (wB === 0) continue;
+          const wF = n - wB; if (wF === 0) break;
+          sumB += t * hist[t];
+          const mB = sumB / wB, mF = (sum - sumB) / wF, v = wB * wF * (mB - mF) ** 2;
+          if (v > maxVar) { maxVar = v; thresh = t; }
+        }
+        for (let i = 0; i < n; i++) {
+          const g = Math.round(0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2]);
+          const v = g > thresh ? 255 : 0;
+          out[i*4]=out[i*4+1]=out[i*4+2]=v; out[i*4+3]=255;
+        }
       } else if (style === 'invert') {
         for (let i = 0; i < n; i++) { out[i*4]=255-d[i*4]; out[i*4+1]=255-d[i*4+1]; out[i*4+2]=255-d[i*4+2]; out[i*4+3]=255; }
       } else if (style === 'posterize') {
