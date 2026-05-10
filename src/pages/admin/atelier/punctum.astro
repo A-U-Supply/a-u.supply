@@ -11953,6 +11953,7 @@ import Admin from '../../../layouts/Admin.astro';
     // ─── Switch bot ────────────────────────────────────────────────────────────
 
     function switchBot(id: string, { skipClear = false }: { skipClear?: boolean } = {}) {
+      const prevInputs = BOTS[currentBot]?.inputs ?? 4;
       currentBot = id;
       botSelect.value = id;
       const bot = BOTS[id];
@@ -11963,9 +11964,22 @@ import Admin from '../../../layouts/Admin.astro';
       const descEl = document.getElementById('pt-bot-desc');
       if (descEl) descEl.textContent = bot?.desc ?? '';
 
+      // Expand slot arrays if this bot needs more slots than currently allocated
+      for (let i = sourceImgs.length; i < bot.inputs; i++) {
+        sourceImgs.push(null);
+        sourceIds.push(null);
+        slotTransforms.push({ rot: 0, flip: false });
+        slotLocked.push(false);
+        slotUserSet.push(false);
+        effectiveImgs.push(null);
+        effectiveBlobUrls.push(null);
+        slotHistory.push([]);
+      }
+
       if (!skipClear) {
-        // Reset state — preserve locked slots
-        for (let i = 0; i < 4; i++) {
+        // Reset state — preserve locked slots; clear all slots used by prev or new bot
+        const clearCount = Math.max(prevInputs, bot.inputs);
+        for (let i = 0; i < clearCount; i++) {
           if (!slotLocked[i]) {
             sourceImgs[i] = null;
             sourceIds[i] = null;
@@ -11990,6 +12004,16 @@ import Admin from '../../../layouts/Admin.astro';
       paramsEl.innerHTML = '';
       bot.buildParams?.();
       enhanceSliders();
+
+      // Auto-expand params panel when the bot has parameters
+      const botParamsWrap = document.getElementById('pt-bot-params-wrap');
+      if (botParamsWrap) {
+        if (bot.buildParams) {
+          botParamsWrap.classList.remove('collapsed');
+        } else {
+          botParamsWrap.classList.add('collapsed');
+        }
+      }
 
       stencilParamsEl.style.display = bot.renderAsync ? 'none' : 'flex';
       seedInput.style.display = (bot.hasRandomness || bot.renderAsync) ? '' : 'none';
