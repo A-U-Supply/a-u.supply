@@ -7421,6 +7421,54 @@ import Admin from '../../../layouts/Admin.astro';
       return norm > 0 ? total / norm : 0;
     }
 
+    // cfBorderScore variant for Mondrian: context strips are aboveH×q and q×leftW (sampled to q resolution)
+    // Avoids cfXform + resizeToMatch per candidate — only border pixels are evaluated
+    function cfBorderScoreM(
+      d: Uint8ClampedArray, q: number, rot: number, flipH: boolean,
+      aboveQ: Uint8ClampedArray | null, aboveH: number,
+      leftQ: Uint8ClampedArray | null, leftW: number,
+    ): number {
+      let total = 0, norm = 0;
+      const dep = CF_DEPTH;
+      if (aboveQ) {
+        const d2 = Math.min(dep, aboveH);
+        for (let ty = 0; ty < d2; ty++) {
+          const w = d2 - ty;
+          norm += w; let s = 0;
+          const aboveRow = aboveH - 1 - ty;
+          for (let tx = 0; tx < q; tx++) {
+            let sx = tx, sy = ty;
+            if (rot === 90)       { sx = q-1-ty; sy = tx; }
+            else if (rot === 180) { sx = q-1-tx; sy = q-1-ty; }
+            else if (rot === 270) { sx = ty;     sy = q-1-tx; }
+            if (flipH) sx = q-1-sx;
+            const ci = (sy*q+sx)*4, ai = (aboveRow*q+tx)*4;
+            s += Math.abs(d[ci]-aboveQ[ai]) + Math.abs(d[ci+1]-aboveQ[ai+1]) + Math.abs(d[ci+2]-aboveQ[ai+2]);
+          }
+          total += w * s / (q * 3);
+        }
+      }
+      if (leftQ) {
+        const d2 = Math.min(dep, leftW);
+        for (let tx = 0; tx < d2; tx++) {
+          const w = d2 - tx;
+          norm += w; let s = 0;
+          const leftCol = leftW - 1 - tx;
+          for (let ty = 0; ty < q; ty++) {
+            let sx = tx, sy = ty;
+            if (rot === 90)       { sx = q-1-ty; sy = tx; }
+            else if (rot === 180) { sx = q-1-tx; sy = q-1-ty; }
+            else if (rot === 270) { sx = ty;     sy = q-1-tx; }
+            if (flipH) sx = q-1-sx;
+            const ci = (sy*q+sx)*4, li = (ty*leftW+leftCol)*4;
+            s += Math.abs(d[ci]-leftQ[li]) + Math.abs(d[ci+1]-leftQ[li+1]) + Math.abs(d[ci+2]-leftQ[li+2]);
+          }
+          total += w * s / (q * 3);
+        }
+      }
+      return norm > 0 ? total / norm : 0;
+    }
+
     // Dynamic-programming minimum-cost seam carving (returns column index per row)
     function cfMinSeam(cost: Float32Array, W: number, H: number): number[] {
       const dp = new Float32Array(W * H);
@@ -7640,43 +7688,47 @@ import Admin from '../../../layouts/Admin.astro';
       for (const reg of regions) {
         const { x: rx, y: ry, w: rw, h: rh } = reg;
 
-        // Extract context strips from already-painted canvas
+        // Extract context strips sampled to q resolution for fast border scoring
         const aboveH = Math.min(CF_DEPTH, ry);
         const leftW  = Math.min(CF_DEPTH, rx);
-        let aboveStrip: Uint8ClampedArray | null = null;
-        let leftStrip: Uint8ClampedArray | null = null;
+        let aboveQ: Uint8ClampedArray | null = null;
+        let leftQ: Uint8ClampedArray | null = null;
         if (aboveH > 0) {
-          aboveStrip = new Uint8ClampedArray(aboveH * rw * 4);
-          for (let dy = 0; dy < aboveH; dy++) for (let dx = 0; dx < rw; dx++) {
-            const si=((ry-aboveH+dy)*size+rx+dx)*4, di=(dy*rw+dx)*4;
-            aboveStrip[di]=buf[si]; aboveStrip[di+1]=buf[si+1]; aboveStrip[di+2]=buf[si+2]; aboveStrip[di+3]=255;
+          aboveQ = new Uint8ClampedArray(aboveH * q * 4);
+          for (let dy = 0; dy < aboveH; dy++) for (let dx = 0; dx < q; dx++) {
+            const srcX = Math.min(Math.round(dx * rw / q), rw - 1);
+            const si=((ry-aboveH+dy)*size+rx+srcX)*4, di=(dy*q+dx)*4;
+            aboveQ[di]=buf[si]; aboveQ[di+1]=buf[si+1]; aboveQ[di+2]=buf[si+2]; aboveQ[di+3]=255;
           }
         }
         if (leftW > 0) {
-          leftStrip = new Uint8ClampedArray(rh * leftW * 4);
-          for (let dy = 0; dy < rh; dy++) for (let dx = 0; dx < leftW; dx++) {
-            const si=((ry+dy)*size+rx-leftW+dx)*4, di=(dy*leftW+dx)*4;
-            leftStrip[di]=buf[si]; leftStrip[di+1]=buf[si+1]; leftStrip[di+2]=buf[si+2]; leftStrip[di+3]=255;
+          leftQ = new Uint8ClampedArray(q * leftW * 4);
+          for (let dy = 0; dy < q; dy++) {
+            const srcY = Math.min(Math.round(dy * rh / q), rh - 1);
+            for (let dx = 0; dx < leftW; dx++) {
+              const si=((ry+srcY)*size+rx-leftW+dx)*4, di=(dy*leftW+dx)*4;
+              leftQ[di]=buf[si]; leftQ[di+1]=buf[si+1]; leftQ[di+2]=buf[si+2]; leftQ[di+3]=255;
+            }
           }
         }
 
         let bestScore = Infinity, bestSrcJ = -1, bestQi = -1;
+        let bestRot = 0, bestFlipH = false;
         let bestData: Uint8ClampedArray | null = null;
 
+        // Score candidates at q×q resolution — no resize per candidate
         for (const [srcJ, avail] of pieces) {
           if (usedSrcs.has(srcJ)) continue;
           for (const [qi, tile] of avail) {
             for (const {rot,flipH} of CF_TRANSFORMS) {
-              const td = cfXform(tile, q, rot, flipH, false);
-              // Resize to region dims for scoring
-              const rd = resizeToMatch(td, q, q, rw, rh);
-              const sc = cfEdgeScore(rd, rw, rh,
-                aboveStrip, rw, aboveH || 1,
-                leftStrip, leftW || 1, rh);
-              if (sc < bestScore) { bestScore=sc; bestSrcJ=srcJ; bestQi=qi; bestData=rd; }
+              const sc = cfBorderScoreM(tile, q, rot, flipH, aboveQ, aboveH, leftQ, leftW);
+              if (sc < bestScore) { bestScore=sc; bestSrcJ=srcJ; bestQi=qi; bestRot=rot; bestFlipH=flipH; }
             }
           }
         }
+        // Only transform + resize the winner (one canvas op per region instead of 648)
+        const winTile = pieces.find(([s]) => s === bestSrcJ)![1].find(([i]) => i === bestQi)![1];
+        bestData = resizeToMatch(cfXform(winTile, q, bestRot, bestFlipH, false), q, q, rw, rh);
 
         usedSrcs.add(bestSrcJ);
         chosenQis.set(bestSrcJ, bestQi);
