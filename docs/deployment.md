@@ -92,3 +92,4 @@ The legacy site's `index.html` is NOT served at `/` — the Astro homepage owns 
 ### Legacy repo auto-deploy
 
 Push to `ausupply.github.io` → GitHub webhook hits `POST /hooks/legacy` → `git pull` in the legacy site directory. No container restart needed.
+
