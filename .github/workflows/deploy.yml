@@ -26,3 +26,8 @@ jobs:
 
       - name: Fix nginx routing
         run: ssh dokku ps:restart au-supply
+
+      - name: Send deploy notification
+        run: |
+          PAYLOAD=$(jq -c '{ref, commits, pusher, repository, compare}' "$GITHUB_EVENT_PATH" | xxd -p | tr -d '\n')
+          ssh dokku run au-supply .venv/bin/python manage.py notify-deploy "$PAYLOAD"
