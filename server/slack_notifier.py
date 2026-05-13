@@ -70,6 +70,41 @@ def queue_batched(event_type: str, user: User | None, **payload: Any) -> None:
         logger.exception("queue_batched failed for %s", event_type)
 
 
+def notify_deploy(github_payload: dict) -> None:
+    """Post a deploy notification when the master branch receives commits.
+
+    Accepts the raw GitHub push-event payload. Only acts on pushes to
+    ``refs/heads/master``. Fire-and-forget like all Slack calls here.
+    """
+    if not SLACK_LOG_ENABLED:
+        return
+    if github_payload.get("ref") != "refs/heads/master":
+        return
+    commits = github_payload.get("commits", [])
+    if not commits:
+        return
+    pusher_name = (github_payload.get("pusher") or {}).get("name", "someone")
+    repo = github_payload.get("repository") or {}
+    repo_name = repo.get("full_name", "a-u.supply")
+    repo_url = repo.get("html_url", SITE_URL)
+
+    head = commits[-1]
+    sha = (head.get("id") or "")[:7]
+    message = (head.get("message") or "").split("\n")[0] or "no message"
+    commit_url = head.get("url", "")
+
+    lines = [
+        f"🚀 *{repo_name}* deployed by {pusher_name}",
+        f"<{commit_url}|`{sha}`> {message}",
+    ]
+    if len(commits) > 1:
+        compare_url = github_payload.get("compare", "")
+        rest = len(commits) - 1
+        lines.append(f"<{compare_url}|+{rest} more commit{'s' if rest != 1 else ''}>")
+    text = "\n".join(lines)
+    _schedule_post({"text": text, "unfurl_links": False})
+
+
 # ---------------------------------------------------------------------------
 # Transport
 # ---------------------------------------------------------------------------
