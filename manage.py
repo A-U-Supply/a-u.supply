@@ -13,6 +13,7 @@ Usage (from host):
     ssh dokku run au-supply .venv/bin/python manage.py refresh-all-apps
 """
 
+import json
 import sys
 from pathlib import Path
 
