@@ -18,6 +18,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from typing import Any
@@ -93,14 +94,22 @@ def notify_deploy(github_payload: dict) -> None:
     message = (head.get("message") or "").split("\n")[0] or "no message"
     commit_url = head.get("url", "")
 
-    lines = [
-        f"🚀 *{repo_name}* deployed by {pusher_name}",
-        f"<{commit_url}|`{sha}`> {message}",
-    ]
-    if len(commits) > 1:
-        compare_url = github_payload.get("compare", "")
-        rest = len(commits) - 1
-        lines.append(f"<{compare_url}|+{rest} more commit{'s' if rest != 1 else ''}>")
+    # Extract PR number from squash-merge commit message: "Title (#123)"
+    pr_number = None
+    m = re.search(r"\(#(\d+)\)\s*$", message)
+    if m:
+        pr_number = m.group(1)
+
+    lines = [f"🚀 *{repo_name}* deployed by {pusher_name}"]
+    lines.append(f"<{commit_url}|`{sha}`> {message}")
+    links = [f"<{repo_url}|repo>"]
+    if pr_number:
+        pr_url = f"https://github.com/{repo_name}/pull/{pr_number}"
+        links.insert(0, f"<{pr_url}|PR #{pr_number}>")
+    compare_url = github_payload.get("compare", "")
+    if compare_url:
+        links.insert(0, f"<{compare_url}|changes>")
+    lines.append(" · ".join(links))
     text = "\n".join(lines)
     _schedule_post({"text": text, "unfurl_links": False})
 
