@@ -2,7 +2,6 @@ import asyncio
 import hashlib
 import hmac
 import html
-import json
 import logging
 import os
 import subprocess
@@ -767,7 +766,6 @@ async def webhook_deploy(request: Request):
 
     Runs the configured deploy script if set, otherwise acknowledges the webhook
     without action (the deployment platform rebuilds automatically on git push).
-    Posts a deploy notification to Slack on pushes to master.
 
     **Do not call manually** — this is triggered by GitHub's webhook system.
     """
@@ -775,15 +773,6 @@ async def webhook_deploy(request: Request):
     signature = request.headers.get("X-Hub-Signature-256", "")
     if not _verify_webhook(body, signature):
         raise HTTPException(status_code=403, detail="Invalid signature")
-
-    # Post a deploy notification to Slack for master branch pushes
-    if request.headers.get("X-GitHub-Event") == "push":
-        try:
-            from server.slack_notifier import notify_deploy
-            notify_deploy(json.loads(body))
-        except Exception:
-            logger.exception("Deploy notification failed")
-
     deploy_script = os.environ.get("DEPLOY_SCRIPT", "")
     if deploy_script:
         subprocess.Popen(
