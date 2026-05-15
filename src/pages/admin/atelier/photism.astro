@@ -271,6 +271,7 @@ import Admin from '../../../layouts/Admin.astro';
     }
     .ph-modal {
       background: var(--bg, #111);
+      color: var(--fg, #e8e8e8);
       border: 1px solid var(--border, #333);
       border-radius: 6px;
       width: min(560px, 100%);
@@ -318,11 +319,12 @@ import Admin from '../../../layouts/Admin.astro';
     .ph-audio-card {
       border: 1px solid var(--border, #333); border-radius: 4px;
       padding: 0.6rem 0.7rem; cursor: pointer;
+      background: var(--bg2, #1a1a1a);
       transition: border-color 0.1s, background 0.1s;
       display: flex; flex-direction: column; gap: 0.2rem; min-width: 0;
     }
-    .ph-audio-card:hover { border-color: var(--accent, #888); background: rgba(255,255,255,0.03); }
-    .ph-audio-card__icon { font-size: 1.1rem; opacity: 0.35; }
+    .ph-audio-card:hover { border-color: var(--accent, #888); background: rgba(255,255,255,0.06); }
+    .ph-audio-card__icon { font-size: 0.85rem; opacity: 0.4; font-family: sans-serif; }
     .ph-audio-card__name {
       font-size: 0.65rem; opacity: 0.8;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
