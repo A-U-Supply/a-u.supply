@@ -25,7 +25,10 @@ import Admin from '../../../layouts/Admin.astro';
           <div class="ph-drop-sub">MP3 · WAV · OGG · FLAC · M4A</div>
         </div>
         <div id="ph-loaded-zone" style="display:none">
-          <canvas id="ph-waveform" width="264" height="52"></canvas>
+          <div class="ph-waveform-row">
+            <button class="ph-play-btn" id="ph-play-btn" title="Play / Stop">▶</button>
+            <canvas id="ph-waveform" width="264" height="52"></canvas>
+          </div>
           <div class="ph-loaded-footer">
             <div id="ph-audio-meta" class="ph-audio-meta"></div>
             <button class="ph-change-btn" id="ph-change-btn">Change</button>
@@ -58,22 +61,24 @@ import Admin from '../../../layouts/Admin.astro';
 
       <!-- Shared params -->
       <div class="ph-field">
-        <label class="ph-label" for="ph-fft">FFT Size</label>
+        <label class="ph-label" for="ph-fft">Detail</label>
         <select class="ph-select" id="ph-fft">
-          <option value="512">512</option>
-          <option value="1024" selected>1024</option>
-          <option value="2048">2048</option>
-          <option value="4096">4096</option>
+          <option value="512">Low</option>
+          <option value="1024" selected>Med</option>
+          <option value="2048">High</option>
+          <option value="4096">Ultra</option>
         </select>
       </div>
 
       <div class="ph-field">
-        <label class="ph-label" for="ph-time-start">Start <span class="ph-val" id="ph-ts-val">0%</span></label>
-        <input class="ph-range" type="range" id="ph-time-start" min="0" max="100" value="0" />
-      </div>
-      <div class="ph-field">
-        <label class="ph-label" for="ph-time-end">End <span class="ph-val" id="ph-te-val">100%</span></label>
-        <input class="ph-range" type="range" id="ph-time-end" min="0" max="100" value="100" />
+        <label class="ph-label">
+          <span>Trim</span>
+          <span class="ph-val"><span id="ph-ts-val">0</span>–<span id="ph-te-val">100</span>%</span>
+        </label>
+        <div class="ph-dual-range">
+          <input type="range" id="ph-time-start" min="0" max="100" value="0" />
+          <input type="range" id="ph-time-end"   min="0" max="100" value="100" />
+        </div>
       </div>
 
       <div class="ph-divider"></div>
@@ -114,16 +119,6 @@ import Admin from '../../../layouts/Admin.astro';
         </div>
       </div>
 
-      <div class="ph-divider"></div>
-
-      <div class="ph-field">
-        <label class="ph-label" for="ph-fps">Record FPS</label>
-        <select class="ph-select" id="ph-fps">
-          <option value="12">12 fps</option>
-          <option value="24" selected>24 fps</option>
-          <option value="30">30 fps</option>
-        </select>
-      </div>
     </div>
 
     <!-- ── Stage ──────────────────────────────────────────────── -->
@@ -137,10 +132,24 @@ import Admin from '../../../layouts/Admin.astro';
       </div>
 
       <div class="ph-action-bar" id="ph-action-bar" style="display:none">
-        <button class="btn btn--secondary" id="ph-save-btn">☁ Save Image</button>
-        <button class="btn btn--secondary" id="ph-record-btn">⏺ Record WebM</button>
-        <button class="btn btn--secondary" id="ph-frames-btn">⬇ Save Frames</button>
+        <button class="btn btn--primary ph-save-btn" id="ph-save-btn">☁ Save Image</button>
+        <div class="ph-export-wrap">
+          <button class="btn btn--secondary ph-export-btn" id="ph-export-btn">Export ▾</button>
+          <div class="ph-export-menu" id="ph-export-menu" style="display:none">
+            <button class="ph-export-item" id="ph-record-btn">⏺ Record WebM</button>
+            <div class="ph-export-fps">
+              <span>FPS</span>
+              <select class="ph-select" id="ph-fps">
+                <option value="12">12</option>
+                <option value="24" selected>24</option>
+                <option value="30">30</option>
+              </select>
+            </div>
+            <button class="ph-export-item" id="ph-frames-btn">⬇ Save Frames</button>
+          </div>
+        </div>
       </div>
+      <button class="ph-settings-toggle" id="ph-settings-toggle">Settings ▾</button>
     </div>
   </div>
 
@@ -272,8 +281,63 @@ import Admin from '../../../layouts/Admin.astro';
     }
     .ph-busy { opacity: 0.7; }
 
+    /* Play button */
+    .ph-waveform-row { display: flex; align-items: center; gap: 0.5rem; width: 100%; }
+    .ph-waveform-row #ph-waveform { flex: 1; }
+    .ph-play-btn {
+      flex-shrink: 0; width: 2rem; height: 2rem;
+      background: var(--bg2, #1a1a1a); border: 1px solid var(--border, #444);
+      border-radius: 50%; color: inherit; cursor: pointer; font-size: 0.65rem;
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color 0.1s;
+    }
+    .ph-play-btn:hover { border-color: var(--accent, #888); }
+
+    /* Dual range */
+    .ph-dual-range { position: relative; height: 1.5rem; margin-top: 0.2rem; }
+    .ph-dual-range input[type=range] {
+      position: absolute; inset: 0; width: 100%;
+      appearance: none; -webkit-appearance: none;
+      background: transparent; pointer-events: none;
+      margin: 0; height: 100%;
+    }
+    .ph-dual-range input[type=range]::-webkit-slider-runnable-track { height: 3px; background: var(--border, #444); border-radius: 2px; }
+    .ph-dual-range input[type=range]::-moz-range-track { height: 3px; background: var(--border, #444); border-radius: 2px; }
+    .ph-dual-range input[type=range]::-webkit-slider-thumb {
+      appearance: none; -webkit-appearance: none;
+      pointer-events: all; width: 14px; height: 14px;
+      border-radius: 50%; background: var(--accent, #888); cursor: pointer; margin-top: -5.5px;
+    }
+    .ph-dual-range input[type=range]::-moz-range-thumb {
+      pointer-events: all; width: 14px; height: 14px;
+      border-radius: 50%; background: var(--accent, #888); border: none; cursor: pointer;
+    }
+
     /* Action bar */
-    .ph-action-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .ph-action-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+    .ph-save-btn { flex-shrink: 0; }
+    .ph-export-wrap { position: relative; }
+    .ph-export-menu {
+      position: absolute; top: calc(100% + 4px); right: 0;
+      background: var(--bg, #111); border: 1px solid var(--border, #333);
+      border-radius: 4px; min-width: 160px; z-index: 100;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .ph-export-item {
+      padding: 0.5rem 0.75rem; font-size: 0.75rem; text-align: left;
+      background: none; border: none; color: inherit; cursor: pointer;
+      transition: background 0.1s;
+    }
+    .ph-export-item:hover { background: rgba(255,255,255,0.06); }
+    .ph-export-fps {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.35rem 0.75rem; font-size: 0.7rem; opacity: 0.6;
+      border-top: 1px solid var(--border, #333); border-bottom: 1px solid var(--border, #333);
+    }
+    .ph-export-fps .ph-select { padding: 0.1rem 0.3rem; font-size: 0.7rem; }
+
+    /* Settings toggle (mobile only) */
+    .ph-settings-toggle { display: none; }
 
     /* Library modal */
     .ph-modal-overlay {
@@ -354,15 +418,27 @@ import Admin from '../../../layouts/Admin.astro';
     /* Responsive */
     @media (max-width: 700px) {
       .ph-shell { flex-direction: column; }
-      .ph-controls { width: 100%; }
+      .ph-stage { order: -1; }
+      .ph-controls { width: 100%; display: none; }
+      .ph-controls--open { display: flex; }
+      .ph-settings-toggle {
+        display: block; width: 100%; margin-top: 0.5rem;
+        font-size: 0.75rem; padding: 0.45rem;
+        background: none; border: 1px solid var(--border, #444);
+        border-radius: 4px; color: inherit; cursor: pointer;
+        text-align: center; opacity: 0.6;
+      }
+      .ph-settings-toggle:hover { opacity: 1; }
     }
     @media (max-width: 500px) {
-      .ph-stage { order: -1; }
       #ph-canvas { aspect-ratio: 1 / 1; }
       .ph-pill { padding: 0.45rem 0.75rem; font-size: 0.8rem; }
-      .ph-range { height: 2.75rem; }
+      .ph-dual-range input[type=range]::-webkit-slider-thumb { width: 20px; height: 20px; margin-top: -8.5px; }
+      .ph-dual-range input[type=range]::-moz-range-thumb { width: 20px; height: 20px; }
       .ph-action-bar { flex-direction: column; }
-      .ph-action-bar .btn { width: 100%; }
+      .ph-action-bar .btn, .ph-export-wrap { width: 100%; }
+      .ph-export-btn { width: 100%; }
+      .ph-export-menu { left: 0; right: 0; }
       .ph-label { font-size: 0.75rem; }
     }
   </style>
@@ -407,6 +483,9 @@ import Admin from '../../../layouts/Admin.astro';
     let renderPending = false;
     let lastArrayBuf: ArrayBuffer | null = null;
     let lastFileName = 'audio';
+    let currentAudioBuffer: AudioBuffer | null = null;
+    let playbackSource: AudioBufferSourceNode | null = null;
+    let playbackCtx: AudioContext | null = null;
 
     const canvas = document.getElementById('ph-canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d')!;
@@ -804,6 +883,7 @@ import Admin from '../../../layouts/Admin.astro';
 
         const audioCtx = new OfflineAudioContext(1, 1, 44100);
         const audioBuffer = await audioCtx.decodeAudioData(arrayBuf);
+        currentAudioBuffer = audioBuffer;
 
         busyLabel.textContent = 'Analyzing…';
         const fftSize = parseInt((document.getElementById('ph-fft') as HTMLSelectElement).value);
@@ -1147,10 +1227,22 @@ import Admin from '../../../layouts/Admin.astro';
       loadAudioData(lastArrayBuf.slice(0), lastFileName);
     });
 
-    // Sliders
+    // Dual range trim — clamp so handles don't cross
+    const startEl = document.getElementById('ph-time-start') as HTMLInputElement;
+    const endEl   = document.getElementById('ph-time-end')   as HTMLInputElement;
+    const tsVal   = document.getElementById('ph-ts-val')!;
+    const teVal   = document.getElementById('ph-te-val')!;
+    startEl.addEventListener('input', () => {
+      if (parseInt(startEl.value) > parseInt(endEl.value)) startEl.value = endEl.value;
+      tsVal.textContent = startEl.value; scheduleRender();
+    });
+    endEl.addEventListener('input', () => {
+      if (parseInt(endEl.value) < parseInt(startEl.value)) endEl.value = startEl.value;
+      teVal.textContent = endEl.value; scheduleRender();
+    });
+
+    // Other sliders
     const sliderDefs: [string, string, (v: string) => string][] = [
-      ['ph-time-start', 'ph-ts-val',   v => `${v}%`],
-      ['ph-time-end',   'ph-te-val',   v => `${v}%`],
       ['ph-freq-max',   'ph-fmax-val', v => `${Math.round(parseInt(v) / 100) / 10} kHz`],
       ['ph-rotation',   'ph-rot-val',  v => `${v}°`],
       ['ph-warp',       'ph-warp-val', v => v],
@@ -1163,9 +1255,44 @@ import Admin from '../../../layouts/Admin.astro';
       el.addEventListener('input', () => { valEl.textContent = fmt(el.value); scheduleRender(); });
     }
 
+    // Play / stop
+    document.getElementById('ph-play-btn')!.addEventListener('click', () => {
+      const btn = document.getElementById('ph-play-btn') as HTMLButtonElement;
+      if (playbackSource) {
+        playbackSource.stop(); playbackSource = null; btn.textContent = '▶'; return;
+      }
+      if (!currentAudioBuffer) return;
+      playbackCtx = new AudioContext();
+      playbackSource = playbackCtx.createBufferSource();
+      playbackSource.buffer = currentAudioBuffer;
+      playbackSource.connect(playbackCtx.destination);
+      const [t0, t1] = getTimeRange();
+      const dur = currentAudioBuffer.duration;
+      playbackSource.start(0, t0 * dur, (t1 - t0) * dur);
+      btn.textContent = '⏹';
+      playbackSource.onended = () => { playbackSource = null; btn.textContent = '▶'; };
+    });
+
+    // Export dropdown
+    const exportBtn  = document.getElementById('ph-export-btn')!;
+    const exportMenu = document.getElementById('ph-export-menu')!;
+    exportBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      exportMenu.style.display = exportMenu.style.display === 'none' ? 'flex' : 'none';
+    });
+    document.addEventListener('click', () => { exportMenu.style.display = 'none'; });
+
     // Output actions
     document.getElementById('ph-save-btn')!.addEventListener('click', saveImage);
-    document.getElementById('ph-record-btn')!.addEventListener('click', recordWebM);
-    document.getElementById('ph-frames-btn')!.addEventListener('click', saveFrames);
+    document.getElementById('ph-record-btn')!.addEventListener('click', () => { exportMenu.style.display = 'none'; recordWebM(); });
+    document.getElementById('ph-frames-btn')!.addEventListener('click', () => { exportMenu.style.display = 'none'; saveFrames(); });
+
+    // Mobile settings toggle
+    document.getElementById('ph-settings-toggle')!.addEventListener('click', () => {
+      const ctrl = document.querySelector('.ph-controls') as HTMLElement;
+      const btn  = document.getElementById('ph-settings-toggle') as HTMLButtonElement;
+      const open = ctrl.classList.toggle('ph-controls--open');
+      btn.textContent = open ? 'Settings ▴' : 'Settings ▾';
+    });
   </script>
 </Admin>
