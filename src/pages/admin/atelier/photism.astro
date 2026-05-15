@@ -146,8 +146,16 @@ import Admin from '../../../layouts/Admin.astro';
               </select>
             </div>
             <button class="ph-export-item" id="ph-frames-btn">⬇ Save Frames</button>
+            <button class="ph-export-item" id="ph-audio-btn">♫ Export Audio</button>
           </div>
         </div>
+        <button class="btn btn--secondary ph-paint-btn" id="ph-paint-btn">✏ Paint</button>
+      </div>
+      <div class="ph-paint-bar" id="ph-paint-bar" style="display:none">
+        <span class="ph-paint-label">Size <span id="ph-brush-val">8</span>px</span>
+        <input type="range" class="ph-range ph-brush-slider" id="ph-brush-size" min="2" max="30" value="8" />
+        <button class="btn btn--secondary ph-erase-btn" id="ph-erase-btn">✏ Draw</button>
+        <button class="btn ph-paint-reset-btn" id="ph-paint-reset-btn">Reset</button>
       </div>
       <button class="ph-settings-toggle" id="ph-settings-toggle">Settings ▾</button>
     </div>
@@ -336,6 +344,23 @@ import Admin from '../../../layouts/Admin.astro';
     }
     .ph-export-fps .ph-select { padding: 0.1rem 0.3rem; font-size: 0.7rem; }
 
+    /* Paint mode */
+    .ph-paint-btn--active { border-color: var(--accent, #aaa); box-shadow: 0 0 0 1px var(--accent, #aaa); }
+    .ph-canvas-wrap--paint #ph-canvas { cursor: crosshair; user-select: none; }
+    .ph-paint-bar {
+      align-items: center; gap: 0.5rem; flex-wrap: wrap;
+      padding: 0.35rem 0; font-size: 0.7rem;
+    }
+    .ph-paint-label { opacity: 0.55; flex-shrink: 0; white-space: nowrap; }
+    .ph-brush-slider { width: 80px; }
+    .ph-erase-btn--active { border-color: #e67; color: #e67; }
+    .ph-paint-reset-btn {
+      font-size: 0.7rem; padding: 0.2rem 0.6rem;
+      background: none; border: 1px solid var(--border, #444); border-radius: 3px;
+      color: inherit; cursor: pointer; opacity: 0.55;
+    }
+    .ph-paint-reset-btn:hover { opacity: 1; }
+
     /* Settings toggle (mobile only) */
     .ph-settings-toggle { display: none; }
 
@@ -486,6 +511,11 @@ import Admin from '../../../layouts/Admin.astro';
     let currentAudioBuffer: AudioBuffer | null = null;
     let playbackSource: AudioBufferSourceNode | null = null;
     let playbackCtx: AudioContext | null = null;
+    let paintMode = false;
+    let editedFrames: Float32Array[] | null = null;
+    let brushSize = 8;
+    let eraseMode = false;
+    let isPainting = false;
 
     const canvas = document.getElementById('ph-canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d')!;
@@ -818,11 +848,12 @@ import Admin from '../../../layouts/Admin.astro';
       if (!spectrogramData) return;
       const [a, b] = t0 !== undefined ? [t0, t1!] : getTimeRange();
       const params = getParams();
+      const data = editedFrames ? { ...spectrogramData, frames: editedFrames } : spectrogramData;
       switch (currentMode) {
-        case 'waterfall': renderWaterfall(spectrogramData, paletteLUT, a, b, params); break;
-        case 'radial':    renderRadial(spectrogramData, paletteLUT, a, b, params); break;
-        case 'glitch':    renderGlitch(spectrogramData, paletteLUT, a, b, params); break;
-        case 'hybrid':    renderHybrid(spectrogramData, paletteLUT, a, b, params); break;
+        case 'waterfall': renderWaterfall(data, paletteLUT, a, b, params); break;
+        case 'radial':    renderRadial(data, paletteLUT, a, b, params); break;
+        case 'glitch':    renderGlitch(data, paletteLUT, a, b, params); break;
+        case 'hybrid':    renderHybrid(data, paletteLUT, a, b, params); break;
       }
     }
 
@@ -876,6 +907,8 @@ import Admin from '../../../layouts/Admin.astro';
       busyEl.style.display = 'flex';
       busyLabel.textContent = 'Decoding…';
       actionBar.style.display = 'none';
+      editedFrames = null;
+      if (paintMode) setPaintMode(false);
 
       try {
         lastArrayBuf = arrayBuf.slice(0); // store a copy for FFT size recompute
@@ -1061,6 +1094,131 @@ import Admin from '../../../layouts/Admin.astro';
       a.href = URL.createObjectURL(new Blob([zip], { type: 'application/zip' }));
       a.download = 'photism-frames.zip'; a.click();
       btn.disabled = false; btn.textContent = '⬇ Save Frames';
+    }
+
+    // ─── WAV encoding ─────────────────────────────────────────────────────────
+    function encodeWAV(signal: Float32Array, sampleRate: number): ArrayBuffer {
+      const numSamples = signal.length;
+      const buf = new ArrayBuffer(44 + numSamples * 2);
+      const v = new DataView(buf);
+      const writeStr = (off: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i)); };
+      writeStr(0, 'RIFF'); v.setUint32(4, 36 + numSamples * 2, true);
+      writeStr(8, 'WAVE'); writeStr(12, 'fmt ');
+      v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+      v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true);
+      v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+      writeStr(36, 'data'); v.setUint32(40, numSamples * 2, true);
+      for (let i = 0; i < numSamples; i++) {
+        v.setInt16(44 + i * 2, Math.max(-32768, Math.min(32767, Math.round(signal[i] * 32767))), true);
+      }
+      return buf;
+    }
+
+    // ─── Additive synthesis from magnitude frames ─────────────────────────────
+    async function synthesizeFromFrames(
+      frames: Float32Array[], numBins: number, sampleRate: number,
+      hopSamples: number, progressCb: (p: number) => void,
+    ): Promise<Float32Array> {
+      const numFrames = frames.length;
+      const totalSamples = numFrames * hopSamples;
+      const signal = new Float32Array(totalSamples);
+      const TWO_PI = 2 * Math.PI;
+      const CHUNK = 4;
+
+      for (let f = 0; f < numFrames; f++) {
+        const tStart = f * hopSamples / sampleRate;
+        const frame = frames[f];
+        for (let b = 0; b < numBins; b++) {
+          const amp = frame[b];
+          if (amp < 0.01) continue;
+          const freq = (b / numBins) * (sampleRate / 2);
+          for (let i = 0; i < hopSamples; i++) {
+            signal[f * hopSamples + i] += Math.sin(TWO_PI * freq * (tStart + i / sampleRate)) * amp;
+          }
+        }
+        if (f % CHUNK === CHUNK - 1) { progressCb(f / numFrames); await yieldToUI(); }
+      }
+
+      // Normalize
+      let peak = 0;
+      for (let i = 0; i < totalSamples; i++) if (Math.abs(signal[i]) > peak) peak = Math.abs(signal[i]);
+      if (peak > 0) for (let i = 0; i < totalSamples; i++) signal[i] /= peak;
+      return signal;
+    }
+
+    async function exportAudio() {
+      if (!spectrogramData) return;
+      const busyEl = document.getElementById('ph-busy')!;
+      const busyLabel = document.getElementById('ph-busy-label')!;
+      busyEl.style.display = 'flex';
+      exportMenu.style.display = 'none';
+
+      const [t0, t1] = getTimeRange();
+      const { numBins, sampleRate, numFrames } = spectrogramData;
+      const frames = editedFrames ?? spectrogramData.frames;
+      const fftSize = parseInt((document.getElementById('ph-fft') as HTMLSelectElement).value);
+      const hopSamples = fftSize >> 2;
+      const fStart = Math.floor(t0 * numFrames);
+      const fEnd   = Math.ceil(t1 * numFrames);
+      const trimmedFrames = frames.slice(fStart, fEnd);
+
+      try {
+        const signal = await synthesizeFromFrames(trimmedFrames, numBins, sampleRate, hopSamples, p => {
+          busyLabel.textContent = `Synthesizing… ${Math.round(p * 100)}%`;
+        });
+        const wav = encodeWAV(signal, sampleRate);
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }));
+        a.download = `${lastFileName.replace(/\.[^.]+$/, '')}-synth.wav`;
+        a.click();
+      } finally {
+        busyEl.style.display = 'none';
+      }
+    }
+
+    // ─── Paint mode ───────────────────────────────────────────────────────────
+    function setPaintMode(on: boolean) {
+      paintMode = on;
+      if (!on) { eraseMode = false; isPainting = false; }
+      const btn = document.getElementById('ph-paint-btn')!;
+      const paintBar = document.getElementById('ph-paint-bar')!;
+      const wrap = document.getElementById('ph-canvas-wrap')!;
+      const eraseBtn = document.getElementById('ph-erase-btn') as HTMLButtonElement;
+      btn.classList.toggle('ph-paint-btn--active', on);
+      paintBar.style.display = on ? 'flex' : 'none';
+      wrap.classList.toggle('ph-canvas-wrap--paint', on);
+      if (!on) { eraseBtn.textContent = '✏ Draw'; eraseBtn.classList.remove('ph-erase-btn--active'); }
+    }
+
+    function applyBrush(clientX: number, clientY: number) {
+      if (!spectrogramData) return;
+      if (!editedFrames) {
+        editedFrames = spectrogramData.frames.map(fr => fr.slice());
+      }
+      const rect = canvas.getBoundingClientRect();
+      const cx = (clientX - rect.left) / rect.width * canvas.width;
+      const cy = (clientY - rect.top) / rect.height * canvas.height;
+      const [t0, t1] = getTimeRange();
+      const { numFrames, numBins } = spectrogramData;
+      const fStart = Math.floor(t0 * numFrames);
+      const fEnd   = Math.ceil(t1 * numFrames);
+      const numVis = Math.max(1, fEnd - fStart);
+      const fCenter = Math.floor(cx / canvas.width * numVis) + fStart;
+      const bCenter = numBins - 1 - Math.floor(cy / canvas.height * numBins);
+      const brushVal = eraseMode ? 0 : 1;
+      // Scale brush radius from CSS pixels to frame/bin units
+      const fRadius = Math.max(1, Math.ceil(brushSize * numVis / rect.width));
+      const bRadius = Math.max(1, Math.ceil(brushSize * numBins / rect.height));
+      for (let df = -fRadius; df <= fRadius; df++) {
+        const f = fCenter + df;
+        if (f < 0 || f >= editedFrames.length) continue;
+        for (let db = -bRadius; db <= bRadius; db++) {
+          const b = bCenter + db;
+          if (b < 0 || b >= numBins) continue;
+          editedFrames[f][b] = brushVal;
+        }
+      }
+      scheduleRender();
     }
 
     // ─── UI wiring ────────────────────────────────────────────────────────────
@@ -1286,6 +1444,7 @@ import Admin from '../../../layouts/Admin.astro';
     document.getElementById('ph-save-btn')!.addEventListener('click', saveImage);
     document.getElementById('ph-record-btn')!.addEventListener('click', () => { exportMenu.style.display = 'none'; recordWebM(); });
     document.getElementById('ph-frames-btn')!.addEventListener('click', () => { exportMenu.style.display = 'none'; saveFrames(); });
+    document.getElementById('ph-audio-btn')!.addEventListener('click', exportAudio);
 
     // Mobile settings toggle
     document.getElementById('ph-settings-toggle')!.addEventListener('click', () => {
@@ -1294,5 +1453,55 @@ import Admin from '../../../layouts/Admin.astro';
       const open = ctrl.classList.toggle('ph-controls--open');
       btn.textContent = open ? 'Settings ▴' : 'Settings ▾';
     });
+
+    // Paint mode toggle
+    document.getElementById('ph-paint-btn')!.addEventListener('click', () => setPaintMode(!paintMode));
+
+    // Erase / Draw toggle
+    document.getElementById('ph-erase-btn')!.addEventListener('click', () => {
+      eraseMode = !eraseMode;
+      const btn = document.getElementById('ph-erase-btn') as HTMLButtonElement;
+      btn.textContent = eraseMode ? '⌫ Erase' : '✏ Draw';
+      btn.classList.toggle('ph-erase-btn--active', eraseMode);
+    });
+
+    // Brush size
+    document.getElementById('ph-brush-size')!.addEventListener('input', e => {
+      brushSize = parseInt((e.target as HTMLInputElement).value);
+      document.getElementById('ph-brush-val')!.textContent = String(brushSize);
+    });
+
+    // Reset edits
+    document.getElementById('ph-paint-reset-btn')!.addEventListener('click', () => {
+      editedFrames = null;
+      scheduleRender();
+    });
+
+    // Canvas mouse paint
+    canvas.addEventListener('mousedown', (e) => {
+      if (!paintMode) return;
+      isPainting = true;
+      applyBrush(e.clientX, e.clientY);
+    });
+    canvas.addEventListener('mousemove', (e) => {
+      if (!paintMode || !isPainting) return;
+      applyBrush(e.clientX, e.clientY);
+    });
+    canvas.addEventListener('mouseup', () => { isPainting = false; });
+    canvas.addEventListener('mouseleave', () => { isPainting = false; });
+
+    // Canvas touch paint
+    canvas.addEventListener('touchstart', (e) => {
+      if (!paintMode) return;
+      e.preventDefault();
+      isPainting = true;
+      applyBrush(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: false });
+    canvas.addEventListener('touchmove', (e) => {
+      if (!paintMode || !isPainting) return;
+      e.preventDefault();
+      applyBrush(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: false });
+    canvas.addEventListener('touchend', () => { isPainting = false; });
   </script>
 </Admin>
