@@ -493,6 +493,8 @@ import Admin from '../../../layouts/Admin.astro';
     // ─── Types ────────────────────────────────────────────────────────────────
     interface SpectrogramData {
       frames: Float32Array[];
+      phases: Float32Array[];   // raw phase per bin per frame (atan2 of FFT output)
+      maxMag: number;           // raw magnitude peak before log normalization
       numFrames: number;
       numBins: number;
       sampleRate: number;
@@ -569,6 +571,7 @@ import Admin from '../../../layouts/Admin.astro';
       const numBins = fftSize >> 1;
       const numFrames = Math.max(1, Math.floor((pcm.length - fftSize) / hop) + 1);
       const frames: Float32Array[] = [];
+      const phases: Float32Array[] = [];
       const re = new Float64Array(fftSize);
       const im = new Float64Array(fftSize);
       const CHUNK = 40;
@@ -581,12 +584,17 @@ import Admin from '../../../layouts/Admin.astro';
         }
         fft(re, im);
         const mag = new Float32Array(numBins);
-        for (let i = 0; i < numBins; i++) mag[i] = Math.sqrt(re[i] * re[i] + im[i] * im[i]);
+        const phase = new Float32Array(numBins);
+        for (let i = 0; i < numBins; i++) {
+          mag[i] = Math.sqrt(re[i] * re[i] + im[i] * im[i]);
+          phase[i] = Math.atan2(im[i], re[i]);
+        }
         frames.push(mag);
+        phases.push(phase);
         if (f % CHUNK === CHUNK - 1) { progressCb(f / numFrames); await yieldToUI(); }
       }
 
-      // Log-magnitude normalize
+      // Log-magnitude normalize — store raw peak before modifying frames
       let maxMag = 0;
       for (const fr of frames) for (const v of fr) if (v > maxMag) maxMag = v;
       if (maxMag > 0) {
@@ -606,7 +614,7 @@ import Admin from '../../../layouts/Admin.astro';
         waveform[f] = Math.sqrt(rms / (end - start));
       }
 
-      return { frames, numFrames, numBins, sampleRate, duration: audioBuffer.duration, waveform };
+      return { frames, phases, maxMag, numFrames, numBins, sampleRate, duration: audioBuffer.duration, waveform };
     }
 
     function yieldToUI(): Promise<void> { return new Promise(r => setTimeout(r, 0)); }
@@ -1114,32 +1122,67 @@ import Admin from '../../../layouts/Admin.astro';
       return buf;
     }
 
-    // ─── Additive synthesis from magnitude frames ─────────────────────────────
-    async function synthesizeFromFrames(
-      frames: Float32Array[], numBins: number, sampleRate: number,
-      hopSamples: number, progressCb: (p: number) => void,
+    // ─── ISTFT with Overlap-Add (OLA) ────────────────────────────────────────
+    // frames: log-normalized magnitudes (display space)
+    // phases: raw atan2 phase per bin per frame
+    // maxMag: raw peak magnitude stored during analysis (used to invert log)
+    async function istftOLA(
+      frames: Float32Array[], phases: Float32Array[], maxMag: number,
+      fftSize: number, hopSamples: number, progressCb: (p: number) => void,
     ): Promise<Float32Array> {
       const numFrames = frames.length;
-      const totalSamples = numFrames * hopSamples;
+      const numBins = fftSize >> 1;
+      const totalSamples = (numFrames - 1) * hopSamples + fftSize;
       const signal = new Float32Array(totalSamples);
-      const TWO_PI = 2 * Math.PI;
-      const CHUNK = 4;
+      const norm   = new Float32Array(totalSamples);
+      const hann   = hannWindow(fftSize);
+      const re     = new Float64Array(fftSize);
+      const im     = new Float64Array(fftSize);
+      const CHUNK  = 8;
 
       for (let f = 0; f < numFrames; f++) {
-        const tStart = f * hopSamples / sampleRate;
         const frame = frames[f];
+        const phase = phases[f];
+
+        // Reconstruct complex spectrum from log-normalized mag + raw phase
+        // Inverse of: v = log1p(raw/maxMag * 100) / log(101)
+        // → raw = maxMag * (101^v - 1) / 100
+        re.fill(0); im.fill(0);
         for (let b = 0; b < numBins; b++) {
-          const amp = frame[b];
-          if (amp < 0.01) continue;
-          const freq = (b / numBins) * (sampleRate / 2);
-          for (let i = 0; i < hopSamples; i++) {
-            signal[f * hopSamples + i] += Math.sin(TWO_PI * freq * (tStart + i / sampleRate)) * amp;
-          }
+          const rawMag = maxMag * (Math.pow(101, frame[b]) - 1) / 100;
+          re[b] = rawMag * Math.cos(phase[b]);
+          im[b] = rawMag * Math.sin(phase[b]);
         }
+        // Conjugate symmetry for real-valued IFFT output
+        for (let b = 1; b < numBins; b++) {
+          re[fftSize - b] = re[b];
+          im[fftSize - b] = -im[b];
+        }
+
+        // IFFT: negate im, forward FFT, negate im, divide by N
+        for (let i = 0; i < fftSize; i++) im[i] = -im[i];
+        fft(re, im);
+        const inv = 1 / fftSize;
+        for (let i = 0; i < fftSize; i++) { re[i] *= inv; im[i] = -im[i] * inv; }
+        // re[i] is the time-domain frame; im should be ~0 (conjugate symmetry ensures real output)
+
+        // Overlap-add with Hann window + accumulate normalization
+        const start = f * hopSamples;
+        for (let i = 0; i < fftSize; i++) {
+          const idx = start + i;
+          if (idx >= totalSamples) break;
+          const w = hann[i];
+          signal[idx] += re[i] * w;
+          norm[idx]   += w * w;
+        }
+
         if (f % CHUNK === CHUNK - 1) { progressCb(f / numFrames); await yieldToUI(); }
       }
 
-      // Normalize
+      // Normalize by accumulated window energy, then peak-normalize
+      for (let i = 0; i < totalSamples; i++) {
+        if (norm[i] > 1e-8) signal[i] /= norm[i];
+      }
       let peak = 0;
       for (let i = 0; i < totalSamples; i++) if (Math.abs(signal[i]) > peak) peak = Math.abs(signal[i]);
       if (peak > 0) for (let i = 0; i < totalSamples; i++) signal[i] /= peak;
@@ -1154,16 +1197,17 @@ import Admin from '../../../layouts/Admin.astro';
       exportMenu.style.display = 'none';
 
       const [t0, t1] = getTimeRange();
-      const { numBins, sampleRate, numFrames } = spectrogramData;
+      const { sampleRate, numFrames, phases, maxMag } = spectrogramData;
       const frames = editedFrames ?? spectrogramData.frames;
       const fftSize = parseInt((document.getElementById('ph-fft') as HTMLSelectElement).value);
       const hopSamples = fftSize >> 2;
       const fStart = Math.floor(t0 * numFrames);
       const fEnd   = Math.ceil(t1 * numFrames);
       const trimmedFrames = frames.slice(fStart, fEnd);
+      const trimmedPhases = phases.slice(fStart, fEnd);
 
       try {
-        const signal = await synthesizeFromFrames(trimmedFrames, numBins, sampleRate, hopSamples, p => {
+        const signal = await istftOLA(trimmedFrames, trimmedPhases, maxMag, fftSize, hopSamples, p => {
           busyLabel.textContent = `Synthesizing… ${Math.round(p * 100)}%`;
         });
         const wav = encodeWAV(signal, sampleRate);
