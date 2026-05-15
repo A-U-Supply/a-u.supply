@@ -1031,7 +1031,7 @@ import Admin from '../../../layouts/Admin.astro';
               media_types: ['audio'],
               sort: 'created_at:desc',
               page: 1, per_page: 48,
-              filters: { output_index: libCurrentTab === 'inputs' ? '__inputs__' : '__outputs__' },
+              filters: { output_index: [libCurrentTab === 'inputs' ? '__inputs__' : '__outputs__'] },
             }),
           });
           if (res.ok) {
