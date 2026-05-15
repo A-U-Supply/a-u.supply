@@ -16,14 +16,23 @@ import Admin from '../../../layouts/Admin.astro';
       <div class="ph-drop-zone" id="ph-drop-zone">
         <div class="ph-drop-empty" id="ph-drop-empty">
           <div class="ph-drop-icon">♫</div>
-          <div class="ph-drop-hint">Drop audio or click to upload</div>
+          <div class="ph-drop-hint">Drop audio here</div>
+          <div class="ph-drop-actions">
+            <button class="ph-drop-btn" id="ph-upload-btn">↑ Upload File</button>
+            <span class="ph-drop-or">or</span>
+            <button class="ph-drop-btn ph-drop-btn--lib" id="ph-lib-btn">From Library</button>
+          </div>
           <div class="ph-drop-sub">MP3 · WAV · OGG · FLAC · M4A</div>
         </div>
-        <canvas id="ph-waveform" width="264" height="52" style="display:none"></canvas>
-        <div id="ph-audio-meta" class="ph-audio-meta" style="display:none"></div>
+        <div id="ph-loaded-zone" style="display:none">
+          <canvas id="ph-waveform" width="264" height="52"></canvas>
+          <div class="ph-loaded-footer">
+            <div id="ph-audio-meta" class="ph-audio-meta"></div>
+            <button class="ph-change-btn" id="ph-change-btn">Change</button>
+          </div>
+        </div>
         <input type="file" id="ph-file-input" accept="audio/*" style="display:none" />
       </div>
-      <button class="btn btn--secondary ph-lib-btn" id="ph-lib-btn">Pick from Library</button>
 
       <div class="ph-divider"></div>
 
@@ -158,26 +167,37 @@ import Admin from '../../../layouts/Admin.astro';
 
     /* Drop zone */
     .ph-drop-zone {
-      border: 1px solid var(--border, #333);
-      border-radius: 4px;
-      padding: 0.75rem;
-      cursor: pointer;
+      border: 1px dashed var(--border, #444);
+      border-radius: 6px;
+      padding: 1.25rem 1rem;
       transition: border-color 0.15s;
-      min-height: 90px;
+      min-height: 150px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       gap: 0.25rem;
     }
-    .ph-drop-zone:hover,
-    .ph-drop-zone.drag-over { border-color: var(--accent, #888); }
-    .ph-drop-empty { text-align: center; }
-    .ph-drop-icon { font-size: 1.4rem; opacity: 0.5; margin-bottom: 0.25rem; }
-    .ph-drop-hint { font-size: 0.75rem; opacity: 0.7; }
-    .ph-drop-sub  { font-size: 0.65rem; opacity: 0.4; margin-top: 0.15rem; }
-    .ph-audio-meta { font-size: 0.65rem; opacity: 0.5; text-align: center; margin-top: 0.25rem; }
-    #ph-waveform { width: 100%; border-radius: 2px; }
+    .ph-drop-zone.drag-over { border-color: var(--accent, #888); border-style: solid; }
+    .ph-drop-empty { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.15rem; }
+    .ph-drop-icon { font-size: 1.6rem; opacity: 0.4; margin-bottom: 0.2rem; }
+    .ph-drop-hint { font-size: 0.8rem; opacity: 0.6; }
+    .ph-drop-actions { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.65rem; }
+    .ph-drop-btn {
+      font-size: 0.75rem; padding: 0.3rem 0.8rem;
+      border: 1px solid var(--border, #444); border-radius: 3px;
+      background: var(--bg2, #1a1a1a); color: inherit; cursor: pointer;
+      transition: border-color 0.1s, opacity 0.1s;
+    }
+    .ph-drop-btn:hover { border-color: var(--accent, #888); }
+    .ph-drop-btn--lib { border-color: var(--accent, #777); }
+    .ph-drop-or { font-size: 0.65rem; opacity: 0.35; }
+    .ph-drop-sub { font-size: 0.65rem; opacity: 0.35; margin-top: 0.5rem; }
+    .ph-loaded-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 0.3rem; width: 100%; }
+    .ph-audio-meta { font-size: 0.65rem; opacity: 0.5; }
+    .ph-change-btn { font-size: 0.65rem; opacity: 0.45; background: none; border: none; color: inherit; cursor: pointer; padding: 0; flex-shrink: 0; }
+    .ph-change-btn:hover { opacity: 1; }
+    #ph-waveform { width: 100%; border-radius: 2px; display: block; }
 
     /* Divider */
     .ph-divider { height: 1px; background: var(--border, #333); margin: 0.25rem 0; }
@@ -254,9 +274,6 @@ import Admin from '../../../layouts/Admin.astro';
 
     /* Action bar */
     .ph-action-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-
-    /* Library button */
-    .ph-lib-btn { width: 100%; font-size: 0.75rem; }
 
     /* Library modal */
     .ph-modal-overlay {
@@ -796,17 +813,18 @@ import Admin from '../../../layouts/Admin.astro';
 
         drawMiniWaveform(spectrogramData.waveform);
         dropEmpty.style.display = 'none';
-        waveformCanvas.style.display = 'block';
         const mins = Math.floor(audioBuffer.duration / 60);
         const secs = Math.floor(audioBuffer.duration % 60);
         metaEl.textContent = `${name} · ${mins}:${String(secs).padStart(2,'0')}`;
-        metaEl.style.display = 'block';
+        document.getElementById('ph-loaded-zone')!.style.display = 'block';
 
         busyEl.style.display = 'none';
         actionBar.style.display = 'flex';
         render();
       } catch (err) {
         busyEl.style.display = 'none';
+        dropEmpty.style.display = '';
+        document.getElementById('ph-loaded-zone')!.style.display = 'none';
         emptyEl.style.display = 'flex';
         (emptyEl as HTMLElement).textContent = 'Failed to decode audio file';
         console.error(err);
@@ -970,7 +988,7 @@ import Admin from '../../../layouts/Admin.astro';
     // Drop zone
     const dropZone = document.getElementById('ph-drop-zone')!;
     const fileInput = document.getElementById('ph-file-input') as HTMLInputElement;
-    dropZone.addEventListener('click', () => fileInput.click());
+    document.getElementById('ph-upload-btn')!.addEventListener('click', e => { e.stopPropagation(); fileInput.click(); });
     fileInput.addEventListener('change', () => { if (fileInput.files?.[0]) loadAudioFile(fileInput.files[0]); });
     dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
@@ -978,6 +996,11 @@ import Admin from '../../../layouts/Admin.astro';
       e.preventDefault(); dropZone.classList.remove('drag-over');
       const f = e.dataTransfer?.files[0];
       if (f && f.type.startsWith('audio/')) loadAudioFile(f);
+    });
+    document.getElementById('ph-change-btn')!.addEventListener('click', () => {
+      document.getElementById('ph-drop-empty')!.style.display = '';
+      document.getElementById('ph-loaded-zone')!.style.display = 'none';
+      spectrogramData = null;
     });
 
     // ─── Library modal ────────────────────────────────────────────────────────
