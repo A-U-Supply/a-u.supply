@@ -250,6 +250,8 @@ const { title, current } = Astro.props;
   function applyPageBackground() {
     if (window.location.pathname === '/admin/atelier/punctum') {
       document.body.style.background = '#221c00';
+    } else if (window.location.pathname === '/admin/atelier/photism') {
+      document.body.style.background = '#1a1200';
     } else {
       document.body.style.removeProperty('background');
     }
