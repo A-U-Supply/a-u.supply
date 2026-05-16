@@ -27,9 +27,21 @@
     notes_updated_at: string | null;
     pinned: Record<string, string>;
     thread_count?: number;
+    repo_id?: string | null;
+    repo_path?: string | null;
+    repo_ref?: string | null;
+    run_command?: string | null;
     created_at: string | null;
     updated_at: string | null;
   };
+
+  type RepoMeta = {
+    id: string;
+    owner: string;
+    repo_name: string;
+    default_branch: string;
+    blob_url_template: string;
+  } | null;
 
   type Item = {
     id: string;
@@ -48,9 +60,13 @@
   let slots = $state<Slot[]>([]);
   let itemsBySlot = $state<Record<string, Item[]>>({});
   let openSlot = $state<string | null>(null);
-  let openSection = $state<'files' | 'notes' | 'threads' | null>(null);
+  let openSection = $state<'files' | 'notes' | 'threads' | 'runs' | null>(null);
   let error = $state<string | null>(null);
   let saveTimers = $state<Record<string, any>>({});
+
+  let repoMeta = $state<RepoMeta>(null);
+  let runsBySlot = $state<Record<string, any[]>>({});
+  let runningSlots = $state<Set<string>>(new Set());
 
   let pullOpenForSlot = $state<string | null>(null);
   let pullOpen = $state(false);
@@ -78,6 +94,116 @@
       slots = body.slots || [];
     } catch (e: any) {
       error = e?.message || 'Failed to load slots';
+    }
+    // Always reload the repo meta alongside slots so source links stay fresh.
+    loadRepoMeta();
+  }
+
+  async function loadRepoMeta() {
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/repo`,
+        { credentials: 'include' },
+      );
+      if (!res.ok) return;
+      const body = await res.json();
+      repoMeta = body.repo
+        ? {
+            id: body.repo.id,
+            owner: body.repo.owner,
+            repo_name: body.repo.repo_name,
+            default_branch: body.repo.default_branch,
+            blob_url_template: body.repo.blob_url_template,
+          }
+        : null;
+    } catch {}
+  }
+
+  function blobUrl(slot: Slot): string | null {
+    if (!repoMeta || !slot.repo_path) return null;
+    const ref = slot.repo_ref || repoMeta.default_branch || 'main';
+    return repoMeta.blob_url_template
+      .replace('{ref}', encodeURIComponent(ref))
+      .replace(
+        '{path}',
+        slot.repo_path.split('/').map(encodeURIComponent).join('/'),
+      );
+  }
+
+  async function runSlot(slot: Slot) {
+    if (!repoMeta || !slot.repo_path) return;
+    if (runningSlots.has(slot.id)) return;
+    runningSlots = new Set([...runningSlots, slot.id]);
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/slots/${encodeURIComponent(slot.id)}/run`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        },
+      );
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b?.detail || 'Run failed');
+      }
+      const body = await res.json();
+      const jobId = body.job_id;
+      // Poll the job
+      let attempts = 0;
+      while (attempts < 240) {
+        await new Promise((r) => setTimeout(r, 2500));
+        attempts++;
+        const jr = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`, {
+          credentials: 'include',
+        });
+        if (!jr.ok) break;
+        const jb = await jr.json();
+        if (
+          jb.status === 'completed' ||
+          jb.status === 'failed' ||
+          jb.status === 'cancelled'
+        ) {
+          break;
+        }
+      }
+      // Reload slot items + runs + slots (pin may have changed)
+      await load();
+      await loadItems(slot.id);
+      await loadRuns(slot.id);
+    } catch (e: any) {
+      error = e?.message || 'Run failed';
+    } finally {
+      const next = new Set(runningSlots);
+      next.delete(slot.id);
+      runningSlots = next;
+    }
+  }
+
+  async function loadRuns(slotId: string) {
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/slots/${encodeURIComponent(slotId)}/runs`,
+        { credentials: 'include' },
+      );
+      if (!res.ok) return;
+      const body = await res.json();
+      runsBySlot = { ...runsBySlot, [slotId]: body.runs || [] };
+    } catch {}
+  }
+
+  function fmtRunTime(iso: string | null | undefined): string {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      const mins = Math.round((Date.now() - d.getTime()) / 60000);
+      if (mins < 1) return 'just now';
+      if (mins < 60) return `${mins}m ago`;
+      if (mins < 60 * 24) return `${Math.round(mins / 60)}h ago`;
+      return d.toLocaleString();
+    } catch {
+      return iso;
     }
   }
 
@@ -174,7 +300,7 @@
 
   function toggleSection(
     slotId: string,
-    section: 'files' | 'notes' | 'threads',
+    section: 'files' | 'notes' | 'threads' | 'runs',
   ) {
     if (openSlot === slotId && openSection === section) {
       openSlot = null;
@@ -183,6 +309,7 @@
       openSlot = slotId;
       openSection = section;
       if (section === 'files' && !itemsBySlot[slotId]) loadItems(slotId);
+      if (section === 'runs' && !runsBySlot[slotId]) loadRuns(slotId);
     }
   }
 
@@ -281,6 +408,18 @@
     if (projectId) load();
   });
 
+  function onSlotsChanged() {
+    load();
+  }
+
+  onMount(() => {
+    document.addEventListener('latent:slots-changed', onSlotsChanged);
+    return () => {
+      document.removeEventListener('latent:slots-changed', onSlotsChanged);
+      sortable?.destroy();
+    };
+  });
+
   $effect(() => {
     // (Re)bind Sortable whenever the slot list element exists. Destroy first
     // to avoid stacking handlers on hot-reload.
@@ -301,8 +440,6 @@
       },
     });
   });
-
-  onMount(() => () => sortable?.destroy());
 </script>
 
 <section class="slots">
@@ -358,6 +495,13 @@
               >Threads{#if slot.thread_count}
                 ({slot.thread_count}){/if}</button
             >
+            {#if slot.repo_path}
+              <button
+                class="action-btn"
+                type="button"
+                onclick={() => toggleSection(slot.id, 'runs')}>Runs</button
+              >
+            {/if}
             <button
               class="action-btn action-btn--danger"
               type="button"
@@ -365,6 +509,31 @@
             >
           </div>
         </div>
+
+        {#if slot.repo_path && repoMeta}
+          <div class="slot__repo">
+            <span class="muted">Source:</span>
+            <a
+              class="repo-path"
+              href={blobUrl(slot) || '#'}
+              target="_blank"
+              rel="noopener">{slot.repo_path}</a
+            >
+            {#if slot.repo_ref}
+              <span class="ref-pill" title={slot.repo_ref}
+                >{slot.repo_ref.slice(0, 7)}</span
+              >
+            {/if}
+            <span class="spacer"></span>
+            <button
+              class="btn-primary btn-run"
+              type="button"
+              onclick={() => runSlot(slot)}
+              disabled={runningSlots.has(slot.id)}
+              >{runningSlots.has(slot.id) ? '⟳ Running…' : '▶ Run'}</button
+            >
+          </div>
+        {/if}
 
         <div class="slot__pins">
           {#each ['image', 'audio', 'video', 'session'] as mt}
@@ -480,6 +649,41 @@
               title="Slot discussion"
               compact={true}
             />
+          </div>
+        {/if}
+
+        {#if openSlot === slot.id && openSection === 'runs'}
+          <div class="slot__panel">
+            {#if (runsBySlot[slot.id] || []).length === 0}
+              <div class="muted">No runs yet — hit ▶ Run above.</div>
+            {:else}
+              <ul class="runs-list">
+                {#each runsBySlot[slot.id] as r (r.id)}
+                  <li class="run" data-ok={r.exit_code === 0}>
+                    <div class="run__head">
+                      <span class="run__sha" title={r.ref}
+                        >{(r.ref || '').slice(0, 7)}</span
+                      >
+                      <span class="muted">{fmtRunTime(r.started_at)}</span>
+                      {#if r.exit_code === 0}
+                        <span class="run__ok">✓ ok</span>
+                      {:else if r.exit_code !== null && r.exit_code !== undefined}
+                        <span class="run__err">✗ exit {r.exit_code}</span>
+                      {:else if r.finished_at == null}
+                        <span class="muted">running…</span>
+                      {/if}
+                      <span class="run__outputs"
+                        >{(r.outputs || []).length} output{(r.outputs || [])
+                          .length === 1
+                          ? ''
+                          : 's'}</span
+                      >
+                    </div>
+                    <code class="run__cmd">{r.command}</code>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
           </div>
         {/if}
       </li>
@@ -650,6 +854,91 @@
   .slot__panel-actions {
     display: flex;
     gap: var(--space-sm);
+  }
+  .slot__repo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px var(--space-sm);
+    border-top: 1px dashed var(--color-border);
+    background: #fafafa;
+    flex-wrap: wrap;
+    font-size: var(--text-sm);
+  }
+  .slot__repo .muted {
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    font-size: 0.65rem;
+  }
+  .repo-path {
+    color: var(--color-accent);
+    font-family: var(--font-mono);
+    word-break: break-all;
+  }
+  .ref-pill {
+    font-family: var(--font-mono);
+    color: var(--color-muted);
+    font-size: 0.7rem;
+    border: 1px dashed var(--color-border);
+    padding: 0 4px;
+    background: var(--color-bg);
+  }
+  .spacer {
+    flex: 1;
+  }
+  .btn-run {
+    padding: 3px 10px;
+    font-size: 0.75rem;
+  }
+  .runs-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .run {
+    border: 1px solid var(--color-border);
+    padding: 6px 8px;
+    background: var(--color-bg);
+  }
+  .run[data-ok='false'] {
+    border-color: #c00;
+  }
+  .run__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: var(--text-sm);
+  }
+  .run__sha {
+    font-family: var(--font-mono);
+    background: var(--color-text);
+    color: var(--color-bg);
+    padding: 0 6px;
+    font-size: 0.7rem;
+  }
+  .run__ok {
+    color: #080;
+  }
+  .run__err {
+    color: #c00;
+  }
+  .run__outputs {
+    color: var(--color-muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+  }
+  .run__cmd {
+    display: block;
+    margin-top: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--color-muted);
+    word-break: break-all;
   }
   .grid {
     list-style: none;

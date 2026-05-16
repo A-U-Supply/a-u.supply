@@ -2,26 +2,29 @@
 
 All requests go through this module — Latents UI never talks to fold directly.
 
-Auto-provisioning:
-    - Each au-supply admin user maps 1:1 to a Lemmy user. Created via the
-      Lemmy admin register-user endpoint on first access.
-    - JWTs are stored encrypted in `users.lemmy_token_encrypted` using
-      Fernet (symmetric, authenticated). The encryption key comes from
-      `LEMMY_TOKEN_KEY` env var.
+Identity model
+--------------
+Lemmy 0.19.x has no admin-create-user API, and fold runs with `private_instance`
++ closed registration. So we don't auto-provision. Instead, each band member
+links their existing fold account in admin settings: they enter their fold
+username + password once, we log in server-side, encrypt and store the JWT.
+After that all proxy calls happen under their real fold identity.
 
-Graceful degradation:
-    - If `LEMMY_URL` is unset, the module operates in dry-run mode: all calls
-      return None and log a notice. This allows the Latents feature to ship
-      before the fold instance is live.
-    - Any request error logs and raises `LemmyUnavailable`, which proxy
-      endpoints translate into a 503 with a user-friendly message.
+JWTs are stored encrypted in `users.lemmy_token_encrypted` using Fernet, with
+the encryption key derived from the `LEMMY_TOKEN_KEY` env var.
+
+Graceful degradation
+--------------------
+- `LEMMY_URL` unset → `is_configured()` returns False; calls return None/[].
+- Network failures or non-2xx responses raise `LemmyUnavailable` which proxy
+  endpoints turn into a 503 with a clean UI message.
+- User hasn't linked yet → `LemmyNotLinked`, distinct from `LemmyUnavailable`
+  so the UI can show a "Link your fold account" CTA instead of a generic error.
 """
 
 import base64
-import json
 import logging
 import os
-import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -31,16 +34,19 @@ logger = logging.getLogger(__name__)
 
 
 LEMMY_URL = os.environ.get("LEMMY_URL", "").rstrip("/")
-LEMMY_ADMIN_TOKEN = os.environ.get("LEMMY_ADMIN_TOKEN", "")
 LEMMY_TOKEN_KEY = os.environ.get("LEMMY_TOKEN_KEY", "")
 STACKS_COMMUNITY_NAME = "stacks"
 
-# Singleton cache for the resolved stacks community id, set on first access.
+# Cached resolution of the global `stacks` community id.
 _stacks_community_id: int | None = None
 
 
 class LemmyUnavailable(Exception):
     """Lemmy is unreachable, misconfigured, or returned an error."""
+
+
+class LemmyNotLinked(Exception):
+    """The calling au-supply user hasn't linked a fold account yet."""
 
 
 def is_configured() -> bool:
@@ -61,8 +67,7 @@ def _fernet():
         raise LemmyUnavailable("LEMMY_TOKEN_KEY env var is not set")
     key = LEMMY_TOKEN_KEY.encode("utf-8")
     # Fernet wants a urlsafe base64-encoded 32-byte key. If the env var is plain
-    # text, derive a key from it deterministically (suitable for our scale; not
-    # a substitute for a proper KMS).
+    # text, derive one deterministically.
     if len(key) != 44 or not key.endswith(b"="):
         import hashlib
         digest = hashlib.sha256(key).digest()
@@ -86,7 +91,7 @@ def decrypt_token(ciphertext: str) -> str:
 def _client() -> httpx.Client:
     if not LEMMY_URL:
         raise LemmyUnavailable("LEMMY_URL is not set")
-    return httpx.Client(base_url=LEMMY_URL, timeout=10.0)
+    return httpx.Client(base_url=LEMMY_URL, timeout=15.0)
 
 
 def _request(method: str, path: str, *, token: str | None = None, json_body: dict | None = None, params: dict | None = None) -> Any:
@@ -108,99 +113,76 @@ def _request(method: str, path: str, *, token: str | None = None, json_body: dic
 
 
 # ---------------------------------------------------------------------------
-# User provisioning
+# Account linkage (replaces auto-provisioning)
 # ---------------------------------------------------------------------------
 
 
-def _slug_login(email: str) -> str:
-    """Lemmy logins must be unique per instance and ASCII-safe. Derive from email."""
-    local = (email.split("@", 1)[0] or "user").lower()
-    slug = re.sub(r"[^a-z0-9_]+", "_", local)[:20] or "user"
-    return slug
+def link_account(db, user, fold_username: str, fold_password: str) -> dict:
+    """Log into fold with the supplied credentials, store the JWT against the
+    calling au-supply user. The plaintext password is never persisted.
 
-
-def _gen_password() -> str:
-    import secrets
-    return secrets.token_urlsafe(24)
-
-
-def ensure_user_and_token(db, user) -> str | None:
-    """Auto-provision a Lemmy account for `user` if missing; return their JWT.
-
-    Returns None if Lemmy is not configured (dry-run mode).
+    Returns a small status dict ({lemmy_user_id, lemmy_display, lemmy_username}).
     """
     if not is_configured():
-        logger.info("Lemmy not configured — skipping provisioning for user %s", user.id)
-        return None
-
-    if user.lemmy_user_id and user.lemmy_token_encrypted:
-        try:
-            return decrypt_token(user.lemmy_token_encrypted)
-        except Exception:
-            logger.exception("Failed to decrypt Lemmy token for user %s; reprovisioning", user.id)
-
-    login = _slug_login(user.email)
-    password = _gen_password()
-    display_name = user.name
-
-    # Register via admin endpoint
-    try:
-        resp = _request(
-            "POST",
-            "/api/v3/user/register",
-            token=LEMMY_ADMIN_TOKEN or None,
-            json_body={
-                "username": login,
-                "password": password,
-                "password_verify": password,
-                "show_nsfw": False,
-                "display_name": display_name,
-            },
-        )
-        jwt = resp.get("jwt") if isinstance(resp, dict) else None
-    except LemmyUnavailable:
-        raise
-
+        raise LemmyUnavailable("Lemmy not configured on this server")
+    resp = _request(
+        "POST",
+        "/api/v3/user/login",
+        json_body={"username_or_email": fold_username, "password": fold_password},
+    )
+    jwt = resp.get("jwt") if isinstance(resp, dict) else None
     if not jwt:
-        # Possibly already registered — try login instead.
-        try:
-            resp = _request(
-                "POST",
-                "/api/v3/user/login",
-                json_body={"username_or_email": login, "password": password},
-            )
-            jwt = resp.get("jwt") if isinstance(resp, dict) else None
-        except LemmyUnavailable:
-            raise
+        raise LemmyUnavailable("Login did not return a JWT")
 
-    if not jwt:
-        raise LemmyUnavailable("Lemmy did not return a JWT")
-
-    # Resolve the user id
-    me = _request("GET", "/api/v3/user", token=jwt, params={"username": login})
+    me = _request("GET", "/api/v3/user", token=jwt, params={"username": fold_username})
     lemmy_user_id = None
+    display = None
+    real_username = fold_username
     if isinstance(me, dict):
-        # /api/v3/user returns { person_view: { person: { id, ... } } }
         pv = me.get("person_view") or {}
         person = pv.get("person") or {}
         lemmy_user_id = person.get("id")
+        display = person.get("display_name") or person.get("name")
+        real_username = person.get("name") or fold_username
 
     user.lemmy_user_id = lemmy_user_id
     user.lemmy_token_encrypted = encrypt_token(jwt)
     db.commit()
-    return jwt
+
+    return {
+        "lemmy_user_id": lemmy_user_id,
+        "lemmy_display": display,
+        "lemmy_username": real_username,
+    }
 
 
-def get_user_token(db, user) -> str | None:
-    """Return the user's Lemmy JWT, auto-provisioning if needed."""
+def unlink_account(db, user) -> None:
+    user.lemmy_user_id = None
+    user.lemmy_token_encrypted = None
+    db.commit()
+
+
+def get_user_token(db, user) -> str:
+    """Return the user's Lemmy JWT. Raises if unconfigured / not linked."""
     if not is_configured():
-        return None
-    if user.lemmy_token_encrypted:
-        try:
-            return decrypt_token(user.lemmy_token_encrypted)
-        except Exception:
-            logger.exception("Decrypt Lemmy token failed for user %s; reprovisioning", user.id)
-    return ensure_user_and_token(db, user)
+        raise LemmyUnavailable("Lemmy not configured")
+    if not user.lemmy_token_encrypted:
+        raise LemmyNotLinked("Link your fold account in Settings")
+    try:
+        return decrypt_token(user.lemmy_token_encrypted)
+    except Exception as e:
+        logger.exception("Decrypt Lemmy token failed for user %s", user.id)
+        raise LemmyNotLinked("Stored fold token is invalid — re-link in Settings") from e
+
+
+def status_for_user(user) -> dict:
+    """Lightweight status: configured + linked + display name."""
+    return {
+        "configured": is_configured(),
+        "linked": bool(user.lemmy_token_encrypted),
+        "lemmy_user_id": user.lemmy_user_id,
+        "lemmy_url": LEMMY_URL if is_configured() else None,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -208,72 +190,99 @@ def get_user_token(db, user) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def ensure_project_community(db, project) -> int | None:
-    """Create (or fetch) a private Lemmy community for `project`. Returns its id."""
+def _community_payload(name: str, title: str, description: str | None = None) -> dict:
+    # 0.19.17 only accepts Public / Private. Use Private — the instance is
+    # already private and federation-off, so this is belt-and-suspenders.
+    out: dict[str, Any] = {
+        "name": name,
+        "title": title,
+        "nsfw": False,
+        "visibility": "Private",
+    }
+    if description:
+        out["description"] = description
+    return out
+
+
+def _extract_community_id(resp: Any) -> int | None:
+    if not isinstance(resp, dict):
+        return None
+    cv = resp.get("community_view") or {}
+    community = cv.get("community") or {}
+    cid = community.get("id")
+    if cid:
+        return cid
+    # /api/v3/community returns either community_view (single) or communities (list)
+    communities = resp.get("communities") or []
+    for c in communities:
+        cc = (c.get("community") or {}) if isinstance(c, dict) else {}
+        if cc.get("id"):
+            return cc["id"]
+    return None
+
+
+def ensure_project_community(db, project, token: str) -> int | None:
+    """Create (or fetch) a Lemmy community for `project`. Caller supplies the
+    JWT under which the community will be created; the calling user must be a
+    fold admin (band members on fold all are).
+    """
     if not is_configured():
         return None
     if project.lemmy_community_id:
         return project.lemmy_community_id
-    if not LEMMY_ADMIN_TOKEN:
-        raise LemmyUnavailable("LEMMY_ADMIN_TOKEN required to create communities")
 
-    payload = {
-        "name": project.slug,
-        "title": project.name,
-        "nsfw": False,
-        "visibility": "LocalOnly",
-    }
+    payload = _community_payload(project.slug, project.name)
     try:
-        resp = _request("POST", "/api/v3/community", token=LEMMY_ADMIN_TOKEN, json_body=payload)
-    except LemmyUnavailable:
-        # Maybe it already exists — try to resolve by name
-        resp = _request("GET", "/api/v3/community", token=LEMMY_ADMIN_TOKEN, params={"name": project.slug})
-
-    cid = None
-    if isinstance(resp, dict):
-        cv = resp.get("community_view") or {}
-        community = cv.get("community") or {}
-        cid = community.get("id")
+        resp = _request("POST", "/api/v3/community", token=token, json_body=payload)
+        cid = _extract_community_id(resp)
+    except LemmyUnavailable as e:
+        # Likely "community_already_exists" — try to resolve by name.
+        try:
+            resp = _request(
+                "GET",
+                "/api/v3/community",
+                token=token,
+                params={"name": project.slug},
+            )
+            cid = _extract_community_id(resp)
+        except LemmyUnavailable:
+            raise e
     if cid:
         project.lemmy_community_id = cid
         db.commit()
     return cid
 
 
-def ensure_stacks_community() -> int | None:
+def ensure_stacks_community(token: str) -> int | None:
     """Resolve (or create) the global `stacks` community for media-item threads."""
     global _stacks_community_id
     if _stacks_community_id is not None:
         return _stacks_community_id
     if not is_configured():
         return None
-    if not LEMMY_ADMIN_TOKEN:
-        raise LemmyUnavailable("LEMMY_ADMIN_TOKEN required to bootstrap stacks community")
 
+    payload = _community_payload(
+        STACKS_COMMUNITY_NAME,
+        "Stacks",
+        description="Discussion threads anchored to individual media items.",
+    )
     try:
-        resp = _request(
-            "POST",
-            "/api/v3/community",
-            token=LEMMY_ADMIN_TOKEN,
-            json_body={
-                "name": STACKS_COMMUNITY_NAME,
-                "title": "Stacks",
-                "description": "Discussion threads anchored to individual media items.",
-                "nsfw": False,
-                "visibility": "LocalOnly",
-            },
-        )
-    except LemmyUnavailable:
-        resp = _request("GET", "/api/v3/community", token=LEMMY_ADMIN_TOKEN, params={"name": STACKS_COMMUNITY_NAME})
-
-    if isinstance(resp, dict):
-        cv = resp.get("community_view") or {}
-        community = cv.get("community") or {}
-        cid = community.get("id")
-        if cid:
-            _stacks_community_id = cid
-            return cid
-    return None
+        resp = _request("POST", "/api/v3/community", token=token, json_body=payload)
+        cid = _extract_community_id(resp)
+    except LemmyUnavailable as e:
+        try:
+            resp = _request(
+                "GET",
+                "/api/v3/community",
+                token=token,
+                params={"name": STACKS_COMMUNITY_NAME},
+            )
+            cid = _extract_community_id(resp)
+        except LemmyUnavailable:
+            raise e
+    if cid:
+        _stacks_community_id = cid
+    return cid
 
 
 # ---------------------------------------------------------------------------
@@ -306,7 +315,12 @@ class LemmyComment:
 def list_posts(token: str, community_id: int, limit: int = 50) -> list[LemmyPost]:
     if not is_configured():
         return []
-    resp = _request("GET", "/api/v3/post/list", token=token, params={"community_id": community_id, "limit": limit, "sort": "New"})
+    resp = _request(
+        "GET",
+        "/api/v3/post/list",
+        token=token,
+        params={"community_id": community_id, "limit": limit, "sort": "New"},
+    )
     out: list[LemmyPost] = []
     if isinstance(resp, dict):
         for pv in resp.get("posts", []):
@@ -342,13 +356,16 @@ def get_post(token: str, post_id: int) -> tuple[LemmyPost | None, list[LemmyComm
                 published=p.get("published"),
                 community_id=p.get("community_id"),
             )
-    # Pull comments separately for nested threading
-    cresp = _request("GET", "/api/v3/comment/list", token=token, params={"post_id": post_id, "max_depth": 8, "limit": 200, "sort": "Old"})
+    cresp = _request(
+        "GET",
+        "/api/v3/comment/list",
+        token=token,
+        params={"post_id": post_id, "max_depth": 8, "limit": 200, "sort": "Old"},
+    )
     if isinstance(cresp, dict):
         for cv in cresp.get("comments", []):
             c = cv.get("comment") or {}
             path = c.get("path") or ""
-            # parent id from path: "0.<root>.<...>.<self>"
             parts = path.split(".")
             parent = int(parts[-2]) if len(parts) >= 2 and parts[-2] != "0" else None
             comments.append(LemmyComment(
@@ -366,7 +383,7 @@ def get_post(token: str, post_id: int) -> tuple[LemmyPost | None, list[LemmyComm
 def create_post(token: str, community_id: int, title: str, body: str | None = None, url: str | None = None) -> LemmyPost:
     if not is_configured():
         raise LemmyUnavailable("Lemmy not configured")
-    payload = {"community_id": community_id, "name": title}
+    payload: dict[str, Any] = {"community_id": community_id, "name": title}
     if body:
         payload["body"] = body
     if url:

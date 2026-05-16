@@ -49,9 +49,13 @@
   };
 
   let threads = $state<ThreadRow[]>([]);
-  let lemmyAvailable = $state(true);
+  let lemmyConfigured = $state(true);
+  let lemmyLinked = $state(true);
   let loading = $state(false);
   let error = $state<string | null>(null);
+
+  let isLemmyDown = $derived(!lemmyConfigured);
+  let needsLink = $derived(lemmyConfigured && !lemmyLinked);
 
   let composerOpen = $state(false);
   let composerTitle = $state('');
@@ -75,7 +79,8 @@
       if (!res.ok) throw new Error(`Failed to load (${res.status})`);
       const body = await res.json();
       threads = body.threads || [];
-      lemmyAvailable = body.lemmy_available !== false;
+      lemmyConfigured = body.configured !== false;
+      lemmyLinked = !!body.linked;
     } catch (e: any) {
       error = e?.message || 'Failed to load threads';
     } finally {
@@ -101,7 +106,21 @@
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err?.detail || `Failed (${res.status})`);
+        const detail = err?.detail;
+        if (
+          detail &&
+          typeof detail === 'object' &&
+          detail.code === 'not_linked'
+        ) {
+          lemmyLinked = false;
+          error = 'Link your fold account in Settings to post.';
+          return;
+        }
+        const msg =
+          typeof detail === 'string'
+            ? detail
+            : detail?.message || `Failed (${res.status})`;
+        throw new Error(msg);
       }
       composerOpen = false;
       composerTitle = '';
@@ -210,7 +229,7 @@
         class="action-btn"
         onclick={() => (composerOpen = !composerOpen)}
         type="button"
-        disabled={!lemmyAvailable}
+        disabled={isLemmyDown || needsLink}
         >{composerOpen ? 'Cancel' : '+ New thread'}</button
       >
     </header>
@@ -220,14 +239,20 @@
         class="action-btn"
         onclick={() => (composerOpen = !composerOpen)}
         type="button"
-        disabled={!lemmyAvailable}
+        disabled={isLemmyDown || needsLink}
         >{composerOpen ? 'Cancel' : '+ New thread'}</button
       >
     </div>
   {/if}
 
-  {#if !lemmyAvailable}
+  {#if isLemmyDown}
     <div class="notice notice--warn">Discussion temporarily unavailable.</div>
+  {:else if needsLink}
+    <div class="notice notice--info">
+      Threads are powered by your fold account.
+      <a class="link" href="/admin/settings#lemmy">Link your fold account</a>
+      to read or post.
+    </div>
   {/if}
 
   {#if error}
@@ -499,6 +524,10 @@
   .notice--warn {
     border-color: var(--color-accent);
     color: var(--color-accent);
+  }
+  .notice--info {
+    border-left: 4px solid var(--color-accent);
+    background: rgba(184, 134, 11, 0.06);
   }
   .notice--error {
     border-color: #c00;

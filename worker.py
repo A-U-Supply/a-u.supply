@@ -312,9 +312,333 @@ def _collect_outputs(job: Job, job_dir: Path, db: Session):
     db.commit()
 
 
+def _run_repo_job(job: Job, db: Session) -> None:
+    """Execute a Latents __repo_run__ job: clone repo, run command in a
+    sandboxed Docker container, capture outputs into Emulsion + attach to slot.
+    """
+    import hashlib
+    import mimetypes
+    import uuid as _uuid
+
+    from server.models import (
+        MediaItem,
+        MediaSessionMeta,
+        MediaSource,
+        ProjectItem,
+        ProjectRepo,
+        ProjectSlot,
+        RepoRun,
+        SlotPrimaryPin,
+    )
+
+    try:
+        params = json.loads(job.params or "{}")
+    except (ValueError, TypeError):
+        params = {}
+
+    repo_id = params.get("repo_id")
+    project_id = params.get("project_id")
+    slot_id = params.get("slot_id")
+    owner = params.get("owner")
+    repo_name = params.get("repo_name")
+    ref = params.get("ref") or "main"
+    command = params.get("command") or ""
+    private = bool(params.get("private"))
+    token_id = params.get("github_token_id")
+
+    if not (repo_id and owner and repo_name and command):
+        raise RuntimeError("Missing required repo_run params")
+
+    repo_row = db.query(ProjectRepo).filter(ProjectRepo.id == repo_id).first()
+    if not repo_row:
+        raise RuntimeError(f"ProjectRepo {repo_id} not found")
+    run_row = db.query(RepoRun).filter(RepoRun.job_id == job.id).first()
+    if not run_row:
+        raise RuntimeError(f"RepoRun for job {job.id} not found")
+
+    job.status = "running"
+    job.started_at = _utcnow()
+    db.commit()
+
+    # Build clone URL with optional token for private repos
+    clone_url = f"https://github.com/{owner}/{repo_name}.git"
+    if private and token_id:
+        from server.models import GithubToken
+        from server.github_client import decrypt_token
+        tok = db.query(GithubToken).filter(GithubToken.id == token_id).first()
+        if tok:
+            try:
+                plain = decrypt_token(tok.token_encrypted)
+                clone_url = f"https://x-access-token:{plain}@github.com/{owner}/{repo_name}.git"
+            except Exception:
+                logger.exception("Failed to decrypt PAT for repo job %s", job.id)
+
+    workdir = JOB_DATA_DIR / f"repo-run-{job.id}"
+    workdir.mkdir(parents=True, exist_ok=True)
+    repo_dir = workdir / "repo"
+    out_dir = workdir / "output"
+    out_dir.mkdir(exist_ok=True)
+
+    stderr_tail = ""
+    exit_code: int | None = None
+    try:
+        # 1. Clone
+        logger.info("repo-run %s: cloning %s/%s @ %s", job.id, owner, repo_name, ref)
+        clone = subprocess.run(
+            ["git", "clone", "--depth", "1", "--branch", ref, clone_url, str(repo_dir)],
+            capture_output=True, text=True, timeout=180,
+        )
+        if clone.returncode != 0:
+            # Fall back: maybe ref is a SHA, do full clone then checkout
+            shutil.rmtree(repo_dir, ignore_errors=True)
+            clone2 = subprocess.run(
+                ["git", "clone", clone_url, str(repo_dir)],
+                capture_output=True, text=True, timeout=300,
+            )
+            if clone2.returncode != 0:
+                stderr_tail = (clone2.stderr or clone.stderr)[-4000:]
+                raise RuntimeError(f"git clone failed: {stderr_tail}")
+            co = subprocess.run(
+                ["git", "-C", str(repo_dir), "checkout", ref],
+                capture_output=True, text=True, timeout=60,
+            )
+            if co.returncode != 0:
+                stderr_tail = co.stderr[-4000:]
+                raise RuntimeError(f"git checkout failed: {stderr_tail}")
+
+        # Resolve to a SHA for provenance
+        rev = subprocess.run(
+            ["git", "-C", str(repo_dir), "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=20,
+        )
+        if rev.returncode == 0:
+            run_row.ref = rev.stdout.strip()
+            db.commit()
+
+        # 2. Read optional .au-supply/latent.toml for runtime hints
+        runtime: dict = {}
+        manifest_path = repo_dir / ".au-supply" / "latent.toml"
+        if manifest_path.exists():
+            try:
+                with manifest_path.open("rb") as f:
+                    parsed = tomllib.load(f)
+                runtime = parsed.get("runtime") or {}
+            except Exception:
+                logger.exception("manifest parse failed")
+
+        image = runtime.get("image") or os.environ.get("REPO_RUN_DEFAULT_IMAGE") or "python:3.12-slim"
+        install = runtime.get("install") or []
+        env_vars = runtime.get("env") or []
+        cpu_limit = float(runtime.get("cpu_limit") or 2)
+        memory_mb = int(runtime.get("memory_mb") or 2048)
+        time_limit = int(runtime.get("time_limit_seconds") or 600)
+        network = bool(runtime.get("network"))
+
+        # 3. Run inside Docker. Mount repo_dir and out_dir into /work.
+        container_name = f"reporun-{job.id[:12]}"
+        docker_cmd = [
+            "docker", "run", "--rm",
+            "--name", container_name,
+            "--workdir", "/work",
+            "-v", f"{repo_dir}:/work",
+            "-v", f"{out_dir}:/work/output",
+            "--cpus", str(cpu_limit),
+            "--memory", f"{memory_mb}m",
+            "--pids-limit", "256",
+        ]
+        if not network:
+            docker_cmd += ["--network", "none"]
+        for kv in env_vars:
+            if "=" in kv:
+                docker_cmd += ["-e", kv]
+
+        docker_cmd.append(image)
+
+        # If install steps exist, prepend them to the command.
+        inner = command
+        if install:
+            inner = " && ".join(install) + " && " + command
+        docker_cmd += ["/bin/sh", "-lc", inner]
+
+        logger.info("repo-run %s: docker run %s", job.id, " ".join(docker_cmd[:8]))
+        proc = subprocess.Popen(
+            docker_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        out_buf: list[str] = []
+        try:
+            for line in iter(proc.stdout.readline, ""):
+                if not line:
+                    break
+                out_buf.append(line)
+                if len(out_buf) > 4000:
+                    out_buf = out_buf[-4000:]
+            exit_code = proc.wait(timeout=time_limit)
+        except subprocess.TimeoutExpired:
+            subprocess.run(["docker", "kill", container_name], capture_output=True)
+            exit_code = -1
+            out_buf.append(f"\n[killed: exceeded time_limit_seconds={time_limit}]\n")
+        stderr_tail = "".join(out_buf[-200:])[-16000:]
+
+        if exit_code != 0:
+            raise RuntimeError(f"command exited {exit_code}")
+
+        # 4. Index outputs into Emulsion + attach
+        outputs_meta: list[dict] = []
+        slot = db.query(ProjectSlot).filter(ProjectSlot.id == slot_id).first() if slot_id else None
+        for fpath in sorted(out_dir.rglob("*")):
+            if not fpath.is_file():
+                continue
+            rel = fpath.relative_to(out_dir)
+            data = fpath.read_bytes()
+            sha = hashlib.sha256(data).hexdigest()
+            mime = mimetypes.guess_type(fpath.name)[0] or "application/octet-stream"
+            if mime.startswith("audio/"):
+                media_type = "audio"
+            elif mime.startswith("image/"):
+                media_type = "image"
+            elif mime.startswith("video/"):
+                media_type = "video"
+            else:
+                media_type = "session"
+
+            existing = db.query(MediaItem).filter(MediaItem.sha256 == sha).first()
+            if existing:
+                mi = existing
+                db.add(MediaSource(
+                    media_item_id=mi.id,
+                    source_type="manual_upload",
+                    source_metadata=json.dumps({
+                        "repo_run_id": run_row.id,
+                        "ref": run_row.ref,
+                        "command": run_row.command,
+                        "filename": fpath.name,
+                    }),
+                ))
+            else:
+                target_dir = SEARCH_MEDIA_DIR / media_type / _utcnow().strftime("%Y-%m")
+                target_dir.mkdir(parents=True, exist_ok=True)
+                dest = target_dir / f"{sha[:8]}_{fpath.name}"
+                dest.write_bytes(data)
+                mi = MediaItem(
+                    id=str(_uuid.uuid4()),
+                    sha256=sha,
+                    filename=fpath.name,
+                    file_path=str(dest.relative_to(SEARCH_MEDIA_DIR)),
+                    media_type=media_type,
+                    file_size_bytes=len(data),
+                    mime_type=mime,
+                    description=f"Output of {run_row.command} ({(run_row.ref or '')[:7]})",
+                )
+                db.add(mi)
+                db.add(MediaSource(
+                    media_item_id=mi.id,
+                    source_type="manual_upload",
+                    uploader_id=run_row.triggered_by,
+                    source_metadata=json.dumps({
+                        "repo_run_id": run_row.id,
+                        "ref": run_row.ref,
+                        "command": run_row.command,
+                        "filename": str(rel),
+                    }),
+                ))
+                if media_type == "session":
+                    db.add(MediaSessionMeta(
+                        media_item_id=mi.id,
+                        tool="repo_run",
+                        original_bundle_name=fpath.name,
+                        bundle_size_bytes=len(data),
+                    ))
+
+            # Attach + idempotent
+            dup = db.query(ProjectItem).filter(
+                ProjectItem.project_id == project_id,
+                ProjectItem.slot_id == slot_id,
+                ProjectItem.media_item_id == mi.id,
+            ).first()
+            if not dup:
+                db.add(ProjectItem(
+                    project_id=project_id,
+                    slot_id=slot_id,
+                    media_item_id=mi.id,
+                    added_by=run_row.triggered_by,
+                ))
+
+            # Auto-pin first output of each type if slot has no pin for that type
+            if slot:
+                existing_pin = db.query(SlotPrimaryPin).filter(
+                    SlotPrimaryPin.slot_id == slot.id,
+                    SlotPrimaryPin.media_type == media_type,
+                ).first()
+                if not existing_pin:
+                    db.add(SlotPrimaryPin(
+                        slot_id=slot.id,
+                        media_type=media_type,
+                        media_item_id=mi.id,
+                        repo_run_id=run_row.id,
+                    ))
+
+            outputs_meta.append({
+                "filename": str(rel),
+                "media_item_id": mi.id,
+                "size_bytes": len(data),
+                "media_type": media_type,
+            })
+
+            # Sync to Meilisearch
+            try:
+                from server.search_client import sync_media_item
+                db.flush()
+                sync_media_item(db, mi)
+            except Exception:
+                logger.exception("meili sync failed for %s", mi.id)
+
+        run_row.outputs_json = json.dumps(outputs_meta)
+        run_row.finished_at = _utcnow()
+        run_row.exit_code = exit_code
+        run_row.stderr_tail = stderr_tail
+        db.commit()
+
+        job.status = "completed"
+        job.completed_at = _utcnow()
+        job.log_tail = stderr_tail[-LOG_TAIL_LINES * 200:]
+        db.commit()
+        logger.info("repo-run %s: %d outputs", job.id, len(outputs_meta))
+    except Exception as e:
+        run_row.finished_at = _utcnow()
+        run_row.exit_code = exit_code if exit_code is not None else -1
+        run_row.stderr_tail = stderr_tail
+        db.commit()
+        job.status = "failed"
+        job.error_message = str(e)
+        job.completed_at = _utcnow()
+        job.log_tail = stderr_tail[-LOG_TAIL_LINES * 200:]
+        db.commit()
+        logger.exception("repo-run %s failed", job.id)
+    finally:
+        try:
+            shutil.rmtree(workdir, ignore_errors=True)
+        except Exception:
+            pass
+
+
 def _run_job(job: Job, db: Session):
     """Execute a single job."""
     logger.info("Running job %s (app=%s)", job.id, job.app_name)
+
+    # Special-case: Latents repo execution
+    if job.app_name == "__repo_run__":
+        try:
+            _run_repo_job(job, db)
+        except Exception as e:
+            logger.exception("repo_run job %s failed", job.id)
+            job.status = "failed"
+            job.error_message = f"repo_run failed: {e}"
+            job.completed_at = _utcnow()
+            db.commit()
+        return
 
     # Load app manifest
     app_def = db.query(AppDefinition).filter(AppDefinition.name == job.app_name).first()

@@ -32,8 +32,10 @@ from server.auth import (
 from server.admin_api import router as admin_router
 from server.bookmarks_api import router as bookmarks_router
 from server.catalog import router as catalog_router
+from server.github_api import router as github_router
 from server.jobs_api import router as jobs_router
 from server.latents_api import router as latents_router
+from server.lemmy_api import router as lemmy_router
 from server.search_api import router as search_router
 from server.threads_api import router as threads_router
 from server.models import Base, User, engine
@@ -114,6 +116,35 @@ from server.models import (
 )
 for _model in (_Project, _ProjectSlot, _ProjectItem, _SlotPrimaryPin, _ProjectDocument, _ProjectDocumentRevision, _Thread, _MediaSessionMeta):
     if _model.__tablename__ not in _existing_tables:
+        _model.__table__.create(bind=engine)
+
+# Migrate existing DB: add repo association columns to project_slots
+_slot_cols = [c["name"] for c in _sa_inspect(engine).get_columns("project_slots")]
+for _col, _ddl in (
+    ("repo_id",      "ALTER TABLE project_slots ADD COLUMN repo_id TEXT"),
+    ("repo_path",    "ALTER TABLE project_slots ADD COLUMN repo_path TEXT"),
+    ("repo_ref",     "ALTER TABLE project_slots ADD COLUMN repo_ref TEXT"),
+    ("run_command",  "ALTER TABLE project_slots ADD COLUMN run_command TEXT"),
+):
+    if _col not in _slot_cols:
+        with engine.begin() as _conn:
+            _conn.execute(_sa_text(_ddl))
+
+# Migrate existing DB: add provenance pointer to slot pins
+_pin_cols = [c["name"] for c in _sa_inspect(engine).get_columns("slot_primary_pins")]
+if "repo_run_id" not in _pin_cols:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE slot_primary_pins ADD COLUMN repo_run_id TEXT"))
+
+# Migrate existing DB: create GitHub tables if missing
+_existing_tables_g = set(_sa_inspect(engine).get_table_names())
+from server.models import (
+    GithubToken as _GithubToken,
+    ProjectRepo as _ProjectRepo,
+    RepoRun as _RepoRun,
+)
+for _model in (_GithubToken, _ProjectRepo, _RepoRun):
+    if _model.__tablename__ not in _existing_tables_g:
         _model.__table__.create(bind=engine)
 
 # Migrate existing DB: add latent_id column to releases (reserved for v2 Latent->Release promotion).
@@ -526,8 +557,10 @@ app.add_middleware(
 app.include_router(admin_router)
 app.include_router(bookmarks_router)
 app.include_router(catalog_router)
+app.include_router(github_router)
 app.include_router(jobs_router)
 app.include_router(latents_router)
+app.include_router(lemmy_router)
 app.include_router(search_router)
 app.include_router(threads_router)
 

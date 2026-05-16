@@ -478,6 +478,13 @@ class ProjectSlot(Base):
     notes = Column(String, nullable=True)
     notes_updated_at = Column(DateTime, nullable=True)
     status = Column(String, nullable=False, default="forming")  # forming | developing | fixed
+    # Optional GitHub repo file/dir association — populated by the link UI or
+    # the manifest-sync flow. `repo_id` not declared as FK in code to avoid
+    # circular import; enforced by the `projects` migration on prod.
+    repo_id = Column(String, nullable=True, index=True)
+    repo_path = Column(String, nullable=True)
+    repo_ref = Column(String, nullable=True)         # commit SHA, branch, or tag
+    run_command = Column(String, nullable=True)      # override for sandboxed runs
     created_at = Column(DateTime, nullable=False, default=_utcnow)
     updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
 
@@ -513,6 +520,7 @@ class SlotPrimaryPin(Base):
     slot_id = Column(String, ForeignKey("project_slots.id", ondelete="CASCADE"), primary_key=True)
     media_type = Column(String, primary_key=True)  # image | audio | video | session
     media_item_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False)
+    repo_run_id = Column(String, nullable=True)    # provenance: which run produced this pin
 
     slot = relationship("ProjectSlot", back_populates="pins")
     media_item = relationship("MediaItem")
@@ -567,3 +575,77 @@ class Thread(Base):
     created_at = Column(DateTime, nullable=False, default=_utcnow)
 
     creator = relationship("User")
+
+
+# --- GitHub repo integration ---
+
+
+class GithubToken(Base):
+    """Encrypted personal-access tokens for private-repo access."""
+
+    __tablename__ = "github_tokens"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    label = Column(String, nullable=False)
+    scopes = Column(String, nullable=True)  # display only
+    github_login = Column(String, nullable=True)  # captured at validation time
+    token_encrypted = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+    last_used_at = Column(DateTime, nullable=True)
+
+    user = relationship("User")
+
+
+class ProjectRepo(Base):
+    """A GitHub repository linked to a Latent."""
+
+    __tablename__ = "project_repos"
+    __table_args__ = (UniqueConstraint("project_id"),)
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    project_id = Column(String, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    url = Column(String, nullable=False)             # canonical https URL
+    provider = Column(String, nullable=False, default="github")
+    owner = Column(String, nullable=False)
+    repo_name = Column(String, nullable=False)
+    default_branch = Column(String, nullable=False, default="main")
+    visibility = Column(String, nullable=False, default="public")  # public | private
+    github_token_id = Column(String, ForeignKey("github_tokens.id", ondelete="SET NULL"), nullable=True)
+    last_sha = Column(String, nullable=True)
+    last_synced_at = Column(DateTime, nullable=True)
+    manifest_json = Column(String, nullable=True)    # cached parsed manifest
+    webhook_secret = Column(String, nullable=True)   # for /api/github/webhook HMAC
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+    updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
+
+    project = relationship("Project")
+    github_token = relationship("GithubToken")
+    creator = relationship("User")
+
+
+class RepoRun(Base):
+    """Provenance for every sandboxed script execution out of a linked repo."""
+
+    __tablename__ = "repo_runs"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    project_id = Column(String, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    slot_id = Column(String, ForeignKey("project_slots.id", ondelete="SET NULL"), nullable=True, index=True)
+    repo_id = Column(String, ForeignKey("project_repos.id", ondelete="CASCADE"), nullable=False, index=True)
+    job_id = Column(String, ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True, index=True)
+    ref = Column(String, nullable=False)             # resolved commit SHA at run time
+    command = Column(String, nullable=False)
+    started_at = Column(DateTime, nullable=False, default=_utcnow)
+    finished_at = Column(DateTime, nullable=True)
+    exit_code = Column(Integer, nullable=True)
+    outputs_json = Column(String, nullable=True)
+    stderr_tail = Column(String, nullable=True)
+    triggered_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    project = relationship("Project")
+    slot = relationship("ProjectSlot")
+    repo = relationship("ProjectRepo")
+    job = relationship("Job")
+    runner = relationship("User")

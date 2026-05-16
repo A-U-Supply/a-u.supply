@@ -283,13 +283,8 @@ def create_project(
     db.commit()
     db.refresh(project)
 
-    # Best-effort Lemmy community provisioning; degrades silently if Lemmy unreachable.
-    try:
-        from server.lemmy_client import ensure_user_and_token, ensure_project_community
-        ensure_user_and_token(db, user)
-        ensure_project_community(db, project)
-    except Exception:
-        logger.exception("Lemmy provisioning failed on project create — will retry later")
+    # Lemmy community is provisioned lazily on first Threads action by a
+    # linked user (see threads_api). Don't block Latent creation on Lemmy.
 
     # Slack notification (immediate tier)
     try:

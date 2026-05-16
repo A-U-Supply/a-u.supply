@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from server.auth import get_db, require_admin
 from server.models import MediaItem, Project, ProjectSlot, Thread, User
 from server.lemmy_client import (
+    LemmyNotLinked,
     LemmyUnavailable,
     create_comment as lemmy_create_comment,
     create_post as lemmy_create_post,
@@ -28,11 +29,9 @@ from server.lemmy_client import (
     edit_post as lemmy_edit_post,
     ensure_project_community,
     ensure_stacks_community,
-    ensure_user_and_token,
     get_post as lemmy_get_post,
     get_user_token,
     is_configured,
-    list_posts as lemmy_list_posts,
 )
 
 
@@ -76,32 +75,58 @@ class UpdateCommentBody(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _resolve_community_id(db: Session, anchor_type: str, anchor_id: str) -> int:
-    """Resolve which Lemmy community an anchor lives in. Provisions if needed."""
+class _LemmyError(HTTPException):
+    """Carries a structured `code` so the UI can branch (not_linked vs unavailable)."""
+
+    def __init__(self, code: str, detail: str, status_code: int = 503):
+        super().__init__(status_code=status_code, detail={"code": code, "message": detail})
+
+
+def _require_token(db: Session, user: User) -> str:
+    try:
+        return get_user_token(db, user)
+    except LemmyNotLinked as e:
+        raise _LemmyError("not_linked", str(e))
+    except LemmyUnavailable as e:
+        raise _LemmyError("unavailable", str(e))
+
+
+def _resolve_community_id(db: Session, anchor_type: str, anchor_id: str, token: str) -> int:
+    """Resolve which Lemmy community an anchor lives in. Provisions if needed
+    using the caller's token (band members on fold are admins, so this works)."""
     if anchor_type == "project":
         project = db.query(Project).filter(Project.id == anchor_id).first()
         if not project:
             raise HTTPException(status_code=404, detail="anchor project not found")
-        cid = ensure_project_community(db, project)
+        try:
+            cid = ensure_project_community(db, project, token)
+        except LemmyUnavailable as e:
+            raise _LemmyError("unavailable", str(e))
         if not cid:
-            raise HTTPException(status_code=503, detail="Lemmy not configured or unreachable")
+            raise _LemmyError("unavailable", "Lemmy not configured")
         return cid
     if anchor_type == "slot":
         slot = db.query(ProjectSlot).filter(ProjectSlot.id == anchor_id).first()
         if not slot:
             raise HTTPException(status_code=404, detail="anchor slot not found")
         project = db.query(Project).filter(Project.id == slot.project_id).first()
-        cid = ensure_project_community(db, project)
+        try:
+            cid = ensure_project_community(db, project, token)
+        except LemmyUnavailable as e:
+            raise _LemmyError("unavailable", str(e))
         if not cid:
-            raise HTTPException(status_code=503, detail="Lemmy not configured or unreachable")
+            raise _LemmyError("unavailable", "Lemmy not configured")
         return cid
     if anchor_type == "media_item":
         mi = db.query(MediaItem).filter(MediaItem.id == anchor_id).first()
         if not mi:
             raise HTTPException(status_code=404, detail="anchor media_item not found")
-        cid = ensure_stacks_community()
+        try:
+            cid = ensure_stacks_community(token)
+        except LemmyUnavailable as e:
+            raise _LemmyError("unavailable", str(e))
         if not cid:
-            raise HTTPException(status_code=503, detail="Lemmy not configured or unreachable")
+            raise _LemmyError("unavailable", "Lemmy not configured")
         return cid
     raise HTTPException(status_code=400, detail=f"unsupported anchor_type '{anchor_type}'")
 
@@ -136,6 +161,17 @@ def _comment_dict(c: Any) -> dict:
     }
 
 
+def _availability(user: User) -> dict:
+    """UI-friendly status for the threads section."""
+    from server.lemmy_client import status_for_user
+    s = status_for_user(user)
+    return {
+        "configured": s["configured"],
+        "linked": s["linked"],
+        "lemmy_url": s["lemmy_url"],
+    }
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -148,11 +184,6 @@ def thread_counts(
     user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """Return a `{anchor_id: count}` map for an anchor type.
-
-    Powers the "discussion N" indicator chips on listings (e.g. search result tiles,
-    Latent slot cards) without forcing a per-item round-trip.
-    """
     if anchor_type not in VALID_ANCHOR_TYPES:
         raise HTTPException(status_code=400, detail=f"unsupported anchor_type '{anchor_type}'")
     ids = [s.strip() for s in (anchor_ids or "").split(",") if s.strip()]
@@ -183,27 +214,26 @@ def list_threads(
         .order_by(Thread.created_at.desc())
         .all()
     )
-    # Optionally enrich with Lemmy post titles. Degrade gracefully if unreachable.
     out: list[dict] = []
-    if not is_configured() or not rows:
+    avail = _availability(user)
+    if not avail["configured"] or not avail["linked"] or not rows:
         for t in rows:
             out.append(_thread_summary(t))
-        return {"threads": out, "lemmy_available": is_configured()}
+        return {"threads": out, **avail}
 
     try:
         token = get_user_token(db, user)
-    except LemmyUnavailable:
-        token = None
+    except (LemmyUnavailable, LemmyNotLinked):
+        return {"threads": [_thread_summary(t) for t in rows], **avail}
 
     for t in rows:
         post = None
-        if token:
-            try:
-                post, _ = lemmy_get_post(token, t.lemmy_post_id)
-            except LemmyUnavailable:
-                pass
+        try:
+            post, _ = lemmy_get_post(token, t.lemmy_post_id)
+        except LemmyUnavailable:
+            pass
         out.append(_thread_summary(t, post))
-    return {"threads": out, "lemmy_available": is_configured()}
+    return {"threads": out, **avail}
 
 
 @router.post("", status_code=201, summary="Create a thread")
@@ -215,22 +245,15 @@ def create_thread(
     if body.anchor_type not in VALID_ANCHOR_TYPES:
         raise HTTPException(status_code=400, detail=f"unsupported anchor_type '{body.anchor_type}'")
     if not is_configured():
-        raise HTTPException(status_code=503, detail="Discussion is unavailable (Lemmy not configured)")
+        raise _LemmyError("unavailable", "Discussion is unavailable (Lemmy not configured)")
 
-    try:
-        ensure_user_and_token(db, user)
-    except LemmyUnavailable as e:
-        raise HTTPException(status_code=503, detail=str(e))
-
-    community_id = _resolve_community_id(db, body.anchor_type, body.anchor_id)
-    token = get_user_token(db, user)
-    if not token:
-        raise HTTPException(status_code=503, detail="Could not authenticate to Lemmy")
+    token = _require_token(db, user)
+    community_id = _resolve_community_id(db, body.anchor_type, body.anchor_id, token)
 
     try:
         post = lemmy_create_post(token, community_id, body.title, body=body.body, url=body.url)
     except LemmyUnavailable as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise _LemmyError("unavailable", str(e))
 
     thread = Thread(
         id=str(uuid.uuid4()),
@@ -244,10 +267,13 @@ def create_thread(
     db.commit()
     db.refresh(thread)
 
-    # Slack notification (immediate)
     try:
         from server.slack_notifier import notify_immediate
-        notify_immediate("latent.thread_created", user, anchor_type=body.anchor_type, anchor_id=body.anchor_id, title=body.title, thread_id=thread.id)
+        notify_immediate(
+            "latent.thread_created", user,
+            anchor_type=body.anchor_type, anchor_id=body.anchor_id,
+            title=body.title, thread_id=thread.id,
+        )
     except Exception:
         logger.exception("slack notify_immediate(latent.thread_created) failed")
 
@@ -263,16 +289,16 @@ def get_thread(
     t = db.query(Thread).filter(Thread.id == thread_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="thread not found")
-    if not is_configured():
-        return {**_thread_summary(t), "comments": [], "lemmy_available": False}
-    token = get_user_token(db, user)
-    if not token:
-        return {**_thread_summary(t), "comments": [], "lemmy_available": False}
+    avail = _availability(user)
+    base = {**_thread_summary(t), "comments": [], **avail}
+    if not avail["configured"] or not avail["linked"]:
+        return base
     try:
+        token = get_user_token(db, user)
         post, comments = lemmy_get_post(token, t.lemmy_post_id)
-    except LemmyUnavailable:
-        return {**_thread_summary(t), "comments": [], "lemmy_available": False}
-    return {**_thread_summary(t, post), "comments": [_comment_dict(c) for c in comments], "lemmy_available": True}
+    except (LemmyUnavailable, LemmyNotLinked):
+        return base
+    return {**_thread_summary(t, post), "comments": [_comment_dict(c) for c in comments], **avail}
 
 
 @router.patch("/{thread_id}", summary="Edit a thread (title or body)")
@@ -287,15 +313,11 @@ def update_thread(
         raise HTTPException(status_code=404, detail="thread not found")
     if t.created_by != user.id:
         raise HTTPException(status_code=403, detail="only the author may edit a thread")
-    if not is_configured():
-        raise HTTPException(status_code=503, detail="Discussion is unavailable")
-    token = get_user_token(db, user)
-    if not token:
-        raise HTTPException(status_code=503, detail="Could not authenticate to Lemmy")
+    token = _require_token(db, user)
     try:
         lemmy_edit_post(token, t.lemmy_post_id, title=body.title, body=body.body)
     except LemmyUnavailable as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise _LemmyError("unavailable", str(e))
     return {"ok": True}
 
 
@@ -310,13 +332,13 @@ def delete_thread(
         raise HTTPException(status_code=404, detail="thread not found")
     if t.created_by != user.id:
         raise HTTPException(status_code=403, detail="only the author may delete a thread")
-    if is_configured():
+    try:
         token = get_user_token(db, user)
-        if token:
-            try:
-                lemmy_delete_post(token, t.lemmy_post_id)
-            except LemmyUnavailable:
-                logger.warning("Failed to delete Lemmy post %s — proceeding with local removal", t.lemmy_post_id)
+        lemmy_delete_post(token, t.lemmy_post_id)
+    except LemmyNotLinked:
+        pass  # remove our row regardless so the UI clears
+    except LemmyUnavailable:
+        logger.warning("Failed to delete Lemmy post %s — proceeding with local removal", t.lemmy_post_id)
     db.delete(t)
     db.commit()
     return None
@@ -332,19 +354,11 @@ def create_thread_comment(
     t = db.query(Thread).filter(Thread.id == thread_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="thread not found")
-    if not is_configured():
-        raise HTTPException(status_code=503, detail="Discussion is unavailable")
-    try:
-        ensure_user_and_token(db, user)
-    except LemmyUnavailable as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    token = get_user_token(db, user)
-    if not token:
-        raise HTTPException(status_code=503, detail="Could not authenticate to Lemmy")
+    token = _require_token(db, user)
     try:
         comment = lemmy_create_comment(token, t.lemmy_post_id, body.body, parent_id=body.parent_comment_id)
     except LemmyUnavailable as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise _LemmyError("unavailable", str(e))
     return _comment_dict(comment)
 
 
@@ -356,18 +370,11 @@ def update_thread_comment(
     user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    t = db.query(Thread).filter(Thread.id == thread_id).first()
-    if not t:
-        raise HTTPException(status_code=404, detail="thread not found")
-    if not is_configured():
-        raise HTTPException(status_code=503, detail="Discussion is unavailable")
-    token = get_user_token(db, user)
-    if not token:
-        raise HTTPException(status_code=503, detail="Could not authenticate to Lemmy")
+    token = _require_token(db, user)
     try:
         lemmy_edit_comment(token, comment_id, body.body)
     except LemmyUnavailable as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise _LemmyError("unavailable", str(e))
     return {"ok": True}
 
 
@@ -378,13 +385,9 @@ def delete_thread_comment(
     user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    if not is_configured():
-        raise HTTPException(status_code=503, detail="Discussion is unavailable")
-    token = get_user_token(db, user)
-    if not token:
-        raise HTTPException(status_code=503, detail="Could not authenticate to Lemmy")
+    token = _require_token(db, user)
     try:
         lemmy_delete_comment(token, comment_id)
     except LemmyUnavailable as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise _LemmyError("unavailable", str(e))
     return None
