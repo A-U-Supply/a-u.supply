@@ -3,9 +3,12 @@ import Admin from '../../../layouts/Admin.astro';
 ---
 
 <Admin title="Latent" current="latents">
-  <div id="header" class="latent-header">Loading…</div>
+  <div id="header" class="latent-header">
+    <div class="header-skeleton"></div>
+  </div>
 
   <div id="islands" class="islands" hidden>
+    <section id="repo-island"></section>
     <section id="docs-island"></section>
     <section id="slots-island"></section>
     <section id="loose-island"></section>
@@ -18,6 +21,26 @@ import Admin from '../../../layouts/Admin.astro';
     display: flex;
     flex-direction: column;
     gap: var(--space-xs);
+  }
+  .header-skeleton {
+    height: 64px;
+    border: 1px solid var(--color-border);
+    background: linear-gradient(
+      90deg,
+      var(--color-bg) 0%,
+      rgba(0, 0, 0, 0.04) 50%,
+      var(--color-bg) 100%
+    );
+    background-size: 200% 100%;
+    animation: hdr-shimmer 1.6s linear infinite;
+  }
+  @keyframes hdr-shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
   }
   .islands {
     display: flex;
@@ -34,20 +57,21 @@ import Admin from '../../../layouts/Admin.astro';
   :global(.latent-header .name-input) {
     background: var(--color-bg);
     color: var(--color-text);
-    border: 1px solid var(--color-border);
-    padding: 6px 10px;
+    border: 2px solid var(--color-text);
+    box-shadow: 2px 2px 0 var(--color-text);
+    padding: 8px 12px;
     font: inherit;
     font-family: var(--font-mono);
     font-size: var(--text-lg);
-    font-weight: bold;
+    font-weight: 700;
     flex: 1;
-    min-width: 240px;
+    min-width: 220px;
   }
   :global(.latent-header .kind-select) {
     background: var(--color-bg);
     color: var(--color-text);
     border: 1px solid var(--color-border);
-    padding: 4px 8px;
+    padding: 6px 10px;
     font: inherit;
     font-family: var(--font-mono);
     font-size: var(--text-sm);
@@ -88,9 +112,11 @@ import Admin from '../../../layouts/Admin.astro';
   import LatentSlots from '../../../components/LatentSlots.svelte';
   import LatentDocuments from '../../../components/LatentDocuments.svelte';
   import LatentLooseFiles from '../../../components/LatentLooseFiles.svelte';
+  import LatentRepoStrip from '../../../components/LatentRepoStrip.svelte';
   import Threads from '../../../components/Threads.svelte';
 
   let mounted: any[] = [];
+  let initialized = false;
 
   function statusColor(s: string): string {
     return (
@@ -121,24 +147,31 @@ import Admin from '../../../layouts/Admin.astro';
     );
   }
 
-  let initialized = false;
   async function init() {
+    if (initialized) return;
     const params = new URLSearchParams(window.location.search);
     const id = params.get('id');
     const headerEl = document.getElementById('header');
     const islandsEl = document.getElementById('islands');
     if (!id || !headerEl || !islandsEl) return;
-    if (initialized) return;
-    initialized = true;
 
     const user = await (window as any).__authReady;
     if (!user) return;
+    if (initialized) return;
+    initialized = true;
 
-    const res = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
-      credentials: 'include',
-    });
+    let res: Response;
+    try {
+      res = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
+        credentials: 'include',
+      });
+    } catch (e) {
+      headerEl.innerHTML =
+        '<p style="color:#c00;">Network error loading Latent.</p>';
+      return;
+    }
     if (!res.ok) {
-      headerEl.innerHTML = '<p>Not found.</p>';
+      headerEl.innerHTML = `<p style="color:#c00;">Not found (HTTP ${res.status}).</p>`;
       return;
     }
     const p = await res.json();
@@ -221,6 +254,12 @@ import Admin from '../../../layouts/Admin.astro';
 
     islandsEl.hidden = false;
     mounted.push(
+      mount(LatentRepoStrip, {
+        target: document.getElementById('repo-island')!,
+        props: { projectId: id },
+      }),
+    );
+    mounted.push(
       mount(LatentDocuments, {
         target: document.getElementById('docs-island')!,
         props: { projectId: id },
@@ -260,6 +299,5 @@ import Admin from '../../../layouts/Admin.astro';
     mounted = [];
     initialized = false;
   });
-  // Direct-hit fallback: module scripts can load after astro:page-load fires.
   init();
 </script>
