@@ -27,7 +27,9 @@ import Admin from '../../../layouts/Admin.astro';
         <div id="ph-loaded-zone" style="display:none">
           <div class="ph-waveform-row">
             <button class="ph-play-btn" id="ph-play-btn" title="Play / Stop">▶</button>
+            <button class="ph-loop-btn" id="ph-loop-btn" title="Toggle loop">⟳</button>
             <canvas id="ph-waveform" width="264" height="52"></canvas>
+            <span class="ph-time-display" id="ph-time-display">0:00</span>
           </div>
           <div class="ph-loaded-footer">
             <div id="ph-audio-meta" class="ph-audio-meta"></div>
@@ -125,6 +127,7 @@ import Admin from '../../../layouts/Admin.astro';
     <div class="ph-stage">
       <div class="ph-canvas-wrap" id="ph-canvas-wrap">
         <canvas id="ph-canvas" width="900" height="600"></canvas>
+        <div class="ph-playhead" id="ph-playhead"></div>
         <div class="ph-empty" id="ph-empty">Upload an audio file to begin</div>
         <div class="ph-busy" id="ph-busy" style="display:none">
           <span id="ph-busy-label">Analyzing…</span>
@@ -152,10 +155,12 @@ import Admin from '../../../layouts/Admin.astro';
         <button class="btn btn--secondary ph-paint-btn" id="ph-paint-btn">✏ Paint</button>
       </div>
       <div class="ph-paint-bar" id="ph-paint-bar" style="display:none">
-        <span class="ph-paint-label">Size <span id="ph-brush-val">8</span>px</span>
+        <span class="ph-paint-label">Brush <span id="ph-brush-val">8</span>px</span>
         <input type="range" class="ph-range ph-brush-slider" id="ph-brush-size" min="2" max="30" value="8" />
-        <button class="btn btn--secondary ph-erase-btn" id="ph-erase-btn">✏ Draw</button>
-        <button class="btn ph-paint-reset-btn" id="ph-paint-reset-btn">Reset</button>
+        <div class="ph-paint-bar-btns">
+          <button class="btn btn--secondary ph-erase-btn" id="ph-erase-btn">✏ Draw</button>
+          <button class="btn ph-paint-reset-btn" id="ph-paint-reset-btn">Reset Edits</button>
+        </div>
       </div>
       <button class="ph-settings-toggle" id="ph-settings-toggle">Settings ▾</button>
     </div>
@@ -208,11 +213,11 @@ import Admin from '../../../layouts/Admin.astro';
     }
     .ph-drop-btn:hover { border-color: var(--accent, #888); }
     .ph-drop-btn--lib { border-color: var(--accent, #777); }
-    .ph-drop-or { font-size: 0.65rem; opacity: 0.35; }
-    .ph-drop-sub { font-size: 0.65rem; opacity: 0.35; margin-top: 0.5rem; }
+    .ph-drop-or { font-size: 0.65rem; opacity: 0.50; }
+    .ph-drop-sub { font-size: 0.65rem; opacity: 0.50; margin-top: 0.5rem; }
     .ph-loaded-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 0.3rem; width: 100%; }
-    .ph-audio-meta { font-size: 0.65rem; opacity: 0.5; }
-    .ph-change-btn { font-size: 0.65rem; opacity: 0.45; background: none; border: none; color: inherit; cursor: pointer; padding: 0; flex-shrink: 0; }
+    .ph-audio-meta { font-size: 0.65rem; opacity: 0.65; }
+    .ph-change-btn { font-size: 0.65rem; opacity: 0.60; background: none; border: none; color: inherit; cursor: pointer; padding: 0; flex-shrink: 0; }
     .ph-change-btn:hover { opacity: 1; }
     #ph-waveform { width: 100%; border-radius: 2px; display: block; }
 
@@ -221,10 +226,10 @@ import Admin from '../../../layouts/Admin.astro';
 
     /* Labels */
     .ph-label-row {
-      font-size: 0.65rem;
+      font-size: 0.7rem;
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      opacity: 0.5;
+      opacity: 0.65;
       margin-bottom: 0.1rem;
     }
 
@@ -238,7 +243,7 @@ import Admin from '../../../layouts/Admin.astro';
       background: transparent;
       color: inherit;
       cursor: pointer;
-      opacity: 0.55;
+      opacity: 0.65;
       transition: opacity 0.1s, border-color 0.1s;
     }
     .ph-pill:hover { opacity: 0.85; }
@@ -247,10 +252,10 @@ import Admin from '../../../layouts/Admin.astro';
     /* Fields */
     .ph-field { display: flex; flex-direction: column; gap: 0.2rem; }
     .ph-label {
-      font-size: 0.65rem;
+      font-size: 0.7rem;
       text-transform: uppercase;
       letter-spacing: 0.07em;
-      opacity: 0.55;
+      opacity: 0.65;
       display: flex;
       justify-content: space-between;
     }
@@ -284,22 +289,34 @@ import Admin from '../../../layouts/Admin.astro';
       align-items: center;
       justify-content: center;
       font-size: 0.8rem;
-      opacity: 0.35;
+      opacity: 0.55;
       pointer-events: none;
     }
-    .ph-busy { opacity: 0.7; }
+    .ph-busy { opacity: 0.8; }
 
-    /* Play button */
-    .ph-waveform-row { display: flex; align-items: center; gap: 0.5rem; width: 100%; }
-    .ph-waveform-row #ph-waveform { flex: 1; }
-    .ph-play-btn {
+    /* Play / loop buttons */
+    .ph-waveform-row { display: flex; align-items: center; gap: 0.4rem; width: 100%; }
+    .ph-waveform-row #ph-waveform { flex: 1; min-width: 0; }
+    .ph-play-btn, .ph-loop-btn {
       flex-shrink: 0; width: 2rem; height: 2rem;
       background: var(--bg2, #1a1a1a); border: 1px solid var(--border, #444);
       border-radius: 50%; color: inherit; cursor: pointer; font-size: 0.65rem;
       display: flex; align-items: center; justify-content: center;
       transition: border-color 0.1s;
     }
-    .ph-play-btn:hover { border-color: var(--accent, #888); }
+    .ph-play-btn:hover, .ph-loop-btn:hover { border-color: var(--accent, #888); }
+    .ph-loop-btn--on { border-color: var(--accent, #aaa); color: var(--accent, #aaa); }
+    .ph-time-display {
+      font-size: 0.65rem; opacity: 0.65;
+      font-variant-numeric: tabular-nums; flex-shrink: 0; white-space: nowrap;
+    }
+    /* Playhead overlay on spectrogram canvas */
+    .ph-playhead {
+      position: absolute; top: 0; bottom: 0; width: 2px;
+      background: rgba(255,255,255,0.65); pointer-events: none;
+      transform: translateX(-50%); display: none;
+      box-shadow: 0 0 6px rgba(255,255,255,0.25);
+    }
 
     /* Dual range */
     .ph-dual-range { position: relative; height: 1.5rem; margin-top: 0.2rem; }
@@ -339,7 +356,7 @@ import Admin from '../../../layouts/Admin.astro';
     .ph-export-item:hover { background: rgba(255,255,255,0.06); }
     .ph-export-fps {
       display: flex; align-items: center; gap: 0.5rem;
-      padding: 0.35rem 0.75rem; font-size: 0.7rem; opacity: 0.6;
+      padding: 0.35rem 0.75rem; font-size: 0.7rem; opacity: 0.75;
       border-top: 1px solid var(--border, #333); border-bottom: 1px solid var(--border, #333);
     }
     .ph-export-fps .ph-select { padding: 0.1rem 0.3rem; font-size: 0.7rem; }
@@ -351,7 +368,7 @@ import Admin from '../../../layouts/Admin.astro';
       align-items: center; gap: 0.5rem; flex-wrap: wrap;
       padding: 0.35rem 0; font-size: 0.7rem;
     }
-    .ph-paint-label { opacity: 0.55; flex-shrink: 0; white-space: nowrap; }
+    .ph-paint-label { opacity: 0.65; flex-shrink: 0; white-space: nowrap; }
     .ph-brush-slider { width: 80px; }
     .ph-erase-btn--active { border-color: #e67; color: #e67; }
     .ph-paint-reset-btn {
@@ -403,7 +420,7 @@ import Admin from '../../../layouts/Admin.astro';
       flex: 1; padding: 0.5rem; font-size: 0.7rem;
       text-transform: uppercase; letter-spacing: 0.06em;
       background: none; border: none; color: inherit; cursor: pointer;
-      opacity: 0.45; border-bottom: 2px solid transparent; transition: opacity 0.1s;
+      opacity: 0.60; border-bottom: 2px solid transparent; transition: opacity 0.1s;
     }
     .ph-modal__tab:hover { opacity: 0.8; }
     .ph-modal__tab--active { opacity: 1; border-bottom-color: var(--accent, #888); }
@@ -420,7 +437,7 @@ import Admin from '../../../layouts/Admin.astro';
     }
     .ph-modal__loading {
       grid-column: 1/-1; text-align: center;
-      padding: 2rem; font-size: 0.75rem; opacity: 0.4;
+      padding: 2rem; font-size: 0.75rem; opacity: 0.55;
     }
     .ph-audio-card {
       border: 1px solid var(--border, #333); border-radius: 4px;
@@ -430,7 +447,7 @@ import Admin from '../../../layouts/Admin.astro';
       display: flex; flex-direction: column; gap: 0.2rem; min-width: 0;
     }
     .ph-audio-card:hover { border-color: var(--accent, #888); background: rgba(255,255,255,0.06); }
-    .ph-audio-card__icon { font-size: 0.85rem; opacity: 0.4; font-family: sans-serif; }
+    .ph-audio-card__icon { font-size: 0.85rem; opacity: 0.55; font-family: sans-serif; }
     .ph-audio-card__name {
       font-size: 0.65rem; opacity: 0.8;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -465,6 +482,12 @@ import Admin from '../../../layouts/Admin.astro';
       .ph-export-btn { width: 100%; }
       .ph-export-menu { left: 0; right: 0; }
       .ph-label { font-size: 0.75rem; }
+      /* 44px touch targets for play/loop on mobile */
+      .ph-play-btn, .ph-loop-btn { width: 2.75rem; height: 2.75rem; font-size: 0.85rem; }
+      /* Paint bar: slider full-width, buttons below */
+      .ph-paint-bar { flex-direction: column; align-items: flex-start; gap: 0.4rem; }
+      .ph-brush-slider { width: 100%; }
+      .ph-paint-bar-btns { display: flex; gap: 0.4rem; }
     }
   </style>
 
@@ -518,6 +541,11 @@ import Admin from '../../../layouts/Admin.astro';
     let brushSize = 8;
     let eraseMode = false;
     let isPainting = false;
+    let loopEnabled = false;
+    let playbackStartTime = 0;
+    let playbackStartOffset = 0;
+    let playbackEndOffset = 0;
+    let progressRaf: number | null = null;
 
     const canvas = document.getElementById('ph-canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d')!;
@@ -872,7 +900,7 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     // ─── Mini waveform ────────────────────────────────────────────────────────
-    function drawMiniWaveform(waveform: Float32Array) {
+    function drawMiniWaveform(waveform: Float32Array, cursor?: number) {
       const wc = document.getElementById('ph-waveform') as HTMLCanvasElement;
       const wctx = wc.getContext('2d')!;
       const W = wc.width, H = wc.height;
@@ -881,8 +909,8 @@ import Admin from '../../../layouts/Admin.astro';
       wctx.fillRect(0, 0, W, H);
       wctx.strokeStyle = '#666';
       wctx.lineWidth = 1;
-      wctx.beginPath();
       const mid = H / 2;
+      wctx.beginPath();
       for (let x = 0; x < W; x++) {
         const fi = Math.floor(x / W * waveform.length);
         const amp = waveform[fi] * mid * 0.9;
@@ -890,7 +918,6 @@ import Admin from '../../../layouts/Admin.astro';
         else wctx.lineTo(x, mid - amp);
       }
       wctx.stroke();
-      // Mirror
       wctx.beginPath();
       for (let x = 0; x < W; x++) {
         const fi = Math.floor(x / W * waveform.length);
@@ -899,6 +926,16 @@ import Admin from '../../../layouts/Admin.astro';
         else wctx.lineTo(x, mid + amp);
       }
       wctx.stroke();
+      // Playback cursor
+      if (cursor !== undefined) {
+        const cx = Math.round(cursor * W);
+        wctx.strokeStyle = 'rgba(255,255,255,0.8)';
+        wctx.lineWidth = 1.5;
+        wctx.beginPath();
+        wctx.moveTo(cx, 0);
+        wctx.lineTo(cx, H);
+        wctx.stroke();
+      }
     }
 
     // ─── Audio loading ────────────────────────────────────────────────────────
@@ -1220,6 +1257,47 @@ import Admin from '../../../layouts/Admin.astro';
       }
     }
 
+    // ─── Playback progress ────────────────────────────────────────────────────
+    const playhead  = document.getElementById('ph-playhead')!;
+    const timeDisp  = document.getElementById('ph-time-display')!;
+
+    function fmtTime(secs: number): string {
+      const m = Math.floor(secs / 60);
+      const s = Math.floor(secs % 60);
+      return `${m}:${String(s).padStart(2, '0')}`;
+    }
+
+    function stopProgress() {
+      if (progressRaf !== null) { cancelAnimationFrame(progressRaf); progressRaf = null; }
+      playhead.style.display = 'none';
+      timeDisp.textContent = '0:00';
+      if (spectrogramData) drawMiniWaveform(spectrogramData.waveform);
+    }
+
+    function tickProgress() {
+      if (!playbackCtx || !spectrogramData) return;
+      const dur = spectrogramData.duration;
+      const elapsed = playbackCtx.currentTime - playbackStartTime;
+      let audioTime: number;
+      if (loopEnabled && playbackEndOffset > playbackStartOffset) {
+        const loopDur = playbackEndOffset - playbackStartOffset;
+        audioTime = playbackStartOffset + ((elapsed % loopDur) + loopDur) % loopDur;
+      } else {
+        audioTime = Math.min(playbackStartOffset + elapsed, playbackEndOffset);
+      }
+      const trimDur = playbackEndOffset - playbackStartOffset;
+      const progressInTrim = trimDur > 0 ? Math.max(0, Math.min(1, (audioTime - playbackStartOffset) / trimDur)) : 0;
+      // Update time display (relative to full track)
+      timeDisp.textContent = fmtTime(audioTime);
+      // Move playhead on spectrogram canvas
+      playhead.style.display = 'block';
+      playhead.style.left = `${progressInTrim * 100}%`;
+      // Update waveform cursor (position within full track)
+      const trackFrac = dur > 0 ? audioTime / dur : 0;
+      drawMiniWaveform(spectrogramData.waveform, Math.max(0, Math.min(1, trackFrac)));
+      progressRaf = requestAnimationFrame(tickProgress);
+    }
+
     // ─── Paint mode ───────────────────────────────────────────────────────────
     function setPaintMode(on: boolean) {
       paintMode = on;
@@ -1461,7 +1539,8 @@ import Admin from '../../../layouts/Admin.astro';
     document.getElementById('ph-play-btn')!.addEventListener('click', () => {
       const btn = document.getElementById('ph-play-btn') as HTMLButtonElement;
       if (playbackSource) {
-        playbackSource.stop(); playbackSource = null; btn.textContent = '▶'; return;
+        playbackSource.stop(); playbackSource = null;
+        btn.textContent = '▶'; stopProgress(); return;
       }
       if (!currentAudioBuffer) return;
       playbackCtx = new AudioContext();
@@ -1470,9 +1549,34 @@ import Admin from '../../../layouts/Admin.astro';
       playbackSource.connect(playbackCtx.destination);
       const [t0, t1] = getTimeRange();
       const dur = currentAudioBuffer.duration;
-      playbackSource.start(0, t0 * dur, (t1 - t0) * dur);
+      playbackStartOffset = t0 * dur;
+      playbackEndOffset   = t1 * dur;
+      playbackStartTime   = playbackCtx.currentTime;
+      if (loopEnabled) {
+        playbackSource.loop      = true;
+        playbackSource.loopStart = playbackStartOffset;
+        playbackSource.loopEnd   = playbackEndOffset;
+        playbackSource.start(0, playbackStartOffset);
+      } else {
+        playbackSource.start(0, playbackStartOffset, playbackEndOffset - playbackStartOffset);
+      }
       btn.textContent = '⏹';
-      playbackSource.onended = () => { playbackSource = null; btn.textContent = '▶'; };
+      progressRaf = requestAnimationFrame(tickProgress);
+      playbackSource.onended = () => {
+        playbackSource = null; btn.textContent = '▶'; stopProgress();
+      };
+    });
+
+    // Loop toggle
+    document.getElementById('ph-loop-btn')!.addEventListener('click', () => {
+      loopEnabled = !loopEnabled;
+      const btn = document.getElementById('ph-loop-btn')!;
+      btn.classList.toggle('ph-loop-btn--on', loopEnabled);
+      if (playbackSource) {
+        playbackSource.loop      = loopEnabled;
+        playbackSource.loopStart = playbackStartOffset;
+        playbackSource.loopEnd   = playbackEndOffset;
+      }
     });
 
     // Export dropdown
