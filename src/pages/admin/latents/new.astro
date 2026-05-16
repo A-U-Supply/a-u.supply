@@ -1,0 +1,125 @@
+---
+import Admin from '../../../layouts/Admin.astro';
+---
+
+<Admin title="New Latent" current="latents">
+  <div class="page-header">
+    <h1>New Latent</h1>
+    <p class="page-subtitle">A fresh pre-release workspace.</p>
+  </div>
+
+  <form id="new-form" class="form">
+    <label
+      >Name
+      <input type="text" name="name" required maxlength="200" />
+    </label>
+    <label
+      >Kind
+      <select name="kind">
+        <option value="album">album</option>
+        <option value="video">video</option>
+        <option value="zine">zine</option>
+        <option value="other" selected>other</option>
+      </select>
+    </label>
+    <div class="actions">
+      <button type="submit" class="btn btn--primary">Create</button>
+      <a class="btn" href="/admin/latents">Cancel</a>
+    </div>
+    <p id="error" class="error" hidden></p>
+  </form>
+</Admin>
+
+<style>
+  .page-header h1 {
+    margin: 0;
+  }
+  .page-subtitle {
+    color: var(--color-muted, #888);
+    margin-top: 4px;
+  }
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 480px;
+    margin-top: var(--space-md, 1rem);
+  }
+  .form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--color-muted, #888);
+  }
+  .form input,
+  .form select {
+    background: var(--color-bg-input, #111);
+    color: inherit;
+    border: 2px solid var(--color-border, #333);
+    padding: 6px 10px;
+    font-family: inherit;
+  }
+  .actions {
+    display: flex;
+    gap: 8px;
+  }
+  .btn {
+    display: inline-block;
+    padding: 6px 12px;
+    background: #1a1a1a;
+    color: #fff;
+    border: 2px solid var(--color-border, #333);
+    box-shadow: 2px 2px 0 #000;
+    font-family: var(--font-mono, monospace);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    font-size: var(--text-sm, 0.85rem);
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .btn--primary {
+    background: var(--color-accent, #b8860b);
+  }
+  .error {
+    color: #fca5a5;
+    margin: 0;
+  }
+</style>
+
+<script>
+  document.addEventListener('astro:page-load', () => {
+    const form = document.getElementById('new-form') as HTMLFormElement | null;
+    const err = document.getElementById('error') as HTMLParagraphElement | null;
+    if (!form || !err) return;
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      err.hidden = true;
+      const fd = new FormData(form);
+      const payload = {
+        name: String(fd.get('name') || ''),
+        kind: String(fd.get('kind') || 'other'),
+      };
+      try {
+        const res = await fetch('/api/projects', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          err.textContent = body?.detail || `Failed (${res.status})`;
+          err.hidden = false;
+          return;
+        }
+        const body = await res.json();
+        window.location.href = `/admin/latents/detail?id=${encodeURIComponent(body.id)}`;
+      } catch (e: any) {
+        err.textContent = e?.message || 'Network error';
+        err.hidden = false;
+      }
+    });
+  });
+</script>

@@ -1,0 +1,208 @@
+---
+import Admin from '../../../layouts/Admin.astro';
+---
+
+<Admin title="Latents" current="latents">
+  <div class="page-header">
+    <h1>Latents</h1>
+    <p class="page-subtitle">
+      Pre-release workspace. Each latent gathers files, slots, notes, and
+      discussion for an in-progress work.
+    </p>
+    <div class="actions">
+      <a class="btn btn--primary" href="/admin/latents/new">+ New latent</a>
+    </div>
+  </div>
+
+  <div class="filters">
+    <label
+      >Status
+      <select id="filter-status">
+        <option value="">all</option>
+        <option value="forming">forming</option>
+        <option value="developing">developing</option>
+        <option value="fixing">fixing</option>
+        <option value="abandoned">abandoned</option>
+      </select>
+    </label>
+    <label
+      >Kind
+      <select id="filter-kind">
+        <option value="">all</option>
+        <option value="album">album</option>
+        <option value="video">video</option>
+        <option value="zine">zine</option>
+        <option value="other">other</option>
+      </select>
+    </label>
+  </div>
+
+  <div id="latents-list" class="latent-cards">Loading…</div>
+</Admin>
+
+<style>
+  .page-header h1 {
+    margin: 0;
+  }
+  .page-subtitle {
+    color: var(--color-muted, #888);
+    margin-top: 4px;
+  }
+  .actions {
+    margin-top: 8px;
+  }
+  .btn {
+    display: inline-block;
+    padding: 6px 12px;
+    background: #1a1a1a;
+    color: #fff;
+    border: 2px solid var(--color-border, #333);
+    box-shadow: 2px 2px 0 #000;
+    font-family: var(--font-mono, monospace);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    font-size: var(--text-sm, 0.85rem);
+    text-decoration: none;
+  }
+  .btn--primary {
+    background: var(--color-accent, #b8860b);
+  }
+  .filters {
+    display: flex;
+    gap: 16px;
+    margin: var(--space-md, 1rem) 0;
+    flex-wrap: wrap;
+  }
+  .filters label {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    color: var(--color-muted, #888);
+  }
+  .filters select {
+    background: var(--color-bg-input, #111);
+    color: inherit;
+    border: 2px solid var(--color-border, #333);
+    padding: 4px 8px;
+    font-family: inherit;
+  }
+  .latent-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  :global(.latent-cards .card) {
+    border: 2px solid var(--color-border, #333);
+    background: rgba(255, 255, 255, 0.02);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    text-decoration: none;
+    color: inherit;
+  }
+  :global(.latent-cards .card:hover) {
+    border-color: var(--color-accent, #b8860b);
+  }
+  :global(.latent-cards .card__title) {
+    font-weight: bold;
+    font-size: var(--text-lg, 1.05rem);
+  }
+  :global(.latent-cards .card__meta) {
+    display: flex;
+    gap: 8px;
+    color: var(--color-muted, #888);
+    font-size: var(--text-sm, 0.85rem);
+  }
+  :global(.latent-cards .status-pill) {
+    padding: 2px 8px;
+    border: 2px solid var(--c, #888);
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    font-size: 0.7rem;
+  }
+</style>
+
+<script>
+  document.addEventListener('astro:page-load', async () => {
+    const list = document.getElementById('latents-list');
+    if (!list) return;
+
+    const user = await (window as any).__authReady;
+    if (!user) return;
+
+    const statusSel = document.getElementById(
+      'filter-status',
+    ) as HTMLSelectElement;
+    const kindSel = document.getElementById('filter-kind') as HTMLSelectElement;
+
+    function statusColor(s: string): string {
+      return (
+        (
+          {
+            forming: '#9ca3af',
+            developing: '#fbbf24',
+            fixing: '#f97316',
+            abandoned: '#6b7280',
+          } as Record<string, string>
+        )[s] || '#888'
+      );
+    }
+
+    async function refresh() {
+      const params = new URLSearchParams();
+      if (statusSel.value) params.set('status', statusSel.value);
+      if (kindSel.value) params.set('kind', kindSel.value);
+      const res = await fetch('/api/projects?' + params.toString(), {
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        list!.innerHTML = '<p>Failed to load.</p>';
+        return;
+      }
+      const body = await res.json();
+      const projects = body.projects || [];
+      if (projects.length === 0) {
+        list!.innerHTML = '<p>No latents yet.</p>';
+        return;
+      }
+      list!.innerHTML = projects
+        .map((p: any) => {
+          const c = statusColor(p.status);
+          const updated = p.updated_at
+            ? new Date(p.updated_at).toLocaleDateString()
+            : '';
+          return `<a class="card" href="/admin/latents/detail?id=${encodeURIComponent(p.id)}">
+            <div class="card__title">${escapeHtml(p.name)}</div>
+            <div class="card__meta">
+              <span>${escapeHtml(p.kind)}</span>
+              <span class="status-pill" style="--c:${c}">${escapeHtml(p.status)}</span>
+              <span>updated ${updated}</span>
+            </div>
+          </a>`;
+        })
+        .join('');
+    }
+
+    function escapeHtml(s: string): string {
+      return (s || '').replace(
+        /[&<>"']/g,
+        (c) =>
+          (
+            ({
+              '&': '&amp;',
+              '<': '&lt;',
+              '>': '&gt;',
+              '"': '&quot;',
+              "'": '&#39;',
+            }) as Record<string, string>
+          )[c],
+      );
+    }
+
+    statusSel.addEventListener('change', refresh);
+    kindSel.addEventListener('change', refresh);
+    refresh();
+  });
+</script>

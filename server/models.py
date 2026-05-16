@@ -51,6 +51,8 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     role = Column(String, nullable=False, default="member")  # "admin" or "member"
     created_at = Column(DateTime, default=_utcnow)
+    lemmy_user_id = Column(Integer, nullable=True)
+    lemmy_token_encrypted = Column(String, nullable=True)
 
 
 class SlackUserMapping(Base):
@@ -103,6 +105,7 @@ class Release(Base):
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, nullable=False, default=_utcnow)
     updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
+    latent_id = Column(String, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
 
     entities = relationship(
         "Entity",
@@ -179,6 +182,7 @@ class MediaItem(Base):
     image_meta = relationship("MediaImageMeta", back_populates="media_item", uselist=False, cascade="all, delete-orphan")
     audio_meta = relationship("MediaAudioMeta", back_populates="media_item", uselist=False, cascade="all, delete-orphan")
     video_meta = relationship("MediaVideoMeta", back_populates="media_item", uselist=False, cascade="all, delete-orphan")
+    session_meta = relationship("MediaSessionMeta", uselist=False, cascade="all, delete-orphan")
     extraction_failures = relationship("ExtractionFailure", back_populates="media_item", cascade="all, delete-orphan")
 
 
@@ -256,6 +260,19 @@ class MediaVideoMeta(Base):
     transcript_confidence = Column(Float, nullable=True)
 
     media_item = relationship("MediaItem", back_populates="video_meta")
+
+
+class MediaSessionMeta(Base):
+    __tablename__ = "media_session_meta"
+
+    media_item_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True, unique=True)
+    tool = Column(String, nullable=False)
+    tool_version = Column(String, nullable=True)
+    original_bundle_name = Column(String, nullable=False)
+    bundle_size_bytes = Column(Integer, nullable=False)
+    notes = Column(String, nullable=True)
+
+    media_item = relationship("MediaItem")
 
 
 class MediaTag(Base):
@@ -420,3 +437,133 @@ class ActivityLog(Base):
     posted_at = Column(DateTime, nullable=True, index=True)  # null until posted to Slack
 
     user = relationship("User")
+
+
+# --- Latents (pre-release workspace) Models ---
+
+
+class Project(Base):
+    """A Latent — a private, admin-only pre-release workspace."""
+
+    __tablename__ = "projects"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    slug = Column(String, unique=True, nullable=False, index=True)
+    name = Column(String, nullable=False)
+    kind = Column(String, nullable=False, default="other")  # album | video | zine | other
+    status = Column(String, nullable=False, default="forming")  # forming | developing | fixing | abandoned
+    hero_media_item_id = Column(String, ForeignKey("media_items.id", ondelete="SET NULL"), nullable=True)
+    lemmy_community_id = Column(Integer, nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+    updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
+
+    creator = relationship("User")
+    hero_media_item = relationship("MediaItem", foreign_keys=[hero_media_item_id])
+    slots = relationship("ProjectSlot", back_populates="project", order_by="ProjectSlot.position", cascade="all, delete-orphan")
+    items = relationship("ProjectItem", back_populates="project", cascade="all, delete-orphan")
+    documents = relationship("ProjectDocument", back_populates="project", order_by="ProjectDocument.position", cascade="all, delete-orphan")
+
+
+class ProjectSlot(Base):
+    """An ordered, named subdivision of a Latent (e.g. a Track on an album)."""
+
+    __tablename__ = "project_slots"
+    __table_args__ = (UniqueConstraint("project_id", "position"),)
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    project_id = Column(String, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    position = Column(Integer, nullable=False)
+    label = Column(String, nullable=False)
+    notes = Column(String, nullable=True)
+    notes_updated_at = Column(DateTime, nullable=True)
+    status = Column(String, nullable=False, default="forming")  # forming | developing | fixed
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+    updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
+
+    project = relationship("Project", back_populates="slots")
+    pins = relationship("SlotPrimaryPin", back_populates="slot", cascade="all, delete-orphan")
+    items = relationship("ProjectItem", back_populates="slot")
+
+
+class ProjectItem(Base):
+    """An attachment of a media_item to a Latent (and optionally a specific slot)."""
+
+    __tablename__ = "project_items"
+    __table_args__ = (UniqueConstraint("project_id", "slot_id", "media_item_id"),)
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    project_id = Column(String, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    slot_id = Column(String, ForeignKey("project_slots.id", ondelete="SET NULL"), nullable=True, index=True)
+    media_item_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False, index=True)
+    added_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    added_at = Column(DateTime, nullable=False, default=_utcnow)
+
+    project = relationship("Project", back_populates="items")
+    slot = relationship("ProjectSlot", back_populates="items")
+    media_item = relationship("MediaItem")
+    adder = relationship("User")
+
+
+class SlotPrimaryPin(Base):
+    """Per slot, per media type, the file pinned as the slot's current 'primary'."""
+
+    __tablename__ = "slot_primary_pins"
+
+    slot_id = Column(String, ForeignKey("project_slots.id", ondelete="CASCADE"), primary_key=True)
+    media_type = Column(String, primary_key=True)  # image | audio | video | session
+    media_item_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False)
+
+    slot = relationship("ProjectSlot", back_populates="pins")
+    media_item = relationship("MediaItem")
+
+
+class ProjectDocument(Base):
+    """A named markdown document attached to a Latent."""
+
+    __tablename__ = "project_documents"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    project_id = Column(String, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    position = Column(Integer, nullable=False, default=0)
+    name = Column(String, nullable=False)
+    content = Column(String, nullable=False, default="")
+    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+
+    project = relationship("Project", back_populates="documents")
+    last_editor = relationship("User")
+    revisions = relationship("ProjectDocumentRevision", back_populates="document", order_by="ProjectDocumentRevision.saved_at.desc()", cascade="all, delete-orphan")
+
+
+class ProjectDocumentRevision(Base):
+    """Full-content snapshots of a project document's history."""
+
+    __tablename__ = "project_document_revisions"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    document_id = Column(String, ForeignKey("project_documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    content = Column(String, nullable=False)
+    saved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    saved_at = Column(DateTime, nullable=False, default=_utcnow, index=True)
+
+    document = relationship("ProjectDocument", back_populates="revisions")
+    saver = relationship("User")
+
+
+class Thread(Base):
+    """Generic, anchor-typed discussion thread backed by a Lemmy post."""
+
+    __tablename__ = "threads"
+    __table_args__ = (UniqueConstraint("lemmy_post_id"),)
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    anchor_type = Column(String, nullable=False, index=True)  # project | slot | media_item
+    anchor_id = Column(String, nullable=False, index=True)
+    lemmy_post_id = Column(Integer, nullable=False)
+    lemmy_community_id = Column(Integer, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+
+    creator = relationship("User")

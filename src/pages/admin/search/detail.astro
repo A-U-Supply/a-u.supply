@@ -78,6 +78,11 @@ import Admin from '../../../layouts/Admin.astro';
       </div>
     </div>
 
+    <!-- Threads section (Lemmy-backed, anchored to this media item) -->
+    <div class="threads-section">
+      <div id="threads-island"></div>
+    </div>
+
     <!-- Sources section -->
     <div class="sources-section">
       <h2>Sources</h2>
@@ -122,7 +127,23 @@ import Admin from '../../../layouts/Admin.astro';
       >
       <button class="action-btn" id="re-extract-btn">Re-extract Metadata</button
       >
-      <button class="action-btn" id="slack-share-btn" style="display:none;"><svg width="14" height="14" viewBox="0 0 122.8 122.8" xmlns="http://www.w3.org/2000/svg" style="vertical-align:-2px;margin-right:5px;flex-shrink:0;"><path d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z" fill="#e01e5a"/><path d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2zm0 6.5c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z" fill="#ecb22e"/><path d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2zm-6.5 0c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z" fill="#2eb67d"/><path d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9zm0-6.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z" fill="#36c5f0"/></svg><span id="slack-share-label"></span></button
+      <button class="action-btn" id="slack-share-btn" style="display:none;"
+        ><svg
+          width="14"
+          height="14"
+          viewBox="0 0 122.8 122.8"
+          xmlns="http://www.w3.org/2000/svg"
+          style="vertical-align:-2px;margin-right:5px;flex-shrink:0;"
+          ><path
+            d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z"
+            fill="#e01e5a"></path><path
+            d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2zm0 6.5c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z"
+            fill="#ecb22e"></path><path
+            d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2zm-6.5 0c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z"
+            fill="#2eb67d"></path><path
+            d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9zm0-6.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z"
+            fill="#36c5f0"></path></svg
+        ><span id="slack-share-label"></span></button
       >
       <button class="action-btn action-btn--danger" id="delete-btn"
         >Delete Media</button
@@ -215,12 +236,14 @@ import Admin from '../../../layouts/Admin.astro';
 
   .tags-section,
   .sources-section,
-  .extraction-section {
+  .extraction-section,
+  .threads-section {
     margin-top: var(--space-lg);
   }
   .tags-section h2,
   .sources-section h2,
-  .extraction-section h2 {
+  .extraction-section h2,
+  .threads-section h2 {
     font-size: var(--text-lg);
     text-transform: uppercase;
     letter-spacing: 1pt;
@@ -377,6 +400,10 @@ import Admin from '../../../layouts/Admin.astro';
 
 <script>
   import { addItemsToWorkspace } from '../../../lib/workspace';
+  import { mount } from 'svelte';
+  import Threads from '../../../components/Threads.svelte';
+
+  let threadsInstance: any = null;
 
   document.addEventListener('astro:page-load', async () => {
     const contentEl = document.getElementById('detail-content');
@@ -395,6 +422,20 @@ import Admin from '../../../layouts/Admin.astro';
       errorEl.textContent = 'No media ID provided';
       errorEl.style.display = 'block';
       return;
+    }
+
+    // Mount the Threads island for this media item
+    const threadsTarget = document.getElementById('threads-island');
+    if (threadsTarget) {
+      threadsInstance?.destroy?.();
+      threadsInstance = mount(Threads, {
+        target: threadsTarget,
+        props: {
+          anchorType: 'media_item',
+          anchorId: mediaId,
+          title: 'Discussion',
+        },
+      });
     }
 
     let currentItem: any = null;
@@ -479,19 +520,31 @@ import Admin from '../../../layouts/Admin.astro';
       } catch {}
 
       const botLabel = atelierMeta?.bot
-        ? ({ bullethole: 'Bullet Hole', stencil: 'Stencil', bw: 'BW', cyanotype: 'Cyanotype', wobbleeye: 'Wobble Eye' } as Record<string,string>)[atelierMeta.bot] || atelierMeta.bot
-        : atelierMeta?.atelier === 'bullethole' ? 'Bullet Hole' : null;
-      document.getElementById('meta-description')!.textContent =
-        atelierMeta
-          ? `${botLabel || 'Punctum'}${atelierMeta.seed ? ' · seed ' + atelierMeta.seed : ''}`
-          : (item.description || '--');
+        ? (
+            {
+              bullethole: 'Bullet Hole',
+              stencil: 'Stencil',
+              bw: 'BW',
+              cyanotype: 'Cyanotype',
+              wobbleeye: 'Wobble Eye',
+            } as Record<string, string>
+          )[atelierMeta.bot] || atelierMeta.bot
+        : atelierMeta?.atelier === 'bullethole'
+          ? 'Bullet Hole'
+          : null;
+      document.getElementById('meta-description')!.textContent = atelierMeta
+        ? `${botLabel || 'Punctum'}${atelierMeta.seed ? ' · seed ' + atelierMeta.seed : ''}`
+        : item.description || '--';
 
       // HD PNG button — only for Atelier images with a known source
-      const hdPngBtn = document.getElementById('hd-png-btn') as HTMLAnchorElement;
+      const hdPngBtn = document.getElementById(
+        'hd-png-btn',
+      ) as HTMLAnchorElement;
       if (atelierMeta?.atelier === 'bullethole' && atelierMeta.source_id) {
         // Legacy bullethole format → redirect to punctum with bot=bullethole
         const p = new URLSearchParams({
-          autoexport: 'png', bot: 'bullethole',
+          autoexport: 'png',
+          bot: 'bullethole',
           source0: atelierMeta.source_id,
           seed: String(atelierMeta.seed ?? 0),
           chaos: String(atelierMeta.chaos ?? 0.5),
@@ -505,10 +558,16 @@ import Admin from '../../../layouts/Admin.astro';
       } else if (atelierMeta?.atelier === 'punctum') {
         const sourceIds: string[] = atelierMeta.source_ids || [];
         if (sourceIds.length > 0 && sourceIds[0]) {
-          const p = new URLSearchParams({ autoexport: 'png', bot: atelierMeta.bot || 'bullethole' });
-          sourceIds.forEach((id: string, i: number) => { if (id) p.set(`source${i}`, id); });
+          const p = new URLSearchParams({
+            autoexport: 'png',
+            bot: atelierMeta.bot || 'bullethole',
+          });
+          sourceIds.forEach((id: string, i: number) => {
+            if (id) p.set(`source${i}`, id);
+          });
           if (atelierMeta.seed) p.set('seed', String(atelierMeta.seed));
-          if (atelierMeta.output_idx) p.set('output_idx', String(atelierMeta.output_idx));
+          if (atelierMeta.output_idx)
+            p.set('output_idx', String(atelierMeta.output_idx));
           const params = atelierMeta.params || {};
           Object.entries(params).forEach(([k, v]) => p.set(k, String(v)));
           hdPngBtn.href = `/admin/atelier/punctum?${p}`;
@@ -523,10 +582,15 @@ import Admin from '../../../layouts/Admin.astro';
         : '--';
 
       // Slack share button
-      const slackBtn = document.getElementById('slack-share-btn') as HTMLButtonElement;
-      const slackLabel = document.getElementById('slack-share-label') as HTMLSpanElement;
+      const slackBtn = document.getElementById(
+        'slack-share-btn',
+      ) as HTMLButtonElement;
+      const slackLabel = document.getElementById(
+        'slack-share-label',
+      ) as HTMLSpanElement;
       if (item.media_type === 'image' || item.media_type === 'audio') {
-        const slackChannel = item.media_type === 'image' ? 'img-junkyard' : 'sample-sale';
+        const slackChannel =
+          item.media_type === 'image' ? 'img-junkyard' : 'sample-sale';
         slackLabel.textContent = `#${slackChannel}`;
         slackBtn.style.display = '';
         slackBtn.addEventListener('click', async () => {
@@ -534,18 +598,23 @@ import Admin from '../../../layouts/Admin.astro';
           slackLabel.textContent = 'Sending…';
           try {
             const res = await fetch(`/api/media/${mediaId}/slack-share`, {
-              method: 'POST', credentials: 'include',
+              method: 'POST',
+              credentials: 'include',
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail ?? 'Share failed');
             slackBtn.innerHTML = 'Sent ✓';
             (window as any).toast?.success(
-              data.already_shared ? `Already in #${data.channel}` : `Sent to #${data.channel}`
+              data.already_shared
+                ? `Already in #${data.channel}`
+                : `Sent to #${data.channel}`,
             );
           } catch (e: any) {
             slackBtn.disabled = false;
             slackLabel.textContent = `#${slackChannel}`;
-            (window as any).toast?.error('Share failed: ' + (e?.message ?? String(e)));
+            (window as any).toast?.error(
+              'Share failed: ' + (e?.message ?? String(e)),
+            );
           }
         });
       }

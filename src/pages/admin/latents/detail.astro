@@ -1,0 +1,231 @@
+---
+import Admin from '../../../layouts/Admin.astro';
+---
+
+<Admin title="Latent" current="latents">
+  <div id="header" class="page-header">Loading…</div>
+
+  <div id="islands" class="islands" hidden>
+    <section id="docs-island"></section>
+    <section id="slots-island"></section>
+    <section id="loose-island"></section>
+    <section id="threads-island"></section>
+  </div>
+
+  <!-- Server-rendered placeholders for hydration. Hidden until the project id resolves. -->
+</Admin>
+
+<style>
+  .page-header h1 {
+    margin: 0;
+  }
+  .page-subtitle {
+    color: var(--color-muted, #888);
+    margin-top: 4px;
+  }
+  .islands {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg, 1.5rem);
+    margin-top: var(--space-md, 1rem);
+  }
+  .header-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .pill {
+    padding: 2px 10px;
+    border: 2px solid var(--c, #888);
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    font-size: var(--text-sm, 0.85rem);
+  }
+  .status-row {
+    display: flex;
+    gap: 4px;
+  }
+  .status-btn {
+    background: transparent;
+    color: inherit;
+    border: 2px solid var(--c, #888);
+    padding: 2px 8px;
+    font: inherit;
+    font-size: var(--text-sm, 0.85rem);
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    cursor: pointer;
+  }
+  .status-btn.active {
+    background: var(--c, #888);
+    color: #000;
+  }
+  .kind-select,
+  .name-input {
+    background: var(--color-bg-input, #111);
+    color: inherit;
+    border: 2px solid var(--color-border, #333);
+    padding: 4px 8px;
+    font: inherit;
+  }
+  .name-input {
+    font-size: var(--text-lg, 1.05rem);
+    font-weight: bold;
+  }
+</style>
+
+<script>
+  import { mount } from 'svelte';
+  import LatentSlots from '../../../components/LatentSlots.svelte';
+  import LatentDocuments from '../../../components/LatentDocuments.svelte';
+  import LatentLooseFiles from '../../../components/LatentLooseFiles.svelte';
+  import Threads from '../../../components/Threads.svelte';
+
+  let mounted: any[] = [];
+
+  function statusColor(s: string): string {
+    return (
+      (
+        {
+          forming: '#9ca3af',
+          developing: '#fbbf24',
+          fixing: '#f97316',
+          abandoned: '#6b7280',
+        } as Record<string, string>
+      )[s] || '#888'
+    );
+  }
+
+  function escapeHtml(s: string): string {
+    return (s || '').replace(
+      /[&<>"']/g,
+      (c) =>
+        (
+          ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;',
+          }) as Record<string, string>
+        )[c],
+    );
+  }
+
+  async function init() {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+    const headerEl = document.getElementById('header');
+    const islandsEl = document.getElementById('islands');
+    if (!id || !headerEl || !islandsEl) return;
+
+    const user = await (window as any).__authReady;
+    if (!user) return;
+
+    const res = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      headerEl.innerHTML = '<p>Not found.</p>';
+      return;
+    }
+    const p = await res.json();
+
+    headerEl.innerHTML = `
+      <div class="header-row">
+        <input class="name-input" id="name-input" type="text" value="${escapeHtml(p.name)}" />
+        <select class="kind-select" id="kind-select">
+          ${['album', 'video', 'zine', 'other'].map((k) => `<option value="${k}" ${k === p.kind ? 'selected' : ''}>${k}</option>`).join('')}
+        </select>
+        <div class="status-row" id="status-row">
+          ${['forming', 'developing', 'fixing', 'abandoned']
+            .map((s) => {
+              const c = statusColor(s);
+              return `<button class="status-btn ${s === p.status ? 'active' : ''}" data-status="${s}" style="--c:${c}">${s}</button>`;
+            })
+            .join('')}
+        </div>
+        <a class="status-btn" href="/admin/latents">All latents</a>
+      </div>
+      <p class="page-subtitle">${escapeHtml(p.kind)} latent · ${p.item_count} files · ${p.documents.length} document${p.documents.length === 1 ? '' : 's'} · ${p.slots.length} slot${p.slots.length === 1 ? '' : 's'}</p>
+    `;
+
+    const nameInput = document.getElementById('name-input') as HTMLInputElement;
+    const kindSelect = document.getElementById(
+      'kind-select',
+    ) as HTMLSelectElement;
+    const statusRow = document.getElementById('status-row')!;
+
+    let nameTimer: any = null;
+    nameInput.addEventListener('input', () => {
+      if (nameTimer) clearTimeout(nameTimer);
+      nameTimer = setTimeout(() => {
+        fetch(`/api/projects/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: nameInput.value }),
+        });
+      }, 1200);
+    });
+    kindSelect.addEventListener('change', () => {
+      fetch(`/api/projects/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: kindSelect.value }),
+      });
+    });
+    statusRow
+      .querySelectorAll<HTMLButtonElement>('[data-status]')
+      .forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const s = btn.dataset.status!;
+          await fetch(`/api/projects/${encodeURIComponent(id)}`, {
+            method: 'PATCH',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: s }),
+          });
+          statusRow
+            .querySelectorAll<HTMLButtonElement>('[data-status]')
+            .forEach((b) => {
+              b.classList.toggle('active', b.dataset.status === s);
+            });
+        });
+      });
+
+    // Tear down any prior islands (when page-load fires again on view transition)
+    for (const m of mounted) m?.destroy?.();
+    mounted = [];
+
+    islandsEl.hidden = false;
+    mounted.push(
+      mount(LatentDocuments, {
+        target: document.getElementById('docs-island')!,
+        props: { projectId: id },
+      }),
+    );
+    mounted.push(
+      mount(LatentSlots, {
+        target: document.getElementById('slots-island')!,
+        props: { projectId: id, projectKind: p.kind },
+      }),
+    );
+    mounted.push(
+      mount(LatentLooseFiles, {
+        target: document.getElementById('loose-island')!,
+        props: { projectId: id },
+      }),
+    );
+    mounted.push(
+      mount(Threads, {
+        target: document.getElementById('threads-island')!,
+        props: { anchorType: 'project', anchorId: id, title: 'Latent threads' },
+      }),
+    );
+  }
+
+  document.addEventListener('astro:page-load', init);
+</script>
