@@ -1,11 +1,14 @@
 <!--
-  LatentSlots — vertical stack of slot cards. Each card holds its own files,
-  pinned primaries per media type, notes, and a discussion badge that opens
-  the slot's threaded discussion inline.
+  LatentSlots — vertical stack of slot cards with drag-reorder. Each card holds
+  its own files, pinned primaries per media type, notes, and threaded
+  discussion. "+ Pull from index" attaches existing media into a slot.
 -->
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import Sortable from 'sortablejs';
   import Uploader from './Uploader.svelte';
   import Threads from './Threads.svelte';
+  import PullFromIndex from './PullFromIndex.svelte';
 
   type Props = {
     projectId: string;
@@ -23,6 +26,7 @@
     notes: string | null;
     notes_updated_at: string | null;
     pinned: Record<string, string>;
+    thread_count?: number;
     created_at: string | null;
     updated_at: string | null;
   };
@@ -48,6 +52,21 @@
   let error = $state<string | null>(null);
   let saveTimers = $state<Record<string, any>>({});
 
+  let pullOpenForSlot = $state<string | null>(null);
+  let pullOpen = $state(false);
+
+  function openPull(slotId: string) {
+    pullOpenForSlot = slotId;
+    pullOpen = true;
+  }
+  function closePull() {
+    pullOpen = false;
+    pullOpenForSlot = null;
+  }
+
+  let slotListEl: HTMLUListElement | null = $state(null);
+  let sortable: Sortable | null = null;
+
   async function load() {
     try {
       const res = await fetch(
@@ -57,7 +76,6 @@
       if (!res.ok) throw new Error(`Failed (${res.status})`);
       const body = await res.json();
       slots = body.slots || [];
-      // load items per slot lazily on expand
     } catch (e: any) {
       error = e?.message || 'Failed to load slots';
     }
@@ -224,49 +242,97 @@
     }
   }
 
+  async function persistOrder(orderedIds: string[]) {
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/slots/reorder`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order: orderedIds }),
+        },
+      );
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      const body = await res.json();
+      slots = body.slots || slots;
+    } catch (e: any) {
+      error = e?.message || 'Failed to reorder';
+      await load(); // resync on failure
+    }
+  }
+
   function thumbUrl(mediaId: string): string {
-    return `/api/media/${encodeURIComponent(mediaId)}/thumbnail?size=200`;
+    return `/api/media/${encodeURIComponent(mediaId)}/thumbnail?size=sm`;
   }
 
   function statusColor(s: string): string {
     return (
-      {
-        forming: '#9ca3af',
-        developing: '#fbbf24',
-        fixed: '#4ade80',
-      }[s] || '#9ca3af'
+      (
+        { forming: '#9ca3af', developing: '#b8860b', fixed: '#080' } as Record<
+          string,
+          string
+        >
+      )[s] || '#9ca3af'
     );
   }
 
   $effect(() => {
     if (projectId) load();
   });
+
+  $effect(() => {
+    // (Re)bind Sortable whenever the slot list element exists. Destroy first
+    // to avoid stacking handlers on hot-reload.
+    if (!slotListEl) return;
+    sortable?.destroy();
+    sortable = Sortable.create(slotListEl, {
+      handle: '.slot__drag',
+      animation: 120,
+      ghostClass: 'slot--ghost',
+      onEnd: () => {
+        if (!slotListEl) return;
+        const ids = Array.from(
+          slotListEl.querySelectorAll<HTMLLIElement>('.slot[data-slot-id]'),
+        )
+          .map((el) => el.dataset.slotId!)
+          .filter(Boolean);
+        if (ids.length) persistOrder(ids);
+      },
+    });
+  });
+
+  onMount(() => () => sortable?.destroy());
 </script>
 
 <section class="slots">
   <header class="slots__head">
-    <h2>Slots</h2>
+    <h2>Slots ({projectKind})</h2>
     <span class="muted">{slots.length}</span>
   </header>
 
   {#if error}
-    <div class="error">{error}</div>
+    <div class="notice notice--error">{error}</div>
   {/if}
 
-  <ul class="slot-list">
+  <ul class="slot-list" bind:this={slotListEl}>
     {#each slots as slot (slot.id)}
-      <li class="slot">
+      <li class="slot" data-slot-id={slot.id}>
         <div class="slot__head">
+          <button class="slot__drag" type="button" aria-label="Drag to reorder"
+            >⋮⋮</button
+          >
           <span class="slot__pos">#{slot.position}</span>
           <button
             class="slot__label"
             onclick={() => renameSlot(slot)}
-            type="button">{slot.label}</button
+            type="button"
+            title="Click to rename">{slot.label}</button
           >
           <div class="slot__status">
             {#each ['forming', 'developing', 'fixed'] as st}
               <button
-                class="pill"
+                class="status-pill"
                 class:active={slot.status === st}
                 style="--c: {statusColor(st)}"
                 onclick={() => setStatus(slot, st)}
@@ -276,22 +342,24 @@
           </div>
           <div class="slot__actions">
             <button
-              class="link"
+              class="action-btn"
               type="button"
               onclick={() => toggleSection(slot.id, 'files')}>Files</button
             >
             <button
-              class="link"
+              class="action-btn"
               type="button"
               onclick={() => toggleSection(slot.id, 'notes')}>Notes</button
             >
             <button
-              class="link"
+              class="action-btn"
               type="button"
-              onclick={() => toggleSection(slot.id, 'threads')}>Threads</button
+              onclick={() => toggleSection(slot.id, 'threads')}
+              >Threads{#if slot.thread_count}
+                ({slot.thread_count}){/if}</button
             >
             <button
-              class="link link--danger"
+              class="action-btn action-btn--danger"
               type="button"
               onclick={() => deleteSlot(slot)}>Delete</button
             >
@@ -314,7 +382,7 @@
                   {/if}
                 </a>
                 <button
-                  class="link link--small"
+                  class="link"
                   type="button"
                   onclick={() => clearPin(slot, mt)}>Unpin</button
                 >
@@ -332,7 +400,15 @@
               {projectId}
               slotId={slot.id}
               compact={true}
+              onUploaded={() => loadItems(slot.id)}
             />
+            <div class="slot__panel-actions">
+              <button
+                class="action-btn"
+                type="button"
+                onclick={() => openPull(slot.id)}>+ Pull from index</button
+              >
+            </div>
             {#if (itemsBySlot[slot.id] || []).length === 0}
               <div class="muted">No files in this slot yet.</div>
             {:else}
@@ -348,17 +424,21 @@
                           src={thumbUrl(it.media_item_id)}
                           alt={it.media?.filename}
                         />
+                      {:else if it.media?.media_type === 'session'}
+                        <span class="icon">▣ session</span>
                       {:else}
                         <span class="icon"
                           >{it.media?.media_type || 'file'}</span
                         >
                       {/if}
                     </a>
-                    <div class="tile__name">{it.media?.filename || '?'}</div>
+                    <div class="tile__name" title={it.media?.filename}>
+                      {it.media?.filename || '?'}
+                    </div>
                     <div class="tile__actions">
                       {#if it.media?.media_type && ['image', 'audio', 'video', 'session'].includes(it.media.media_type)}
                         <button
-                          class="link link--small"
+                          class="action-btn"
                           type="button"
                           onclick={() =>
                             setPin(
@@ -369,7 +449,7 @@
                         >
                       {/if}
                       <button
-                        class="link link--small"
+                        class="action-btn action-btn--danger"
                         type="button"
                         onclick={() => detachItem(slot, it)}>Detach</button
                       >
@@ -398,6 +478,7 @@
               anchorType="slot"
               anchorId={slot.id}
               title="Slot discussion"
+              compact={true}
             />
           </div>
         {/if}
@@ -406,23 +487,38 @@
   </ul>
 
   <div class="slots__footer">
-    <button class="btn" type="button" onclick={addSlot}>+ Add slot</button>
+    <button class="action-btn" type="button" onclick={addSlot}
+      >+ Add slot</button
+    >
   </div>
+
+  <PullFromIndex
+    bind:open={pullOpen}
+    {projectId}
+    slotId={pullOpenForSlot}
+    onAttached={() => pullOpenForSlot && loadItems(pullOpenForSlot)}
+    onClose={closePull}
+  />
 </section>
 
 <style>
   .slots {
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm, 0.5rem);
+    gap: var(--space-sm);
   }
   .slots__head {
     display: flex;
-    align-items: baseline;
-    gap: 8px;
+    align-items: center;
+    gap: var(--space-sm);
+    border-bottom: 2px solid var(--color-text);
+    padding-bottom: var(--space-xs);
   }
   .slots__head h2 {
     margin: 0;
+    font-size: var(--text-lg);
+    text-transform: uppercase;
+    letter-spacing: 1pt;
   }
   .slot-list {
     list-style: none;
@@ -430,23 +526,40 @@
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
   }
   .slot {
-    border: 2px solid var(--color-border, #333);
-    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+  }
+  .slot--ghost {
+    opacity: 0.3;
   }
   .slot__head {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    border-bottom: 1px dashed var(--color-border, #333);
+    gap: var(--space-sm);
+    padding: 6px var(--space-sm);
+    border-bottom: 1px dashed var(--color-border);
+  }
+  .slot__drag {
+    background: transparent;
+    border: 0;
+    color: var(--color-muted);
+    font-size: var(--text-base);
+    cursor: grab;
+    padding: 0 4px;
+    line-height: 1;
+    letter-spacing: -1px;
+  }
+  .slot__drag:active {
+    cursor: grabbing;
   }
   .slot__pos {
-    font-family: var(--font-mono, monospace);
-    color: var(--color-muted, #888);
+    font-family: var(--font-mono);
+    color: var(--color-muted);
+    font-size: var(--text-sm);
   }
   .slot__label {
     background: transparent;
@@ -463,33 +576,34 @@
     display: flex;
     gap: 4px;
   }
-  .pill {
+  .status-pill {
     background: transparent;
-    color: inherit;
-    border: 2px solid var(--c);
+    color: var(--c);
+    border: 1px solid var(--c);
     padding: 2px 8px;
     font: inherit;
-    font-size: var(--text-sm, 0.85rem);
+    font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 1pt;
     cursor: pointer;
   }
-  .pill.active {
+  .status-pill.active {
     background: var(--c);
-    color: #000;
+    color: var(--color-bg);
   }
   .slot__actions {
     display: flex;
-    gap: 10px;
+    gap: 4px;
+    flex-wrap: wrap;
   }
   .slot__pins {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-    padding: 10px;
+    gap: 6px;
+    padding: var(--space-sm);
   }
   .pin {
-    border: 1px dashed var(--color-border, #333);
+    border: 1px dashed var(--color-border);
     padding: 6px;
     display: flex;
     flex-direction: column;
@@ -499,14 +613,14 @@
   .pin__label {
     text-transform: uppercase;
     letter-spacing: 1pt;
-    font-size: var(--text-sm, 0.85rem);
-    color: var(--color-muted, #888);
+    font-size: 0.65rem;
+    color: var(--color-muted);
   }
   .pin__thumb {
     display: block;
     width: 72px;
     height: 72px;
-    background: #000;
+    background: #f4f4f4;
     text-decoration: none;
     color: inherit;
     display: flex;
@@ -524,35 +638,42 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--color-muted, #888);
+    color: var(--color-muted);
   }
   .slot__panel {
-    padding: 10px;
-    border-top: 1px dashed var(--color-border, #333);
+    padding: var(--space-sm);
+    border-top: 1px dashed var(--color-border);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+  .slot__panel-actions {
+    display: flex;
+    gap: var(--space-sm);
   }
   .grid {
     list-style: none;
     padding: 0;
     margin: 0;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 6px;
   }
   .tile {
     display: flex;
     flex-direction: column;
-    border: 2px solid var(--color-border, #333);
-    background: #0a0a0a;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
   }
   .tile__thumb {
-    display: block;
-    aspect-ratio: 1;
-    background: #000;
     display: flex;
     align-items: center;
     justify-content: center;
+    aspect-ratio: 1;
+    background: #f4f4f4;
     text-decoration: none;
     color: inherit;
+    overflow: hidden;
   }
   .tile__thumb img {
     width: 100%;
@@ -560,14 +681,14 @@
     object-fit: cover;
   }
   .icon {
-    color: var(--color-muted, #888);
+    color: var(--color-muted);
     text-transform: uppercase;
     letter-spacing: 1pt;
-    font-size: var(--text-sm, 0.85rem);
+    font-size: var(--text-sm);
   }
   .tile__name {
     padding: 4px 6px;
-    font-size: var(--text-sm, 0.85rem);
+    font-size: var(--text-sm);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -575,57 +696,55 @@
   .tile__actions {
     padding: 0 6px 6px;
     display: flex;
-    gap: 6px;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  textarea {
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    padding: 8px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    width: 100%;
+    box-sizing: border-box;
   }
   .link {
     background: transparent;
     border: 0;
-    color: var(--color-accent, #b8860b);
+    color: var(--color-accent);
     cursor: pointer;
     text-decoration: underline;
     padding: 0;
     font: inherit;
-  }
-  .link--small {
-    font-size: var(--text-sm, 0.85rem);
-  }
-  .link--danger {
-    color: #fca5a5;
-  }
-  textarea {
-    background: var(--color-bg-input, #111);
-    color: inherit;
-    border: 2px solid var(--color-border, #333);
-    padding: 8px;
-    font-family: inherit;
-    width: 100%;
-    box-sizing: border-box;
-  }
-  .btn {
-    padding: 6px 12px;
-    background: #1a1a1a;
-    color: #fff;
-    border: 2px solid var(--color-border, #333);
-    box-shadow: 2px 2px 0 #000;
-    font-family: var(--font-mono, monospace);
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 1pt;
-    font-size: var(--text-sm, 0.85rem);
-    cursor: pointer;
-  }
-  .slots__footer {
-    display: flex;
-    justify-content: flex-start;
+    font-size: 0.7rem;
   }
   .muted {
-    color: var(--color-muted, #888);
-    font-size: var(--text-sm, 0.85rem);
+    color: var(--color-muted);
+    font-size: var(--text-sm);
   }
-  .error {
-    padding: 8px 10px;
-    border: 2px solid #ef4444;
-    color: #fca5a5;
-    font-size: var(--text-sm, 0.85rem);
+  .notice {
+    padding: 6px 10px;
+    border: 1px solid var(--color-border);
+    font-size: var(--text-sm);
+  }
+  .notice--error {
+    border-color: #c00;
+    color: #c00;
+  }
+  @media (max-width: 640px) {
+    .slot__pins {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .slot__head {
+      gap: 6px;
+    }
+    .slot__actions {
+      flex-basis: 100%;
+      justify-content: flex-end;
+    }
+    .grid {
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    }
   }
 </style>

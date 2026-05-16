@@ -141,6 +141,33 @@ def _comment_dict(c: Any) -> dict:
 # ---------------------------------------------------------------------------
 
 
+@router.get("/counts", summary="Bulk thread counts by anchor_id")
+def thread_counts(
+    anchor_type: str = Query(...),
+    anchor_ids: str = Query("", description="Comma-separated list of anchor ids"),
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Return a `{anchor_id: count}` map for an anchor type.
+
+    Powers the "discussion N" indicator chips on listings (e.g. search result tiles,
+    Latent slot cards) without forcing a per-item round-trip.
+    """
+    if anchor_type not in VALID_ANCHOR_TYPES:
+        raise HTTPException(status_code=400, detail=f"unsupported anchor_type '{anchor_type}'")
+    ids = [s.strip() for s in (anchor_ids or "").split(",") if s.strip()]
+    if not ids:
+        return {"counts": {}}
+    from sqlalchemy import func as _func
+    rows = (
+        db.query(Thread.anchor_id, _func.count(Thread.id))
+        .filter(Thread.anchor_type == anchor_type, Thread.anchor_id.in_(ids))
+        .group_by(Thread.anchor_id)
+        .all()
+    )
+    return {"counts": {aid: int(c) for aid, c in rows}}
+
+
 @router.get("", summary="List threads for an anchor")
 def list_threads(
     anchor_type: str = Query(...),

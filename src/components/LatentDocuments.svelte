@@ -97,7 +97,6 @@
       current = body;
       dirty = false;
       savedAt = body.updated_at;
-      // Update the header in the list
       docs = docs.map((d) =>
         d.id === body.id
           ? { ...d, name: body.name, updated_at: body.updated_at }
@@ -233,7 +232,7 @@
   </header>
 
   {#if error}
-    <div class="error">{error}</div>
+    <div class="notice notice--error">{error}</div>
   {/if}
 
   {#if current}
@@ -243,10 +242,16 @@
           {#if saving}Saving…{:else if dirty}Unsaved changes{:else if savedAt}Saved
             · {fmtTime(savedAt)}{/if}
         </span>
-        <button class="link" type="button" onclick={renameDoc}>Rename</button>
-        <button class="link" type="button" onclick={openRevs}>History</button>
-        <button class="link link--danger" type="button" onclick={deleteDoc}
-          >Delete</button
+        <button class="action-btn" type="button" onclick={renameDoc}
+          >Rename</button
+        >
+        <button class="action-btn" type="button" onclick={openRevs}
+          >History</button
+        >
+        <button
+          class="action-btn action-btn--danger"
+          type="button"
+          onclick={deleteDoc}>Delete</button
         >
       </div>
       <textarea
@@ -266,8 +271,10 @@
     <div class="drawer" role="dialog" aria-label="Revision history">
       <header>
         <strong>History</strong>
-        <button class="link" type="button" onclick={() => (revsOpen = false)}
-          >Close</button
+        <button
+          class="action-btn"
+          type="button"
+          onclick={() => (revsOpen = false)}>Close</button
         >
       </header>
       {#if revs.length === 0}
@@ -280,8 +287,10 @@
               <pre>{r.content.slice(0, 600)}{r.content.length > 600
                   ? '…'
                   : ''}</pre>
-              <button class="link" type="button" onclick={() => restoreRev(r)}
-                >Restore this</button
+              <button
+                class="action-btn"
+                type="button"
+                onclick={() => restoreRev(r)}>Restore this</button
               >
             </li>
           {/each}
@@ -295,98 +304,95 @@
   .docs {
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm, 0.5rem);
+    gap: var(--space-sm);
   }
   .docs__head {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 8px;
+    align-items: center;
+    gap: var(--space-sm);
+    border-bottom: 2px solid var(--color-text);
+    padding-bottom: var(--space-xs);
   }
   .docs__head h2 {
     margin: 0;
+    font-size: var(--text-lg);
+    text-transform: uppercase;
+    letter-spacing: 1pt;
   }
   .docs__tabs {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
+    margin-left: auto;
   }
   .tab {
     padding: 4px 10px;
-    background: transparent;
-    color: inherit;
-    border: 2px solid var(--color-border, #333);
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
     cursor: pointer;
     font: inherit;
-    font-size: var(--text-sm, 0.85rem);
+    font-size: var(--text-sm);
   }
   .tab.active {
-    background: var(--color-accent, #b8860b);
-    color: #000;
+    background: var(--color-text);
+    color: var(--color-bg);
+    border-color: var(--color-text);
   }
   .tab--add {
-    color: var(--color-muted, #888);
+    color: var(--color-muted);
   }
   .editor {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
   }
   .editor__bar {
     display: flex;
-    gap: 12px;
+    gap: var(--space-sm);
     align-items: center;
-    font-size: var(--text-sm, 0.85rem);
+    font-size: var(--text-sm);
+    flex-wrap: wrap;
   }
   .status {
-    color: var(--color-muted, #888);
+    color: var(--color-muted);
     flex: 1;
   }
   textarea {
-    background: var(--color-bg-input, #111);
-    color: inherit;
-    border: 2px solid var(--color-border, #333);
-    padding: 10px;
-    font-family: var(--font-mono, monospace);
-    font-size: 0.95rem;
-    line-height: 1.4;
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    padding: var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    line-height: 1.5;
     width: 100%;
     box-sizing: border-box;
     resize: vertical;
   }
-  .link {
-    background: transparent;
-    border: 0;
-    color: var(--color-accent, #b8860b);
-    cursor: pointer;
-    text-decoration: underline;
-    padding: 0;
-    font: inherit;
-  }
-  .link--danger {
-    color: #fca5a5;
-  }
   .muted {
-    color: var(--color-muted, #888);
-    font-size: var(--text-sm, 0.85rem);
+    color: var(--color-muted);
+    font-size: var(--text-sm);
   }
-  .error {
-    padding: 8px 10px;
-    border: 2px solid #ef4444;
-    color: #fca5a5;
-    font-size: var(--text-sm, 0.85rem);
+  .notice {
+    padding: 6px 10px;
+    border: 1px solid var(--color-border);
+    font-size: var(--text-sm);
+  }
+  .notice--error {
+    border-color: #c00;
+    color: #c00;
   }
   .drawer {
-    border: 2px solid var(--color-border, #333);
-    background: rgba(0, 0, 0, 0.45);
-    padding: 10px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    padding: var(--space-sm);
   }
   .drawer header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: var(--space-xs);
   }
   .drawer ul {
     list-style: none;
@@ -394,21 +400,27 @@
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--space-sm);
   }
   .drawer li {
-    border: 1px dashed var(--color-border, #333);
+    border: 1px dashed var(--color-border);
     padding: 6px;
   }
   .drawer pre {
     margin: 4px 0;
     white-space: pre-wrap;
     word-break: break-word;
-    font-size: 0.85rem;
-    color: var(--color-muted, #888);
+    font-size: 0.7rem;
+    color: var(--color-muted);
   }
   .rev__meta {
-    font-size: var(--text-sm, 0.85rem);
-    color: var(--color-muted, #888);
+    font-size: 0.7rem;
+    color: var(--color-muted);
+  }
+  @media (max-width: 640px) {
+    .docs__tabs {
+      margin-left: 0;
+      width: 100%;
+    }
   }
 </style>

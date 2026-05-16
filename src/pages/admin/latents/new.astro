@@ -5,16 +5,16 @@ import Admin from '../../../layouts/Admin.astro';
 <Admin title="New Latent" current="latents">
   <div class="page-header">
     <h1>New Latent</h1>
-    <p class="page-subtitle">A fresh pre-release workspace.</p>
   </div>
+  <p class="page-subtitle">A fresh pre-release workspace.</p>
 
   <form id="new-form" class="form">
-    <label
-      >Name
+    <label class="field">
+      <span>Name</span>
       <input type="text" name="name" required maxlength="200" />
     </label>
-    <label
-      >Kind
+    <label class="field">
+      <span>Kind</span>
       <select name="kind">
         <option value="album">album</option>
         <option value="video">video</option>
@@ -23,67 +23,53 @@ import Admin from '../../../layouts/Admin.astro';
       </select>
     </label>
     <div class="actions">
-      <button type="submit" class="btn btn--primary">Create</button>
-      <a class="btn" href="/admin/latents">Cancel</a>
+      <button type="submit" class="btn-primary">Create</button>
+      <a class="action-btn" href="/admin/latents">Cancel</a>
     </div>
     <p id="error" class="error" hidden></p>
   </form>
 </Admin>
 
 <style>
-  .page-header h1 {
-    margin: 0;
-  }
   .page-subtitle {
-    color: var(--color-muted, #888);
-    margin-top: 4px;
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    margin-top: var(--space-xs);
   }
   .form {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--space-sm);
     max-width: 480px;
-    margin-top: var(--space-md, 1rem);
+    margin-top: var(--space-md);
   }
-  .form label {
+  .field {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    color: var(--color-muted, #888);
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    text-transform: uppercase;
+    letter-spacing: 1pt;
   }
-  .form input,
-  .form select {
-    background: var(--color-bg-input, #111);
-    color: inherit;
-    border: 2px solid var(--color-border, #333);
+  .field input,
+  .field select {
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
     padding: 6px 10px;
-    font-family: inherit;
+    font-family: var(--font-mono);
+    font-size: var(--text-base);
+    text-transform: none;
   }
   .actions {
     display: flex;
-    gap: 8px;
-  }
-  .btn {
-    display: inline-block;
-    padding: 6px 12px;
-    background: #1a1a1a;
-    color: #fff;
-    border: 2px solid var(--color-border, #333);
-    box-shadow: 2px 2px 0 #000;
-    font-family: var(--font-mono, monospace);
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 1pt;
-    font-size: var(--text-sm, 0.85rem);
-    text-decoration: none;
-    cursor: pointer;
-  }
-  .btn--primary {
-    background: var(--color-accent, #b8860b);
+    gap: var(--space-sm);
   }
   .error {
-    color: #fca5a5;
+    color: #c00;
     margin: 0;
+    font-size: var(--text-sm);
   }
 </style>
 

@@ -26,6 +26,7 @@ from server.models import (
     ProjectItem,
     ProjectSlot,
     SlotPrimaryPin,
+    Thread,
     User,
 )
 
@@ -116,7 +117,7 @@ def _project_summary(p: Project) -> dict:
     }
 
 
-def _slot_summary(s: ProjectSlot, pins: dict[str, str] | None = None) -> dict:
+def _slot_summary(s: ProjectSlot, pins: dict[str, str] | None = None, thread_count: int = 0) -> dict:
     pin_map = pins or {}
     return {
         "id": s.id,
@@ -127,6 +128,7 @@ def _slot_summary(s: ProjectSlot, pins: dict[str, str] | None = None) -> dict:
         "notes": s.notes,
         "notes_updated_at": s.notes_updated_at.isoformat() if s.notes_updated_at else None,
         "pinned": pin_map,
+        "thread_count": int(thread_count),
         "created_at": s.created_at.isoformat() if s.created_at else None,
         "updated_at": s.updated_at.isoformat() if s.updated_at else None,
     }
@@ -314,12 +316,26 @@ def get_project(
         ProjectItem.project_id == project_id,
         ProjectItem.slot_id.is_(None),
     ).scalar() or 0
+    project_thread_count = db.query(func.count(Thread.id)).filter(
+        Thread.anchor_type == "project", Thread.anchor_id == project_id,
+    ).scalar() or 0
+    slot_thread_counts: dict[str, int] = {}
+    if slots:
+        slot_ids = [s.id for s in slots]
+        rows = (
+            db.query(Thread.anchor_id, func.count(Thread.id))
+            .filter(Thread.anchor_type == "slot", Thread.anchor_id.in_(slot_ids))
+            .group_by(Thread.anchor_id)
+            .all()
+        )
+        slot_thread_counts = {aid: int(c) for aid, c in rows}
     return {
         **_project_summary(p),
-        "slots": [_slot_summary(s, slot_pins.get(s.id)) for s in slots],
+        "slots": [_slot_summary(s, slot_pins.get(s.id), slot_thread_counts.get(s.id, 0)) for s in slots],
         "documents": [_document_summary(d) for d in documents],
         "item_count": int(item_count),
         "loose_item_count": int(loose_count),
+        "thread_count": int(project_thread_count),
     }
 
 
@@ -465,8 +481,8 @@ def reorder_slots(
     if set(body.order) != set(by_id.keys()):
         raise HTTPException(status_code=400, detail="Order must contain every slot id exactly once")
     # Two-pass to dodge the (project_id, position) unique constraint while shuffling.
-    for s in slots:
-        s.position = -1 * (1 + slots.index(s))
+    for i, s in enumerate(slots):
+        s.position = -(i + 1)
     db.flush()
     for i, sid in enumerate(body.order):
         by_id[sid].position = i + 1

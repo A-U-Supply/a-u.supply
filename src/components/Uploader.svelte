@@ -7,10 +7,7 @@
     - slotId: optional slot inside the Latent to attach to
     - defaultTags: comma-separated string of tags pre-applied to every upload
     - compact: render in a compact mode (no shared-fields box, smaller dropzone)
-
-  Emits CustomEvent('uploaded') on the host element after every successful upload,
-  with detail = { media_item_id, project_id, slot_id }. Pages can listen and
-  refresh their views.
+    - onUploaded: callback fired after each successful upload, with the upload payload
 -->
 <script lang="ts">
   type Props = {
@@ -19,6 +16,11 @@
     slotId?: string;
     defaultTags?: string;
     compact?: boolean;
+    onUploaded?: (detail: {
+      media_item_id: string;
+      project_id: string | null;
+      slot_id: string | null;
+    }) => void;
   };
 
   let {
@@ -27,6 +29,7 @@
     slotId = '',
     defaultTags = '',
     compact = false,
+    onUploaded,
   }: Props = $props();
 
   type Item = {
@@ -43,7 +46,6 @@
   let description = $state('');
   let busy = $state(false);
   let summary = $state('');
-  let host: HTMLDivElement | null = $state(null);
   let fileInput: HTMLInputElement | null = $state(null);
   let dragOver = $state(false);
 
@@ -184,16 +186,11 @@
           it.message = 'Uploaded';
           try {
             const body = await res.json();
-            host?.dispatchEvent(
-              new CustomEvent('uploaded', {
-                bubbles: true,
-                detail: {
-                  media_item_id: body?.id,
-                  project_id: projectId || null,
-                  slot_id: slotId || null,
-                },
-              }),
-            );
+            onUploaded?.({
+              media_item_id: body?.id,
+              project_id: projectId || null,
+              slot_id: slotId || null,
+            });
           } catch {}
         } else {
           fail++;
@@ -224,7 +221,7 @@
   }
 </script>
 
-<div class="uploader" class:compact bind:this={host}>
+<div class="uploader" class:compact>
   <div
     class="dropzone"
     class:dragover={dragOver}
@@ -238,7 +235,7 @@
     <div class="dropzone__inner">
       <p class="dropzone__text">Drag &amp; drop files here</p>
       <p class="dropzone__sub">or</p>
-      <span class="dropzone__btn">Browse files</span>
+      <span class="action-btn">Browse files</span>
       <input
         bind:this={fileInput}
         type="file"
@@ -253,11 +250,7 @@
     <div class="shared-fields">
       <label class="field">
         <span class="field__label">Tags (applied to every file)</span>
-        <input
-          type="text"
-          bind:value={tags}
-          placeholder="Comma-separated tags"
-        />
+        <input type="text" bind:value={tags} placeholder="Comma-separated" />
       </label>
       <label class="field">
         <span class="field__label">Description</span>
@@ -287,7 +280,7 @@
             <div class="file__meta">
               {formatSize(it.file.size)}
               {#if it.isSession && it.sessionTool}
-                · <strong>session</strong> · {it.sessionTool}
+                · session · {it.sessionTool}
               {/if}
             </div>
           </div>
@@ -310,13 +303,16 @@
     </ul>
 
     <div class="actions">
-      <button class="btn btn--primary" onclick={uploadAll} disabled={busy}
+      <button class="btn-primary" onclick={uploadAll} disabled={busy}
         >{busy
           ? 'Uploading…'
           : `Upload ${items.length} file${items.length === 1 ? '' : 's'}`}</button
       >
-      <button class="btn" onclick={clearAll} disabled={busy} type="button"
-        >Clear</button
+      <button
+        class="action-btn"
+        onclick={clearAll}
+        disabled={busy}
+        type="button">Clear</button
       >
     </div>
   {/if}
@@ -330,52 +326,45 @@
   .uploader {
     display: flex;
     flex-direction: column;
-    gap: var(--space-md, 1rem);
+    gap: var(--space-sm);
   }
   .dropzone {
-    border: 2px dashed var(--color-border, #333);
-    padding: var(--space-xl, 2rem);
+    border: 2px dashed var(--color-border);
+    padding: var(--space-lg);
     text-align: center;
     cursor: pointer;
+    background: var(--color-bg);
     transition:
       border-color 0.15s,
       background 0.15s;
-    background: transparent;
   }
   .compact .dropzone {
-    padding: var(--space-md, 1rem);
+    padding: var(--space-md);
   }
   .dropzone.dragover {
-    border-color: var(--color-accent, #b8860b);
+    border-color: var(--color-accent);
     background: rgba(184, 134, 11, 0.06);
   }
   .dropzone__text {
-    font-size: var(--text-lg, 1.05rem);
+    font-size: var(--text-base);
     text-transform: uppercase;
     letter-spacing: 1pt;
-    margin: 0 0 var(--space-xs, 0.25rem);
+    margin: 0 0 var(--space-xs);
   }
   .dropzone__sub {
-    color: var(--color-muted, #888);
-    font-size: var(--text-sm, 0.85rem);
-    margin: 0 0 var(--space-sm, 0.5rem);
-  }
-  .dropzone__btn {
-    display: inline-block;
-    padding: var(--space-xs, 0.3rem) var(--space-md, 1rem);
-    background: #1a1a1a;
-    color: #fff;
-    border: 2px solid var(--color-border, #333);
-    box-shadow: 2px 2px 0 #000;
-    font-family: var(--font-mono, monospace);
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 1pt;
-    font-size: var(--text-sm, 0.85rem);
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    margin: 0 0 var(--space-xs);
   }
   .shared-fields {
     display: grid;
-    gap: var(--space-sm, 0.5rem);
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-sm);
+  }
+  @media (max-width: 640px) {
+    .shared-fields {
+      grid-template-columns: 1fr;
+    }
   }
   .field {
     display: flex;
@@ -383,18 +372,19 @@
     gap: 4px;
   }
   .field__label {
-    font-size: var(--text-sm, 0.85rem);
-    color: var(--color-muted, #888);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
     text-transform: uppercase;
     letter-spacing: 1pt;
   }
   .field input,
   .field textarea {
-    background: var(--color-bg-input, #111);
-    color: inherit;
-    border: 2px solid var(--color-border, #333);
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
     padding: 6px 10px;
-    font-family: inherit;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
   }
   .file-list {
     list-style: none;
@@ -402,24 +392,24 @@
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
   }
   .file {
     display: grid;
-    grid-template-columns: 48px 1fr auto auto;
+    grid-template-columns: 44px 1fr auto auto;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     padding: 6px 8px;
-    border: 2px solid var(--color-border, #333);
-    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
   }
   .file__preview {
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #000;
+    background: #f4f4f4;
     overflow: hidden;
   }
   .file__preview img {
@@ -428,8 +418,8 @@
     object-fit: cover;
   }
   .file__icon {
-    color: var(--color-muted, #888);
-    font-size: var(--text-sm, 0.85rem);
+    color: var(--color-muted);
+    font-size: var(--text-sm);
     text-transform: uppercase;
     letter-spacing: 1pt;
   }
@@ -440,62 +430,56 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-size: var(--text-sm);
   }
   .file__meta {
-    color: var(--color-muted, #888);
-    font-size: var(--text-sm, 0.85rem);
+    color: var(--color-muted);
+    font-size: 0.7rem;
   }
   .file__status {
-    font-size: var(--text-sm, 0.85rem);
+    font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 1pt;
-    color: var(--color-muted, #888);
+    color: var(--color-muted);
+    white-space: nowrap;
   }
   .file[data-status='done'] .file__status {
-    color: #4ade80;
+    color: #080;
   }
   .file[data-status='error'] .file__status {
-    color: #f87171;
+    color: #c00;
   }
   .file[data-status='uploading'] .file__status {
-    color: var(--color-accent, #b8860b);
+    color: var(--color-accent);
   }
   .file__remove {
     background: transparent;
     border: 0;
-    color: var(--color-muted, #888);
+    color: var(--color-muted);
     font-size: 1.25rem;
     cursor: pointer;
-    padding: 0 8px;
+    padding: 0 4px;
+    line-height: 1;
   }
   .actions {
     display: flex;
-    gap: var(--space-sm, 0.5rem);
-  }
-  .btn {
-    padding: 6px 14px;
-    background: #1a1a1a;
-    color: #fff;
-    border: 2px solid var(--color-border, #333);
-    box-shadow: 2px 2px 0 #000;
-    font-family: var(--font-mono, monospace);
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 1pt;
-    font-size: var(--text-sm, 0.85rem);
-    cursor: pointer;
-  }
-  .btn--primary {
-    background: var(--color-accent, #b8860b);
-  }
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
   }
   .summary {
-    padding: 8px 10px;
-    border: 2px solid var(--color-border, #333);
-    background: rgba(255, 255, 255, 0.02);
-    font-size: var(--text-sm, 0.85rem);
+    padding: 6px 10px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    font-size: var(--text-sm);
+  }
+  @media (max-width: 640px) {
+    .file {
+      grid-template-columns: 40px 1fr auto;
+    }
+    .file__status {
+      grid-column: 2 / -1;
+      grid-row: 2;
+      font-size: 0.65rem;
+    }
   }
 </style>

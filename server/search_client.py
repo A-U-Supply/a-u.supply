@@ -513,7 +513,10 @@ def multi_search(
     """
     client = get_client()
 
-    if not media_types:
+    # `None` → default to the three public indices. An explicit empty list is
+    # respected so callers can opt into Emulsion-only searches (e.g. the
+    # "Pull from index" modal restricted to Emulsion).
+    if media_types is None:
         media_types = ["image", "audio", "video"]
 
     queries = []

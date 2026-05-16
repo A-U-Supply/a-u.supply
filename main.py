@@ -100,13 +100,7 @@ if "lemmy_token_encrypted" not in _user_cols:
     with engine.begin() as _conn:
         _conn.execute(_sa_text("ALTER TABLE users ADD COLUMN lemmy_token_encrypted TEXT"))
 
-# Migrate existing DB: add latent_id column to releases (reserved for v2 Latent->Release promotion)
-_release_cols_v2 = [c["name"] for c in _sa_inspect(engine).get_columns("releases")]
-if "latent_id" not in _release_cols_v2:
-    with engine.begin() as _conn:
-        _conn.execute(_sa_text("ALTER TABLE releases ADD COLUMN latent_id TEXT REFERENCES projects(id) ON DELETE SET NULL"))
-
-# Migrate existing DB: create Latents tables if missing
+# Migrate existing DB: create Latents tables first so the FK from releases.latent_id resolves
 _existing_tables = set(_sa_inspect(engine).get_table_names())
 from server.models import (
     Project as _Project,
@@ -121,6 +115,14 @@ from server.models import (
 for _model in (_Project, _ProjectSlot, _ProjectItem, _SlotPrimaryPin, _ProjectDocument, _ProjectDocumentRevision, _Thread, _MediaSessionMeta):
     if _model.__tablename__ not in _existing_tables:
         _model.__table__.create(bind=engine)
+
+# Migrate existing DB: add latent_id column to releases (reserved for v2 Latent->Release promotion).
+# Plain TEXT (no FK) — keeps the migration trivial across SQLite versions; the SQLAlchemy
+# model still expresses the FK at the ORM layer.
+_release_cols_v2 = [c["name"] for c in _sa_inspect(engine).get_columns("releases")]
+if "latent_id" not in _release_cols_v2:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE releases ADD COLUMN latent_id TEXT"))
 
 
 # ---------------------------------------------------------------------------

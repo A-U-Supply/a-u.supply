@@ -107,6 +107,7 @@ class SearchRequest(BaseModel):
     sort: str | None = Field(None, description="Sort field and direction, e.g. `created_at:desc`, `total_reaction_count:desc`, `file_size_bytes:asc`. Null for relevance sorting.")
     page: int = Field(1, ge=1, description="Page number (1-indexed).")
     per_page: int = Field(20, ge=1, le=500, description="Results per page (max 500).")
+    include_emulsion: bool = Field(False, description="Also search the private Emulsion (Latents) index. Admin only.")
 
 
 class MediaUpdateRequest(BaseModel):
@@ -589,6 +590,7 @@ def search_media(
         sort=sort_list,
         page=body.page,
         per_page=body.per_page,
+        include_emulsion=body.include_emulsion,
     )
     return results
 

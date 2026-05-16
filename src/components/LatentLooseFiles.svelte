@@ -1,9 +1,11 @@
 <!--
   LatentLooseFiles — the grid of files attached to a Latent at the loose level
-  (i.e. not inside any slot). Renders the unified Uploader docked at the top.
+  (i.e. not inside any slot). Renders the unified Uploader docked at the top
+  and a "Pull from index" modal for attaching existing media.
 -->
 <script lang="ts">
   import Uploader from './Uploader.svelte';
+  import PullFromIndex from './PullFromIndex.svelte';
 
   type Props = {
     projectId: string;
@@ -28,7 +30,7 @@
   let items = $state<Item[]>([]);
   let loading = $state(false);
   let error = $state<string | null>(null);
-  let host: HTMLElement | null = $state(null);
+  let pullOpen = $state(false);
 
   async function load() {
     loading = true;
@@ -69,11 +71,7 @@
   }
 
   function thumbUrl(mediaId: string): string {
-    return `/api/media/${encodeURIComponent(mediaId)}/thumbnail?size=240`;
-  }
-
-  function onUploaded() {
-    load();
+    return `/api/media/${encodeURIComponent(mediaId)}/thumbnail?size=sm`;
   }
 
   $effect(() => {
@@ -81,22 +79,32 @@
   });
 </script>
 
-<section class="loose" bind:this={host} onuploaded={onUploaded}>
+<section class="loose">
   <header class="loose__head">
     <h2>Loose files</h2>
     <span class="muted">{items.length}</span>
+    <div class="loose__actions">
+      <button class="action-btn" type="button" onclick={() => (pullOpen = true)}
+        >+ Pull from index</button
+      >
+    </div>
   </header>
 
-  <Uploader destination="project" {projectId} compact={true} />
+  <Uploader
+    destination="project"
+    {projectId}
+    compact={true}
+    onUploaded={() => load()}
+  />
 
   {#if error}
-    <div class="error">{error}</div>
+    <div class="notice notice--error">{error}</div>
   {/if}
   {#if loading && items.length === 0}
     <div class="muted">Loading…</div>
   {:else if items.length === 0}
     <div class="muted">
-      No loose files yet — drop something above or attach from the Stacks.
+      No loose files yet — drop something above, or pull from the index.
     </div>
   {:else}
     <ul class="grid">
@@ -126,53 +134,65 @@
             </div>
           </div>
           <div class="tile__actions">
-            <button class="link" type="button" onclick={() => detach(it)}
-              >Detach</button
+            <button
+              class="action-btn action-btn--danger"
+              type="button"
+              onclick={() => detach(it)}>Detach</button
             >
           </div>
         </li>
       {/each}
     </ul>
   {/if}
+
+  <PullFromIndex bind:open={pullOpen} {projectId} onAttached={() => load()} />
 </section>
 
 <style>
   .loose {
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm, 0.5rem);
+    gap: var(--space-sm);
   }
   .loose__head {
     display: flex;
-    align-items: baseline;
-    gap: 8px;
+    align-items: center;
+    gap: var(--space-sm);
+    border-bottom: 2px solid var(--color-text);
+    padding-bottom: var(--space-xs);
   }
   .loose__head h2 {
     margin: 0;
+    font-size: var(--text-lg);
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+  }
+  .loose__actions {
+    margin-left: auto;
   }
   .grid {
     list-style: none;
     padding: 0;
     margin: 0;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 8px;
   }
   .tile {
-    border: 2px solid var(--color-border, #333);
-    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
     display: flex;
     flex-direction: column;
   }
   .tile__thumb {
-    display: block;
-    aspect-ratio: 1;
-    background: #000;
     display: flex;
     align-items: center;
     justify-content: center;
+    aspect-ratio: 1;
+    background: #f4f4f4;
     text-decoration: none;
     color: inherit;
+    overflow: hidden;
   }
   .tile__thumb img {
     width: 100%;
@@ -180,10 +200,10 @@
     object-fit: cover;
   }
   .icon {
-    color: var(--color-muted, #888);
+    color: var(--color-muted);
     text-transform: uppercase;
     letter-spacing: 1pt;
-    font-size: var(--text-sm, 0.85rem);
+    font-size: var(--text-sm);
   }
   .tile__info {
     padding: 6px 8px;
@@ -193,32 +213,37 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--text-sm, 0.85rem);
+    font-size: var(--text-sm);
   }
   .tile__meta {
-    color: var(--color-muted, #888);
-    font-size: var(--text-sm, 0.85rem);
+    color: var(--color-muted);
+    font-size: 0.7rem;
   }
   .tile__actions {
-    padding: 0 8px 8px;
-  }
-  .link {
-    background: transparent;
-    border: 0;
-    color: var(--color-accent, #b8860b);
-    cursor: pointer;
-    padding: 0;
-    text-decoration: underline;
-    font: inherit;
+    padding: 0 6px 6px;
   }
   .muted {
-    color: var(--color-muted, #888);
-    font-size: var(--text-sm, 0.85rem);
+    color: var(--color-muted);
+    font-size: var(--text-sm);
   }
-  .error {
-    padding: 8px 10px;
-    border: 2px solid #ef4444;
-    color: #fca5a5;
-    font-size: var(--text-sm, 0.85rem);
+  .notice {
+    padding: 6px 10px;
+    border: 1px solid var(--color-border);
+    font-size: var(--text-sm);
+  }
+  .notice--error {
+    border-color: #c00;
+    color: #c00;
+  }
+  @media (max-width: 640px) {
+    .grid {
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    }
+    .loose__head {
+      flex-wrap: wrap;
+    }
+    .loose__actions {
+      margin-left: 0;
+    }
   }
 </style>

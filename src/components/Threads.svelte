@@ -7,15 +7,22 @@
     - anchorType: 'project' | 'slot' | 'media_item'
     - anchorId: the id of the anchored entity
     - title: optional section heading (defaults to "Threads")
+    - compact: render without the heading row (slot panels)
 -->
 <script lang="ts">
   type Props = {
     anchorType: 'project' | 'slot' | 'media_item';
     anchorId: string;
     title?: string;
+    compact?: boolean;
   };
 
-  let { anchorType, anchorId, title = 'Threads' }: Props = $props();
+  let {
+    anchorType,
+    anchorId,
+    title = 'Threads',
+    compact = false,
+  }: Props = $props();
 
   type ThreadRow = {
     id: string;
@@ -54,7 +61,6 @@
 
   let expandedId = $state<string | null>(null);
   let expandedComments = $state<CommentRow[]>([]);
-  let expandedPost = $state<ThreadRow | null>(null);
   let replyBody = $state('');
   let replyParent = $state<number | null>(null);
 
@@ -113,11 +119,9 @@
     if (expandedId === t.id) {
       expandedId = null;
       expandedComments = [];
-      expandedPost = null;
       return;
     }
     expandedId = t.id;
-    expandedPost = t;
     expandedComments = [];
     replyParent = null;
     try {
@@ -127,7 +131,7 @@
       if (!res.ok) throw new Error(`Failed (${res.status})`);
       const body = await res.json();
       expandedComments = body.comments || [];
-      // Update merged thread record with latest title/body
+      // Refresh the title/body on the row from the live Lemmy data
       const idx = threads.findIndex((x) => x.id === t.id);
       if (idx >= 0) {
         threads[idx] = {
@@ -183,17 +187,12 @@
   function nestComments(
     flat: CommentRow[],
   ): { c: CommentRow; depth: number }[] {
-    // Lemmy comment.path = "0.<root>.<child>...". Depth = path segments - 2 (root and "0").
-    const out: { c: CommentRow; depth: number }[] = [];
-    const byId: Record<number, CommentRow> = {};
-    for (const c of flat) byId[c.id] = c;
+    // Lemmy comment.path = "0.<root>.<child>...". Depth = path segments - 2.
     const sorted = [...flat].sort((a, b) => a.path.localeCompare(b.path));
-    for (const c of sorted) {
+    return sorted.map((c) => {
       const parts = c.path.split('.').filter(Boolean);
-      const depth = Math.max(0, parts.length - 2);
-      out.push({ c, depth });
-    }
-    return out;
+      return { c, depth: Math.max(0, parts.length - 2) };
+    });
   }
 
   let nested = $derived(nestComments(expandedComments));
@@ -203,24 +202,36 @@
   });
 </script>
 
-<section class="threads">
-  <header class="threads__head">
-    <h2>{title}</h2>
-    <button
-      class="btn"
-      onclick={() => (composerOpen = !composerOpen)}
-      type="button"
-      disabled={!lemmyAvailable}
-      >{composerOpen ? 'Cancel' : '+ New thread'}</button
-    >
-  </header>
+<section class="threads" class:compact>
+  {#if !compact}
+    <header class="threads__head">
+      <h2>{title}</h2>
+      <button
+        class="action-btn"
+        onclick={() => (composerOpen = !composerOpen)}
+        type="button"
+        disabled={!lemmyAvailable}
+        >{composerOpen ? 'Cancel' : '+ New thread'}</button
+      >
+    </header>
+  {:else}
+    <div class="threads__head threads__head--compact">
+      <button
+        class="action-btn"
+        onclick={() => (composerOpen = !composerOpen)}
+        type="button"
+        disabled={!lemmyAvailable}
+        >{composerOpen ? 'Cancel' : '+ New thread'}</button
+      >
+    </div>
+  {/if}
 
   {#if !lemmyAvailable}
-    <div class="warn">Discussion temporarily unavailable.</div>
+    <div class="notice notice--warn">Discussion temporarily unavailable.</div>
   {/if}
 
   {#if error}
-    <div class="error">{error}</div>
+    <div class="notice notice--error">{error}</div>
   {/if}
 
   {#if composerOpen}
@@ -244,11 +255,11 @@
       ></textarea>
       <input
         type="url"
-        placeholder="Link (paste a SoundCloud / Drive / YouTube URL for a link post — optional)"
+        placeholder="Paste a SoundCloud / Drive / YouTube URL for a link post (optional)"
         bind:value={composerUrl}
       />
       <div class="composer__actions">
-        <button class="btn btn--primary" type="submit" disabled={posting}
+        <button class="btn-primary" type="submit" disabled={posting}
           >{posting ? 'Posting…' : 'Post thread'}</button
         >
       </div>
@@ -281,7 +292,7 @@
                 {#each nested as { c, depth } (c.id)}
                   <li
                     class="comment"
-                    style="margin-left: {Math.min(depth, 6) * 18}px"
+                    style="margin-left: {Math.min(depth, 6) * 16}px"
                   >
                     <div class="comment__meta">
                       <span>user #{c.creator_id}</span>
@@ -320,8 +331,10 @@
                   placeholder="Write a reply…"
                   bind:value={replyBody}
                 ></textarea>
-                <button class="btn" type="submit" disabled={!replyBody.trim()}
-                  >Reply</button
+                <button
+                  class="action-btn"
+                  type="submit"
+                  disabled={!replyBody.trim()}>Reply</button
                 >
               </form>
             </div>
@@ -336,52 +349,42 @@
   .threads {
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm, 0.5rem);
+    gap: var(--space-sm);
   }
   .threads__head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--space-sm);
+  }
+  .threads__head--compact {
+    justify-content: flex-end;
   }
   .threads__head h2 {
     margin: 0;
-  }
-  .btn {
-    padding: 6px 12px;
-    background: #1a1a1a;
-    color: #fff;
-    border: 2px solid var(--color-border, #333);
-    box-shadow: 2px 2px 0 #000;
-    font-family: var(--font-mono, monospace);
-    font-weight: bold;
+    font-size: var(--text-lg);
     text-transform: uppercase;
     letter-spacing: 1pt;
-    font-size: var(--text-sm, 0.85rem);
-    cursor: pointer;
-  }
-  .btn--primary {
-    background: var(--color-accent, #b8860b);
-  }
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+    padding-bottom: var(--space-xs);
+    border-bottom: 2px solid var(--color-text);
+    flex: 1;
   }
   .composer {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    border: 2px solid var(--color-border, #333);
-    padding: 10px;
-    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--color-border);
+    padding: var(--space-sm);
+    background: var(--color-bg);
   }
   .composer input,
   .composer textarea {
-    background: var(--color-bg-input, #111);
-    color: inherit;
-    border: 2px solid var(--color-border, #333);
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
     padding: 6px 10px;
-    font-family: inherit;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
   }
   .composer__actions {
     display: flex;
@@ -393,11 +396,11 @@
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
   }
   .thread {
-    border: 2px solid var(--color-border, #333);
-    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
   }
   .thread__head {
     width: 100%;
@@ -405,38 +408,45 @@
     border: 0;
     color: inherit;
     text-align: left;
-    padding: 10px 12px;
+    padding: var(--space-sm);
     display: flex;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--space-sm);
     cursor: pointer;
     font: inherit;
+    font-size: var(--text-sm);
   }
   .thread.expanded .thread__head {
-    border-bottom: 1px dashed var(--color-border, #333);
+    border-bottom: 1px dashed var(--color-border);
+    background: #fafafa;
   }
   .thread__title {
     font-weight: bold;
   }
   .thread__meta {
-    color: var(--color-muted, #888);
-    font-size: var(--text-sm, 0.85rem);
+    color: var(--color-muted);
+    font-size: 0.7rem;
+    white-space: nowrap;
   }
   .thread__body {
-    padding: 12px;
+    padding: var(--space-sm);
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--space-sm);
   }
   .link-card {
     display: inline-block;
     padding: 6px 10px;
-    border: 2px solid var(--color-border, #333);
-    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--color-border);
+    background: #fafafa;
     word-break: break-all;
+    color: var(--color-accent);
+    font-size: var(--text-sm);
+    text-decoration: none;
   }
   .markdown {
     white-space: pre-wrap;
+    font-size: var(--text-sm);
   }
   .comments {
     list-style: none;
@@ -444,21 +454,24 @@
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
   }
   .comment {
-    border-left: 2px solid var(--color-border, #333);
+    border-left: 2px solid var(--color-border);
     padding: 4px 8px;
   }
   .comment__meta {
-    color: var(--color-muted, #888);
-    font-size: var(--text-sm, 0.85rem);
+    color: var(--color-muted);
+    font-size: 0.65rem;
     display: flex;
     gap: 8px;
     align-items: center;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
   }
   .comment__body {
     white-space: pre-wrap;
+    font-size: var(--text-sm);
   }
   .reply {
     display: flex;
@@ -466,35 +479,45 @@
     gap: 6px;
   }
   .reply textarea {
-    background: var(--color-bg-input, #111);
-    color: inherit;
-    border: 2px solid var(--color-border, #333);
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
     padding: 6px 10px;
-    font-family: inherit;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
   }
   .muted {
-    color: var(--color-muted, #888);
-    font-size: var(--text-sm, 0.85rem);
+    color: var(--color-muted);
+    font-size: var(--text-sm);
   }
-  .warn {
-    padding: 8px 10px;
-    border: 2px solid #d97706;
-    color: #fbbf24;
-    font-size: var(--text-sm, 0.85rem);
+  .notice {
+    padding: 6px 10px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    font-size: var(--text-sm);
   }
-  .error {
-    padding: 8px 10px;
-    border: 2px solid #ef4444;
-    color: #fca5a5;
-    font-size: var(--text-sm, 0.85rem);
+  .notice--warn {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+  .notice--error {
+    border-color: #c00;
+    color: #c00;
   }
   .link {
     background: transparent;
     border: 0;
-    color: var(--color-accent, #b8860b);
+    color: var(--color-accent);
     cursor: pointer;
     text-decoration: underline;
     padding: 0;
     font: inherit;
+  }
+  @media (max-width: 640px) {
+    .thread__head {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+    }
   }
 </style>

@@ -749,6 +749,22 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
 
 <!-- Global styles for dynamically rendered grid items (innerHTML) -->
 <style is:global>
+  .grid-item__meta .discuss-chip,
+  .feed-item__meta .discuss-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    color: var(--color-muted);
+    border: 1px solid var(--color-border);
+    padding: 0 5px;
+    margin-left: 4px;
+  }
+</style>
+
+<style is:global>
   .results-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -1911,6 +1927,36 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       scrollPageDetectHandler();
     }
 
+    async function enrichDiscussionCounts(ids: string[]) {
+      if (!ids.length) return;
+      try {
+        const res = await fetch(
+          `/api/threads/counts?anchor_type=media_item&anchor_ids=${encodeURIComponent(ids.join(','))}`,
+          { credentials: 'include' },
+        );
+        if (!res.ok) return;
+        const body = await res.json();
+        const counts: Record<string, number> = body.counts || {};
+        for (const [id, count] of Object.entries(counts)) {
+          if (!count) continue;
+          // Inject into grid + feed tiles; both have `.grid-item__meta` or
+          // `.feed-item__meta` siblings keyed by `data-id`.
+          const tile = document.querySelector(
+            `.grid-item[data-id="${CSS.escape(id)}"] .grid-item__meta, .feed-item[data-id="${CSS.escape(id)}"] .feed-item__meta`,
+          );
+          if (tile && !tile.querySelector('.discuss-chip')) {
+            const chip = document.createElement('span');
+            chip.className = 'discuss-chip';
+            chip.title = `${count} thread${count === 1 ? '' : 's'}`;
+            chip.textContent = `💬 ${count}`;
+            tile.appendChild(chip);
+          }
+        }
+      } catch {
+        // Silent — discussion is a nice-to-have surface
+      }
+    }
+
     function renderResults() {
       if (allResults.length === 0) {
         emptyEl.style.display = 'block';
@@ -2107,6 +2153,11 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
           })
           .join('');
       }
+
+      // Async-enrich rendered tiles with discussion-thread counts.
+      // The proxy degrades gracefully if Lemmy isn't configured, so failures
+      // are silent.
+      enrichDiscussionCounts(allResults.map((it) => it.id));
 
       // Pagination vs infinite-scroll progress footer — feed gets the
       // continuous "1–48 of 230" footer + scroll loader; grid and list get
