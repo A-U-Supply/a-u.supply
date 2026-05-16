@@ -121,12 +121,15 @@ import Admin from '../../../layouts/Admin.astro';
     );
   }
 
+  let initialized = false;
   async function init() {
     const params = new URLSearchParams(window.location.search);
     const id = params.get('id');
     const headerEl = document.getElementById('header');
     const islandsEl = document.getElementById('islands');
     if (!id || !headerEl || !islandsEl) return;
+    if (initialized) return;
+    initialized = true;
 
     const user = await (window as any).__authReady;
     if (!user) return;
@@ -255,5 +258,8 @@ import Admin from '../../../layouts/Admin.astro';
       } catch {}
     }
     mounted = [];
+    initialized = false;
   });
+  // Direct-hit fallback: module scripts can load after astro:page-load fires.
+  init();
 </script>
