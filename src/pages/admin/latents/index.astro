@@ -6,38 +6,42 @@ import Admin from '../../../layouts/Admin.astro';
   <div class="page-header">
     <h1>Latents</h1>
     <div class="header-actions">
-      <a class="btn-primary" href="/admin/latents/new">+ New latent</a>
+      <a class="btn-primary" href="/admin/latents/new">+ New Latent</a>
     </div>
   </div>
   <p class="page-subtitle">
-    Pre-release workspace. Each latent gathers files, slots, notes, and
+    Pre-release workspace. Each latent gathers files, slots, notes and
     discussion for an in-progress work.
   </p>
 
-  <div class="filters">
-    <label class="filter">
-      <span>Status</span>
-      <select id="filter-status">
-        <option value="">all</option>
-        <option value="forming">forming</option>
-        <option value="developing">developing</option>
-        <option value="fixing">fixing</option>
-        <option value="abandoned">abandoned</option>
-      </select>
-    </label>
-    <label class="filter">
-      <span>Kind</span>
-      <select id="filter-kind">
-        <option value="">all</option>
-        <option value="album">album</option>
-        <option value="video">video</option>
-        <option value="zine">zine</option>
-        <option value="other">other</option>
-      </select>
-    </label>
+  <div class="filter-bar">
+    <div class="filter-group">
+      <span class="filter-group__label">Status</span>
+      <div class="chip-row" id="status-chips">
+        <button class="chip active" data-status="">all</button>
+        <button class="chip" data-status="forming">forming</button>
+        <button class="chip" data-status="developing">developing</button>
+        <button class="chip" data-status="fixing">fixing</button>
+        <button class="chip" data-status="abandoned">abandoned</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-group__label">Kind</span>
+      <div class="chip-row" id="kind-chips">
+        <button class="chip active" data-kind="">all</button>
+        <button class="chip" data-kind="album">album</button>
+        <button class="chip" data-kind="video">video</button>
+        <button class="chip" data-kind="zine">zine</button>
+        <button class="chip" data-kind="other">other</button>
+      </div>
+    </div>
   </div>
 
-  <div id="latents-list" class="latent-cards">Loading…</div>
+  <div id="latents-list" class="latent-grid" aria-busy="true">
+    <div class="latent-skeleton"></div>
+    <div class="latent-skeleton"></div>
+    <div class="latent-skeleton"></div>
+  </div>
 </Admin>
 
 <style>
@@ -45,36 +49,83 @@ import Admin from '../../../layouts/Admin.astro';
     color: var(--color-muted);
     font-size: var(--text-sm);
     margin-top: var(--space-xs);
+    max-width: 60ch;
   }
-  .filters {
+  .filter-bar {
     display: flex;
     gap: var(--space-md);
     margin: var(--space-md) 0;
     flex-wrap: wrap;
+    border-top: 1px dotted var(--color-border);
+    border-bottom: 1px dotted var(--color-border);
+    padding: var(--space-sm) 0;
   }
-  .filter {
+  .filter-group {
     display: flex;
-    gap: 6px;
     align-items: center;
-    color: var(--color-muted);
-    font-size: var(--text-sm);
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+  }
+  .filter-group__label {
+    font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 1pt;
+    color: var(--color-muted);
   }
-  .filter select {
+  .chip-row {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .chip {
+    padding: 3px 10px;
     background: var(--color-bg);
     color: var(--color-text);
     border: 1px solid var(--color-border);
-    padding: 4px 8px;
+    cursor: pointer;
     font-family: var(--font-mono);
     font-size: var(--text-sm);
+    text-transform: lowercase;
+    transition:
+      background 80ms,
+      color 80ms,
+      border-color 80ms;
   }
-  .latent-cards {
+  .chip:hover {
+    border-color: var(--color-text);
+  }
+  .chip.active {
+    background: var(--color-text);
+    color: var(--color-bg);
+    border-color: var(--color-text);
+  }
+  .latent-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: var(--space-sm);
   }
-  :global(.latent-cards .card) {
+  .latent-skeleton {
+    border: 1px solid var(--color-border);
+    height: 92px;
+    background: linear-gradient(
+      90deg,
+      var(--color-bg) 0%,
+      rgba(0, 0, 0, 0.04) 50%,
+      var(--color-bg) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
+  }
+  @keyframes shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+  :global(.latent-grid .card) {
+    position: relative;
     border: 1px solid var(--color-border);
     background: var(--color-bg);
     padding: var(--space-sm);
@@ -83,16 +134,29 @@ import Admin from '../../../layouts/Admin.astro';
     gap: 6px;
     text-decoration: none;
     color: inherit;
-    transition: border-color 80ms;
+    transition:
+      border-color 80ms,
+      transform 80ms,
+      box-shadow 80ms;
   }
-  :global(.latent-cards .card:hover) {
-    border-color: var(--color-accent);
+  :global(.latent-grid .card:hover) {
+    border-color: var(--color-text);
+    transform: translate(-1px, -1px);
+    box-shadow: 2px 2px 0 var(--color-text);
   }
-  :global(.latent-cards .card__title) {
-    font-weight: bold;
+  :global(.latent-grid .card__title) {
+    font-weight: 700;
     font-size: var(--text-base);
+    line-height: 1.25;
+    word-break: break-word;
   }
-  :global(.latent-cards .card__meta) {
+  :global(.latent-grid .card__sub) {
+    color: var(--color-muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+  }
+  :global(.latent-grid .card__meta) {
     display: flex;
     gap: var(--space-sm);
     color: var(--color-muted);
@@ -101,102 +165,171 @@ import Admin from '../../../layouts/Admin.astro';
     letter-spacing: 1pt;
     flex-wrap: wrap;
     align-items: center;
+    margin-top: auto;
   }
-  :global(.latent-cards .status-pill) {
-    padding: 2px 8px;
+  :global(.latent-grid .status-pill) {
+    padding: 1px 8px;
     border: 1px solid var(--c, var(--color-muted));
     color: var(--c, var(--color-muted));
+    background: var(--color-bg);
+  }
+  :global(.latent-grid .empty) {
+    grid-column: 1 / -1;
+    border: 1px dashed var(--color-border);
+    padding: var(--space-lg);
+    text-align: center;
+    color: var(--color-muted);
+  }
+  :global(.latent-grid .empty strong) {
+    display: block;
+    color: var(--color-text);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    font-size: var(--text-sm);
   }
   @media (max-width: 640px) {
-    .latent-cards {
+    .latent-grid {
       grid-template-columns: 1fr;
+    }
+    .filter-bar {
+      flex-direction: column;
+      gap: var(--space-sm);
     }
   }
 </style>
 
 <script>
-  async function bindLatentList() {
-    const list = document.getElementById('latents-list');
-    if (!list) return;
-    if ((list as any).dataset.bound) return;
-    (list as any).dataset.bound = '1';
+  let initialized = false;
+  let activeStatus = '';
+  let activeKind = '';
+  let listEl: HTMLElement | null = null;
 
-    const user = await (window as any).__authReady;
-    if (!user) return;
-
-    const statusSel = document.getElementById(
-      'filter-status',
-    ) as HTMLSelectElement;
-    const kindSel = document.getElementById('filter-kind') as HTMLSelectElement;
-
-    function statusColor(s: string): string {
-      return (
+  function escapeHtml(s: string): string {
+    return (s || '').replace(
+      /[&<>"']/g,
+      (c) =>
         (
-          {
-            forming: '#9ca3af',
-            developing: '#b8860b',
-            fixing: '#080',
-            abandoned: '#6b7280',
-          } as Record<string, string>
-        )[s] || '#888'
-      );
-    }
+          ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;',
+          }) as Record<string, string>
+        )[c],
+    );
+  }
 
-    async function refresh() {
-      const params = new URLSearchParams();
-      if (statusSel.value) params.set('status', statusSel.value);
-      if (kindSel.value) params.set('kind', kindSel.value);
-      const res = await fetch('/api/projects?' + params.toString(), {
+  function statusColor(s: string): string {
+    return (
+      (
+        {
+          forming: '#9ca3af',
+          developing: '#b8860b',
+          fixing: '#080',
+          abandoned: '#6b7280',
+        } as Record<string, string>
+      )[s] || '#888'
+    );
+  }
+
+  function fmtCount(n: number, unit: string): string {
+    return `${n} ${unit}${n === 1 ? '' : 's'}`;
+  }
+
+  async function refresh() {
+    if (!listEl) return;
+    const params = new URLSearchParams();
+    if (activeStatus) params.set('status', activeStatus);
+    if (activeKind) params.set('kind', activeKind);
+    listEl.setAttribute('aria-busy', 'true');
+    let res: Response;
+    try {
+      res = await fetch('/api/projects?' + params.toString(), {
         credentials: 'include',
       });
-      if (!res.ok) {
-        list!.innerHTML = '<p>Failed to load.</p>';
-        return;
-      }
-      const body = await res.json();
-      const projects = body.projects || [];
-      if (projects.length === 0) {
-        list!.innerHTML = '<p class="muted">No latents yet.</p>';
-        return;
-      }
-      list!.innerHTML = projects
-        .map((p: any) => {
-          const c = statusColor(p.status);
-          const updated = p.updated_at
-            ? new Date(p.updated_at).toLocaleDateString()
-            : '';
-          return `<a class="card" href="/admin/latents/detail?id=${encodeURIComponent(p.id)}">
-              <div class="card__title">${escapeHtml(p.name)}</div>
-              <div class="card__meta">
-                <span>${escapeHtml(p.kind)}</span>
-                <span class="status-pill" style="--c:${c}">${escapeHtml(p.status)}</span>
-                <span>updated ${updated}</span>
-              </div>
-            </a>`;
-        })
-        .join('');
+    } catch (e) {
+      listEl.innerHTML =
+        '<div class="empty"><strong>Network error</strong>Could not reach the API.</div>';
+      listEl.setAttribute('aria-busy', 'false');
+      return;
     }
-
-    function escapeHtml(s: string): string {
-      return (s || '').replace(
-        /[&<>"']/g,
-        (c) =>
-          (
-            ({
-              '&': '&amp;',
-              '<': '&lt;',
-              '>': '&gt;',
-              '"': '&quot;',
-              "'": '&#39;',
-            }) as Record<string, string>
-          )[c],
-      );
+    if (!res.ok) {
+      listEl.innerHTML = `<div class="empty"><strong>Failed to load</strong>HTTP ${res.status}</div>`;
+      listEl.setAttribute('aria-busy', 'false');
+      return;
     }
+    const body = await res.json();
+    const projects = body.projects || [];
+    if (projects.length === 0) {
+      listEl.innerHTML = `<div class="empty">
+          <strong>No latents yet</strong>
+          A latent is a pre-release workspace. Create one to start gathering
+          files, slots and discussion.
+          <div style="margin-top: var(--space-sm);">
+            <a class="btn-primary" href="/admin/latents/new">+ New Latent</a>
+          </div>
+        </div>`;
+      listEl.setAttribute('aria-busy', 'false');
+      return;
+    }
+    listEl.innerHTML = projects
+      .map((p: any) => {
+        const c = statusColor(p.status);
+        const updated = p.updated_at
+          ? new Date(p.updated_at).toLocaleDateString()
+          : '';
+        return `<a class="card" href="/admin/latents/detail?id=${encodeURIComponent(p.id)}">
+            <div class="card__title">${escapeHtml(p.name)}</div>
+            <div class="card__sub">${escapeHtml(p.kind)}</div>
+            <div class="card__meta">
+              <span class="status-pill" style="--c:${c}">${escapeHtml(p.status)}</span>
+              <span>updated ${escapeHtml(updated)}</span>
+            </div>
+          </a>`;
+      })
+      .join('');
+    listEl.setAttribute('aria-busy', 'false');
+  }
 
-    statusSel.addEventListener('change', refresh);
-    kindSel.addEventListener('change', refresh);
+  function wireChips(rowId: string, on: (val: string) => void) {
+    const row = document.getElementById(rowId);
+    if (!row) return;
+    row.addEventListener('click', (e) => {
+      const t = (e.target as HTMLElement).closest(
+        'button[data-status],button[data-kind]',
+      ) as HTMLButtonElement | null;
+      if (!t) return;
+      row
+        .querySelectorAll('.chip')
+        .forEach((b) => b.classList.remove('active'));
+      t.classList.add('active');
+      on((t.dataset.status ?? t.dataset.kind) || '');
+    });
+  }
+
+  async function init() {
+    listEl = document.getElementById('latents-list');
+    if (!listEl) return;
+    const user = await (window as any).__authReady;
+    if (!user) return;
+    if (initialized) return;
+    initialized = true;
+    wireChips('status-chips', (v) => {
+      activeStatus = v;
+      refresh();
+    });
+    wireChips('kind-chips', (v) => {
+      activeKind = v;
+      refresh();
+    });
     refresh();
   }
-  document.addEventListener('astro:page-load', bindLatentList);
-  bindLatentList();
+
+  document.addEventListener('astro:page-load', init);
+  document.addEventListener('astro:after-swap', () => {
+    initialized = false;
+  });
+  init();
 </script>
