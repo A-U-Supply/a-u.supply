@@ -90,6 +90,76 @@ import Admin from '../../layouts/Admin.astro';
   <p id="no-admin" style="color: var(--color-muted); display:none;">
     Admin access required for user management.
   </p>
+
+  <!-- Fold (Lemmy) account linkage -->
+  <section id="lemmy" class="settings-card">
+    <h3 class="settings-card__title">Fold account linkage</h3>
+    <p class="settings-card__sub">
+      Latents thread discussion runs on
+      <a href="https://fold.a-u.supply" target="_blank" rel="noopener"
+        >fold.a-u.supply</a
+      >. Link your fold account once — your credentials are exchanged for a
+      session token (encrypted and stored server-side) and never persisted.
+    </p>
+    <div id="lemmy-status">Loading…</div>
+    <form id="lemmy-link-form" class="settings-form" hidden>
+      <input
+        type="text"
+        name="username"
+        placeholder="fold username"
+        required
+        autocomplete="off"
+      />
+      <input
+        type="password"
+        name="password"
+        placeholder="fold password"
+        required
+        autocomplete="current-password"
+      />
+      <button type="submit" class="btn-primary">Link</button>
+    </form>
+    <p id="lemmy-error" class="settings-error" hidden></p>
+  </section>
+
+  <!-- GitHub personal access tokens -->
+  <section id="github" class="settings-card">
+    <h3 class="settings-card__title">GitHub personal access tokens</h3>
+    <p class="settings-card__sub">
+      Add a fine-grained or classic PAT to read private repos and clone them for
+      sandboxed script runs. Tokens are encrypted server-side and never shown
+      again after creation.
+    </p>
+    <table class="release-table" id="gh-table">
+      <thead>
+        <tr>
+          <th>Label</th>
+          <th>GitHub user</th>
+          <th>Scopes</th>
+          <th>Last used</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="gh-tbody"></tbody>
+    </table>
+    <form id="gh-add-form" class="settings-form">
+      <input
+        type="text"
+        name="label"
+        placeholder="Label (e.g. personal)"
+        required
+      />
+      <input
+        type="password"
+        name="token"
+        placeholder="ghp_… or github_pat_…"
+        required
+        autocomplete="off"
+      />
+      <button type="submit" class="btn-primary">Add token</button>
+    </form>
+    <p id="gh-error" class="settings-error" hidden></p>
+  </section>
 </Admin>
 
 <style>
@@ -125,6 +195,65 @@ import Admin from '../../layouts/Admin.astro';
   .invite-form__row select {
     flex: 1;
     min-width: 120px;
+  }
+
+  /* ─── Linkage cards (fold + github) ─── */
+  .settings-card {
+    margin-top: var(--space-lg);
+    padding: var(--space-md);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+  }
+  .settings-card__title {
+    margin: 0 0 var(--space-xs);
+    font-size: var(--text-base);
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+  }
+  .settings-card__sub {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    margin: 0 0 var(--space-sm);
+    max-width: 70ch;
+  }
+  .settings-form {
+    display: flex;
+    gap: var(--space-xs);
+    flex-wrap: wrap;
+    margin-top: var(--space-sm);
+  }
+  .settings-form input {
+    flex: 1;
+    min-width: 160px;
+    padding: 6px 10px;
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+  .settings-error {
+    color: #c00;
+    font-size: var(--text-sm);
+    margin: var(--space-xs) 0 0;
+  }
+  .linked-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: #f4f4f4;
+    border: 1px solid var(--color-border);
+    font-size: var(--text-sm);
+  }
+  .linked-pill__dot {
+    width: 8px;
+    height: 8px;
+    background: #080;
+    border-radius: 50%;
+  }
+  .linked-pill__dot--off {
+    background: var(--color-muted);
   }
 </style>
 
@@ -251,5 +380,165 @@ import Admin from '../../layouts/Admin.astro';
         successEl.style.display = 'block';
         loadUsers();
       });
+
+    // ─── Fold (Lemmy) linkage ───
+    const lemmyStatusEl = document.getElementById('lemmy-status')!;
+    const lemmyForm = document.getElementById(
+      'lemmy-link-form',
+    ) as HTMLFormElement;
+    const lemmyError = document.getElementById(
+      'lemmy-error',
+    ) as HTMLParagraphElement;
+
+    function escapeHtml(s: string): string {
+      return (s || '').replace(
+        /[&<>"']/g,
+        (c) =>
+          (
+            ({
+              '&': '&amp;',
+              '<': '&lt;',
+              '>': '&gt;',
+              '"': '&quot;',
+              "'": '&#39;',
+            }) as Record<string, string>
+          )[c],
+      );
+    }
+
+    async function refreshLemmyStatus() {
+      const res = await fetch('/api/admin/lemmy/status', {
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        lemmyStatusEl.innerHTML =
+          '<p style="color: var(--color-muted)">Lemmy status unavailable.</p>';
+        return;
+      }
+      const s = await res.json();
+      if (!s.configured) {
+        lemmyStatusEl.innerHTML =
+          '<p style="color: var(--color-muted)">Fold not configured on this server (LEMMY_URL not set).</p>';
+        lemmyForm.hidden = true;
+        return;
+      }
+      if (s.linked) {
+        lemmyStatusEl.innerHTML = `
+          <div class="linked-pill"><span class="linked-pill__dot"></span> Linked to ${escapeHtml(s.lemmy_url || '')} (id ${s.lemmy_user_id ?? '?'})</div>
+          <button class="action-btn" id="lemmy-unlink" style="margin-left:8px;">Unlink</button>`;
+        document
+          .getElementById('lemmy-unlink')
+          ?.addEventListener('click', async () => {
+            await fetch('/api/admin/lemmy/unlink', {
+              method: 'POST',
+              credentials: 'include',
+            });
+            refreshLemmyStatus();
+          });
+        lemmyForm.hidden = true;
+      } else {
+        lemmyStatusEl.innerHTML = `<div class="linked-pill"><span class="linked-pill__dot linked-pill__dot--off"></span> Not linked yet</div>`;
+        lemmyForm.hidden = false;
+      }
+    }
+
+    lemmyForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      lemmyError.hidden = true;
+      const data = Object.fromEntries(new FormData(lemmyForm));
+      const res = await fetch('/api/admin/lemmy/link', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fold_username: data.username,
+          fold_password: data.password,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        lemmyError.textContent =
+          (body?.detail && (body.detail.message || body.detail)) ||
+          'Link failed';
+        lemmyError.hidden = false;
+        return;
+      }
+      lemmyForm.reset();
+      refreshLemmyStatus();
+    });
+
+    refreshLemmyStatus();
+
+    // ─── GitHub PATs ───
+    const ghTbody = document.getElementById('gh-tbody')!;
+    const ghForm = document.getElementById('gh-add-form') as HTMLFormElement;
+    const ghError = document.getElementById('gh-error') as HTMLParagraphElement;
+
+    async function refreshGhTokens() {
+      const res = await fetch('/api/github/tokens', { credentials: 'include' });
+      if (!res.ok) {
+        ghTbody.innerHTML = '';
+        return;
+      }
+      const body = await res.json();
+      const rows = body.tokens || [];
+      if (rows.length === 0) {
+        ghTbody.innerHTML =
+          '<tr><td colspan="5" style="color: var(--color-muted)">No PATs stored yet.</td></tr>';
+        return;
+      }
+      ghTbody.innerHTML = rows
+        .map(
+          (t: any) => `
+        <tr>
+          <td>${escapeHtml(t.label)}</td>
+          <td>${t.github_login ? '@' + escapeHtml(t.github_login) : '—'}</td>
+          <td>${(t.scopes || []).map((s: string) => escapeHtml(s)).join(', ') || '—'}</td>
+          <td>${t.last_used_at ? new Date(t.last_used_at).toLocaleDateString() : '—'}</td>
+          <td><button class="action-btn action-btn--danger" data-gh-del="${t.id}">Revoke</button></td>
+        </tr>`,
+        )
+        .join('');
+    }
+
+    ghTbody.addEventListener('click', async (e) => {
+      const btn = (e.target as HTMLElement).closest(
+        '[data-gh-del]',
+      ) as HTMLButtonElement | null;
+      if (!btn) return;
+      if (
+        !confirm(
+          'Revoke this token? Repos using it will fall back to anonymous access.',
+        )
+      )
+        return;
+      await fetch(`/api/github/tokens/${btn.dataset.ghDel}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      refreshGhTokens();
+    });
+
+    ghForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      ghError.hidden = true;
+      const data = Object.fromEntries(new FormData(ghForm));
+      const res = await fetch('/api/github/tokens', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        ghError.textContent = body?.detail || 'Add failed';
+        ghError.hidden = false;
+        return;
+      }
+      ghForm.reset();
+      refreshGhTokens();
+    });
+
+    refreshGhTokens();
   });
 </script>
