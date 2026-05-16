@@ -218,6 +218,18 @@ def _jobs_by_app_link(app_name: str) -> str:
     return f"{SITE_URL}/admin/jobs?app={quote(app_name, safe='')}"
 
 
+def _latent_link(project_id: str) -> str:
+    return f"{SITE_URL}/admin/latents/detail?id={quote(project_id, safe='')}"
+
+
+def _latents_index_link() -> str:
+    return f"{SITE_URL}/admin/latents"
+
+
+def _search_detail_link(media_item_id: str) -> str:
+    return f"{SITE_URL}/admin/search/detail?id={quote(media_item_id, safe='')}"
+
+
 def _jobs_for_batch_link(batch_id: str) -> str:
     return f"{SITE_URL}/admin/jobs?batch_id={quote(batch_id, safe='')}"
 
@@ -529,6 +541,51 @@ def _maybe_with_cover(text: str, code: str, published: bool, alt: str) -> dict:
     return payload
 
 
+def _format_latent_created(u: str, d: dict) -> dict:
+    pid = d.get("project_id") or ""
+    name = d.get("name") or "(untitled)"
+    kind = d.get("kind") or "other"
+    verb = _pick(pid, ["opened", "started", "began", "set up"])
+    text = f"🎞 *{u}* {verb} a new latent: *{name}* ({kind})\n<{_latent_link(pid)}|open latent>"
+    return {"text": text, "unfurl_links": False}
+
+
+def _format_latent_status_changed(u: str, d: dict) -> dict:
+    pid = d.get("project_id") or ""
+    name = d.get("name") or "(untitled)"
+    status = d.get("status") or "?"
+    prior = d.get("prior_status") or "?"
+    text = f"🎞 *{u}* moved *{name}* `{prior} → {status}`\n<{_latent_link(pid)}|open latent>"
+    return {"text": text, "unfurl_links": False}
+
+
+def _format_latent_abandoned(u: str, d: dict) -> dict:
+    pid = d.get("project_id") or ""
+    name = d.get("name") or "(untitled)"
+    text = f"🎞 *{u}* abandoned the latent *{name}*\n<{_latent_link(pid)}|open latent>"
+    return {"text": text, "unfurl_links": False}
+
+
+def _format_latent_thread_created(u: str, d: dict) -> dict:
+    anchor_type = d.get("anchor_type") or "project"
+    anchor_id = d.get("anchor_id") or ""
+    title = d.get("title") or "(untitled)"
+    if anchor_type == "media_item":
+        link = _search_detail_link(anchor_id)
+        where = "in *the Stacks*"
+    elif anchor_type in ("project", "slot"):
+        # For slot anchors we don't know the parent project here without an extra
+        # join; the thread payload carries enough for a meaningful message.
+        link = _latents_index_link()
+        where = "in a *Latent*"
+    else:
+        link = _latents_index_link()
+        where = ""
+    verb = _pick(title, ["opened", "started", "posted"])
+    text = f"💬 *{u}* {verb} a new thread {where}: *{title}*\n<{link}|view>"
+    return {"text": text, "unfurl_links": False}
+
+
 _IMMEDIATE_FORMATTERS = {
     "release.created": _format_release_created,
     "release.updated": _format_release_updated,
@@ -541,6 +598,10 @@ _IMMEDIATE_FORMATTERS = {
     "app.updated": _format_app_updated,
     "output.indexed": _format_output_indexed,
     "outputs.indexed_bulk": _format_outputs_indexed_bulk,
+    "latent.created": _format_latent_created,
+    "latent.status_changed": _format_latent_status_changed,
+    "latent.abandoned": _format_latent_abandoned,
+    "latent.thread_created": _format_latent_thread_created,
 }
 
 
@@ -658,6 +719,26 @@ def _format_rollup_lines(rows: list[ActivityLog], users_by_id: dict[int, str]) -
                 f"• *{user_name}* {verb} {count} output{plural}{suffix} to the midden"
                 f" — <{_midden_link()}|review>"
             )
+
+        elif event_type == "latent.items_added":
+            project_ids = Counter(p.get("project_id") for p in payloads if p.get("project_id"))
+            top_proj = project_ids.most_common(3)
+            proj_bits = ", ".join(
+                f"<{_latent_link(pid)}|*latent*>" for pid, _ in top_proj
+            )
+            suffix = f" to {proj_bits}" if proj_bits else " to a latent"
+            verb = _pick(user_name + "latent_attach", ["attached", "added", "filed"])
+            lines.append(f"• *{user_name}* {verb} {count} file{plural}{suffix}")
+
+        elif event_type == "latent.document_edited":
+            doc_names = {p.get("document_name") for p in payloads if p.get("document_name")}
+            edited_names = ", ".join(f"*{n}*" for n in list(doc_names)[:3])
+            project_ids = {p.get("project_id") for p in payloads if p.get("project_id")}
+            link = ""
+            if project_ids:
+                pid = next(iter(project_ids))
+                link = f" — <{_latent_link(pid)}|open>"
+            lines.append(f"• *{user_name}* edited {edited_names or 'a latent document'}{link}")
 
         elif event_type == "output.indexed":
             apps = Counter(p.get("app_name") for p in payloads if p.get("app_name"))

@@ -107,6 +107,7 @@ class SearchRequest(BaseModel):
     sort: str | None = Field(None, description="Sort field and direction, e.g. `created_at:desc`, `total_reaction_count:desc`, `file_size_bytes:asc`. Null for relevance sorting.")
     page: int = Field(1, ge=1, description="Page number (1-indexed).")
     per_page: int = Field(20, ge=1, le=500, description="Results per page (max 500).")
+    include_emulsion: bool = Field(False, description="Also search the private Emulsion (Latents) index. Admin only.")
 
 
 class MediaUpdateRequest(BaseModel):
@@ -284,6 +285,41 @@ def _media_type_from_mime(mime: str) -> str | None:
         return "audio"
     elif mime.startswith("video/"):
         return "video"
+    return None
+
+
+# DAW / NLE / photo project-file extensions → tool name. Used to detect `session`
+# uploads when the MIME type is generic (zip / octet-stream).
+SESSION_EXT_TO_TOOL = {
+    ".logicx": "logic",
+    ".als": "ableton",
+    ".flp": "flstudio",
+    ".ptx": "protools",
+    ".ptxt": "protools",
+    ".rpp": "reaper",
+    ".bwproject": "bitwig",
+    ".prproj": "premiere",
+    ".drp": "davinci",
+    ".fcpbundle": "finalcut",
+    ".aep": "aftereffects",
+    ".lrcat": "lightroom",
+    ".cosession": "captureone",
+}
+
+
+def _detect_session_tool(filename: str | None) -> str | None:
+    """Inspect a filename for a known DAW/NLE/photo project extension.
+
+    Returns the canonical tool name, or None if not a recognised session bundle.
+    macOS bundle uploads are typically zipped (the bundle directory + .zip) but
+    the original filename usually retains the source extension.
+    """
+    if not filename:
+        return None
+    name_lower = filename.lower()
+    for ext, tool in SESSION_EXT_TO_TOOL.items():
+        if name_lower.endswith(ext) or name_lower.endswith(ext + ".zip"):
+            return tool
     return None
 
 
@@ -554,6 +590,7 @@ def search_media(
         sort=sort_list,
         page=body.page,
         per_page=body.per_page,
+        include_emulsion=body.include_emulsion,
     )
     return results
 
@@ -971,10 +1008,14 @@ def get_public_output_thumbnail(
 
 @router.post("/media/upload", status_code=201, tags=["Media Items"], summary="Upload a media file")
 async def upload_media(
-    file: UploadFile = File(..., description="The media file to upload. Supported types: images, audio, video."),
+    file: UploadFile = File(..., description="The media file to upload. Supported types: images, audio, video, session (DAW/NLE bundles)."),
     tags: str = Form("", description="Comma-separated tags to apply (e.g. `drums,percussive,loop`). Optional."),
     description: str = Form("", description="Freeform notes or description. Optional."),
     output_index: str = Form("", description="Index name to file this item under (e.g. `outputs`). Optional."),
+    project_id: str = Form("", description="If set, the uploaded item is auto-attached to this Latent and indexed into Emulsion."),
+    slot_id: str = Form("", description="If set with project_id, the item also attaches to this slot inside the Latent."),
+    force_session: str = Form("", description="If 'true', treat the file as a `session` media type (DAW/NLE project file)."),
+    tool: str = Form("", description="For session uploads, the tool that produced the file (e.g. 'logic', 'ableton')."),
     _auth=Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
@@ -1001,7 +1042,17 @@ async def upload_media(
 
     # Detect MIME type
     mime = file.content_type or mimetypes.guess_type(file.filename or "")[0] or "application/octet-stream"
-    media_type = _media_type_from_mime(mime)
+
+    # Session detection — explicit override OR known DAW/NLE/photo extension
+    detected_tool = _detect_session_tool(file.filename)
+    is_session = (force_session.lower() == "true") or bool(detected_tool)
+    if is_session:
+        media_type = "session"
+        session_tool = (tool or detected_tool or "other").lower()
+    else:
+        media_type = _media_type_from_mime(mime)
+        session_tool = None
+
     if not media_type:
         raise HTTPException(status_code=400, detail=f"Unsupported MIME type: {mime}")
 
@@ -1019,6 +1070,33 @@ async def upload_media(
         db.add(source)
         if output_index and not existing.output_index:
             existing.output_index = output_index
+        # If uploaded inside a Latent, attach the existing item (idempotent via UniqueConstraint)
+        if project_id:
+            from server.models import Project, ProjectItem, ProjectSlot
+            project = db.query(Project).filter(Project.id == project_id).first()
+            if not project:
+                raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+            resolved_slot_id = None
+            if slot_id:
+                slot = db.query(ProjectSlot).filter(
+                    ProjectSlot.id == slot_id,
+                    ProjectSlot.project_id == project_id,
+                ).first()
+                if not slot:
+                    raise HTTPException(status_code=404, detail=f"Slot {slot_id} not found in project {project_id}")
+                resolved_slot_id = slot.id
+            dup_attach = db.query(ProjectItem).filter(
+                ProjectItem.project_id == project_id,
+                ProjectItem.slot_id == resolved_slot_id,
+                ProjectItem.media_item_id == existing.id,
+            ).first()
+            if not dup_attach:
+                db.add(ProjectItem(
+                    project_id=project_id,
+                    slot_id=resolved_slot_id,
+                    media_item_id=existing.id,
+                    added_by=_auth.id if hasattr(_auth, "id") else None,
+                ))
         db.commit()
         meili_sync(db, existing)
         item = _get_media_item_or_404(db, existing.id)
@@ -1063,6 +1141,41 @@ async def upload_media(
         media_tag = MediaTag(media_item_id=item_id, tag=tag)
         db.add(media_tag)
         _update_vocabulary(db, tag, 1)
+
+    # Session metadata sidecar
+    if is_session:
+        from server.models import MediaSessionMeta
+        session_meta = MediaSessionMeta(
+            media_item_id=item_id,
+            tool=session_tool or "other",
+            original_bundle_name=safe_filename,
+            bundle_size_bytes=len(content),
+        )
+        db.add(session_meta)
+
+    # Auto-attach to a Latent (and optional slot) when project_id provided
+    if project_id:
+        from server.models import Project, ProjectItem, ProjectSlot
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+        # Verify slot belongs to project if provided
+        resolved_slot_id = None
+        if slot_id:
+            slot = db.query(ProjectSlot).filter(
+                ProjectSlot.id == slot_id,
+                ProjectSlot.project_id == project_id,
+            ).first()
+            if not slot:
+                raise HTTPException(status_code=404, detail=f"Slot {slot_id} not found in project {project_id}")
+            resolved_slot_id = slot.id
+        attachment = ProjectItem(
+            project_id=project_id,
+            slot_id=resolved_slot_id,
+            media_item_id=item_id,
+            added_by=_auth.id if hasattr(_auth, "id") else None,
+        )
+        db.add(attachment)
 
     db.commit()
     db.refresh(media_item)

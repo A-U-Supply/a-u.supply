@@ -1,0 +1,111 @@
+---
+import Admin from '../../../layouts/Admin.astro';
+---
+
+<Admin title="New Latent" current="latents">
+  <div class="page-header">
+    <h1>New Latent</h1>
+  </div>
+  <p class="page-subtitle">A fresh pre-release workspace.</p>
+
+  <form id="new-form" class="form">
+    <label class="field">
+      <span>Name</span>
+      <input type="text" name="name" required maxlength="200" />
+    </label>
+    <label class="field">
+      <span>Kind</span>
+      <select name="kind">
+        <option value="album">album</option>
+        <option value="video">video</option>
+        <option value="zine">zine</option>
+        <option value="other" selected>other</option>
+      </select>
+    </label>
+    <div class="actions">
+      <button type="submit" class="btn-primary">Create</button>
+      <a class="action-btn" href="/admin/latents">Cancel</a>
+    </div>
+    <p id="error" class="error" hidden></p>
+  </form>
+</Admin>
+
+<style>
+  .page-subtitle {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    margin-top: var(--space-xs);
+  }
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    max-width: 480px;
+    margin-top: var(--space-md);
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+  }
+  .field input,
+  .field select {
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    padding: 6px 10px;
+    font-family: var(--font-mono);
+    font-size: var(--text-base);
+    text-transform: none;
+  }
+  .actions {
+    display: flex;
+    gap: var(--space-sm);
+  }
+  .error {
+    color: #c00;
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+</style>
+
+<script>
+  document.addEventListener('astro:page-load', () => {
+    const form = document.getElementById('new-form') as HTMLFormElement | null;
+    const err = document.getElementById('error') as HTMLParagraphElement | null;
+    if (!form || !err) return;
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      err.hidden = true;
+      const fd = new FormData(form);
+      const payload = {
+        name: String(fd.get('name') || ''),
+        kind: String(fd.get('kind') || 'other'),
+      };
+      try {
+        const res = await fetch('/api/projects', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          err.textContent = body?.detail || `Failed (${res.status})`;
+          err.hidden = false;
+          return;
+        }
+        const body = await res.json();
+        window.location.href = `/admin/latents/detail?id=${encodeURIComponent(body.id)}`;
+      } catch (e: any) {
+        err.textContent = e?.message || 'Network error';
+        err.hidden = false;
+      }
+    });
+  });
+</script>

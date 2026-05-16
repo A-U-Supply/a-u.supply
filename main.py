@@ -33,7 +33,9 @@ from server.admin_api import router as admin_router
 from server.bookmarks_api import router as bookmarks_router
 from server.catalog import router as catalog_router
 from server.jobs_api import router as jobs_router
+from server.latents_api import router as latents_router
 from server.search_api import router as search_router
+from server.threads_api import router as threads_router
 from server.models import Base, User, engine
 
 logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
@@ -88,6 +90,39 @@ if "comments" not in _sa_inspect(engine).get_table_names():
 if "reactions" not in _sa_inspect(engine).get_table_names():
     from server.models import Reaction as _Reaction
     _Reaction.__table__.create(bind=engine)
+
+# Migrate existing DB: add Lemmy account linkage columns to users
+_user_cols = [c["name"] for c in _sa_inspect(engine).get_columns("users")]
+if "lemmy_user_id" not in _user_cols:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE users ADD COLUMN lemmy_user_id INTEGER"))
+if "lemmy_token_encrypted" not in _user_cols:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE users ADD COLUMN lemmy_token_encrypted TEXT"))
+
+# Migrate existing DB: create Latents tables first so the FK from releases.latent_id resolves
+_existing_tables = set(_sa_inspect(engine).get_table_names())
+from server.models import (
+    Project as _Project,
+    ProjectSlot as _ProjectSlot,
+    ProjectItem as _ProjectItem,
+    SlotPrimaryPin as _SlotPrimaryPin,
+    ProjectDocument as _ProjectDocument,
+    ProjectDocumentRevision as _ProjectDocumentRevision,
+    Thread as _Thread,
+    MediaSessionMeta as _MediaSessionMeta,
+)
+for _model in (_Project, _ProjectSlot, _ProjectItem, _SlotPrimaryPin, _ProjectDocument, _ProjectDocumentRevision, _Thread, _MediaSessionMeta):
+    if _model.__tablename__ not in _existing_tables:
+        _model.__table__.create(bind=engine)
+
+# Migrate existing DB: add latent_id column to releases (reserved for v2 Latent->Release promotion).
+# Plain TEXT (no FK) — keeps the migration trivial across SQLite versions; the SQLAlchemy
+# model still expresses the FK at the ORM layer.
+_release_cols_v2 = [c["name"] for c in _sa_inspect(engine).get_columns("releases")]
+if "latent_id" not in _release_cols_v2:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE releases ADD COLUMN latent_id TEXT"))
 
 
 # ---------------------------------------------------------------------------
@@ -492,7 +527,9 @@ app.include_router(admin_router)
 app.include_router(bookmarks_router)
 app.include_router(catalog_router)
 app.include_router(jobs_router)
+app.include_router(latents_router)
 app.include_router(search_router)
+app.include_router(threads_router)
 
 IS_PRODUCTION = os.environ.get("PRODUCTION", "").lower() in ("1", "true", "yes")
 

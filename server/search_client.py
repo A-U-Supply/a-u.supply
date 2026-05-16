@@ -12,9 +12,11 @@ from server.models import (
     MediaAudioMeta,
     MediaImageMeta,
     MediaItem,
+    MediaSessionMeta,
     MediaSource,
     MediaTag,
     MediaVideoMeta,
+    ProjectItem,
     User,
 )
 
@@ -26,6 +28,11 @@ MEILISEARCH_MASTER_KEY = os.environ.get("MEILISEARCH_MASTER_KEY", "")
 _client = None
 
 INDEX_NAMES = {"image": "images", "audio": "audio", "video": "video"}
+
+# Emulsion is the destination for user-uploaded items (any media_type) and for
+# the `session` media type (DAW/NLE project files), routed at index time.
+EMULSION_INDEX = "emulsion"
+STACKS_COMMUNITY_NAME = "stacks"
 
 # Shared index configuration
 SEARCHABLE_ATTRIBUTES = [
@@ -66,6 +73,8 @@ FILTERABLE_ATTRIBUTES = [
     "job_model",
     "has_transcript",
     "has_text",
+    "project_ids",
+    "tool",
 ]
 
 SORTABLE_ATTRIBUTES = [
@@ -110,7 +119,8 @@ def configure_indexes() -> None:
         "displayedAttributes": ["*"],
     }
 
-    for index_name in INDEX_NAMES.values():
+    all_indexes = list(INDEX_NAMES.values()) + [EMULSION_INDEX]
+    for index_name in all_indexes:
         try:
             client.create_index(index_name, {"primaryKey": "id"})
         except meilisearch.errors.MeilisearchApiError:
@@ -118,6 +128,21 @@ def configure_indexes() -> None:
             pass
         client.index(index_name).update_settings(settings)
         logger.info("Configured Meilisearch index: %s", index_name)
+
+
+def _index_for_media_item(media_item: MediaItem) -> str | None:
+    """Decide which Meilisearch index a media item belongs in.
+
+    - `session` media type always goes to Emulsion.
+    - Items whose only sources are `manual_upload` go to Emulsion (user uploads).
+    - Everything else routes by media_type via INDEX_NAMES.
+    """
+    if media_item.media_type == "session":
+        return EMULSION_INDEX
+    sources = list(media_item.sources or [])
+    if sources and all(getattr(s, "source_type", None) == "manual_upload" for s in sources):
+        return EMULSION_INDEX
+    return INDEX_NAMES.get(media_item.media_type)
 
 
 def _hex_to_color_name(hex_color: str) -> str:
@@ -405,12 +430,24 @@ def _build_document(db: Session, media_item: MediaItem) -> dict:
         doc["audio_transcript"] = meta.audio_transcript
         doc["has_transcript"] = bool(meta.audio_transcript)
 
+    elif media_item.media_type == "session" and media_item.session_meta:
+        meta = media_item.session_meta
+        doc["tool"] = meta.tool
+        doc["tool_version"] = meta.tool_version
+        doc["original_bundle_name"] = meta.original_bundle_name
+        doc["bundle_size_bytes"] = meta.bundle_size_bytes
+        doc["notes"] = meta.notes
+
+    # Latents membership — filterable so a single doc can be found via any Latent it belongs to.
+    project_ids = [pi.project_id for pi in db.query(ProjectItem).filter(ProjectItem.media_item_id == media_item.id).all()]
+    doc["project_ids"] = list(set(project_ids))
+
     return doc
 
 
 def sync_media_item(db: Session, media_item: MediaItem) -> None:
     """Build a document from a MediaItem and upsert it to the correct Meilisearch index."""
-    index_name = INDEX_NAMES.get(media_item.media_type)
+    index_name = _index_for_media_item(media_item)
     if not index_name:
         logger.warning("Unknown media_type '%s' for item %s", media_item.media_type, media_item.id)
         return
@@ -423,9 +460,16 @@ def sync_media_item(db: Session, media_item: MediaItem) -> None:
         logger.exception("Failed to sync media item %s to Meilisearch", media_item.id)
 
 
-def delete_media_item(media_item_id: str, media_type: str) -> None:
-    """Remove a media item from the Meilisearch index."""
-    index_name = INDEX_NAMES.get(media_type)
+def delete_media_item(media_item_id: str, media_type: str, *, source_type: str | None = None) -> None:
+    """Remove a media item from the Meilisearch index.
+
+    For user-uploaded items (`source_type='manual_upload'`) or `session` types, the doc
+    lives in Emulsion regardless of media_type.
+    """
+    if media_type == "session" or source_type == "manual_upload":
+        index_name = EMULSION_INDEX
+    else:
+        index_name = INDEX_NAMES.get(media_type)
     if not index_name:
         logger.warning("Unknown media_type '%s' for deletion of %s", media_type, media_item_id)
         return
@@ -458,24 +502,48 @@ def multi_search(
     sort: list[str] | None = None,
     page: int = 1,
     per_page: int = 20,
+    include_emulsion: bool = False,
 ) -> dict:
     """Execute a multi-index search across specified media type indexes.
 
     Returns combined results with hits, total counts, facet distributions,
     facet stats (min/max for numeric fields), and per-type hit counts.
+
+    `include_emulsion=True` adds the private Emulsion index (admin only).
     """
     client = get_client()
 
-    if not media_types:
+    # `None` → default to the three public indices. An explicit empty list is
+    # respected so callers can opt into Emulsion-only searches (e.g. the
+    # "Pull from index" modal restricted to Emulsion).
+    if media_types is None:
         media_types = ["image", "audio", "video"]
 
     queries = []
     for mt in media_types:
-        index_name = INDEX_NAMES.get(mt)
+        if mt == "emulsion" or mt == "session":
+            if not include_emulsion:
+                continue
+            index_name = EMULSION_INDEX
+        else:
+            index_name = INDEX_NAMES.get(mt)
         if not index_name:
             continue
         q = {
             "indexUid": index_name,
+            "q": query,
+            "limit": 10000,
+            "offset": 0,
+            "facets": ALL_FACETS,
+        }
+        if filters:
+            q["filter"] = filters
+        if sort and sort != ["random"]:
+            q["sort"] = sort
+        queries.append(q)
+    if include_emulsion and EMULSION_INDEX not in [q.get("indexUid") for q in queries]:
+        q = {
+            "indexUid": EMULSION_INDEX,
             "q": query,
             "limit": 10000,
             "offset": 0,
