@@ -74,10 +74,15 @@ import Admin from '../../../layouts/Admin.astro';
 </style>
 
 <script>
-  document.addEventListener('astro:page-load', () => {
+  function bindLatentNewForm() {
     const form = document.getElementById('new-form') as HTMLFormElement | null;
     const err = document.getElementById('error') as HTMLParagraphElement | null;
     if (!form || !err) return;
+    // Astro fires `astro:page-load` once per navigation; on a direct hit, this
+    // module can load AFTER the event already fired, so listen for both and
+    // also call init at script-eval time. Guard so we never double-bind.
+    if ((form.dataset as any).bound) return;
+    (form.dataset as any).bound = '1';
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -107,5 +112,7 @@ import Admin from '../../../layouts/Admin.astro';
         err.hidden = false;
       }
     });
-  });
+  }
+  document.addEventListener('astro:page-load', bindLatentNewForm);
+  bindLatentNewForm();
 </script>

@@ -115,9 +115,11 @@ import Admin from '../../../layouts/Admin.astro';
 </style>
 
 <script>
-  document.addEventListener('astro:page-load', async () => {
+  async function bindLatentList() {
     const list = document.getElementById('latents-list');
     if (!list) return;
+    if ((list as any).dataset.bound) return;
+    (list as any).dataset.bound = '1';
 
     const user = await (window as any).__authReady;
     if (!user) return;
@@ -194,5 +196,7 @@ import Admin from '../../../layouts/Admin.astro';
     statusSel.addEventListener('change', refresh);
     kindSel.addEventListener('change', refresh);
     refresh();
-  });
+  }
+  document.addEventListener('astro:page-load', bindLatentList);
+  bindLatentList();
 </script>
