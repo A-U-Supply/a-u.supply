@@ -83,6 +83,12 @@ import Admin from '../../../layouts/Admin.astro';
       <div id="threads-island"></div>
     </div>
 
+    <!-- Cross-Latent links related to this media item -->
+    <div class="latent-links-section">
+      <h2>Latent links</h2>
+      <div id="latent-links-island"></div>
+    </div>
+
     <!-- Sources section -->
     <div class="sources-section">
       <h2>Sources</h2>
@@ -237,13 +243,15 @@ import Admin from '../../../layouts/Admin.astro';
   .tags-section,
   .sources-section,
   .extraction-section,
-  .threads-section {
+  .threads-section,
+  .latent-links-section {
     margin-top: var(--space-lg);
   }
   .tags-section h2,
   .sources-section h2,
   .extraction-section h2,
-  .threads-section h2 {
+  .threads-section h2,
+  .latent-links-section h2 {
     font-size: var(--text-lg);
     text-transform: uppercase;
     letter-spacing: 1pt;
@@ -402,8 +410,10 @@ import Admin from '../../../layouts/Admin.astro';
   import { addItemsToWorkspace } from '../../../lib/workspace';
   import { mount, unmount } from 'svelte';
   import Threads from '../../../components/Threads.svelte';
+  import LatentLinks from '../../../components/LatentLinks.svelte';
 
   let threadsInstance: any = null;
+  let latentLinksInstance: any = null;
 
   document.addEventListener('astro:before-swap', () => {
     if (threadsInstance) {
@@ -411,6 +421,12 @@ import Admin from '../../../layouts/Admin.astro';
         unmount(threadsInstance);
       } catch {}
       threadsInstance = null;
+    }
+    if (latentLinksInstance) {
+      try {
+        unmount(latentLinksInstance);
+      } catch {}
+      latentLinksInstance = null;
     }
   });
 
@@ -450,6 +466,22 @@ import Admin from '../../../layouts/Admin.astro';
           anchorId: mediaId,
           title: 'Discussion',
         },
+      });
+    }
+
+    // Mount the cross-Latent links island for this media item
+    const linksTarget = document.getElementById('latent-links-island');
+    if (linksTarget) {
+      if (latentLinksInstance) {
+        try {
+          unmount(latentLinksInstance);
+        } catch {}
+        latentLinksInstance = null;
+      }
+      linksTarget.innerHTML = '';
+      latentLinksInstance = mount(LatentLinks, {
+        target: linksTarget,
+        props: { mediaItemId: mediaId, readOnly: true },
       });
     }
 

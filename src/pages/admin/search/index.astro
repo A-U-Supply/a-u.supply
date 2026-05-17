@@ -1694,6 +1694,9 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         sort: sortMap[filters.sortBy] || null,
         page: currentPage,
         per_page: pageSize,
+        // Admin search always includes the private Latents/Emulsion index —
+        // otherwise user-uploaded Latent files appear nowhere in the stacks.
+        include_emulsion: true,
         filters: {},
       };
       if (filters.channels.length)

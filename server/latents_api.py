@@ -25,6 +25,7 @@ from server.models import (
     ProjectDocument,
     ProjectDocumentRevision,
     ProjectItem,
+    ProjectLink,
     ProjectSlot,
     SlotPrimaryPin,
     Thread,
@@ -995,3 +996,196 @@ def reorder_documents(
         by_id[did].position = i + 1
     db.commit()
     return {"documents": [_document_summary(by_id[did]) for did in body.order]}
+
+
+# ---------------------------------------------------------------------------
+# Links — free-form URLs pinned to a Latent or one of its slots.
+# Uses the same Slack permalink recognition as the search engine indexes.
+# ---------------------------------------------------------------------------
+
+
+_SLACK_PERMALINK_RE = re.compile(
+    r"^https?://(?:[\w-]+\.)?slack\.com/archives/[A-Z0-9]+/p\d+",
+    re.IGNORECASE,
+)
+_DRIVE_RE = re.compile(r"^https?://drive\.google\.com/", re.IGNORECASE)
+_DROPBOX_RE = re.compile(r"^https?://(?:www\.)?dropbox\.com/", re.IGNORECASE)
+_SOUNDCLOUD_RE = re.compile(r"^https?://(?:www\.)?soundcloud\.com/", re.IGNORECASE)
+_YOUTUBE_RE = re.compile(r"^https?://(?:www\.|m\.)?(?:youtube\.com|youtu\.be)/", re.IGNORECASE)
+_GITHUB_RE = re.compile(r"^https?://(?:www\.)?github\.com/", re.IGNORECASE)
+
+
+def _detect_link_kind(url: str) -> str:
+    if not url:
+        return "link"
+    if _SLACK_PERMALINK_RE.match(url):
+        return "slack"
+    if _DRIVE_RE.match(url):
+        return "drive"
+    if _DROPBOX_RE.match(url):
+        return "dropbox"
+    if _SOUNDCLOUD_RE.match(url):
+        return "soundcloud"
+    if _YOUTUBE_RE.match(url):
+        return "youtube"
+    if _GITHUB_RE.match(url):
+        return "github"
+    return "link"
+
+
+def _link_summary(link: ProjectLink) -> dict:
+    return {
+        "id": link.id,
+        "project_id": link.project_id,
+        "slot_id": link.slot_id,
+        "url": link.url,
+        "label": link.label,
+        "kind": link.kind,
+        "position": link.position,
+        "created_at": link.created_at.isoformat() if link.created_at else None,
+        "created_by": link.created_by,
+    }
+
+
+class CreateLinkBody(BaseModel):
+    url: str = Field(..., min_length=4)
+    label: str | None = None
+    slot_id: str | None = None
+    position: int | None = None
+
+
+@router.get("/{project_id}/links", summary="List links for a Latent (incl. all its slots)")
+def list_links(
+    project_id: str,
+    slot_id: str | None = Query(None, description="If set, return only links anchored to this slot."),
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    _project_or_404(db, project_id)
+    q = db.query(ProjectLink).filter(ProjectLink.project_id == project_id)
+    if slot_id is not None:
+        if slot_id == "":  # explicit empty = top-level only
+            q = q.filter(ProjectLink.slot_id.is_(None))
+        else:
+            q = q.filter(ProjectLink.slot_id == slot_id)
+    rows = q.order_by(ProjectLink.position, ProjectLink.created_at).all()
+    return {"links": [_link_summary(r) for r in rows]}
+
+
+@router.post("/{project_id}/links", status_code=201, summary="Add a link to a Latent or slot")
+def create_link(
+    project_id: str,
+    body: CreateLinkBody,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    _project_or_404(db, project_id)
+    resolved_slot_id = None
+    if body.slot_id:
+        slot = _slot_or_404(db, project_id, body.slot_id)
+        resolved_slot_id = slot.id
+    if body.position is None:
+        max_pos = db.query(func.max(ProjectLink.position)).filter(
+            ProjectLink.project_id == project_id,
+            ProjectLink.slot_id == resolved_slot_id,
+        ).scalar() or 0
+        position = max_pos + 1
+    else:
+        position = body.position
+    link = ProjectLink(
+        id=str(uuid.uuid4()),
+        project_id=project_id,
+        slot_id=resolved_slot_id,
+        url=body.url.strip(),
+        label=(body.label or None),
+        kind=_detect_link_kind(body.url.strip()),
+        position=position,
+        created_by=user.id,
+    )
+    db.add(link)
+    db.commit()
+    db.refresh(link)
+    return _link_summary(link)
+
+
+@router.delete("/{project_id}/links/{link_id}", status_code=204, summary="Remove a link")
+def delete_link(
+    project_id: str,
+    link_id: str,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    link = db.query(ProjectLink).filter(
+        ProjectLink.id == link_id, ProjectLink.project_id == project_id,
+    ).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="Link not found")
+    db.delete(link)
+    db.commit()
+    return None
+
+
+# Companion endpoint mounted on the media router would be ideal, but keeping
+# it inside the Latents router avoids touching search_api.py: the search
+# detail page calls this directly. Anchored under /api/media to read as
+# media-centric, but the implementation belongs with project linkage.
+links_for_media_router = APIRouter(prefix="/api/media", tags=["Latents"])
+
+
+@links_for_media_router.get(
+    "/{media_item_id}/latent-links",
+    summary="All Latent + slot links related to this media item",
+)
+def latent_links_for_media(
+    media_item_id: str,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """For the search detail page: return every link from every Latent and
+    every slot this media item is attached to. Each link carries
+    project_slug + project_name + slot_label so the UI can group them."""
+    rows = (
+        db.query(ProjectItem.project_id, ProjectItem.slot_id)
+        .filter(ProjectItem.media_item_id == media_item_id)
+        .distinct()
+        .all()
+    )
+    if not rows:
+        return {"links": []}
+    project_ids = {r[0] for r in rows}
+    slot_ids = {r[1] for r in rows if r[1] is not None}
+
+    projects_by_id = {
+        p.id: p
+        for p in db.query(Project).filter(Project.id.in_(project_ids)).all()
+    }
+    slots_by_id = {
+        s.id: s
+        for s in db.query(ProjectSlot).filter(ProjectSlot.id.in_(slot_ids)).all()
+    } if slot_ids else {}
+
+    # Pull all links for those projects (project-level) and those slots.
+    proj_links = (
+        db.query(ProjectLink)
+        .filter(ProjectLink.project_id.in_(project_ids), ProjectLink.slot_id.is_(None))
+        .all()
+    )
+    slot_links = (
+        db.query(ProjectLink)
+        .filter(ProjectLink.slot_id.in_(slot_ids))
+        .all() if slot_ids else []
+    )
+
+    out: list[dict] = []
+    for link in proj_links + slot_links:
+        p = projects_by_id.get(link.project_id)
+        s = slots_by_id.get(link.slot_id) if link.slot_id else None
+        out.append({
+            **_link_summary(link),
+            "project_slug": p.slug if p else None,
+            "project_name": p.name if p else None,
+            "slot_label": s.label if s else None,
+            "slot_position": s.position if s else None,
+        })
+    out.sort(key=lambda x: (x["project_name"] or "", x.get("slot_position") or 0, x["position"]))
+    return {"links": out}

@@ -93,9 +93,27 @@
     return 'file';
   }
 
+  function looksLikeDirectory(f: File): boolean {
+    // Chrome/Safari report empty mime + size=0 + no extension when a folder
+    // gets dropped. Best-effort filter; the user can drag actual files inside.
+    return !f.type && f.size === 0 && !/\.[A-Za-z0-9]{1,8}$/.test(f.name);
+  }
+
   function addFiles(list: FileList | File[]) {
+    const incoming: File[] = Array.from(list).filter((f) => {
+      if (looksLikeDirectory(f)) return false;
+      return true;
+    });
+    // Confirm before sweeping in a huge batch — accidental Cmd+A or folder
+    // drops on Firefox can balloon the queue without warning otherwise.
+    if (incoming.length > 10) {
+      const ok = confirm(
+        `About to add ${incoming.length} files at once. Continue?`,
+      );
+      if (!ok) return;
+    }
     const next: Item[] = [];
-    for (const f of list) {
+    for (const f of incoming) {
       if (
         items.some((it) => it.file.name === f.name && it.file.size === f.size)
       )
@@ -118,8 +136,7 @@
       next.push(item);
     }
     items = [...items, ...next];
-    // Auto-fire the upload — staging files behind a separate "Upload" button
-    // was confusing as hell. uploadAll() is a no-op if already busy or empty.
+    // Auto-fire — staging behind a button was easy to miss.
     if (next.length > 0) {
       void uploadAll();
     }

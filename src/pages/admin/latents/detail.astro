@@ -9,6 +9,7 @@ import Admin from '../../../layouts/Admin.astro';
 
   <div id="islands" class="islands" hidden>
     <section id="repo-island"></section>
+    <section id="links-island"></section>
     <section id="docs-island"></section>
     <section id="slots-island"></section>
     <section id="loose-island"></section>
@@ -197,6 +198,7 @@ import Admin from '../../../layouts/Admin.astro';
   import LatentDocuments from '../../../components/LatentDocuments.svelte';
   import LatentLooseFiles from '../../../components/LatentLooseFiles.svelte';
   import LatentRepoStrip from '../../../components/LatentRepoStrip.svelte';
+  import LatentLinks from '../../../components/LatentLinks.svelte';
   import Threads from '../../../components/Threads.svelte';
 
   let mounted: any[] = [];
@@ -530,6 +532,12 @@ import Admin from '../../../layouts/Admin.astro';
       mount(LatentRepoStrip, {
         target: document.getElementById('repo-island')!,
         props: { projectId: id },
+      }),
+    );
+    mounted.push(
+      mount(LatentLinks, {
+        target: document.getElementById('links-island')!,
+        props: { projectId: id, title: 'Links' },
       }),
     );
     mounted.push(

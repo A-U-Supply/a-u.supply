@@ -34,7 +34,7 @@ from server.bookmarks_api import router as bookmarks_router
 from server.catalog import router as catalog_router
 from server.github_api import router as github_router
 from server.jobs_api import router as jobs_router
-from server.latents_api import router as latents_router
+from server.latents_api import router as latents_router, links_for_media_router
 from server.lemmy_api import router as lemmy_router
 from server.search_api import router as search_router
 from server.threads_api import router as threads_router
@@ -160,14 +160,15 @@ if "is_primary" not in _item_cols:
     with engine.begin() as _conn:
         _conn.execute(_sa_text("ALTER TABLE project_items ADD COLUMN is_primary BOOLEAN NOT NULL DEFAULT 0"))
 
-# Migrate existing DB: create GitHub tables if missing
+# Migrate existing DB: create GitHub + ProjectLink tables if missing
 _existing_tables_g = set(_sa_inspect(engine).get_table_names())
 from server.models import (
     GithubToken as _GithubToken,
     ProjectRepo as _ProjectRepo,
     RepoRun as _RepoRun,
+    ProjectLink as _ProjectLink,
 )
-for _model in (_GithubToken, _ProjectRepo, _RepoRun):
+for _model in (_GithubToken, _ProjectRepo, _RepoRun, _ProjectLink):
     if _model.__tablename__ not in _existing_tables_g:
         _model.__table__.create(bind=engine)
 
@@ -584,6 +585,7 @@ app.include_router(catalog_router)
 app.include_router(github_router)
 app.include_router(jobs_router)
 app.include_router(latents_router)
+app.include_router(links_for_media_router)
 app.include_router(lemmy_router)
 app.include_router(search_router)
 app.include_router(threads_router)
