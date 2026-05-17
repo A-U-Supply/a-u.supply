@@ -68,6 +68,9 @@
   let repoMeta = $state<RepoMeta>(null);
   let runsBySlot = $state<Record<string, any[]>>({});
   let runningSlots = $state<Set<string>>(new Set());
+  // Surface the most recent finished run per slot so the user sees ✓/✗ + tail
+  // after Run completes, instead of the button just snapping back to idle.
+  let lastRun = $state<Record<string, any>>({});
 
   // Inline "link a repo file" editor state — one slot at a time.
   let linkingSlot = $state<string | null>(null);
@@ -193,9 +196,11 @@
       }
       const body = await res.json();
       const jobId = body.job_id;
-      // Poll the job
+      // Poll the job until it leaves pending/running.
+      let finalJob: any = null;
       let attempts = 0;
-      while (attempts < 240) {
+      while (attempts < 720) {
+        // ~30 min at 2.5s
         await new Promise((r) => setTimeout(r, 2500));
         attempts++;
         const jr = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`, {
@@ -208,15 +213,33 @@
           jb.status === 'failed' ||
           jb.status === 'cancelled'
         ) {
+          finalJob = jb;
           break;
         }
       }
-      // Reload slot items + runs + slots (pin may have changed)
+      // Reload slot data so primary pins / items reflect the run output.
       await load();
       await loadItems(slot.id);
       await loadRuns(slot.id);
+      // Stash the most recent run for the slot strip's status display.
+      const runs = runsBySlot[slot.id] || [];
+      if (runs.length) {
+        lastRun = { ...lastRun, [slot.id]: runs[0] };
+      } else if (finalJob) {
+        lastRun = {
+          ...lastRun,
+          [slot.id]: {
+            exit_code: finalJob.status === 'completed' ? 0 : -1,
+            stderr_tail: finalJob.error_message || '',
+          },
+        };
+      }
     } catch (e: any) {
       error = e?.message || 'Run failed';
+      lastRun = {
+        ...lastRun,
+        [slot.id]: { exit_code: -1, stderr_tail: e?.message || 'Run failed' },
+      };
     } finally {
       const next = new Set(runningSlots);
       next.delete(slot.id);
@@ -640,6 +663,24 @@
                 disabled={runningSlots.has(slot.id)}
                 >{runningSlots.has(slot.id) ? '⟳ Running…' : '▶ Run'}</button
               >
+              {#if lastRun[slot.id] && !runningSlots.has(slot.id)}
+                <div
+                  class="run-status"
+                  data-ok={lastRun[slot.id].exit_code === 0}
+                >
+                  {#if lastRun[slot.id].exit_code === 0}
+                    ✓ last run ok
+                  {:else}
+                    ✗ exit {lastRun[slot.id].exit_code} —
+                    <button
+                      class="link link--small"
+                      type="button"
+                      onclick={() => toggleSection(slot.id, 'runs')}
+                      >show output</button
+                    >
+                  {/if}
+                </div>
+              {/if}
             {:else}
               <span class="muted">No source linked.</span>
               <button
@@ -1031,6 +1072,15 @@
   .btn-run {
     padding: 3px 10px;
     font-size: 0.75rem;
+  }
+  .run-status {
+    flex-basis: 100%;
+    font-size: 0.7rem;
+    color: var(--color-muted);
+    padding: 2px 0;
+  }
+  .run-status[data-ok='false'] {
+    color: #c00;
   }
   .link--small {
     font-size: 0.7rem;

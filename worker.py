@@ -432,9 +432,19 @@ def _run_repo_job(job: Job, db: Session) -> None:
         cpu_limit = float(runtime.get("cpu_limit") or 2)
         memory_mb = int(runtime.get("memory_mb") or 2048)
         time_limit = int(runtime.get("time_limit_seconds") or 600)
-        network = bool(runtime.get("network"))
+        # Default to network=true for repo-runs: real-world scripts almost
+        # always need apt-get / pip / soundfont downloads on first run. The
+        # manifest can opt back into the no-network sandbox via network = false.
+        network = runtime.get("network")
+        if network is None:
+            network = True
+        network = bool(network)
 
         # 3. Run inside Docker. Mount repo_dir and out_dir into /work.
+        # Notes on flags we DON'T set:
+        #   --read-only — breaks apt-get / pip writes to /var, /tmp, /root
+        # Notes on flags we keep:
+        #   --cpus, --memory, --pids-limit — cap blast radius without breaking installs
         container_name = f"reporun-{job.id[:12]}"
         docker_cmd = [
             "docker", "run", "--rm",
@@ -444,7 +454,7 @@ def _run_repo_job(job: Job, db: Session) -> None:
             "-v", f"{out_dir}:/work/output",
             "--cpus", str(cpu_limit),
             "--memory", f"{memory_mb}m",
-            "--pids-limit", "256",
+            "--pids-limit", "512",
         ]
         if not network:
             docker_cmd += ["--network", "none"]
