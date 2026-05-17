@@ -151,6 +151,17 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       <input type="number" id="filter-tags-min" min="0" value="0" />
     </div>
 
+    <div class="filter-group">
+      <label class="filter-label">Latents</label>
+      <label class="filter-check">
+        <input type="checkbox" id="filter-include-emulsion" />
+        Include Emulsion (Latent uploads)
+      </label>
+      <div style="font-size:0.6rem; color: var(--color-muted); margin-top:2px;">
+        Off by default — Latent uploads live in their own private index.
+      </div>
+    </div>
+
     <div class="filter-group" id="filter-group-transcript">
       <label class="filter-label">Transcript</label>
       <select id="filter-has-transcript">
@@ -1436,6 +1447,12 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         updateColorMultiHint();
       });
 
+    // Emulsion toggle — re-run search the moment it changes so the user sees
+    // their Latent uploads appear/disappear from the result set immediately.
+    document
+      .getElementById('filter-include-emulsion')
+      ?.addEventListener('change', () => applyAndSearch());
+
     // Search form
     searchForm.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -1699,6 +1716,12 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         'filter-has-text',
       ) as HTMLSelectElement;
       const hasText = textEl.disabled ? '' : textEl.value;
+      const includeEmulsionEl = document.getElementById(
+        'filter-include-emulsion',
+      ) as HTMLInputElement | null;
+      const includeEmulsion = !!(
+        includeEmulsionEl && includeEmulsionEl.checked
+      );
       return {
         types,
         channels,
@@ -1714,6 +1737,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         jobApp,
         hasTranscript,
         hasText,
+        includeEmulsion,
       };
     }
 
@@ -1801,11 +1825,14 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         sort: sortMap[filters.sortBy] || null,
         page: currentPage,
         per_page: pageSize,
-        // Admin search always includes the private Latents/Emulsion index —
-        // otherwise user-uploaded Latent files appear nowhere in the stacks.
-        include_emulsion: true,
         filters: {},
       };
+      // Emulsion (Latent uploads) is opt-in. Latent files live in their own
+      // private index; mixing them into Inputs/Outputs pollutes the curated
+      // scrape view. The "include latents" chip below toggles this.
+      if (filters.includeEmulsion) {
+        body.include_emulsion = true;
+      }
       if (filters.channels.length)
         body.filters.source_channels = filters.channels;
       if (filters.poster) body.filters.poster = filters.poster;
