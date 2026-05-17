@@ -191,13 +191,14 @@ def status_for_user(user) -> dict:
 
 
 def _community_payload(name: str, title: str, description: str | None = None) -> dict:
-    # 0.19.17 only accepts Public / Private. Use Private — the instance is
-    # already private and federation-off, so this is belt-and-suspenders.
+    # Lemmy 0.19.17 accepts `Public` or `LocalOnly` (not Private — that's
+    # 0.20). LocalOnly + instance-level private + federation-off = nothing
+    # ever leaves fold.
     out: dict[str, Any] = {
         "name": name,
         "title": title,
         "nsfw": False,
-        "visibility": "Private",
+        "visibility": "LocalOnly",
     }
     if description:
         out["description"] = description
