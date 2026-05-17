@@ -62,6 +62,9 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     return user
 
 
+# `require_admin` is defined after `get_current_user_or_apikey` so it can
+# delegate to that dependency (which accepts both cookie auth and bearer
+# tokens). See below.
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
@@ -151,6 +154,18 @@ def get_current_user_or_apikey(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Not authenticated",
     )
+
+
+# Re-bind `require_admin` to accept admin-scoped API keys too. Anything routed
+# through this dependency now works with either a logged-in admin cookie or a
+# Bearer token whose stored scope is "admin".
+def require_admin(  # noqa: F811 — intentional override of the cookie-only version above
+    user_and_scope: tuple[User, str] = Depends(get_current_user_or_apikey),
+) -> User:
+    user, scope = user_and_scope
+    if scope != "admin" and user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user
 
 
 def require_scope(required: str):
