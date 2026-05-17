@@ -433,9 +433,12 @@ import Admin from '../../../layouts/Admin.astro';
       return;
     }
 
-    // Mount the Threads island for this media item
-    const threadsTarget = document.getElementById('threads-island');
-    if (threadsTarget) {
+    // Threads island is mounted AFTER media loads so we can pass the
+    // filename through as `defaultTitle` (used when the user starts the
+    // discussion with no prior thread — auto-titled "Discussion: <filename>").
+    function mountThreads(filename: string) {
+      const threadsTarget = document.getElementById('threads-island');
+      if (!threadsTarget) return;
       if (threadsInstance) {
         try {
           unmount(threadsInstance);
@@ -449,6 +452,9 @@ import Admin from '../../../layouts/Admin.astro';
           anchorType: 'media_item',
           anchorId: mediaId,
           title: 'Discussion',
+          singleThread: true,
+          defaultTitle: `Discussion: ${filename || 'untitled'}`,
+          currentUserId: user?.id ?? null,
         },
       });
     }
@@ -465,6 +471,7 @@ import Admin from '../../../layouts/Admin.astro';
         loadingEl.style.display = 'none';
         contentEl.style.display = 'block';
         renderDetail();
+        mountThreads(currentItem.filename || 'untitled');
         // Bookmark star
         const bm = (window as any).__bookmarks;
         const starEl = document.getElementById('detail-bm-star');

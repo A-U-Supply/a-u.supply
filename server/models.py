@@ -578,6 +578,9 @@ class Thread(Base):
     lemmy_community_id = Column(Integer, nullable=False)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, nullable=False, default=_utcnow)
+    # Denormalized post title — written on create, refreshed lazily when the
+    # thread is fetched individually. Source of truth stays Lemmy.
+    title_cache = Column(String, nullable=True)
 
     creator = relationship("User")
 

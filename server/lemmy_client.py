@@ -352,6 +352,34 @@ def list_posts(token: str, community_id: int, limit: int = 50) -> list[LemmyPost
     return out
 
 
+def bulk_comment_counts(token: str, community_id: int, limit: int = 50) -> dict[int, int]:
+    """Return `{post_id: comment_count}` for the most recent posts in a community.
+
+    Used to enrich listing chips with reply counts without N round-trips.
+    Single `/post/list` call. Degrades to `{}` if Lemmy unreachable.
+    """
+    if not is_configured():
+        return {}
+    try:
+        resp = _request(
+            "GET",
+            "/api/v3/post/list",
+            token=token,
+            params={"community_id": community_id, "limit": limit, "sort": "New"},
+        )
+    except LemmyUnavailable:
+        return {}
+    out: dict[int, int] = {}
+    if isinstance(resp, dict):
+        for pv in resp.get("posts", []):
+            p = (pv.get("post") or {}) if isinstance(pv, dict) else {}
+            counts = (pv.get("counts") or {}) if isinstance(pv, dict) else {}
+            pid = p.get("id")
+            if pid is not None:
+                out[int(pid)] = int(counts.get("comments") or 0)
+    return out
+
+
 def get_post(token: str, post_id: int) -> tuple[LemmyPost | None, list[LemmyComment]]:
     if not is_configured():
         return None, []
