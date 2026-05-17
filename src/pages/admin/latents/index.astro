@@ -280,7 +280,10 @@ import Admin from '../../../layouts/Admin.astro';
         const updated = p.updated_at
           ? new Date(p.updated_at).toLocaleDateString()
           : '';
-        return `<a class="card" href="/admin/latents/detail?id=${encodeURIComponent(p.id)}">
+        const href = p.slug
+          ? `/admin/latents/${encodeURIComponent(p.slug)}`
+          : `/admin/latents/detail?id=${encodeURIComponent(p.id)}`;
+        return `<a class="card" href="${href}">
             <div class="card__title">${escapeHtml(p.name)}</div>
             <div class="card__sub">${escapeHtml(p.kind)}</div>
             <div class="card__meta">

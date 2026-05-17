@@ -452,6 +452,8 @@ class Project(Base):
     name = Column(String, nullable=False)
     kind = Column(String, nullable=False, default="other")  # album | video | zine | other
     status = Column(String, nullable=False, default="forming")  # forming | developing | fixing | abandoned
+    description = Column(String, nullable=True)        # markdown, longer-form than the name
+    metadata_json = Column(String, nullable=True)      # JSON dict of arbitrary {key: value}
     hero_media_item_id = Column(String, ForeignKey("media_items.id", ondelete="SET NULL"), nullable=True)
     lemmy_community_id = Column(Integer, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -478,6 +480,8 @@ class ProjectSlot(Base):
     notes = Column(String, nullable=True)
     notes_updated_at = Column(DateTime, nullable=True)
     status = Column(String, nullable=False, default="forming")  # forming | developing | fixed
+    description = Column(String, nullable=True)      # markdown
+    metadata_json = Column(String, nullable=True)    # JSON dict of arbitrary {key: value}
     # Optional GitHub repo file/dir association — populated by the link UI or
     # the manifest-sync flow. `repo_id` not declared as FK in code to avoid
     # circular import; enforced by the `projects` migration on prod.
@@ -505,6 +509,7 @@ class ProjectItem(Base):
     media_item_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False, index=True)
     added_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     added_at = Column(DateTime, nullable=False, default=_utcnow)
+    is_primary = Column(Boolean, nullable=False, default=False)  # star toggle — replaces the rigid per-type pin grid
 
     project = relationship("Project", back_populates="items")
     slot = relationship("ProjectSlot", back_populates="items")
