@@ -118,6 +118,12 @@ for _model in (_Project, _ProjectSlot, _ProjectItem, _SlotPrimaryPin, _ProjectDo
     if _model.__tablename__ not in _existing_tables:
         _model.__table__.create(bind=engine)
 
+# Migrate existing DB: denormalized thread title cache for cheap listing previews
+_thread_cols = [c["name"] for c in _sa_inspect(engine).get_columns("threads")]
+if "title_cache" not in _thread_cols:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE threads ADD COLUMN title_cache TEXT"))
+
 # Migrate existing DB: add repo association columns to project_slots
 _slot_cols = [c["name"] for c in _sa_inspect(engine).get_columns("project_slots")]
 for _col, _ddl in (

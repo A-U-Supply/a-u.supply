@@ -21,6 +21,10 @@ from server.models import MediaItem, Project, ProjectSlot, Thread, User
 from server.lemmy_client import (
     LemmyNotLinked,
     LemmyUnavailable,
+    LEMMY_URL,
+    STACKS_COMMUNITY_NAME,
+    _lemmy_safe_name,
+    bulk_comment_counts as lemmy_bulk_comment_counts,
     create_comment as lemmy_create_comment,
     create_post as lemmy_create_post,
     delete_comment as lemmy_delete_comment,
@@ -131,7 +135,24 @@ def _resolve_community_id(db: Session, anchor_type: str, anchor_id: str, token: 
     raise HTTPException(status_code=400, detail=f"unsupported anchor_type '{anchor_type}'")
 
 
-def _thread_summary(t: Thread, post: Any | None = None) -> dict:
+def _community_name_for(db: Session, t: Thread) -> str | None:
+    """Resolve the Lemmy community handle (used to build c/<name> links)."""
+    if t.anchor_type == "media_item":
+        return STACKS_COMMUNITY_NAME
+    if t.anchor_type in ("project", "slot"):
+        # Both project and slot threads live in the project's community.
+        project_id = t.anchor_id
+        if t.anchor_type == "slot":
+            slot = db.query(ProjectSlot).filter(ProjectSlot.id == t.anchor_id).first()
+            if not slot:
+                return None
+            project_id = slot.project_id
+        project = db.query(Project).filter(Project.id == project_id).first()
+        return _lemmy_safe_name(project.slug) if project and project.slug else None
+    return None
+
+
+def _thread_summary(t: Thread, post: Any | None = None, db: Session | None = None) -> dict:
     out = {
         "id": t.id,
         "anchor_type": t.anchor_type,
@@ -140,12 +161,21 @@ def _thread_summary(t: Thread, post: Any | None = None) -> dict:
         "lemmy_community_id": t.lemmy_community_id,
         "created_by": t.created_by,
         "created_at": t.created_at.isoformat() if t.created_at else None,
+        "lemmy_url": f"{LEMMY_URL}/post/{t.lemmy_post_id}" if LEMMY_URL else None,
     }
+    if db is not None:
+        cname = _community_name_for(db, t)
+        if cname:
+            out["community_name"] = cname
+            out["community_url"] = f"{LEMMY_URL}/c/{cname}" if LEMMY_URL else None
+    # Title: prefer live post, else denormalized cache.
     if post is not None:
         out["title"] = post.name
         out["body"] = post.body
         out["url"] = post.url
         out["published"] = post.published
+    elif t.title_cache:
+        out["title"] = t.title_cache
     return out
 
 
@@ -177,26 +207,82 @@ def _availability(user: User) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/counts", summary="Bulk thread counts by anchor_id")
+@router.get("/counts", summary="Bulk thread counts + preview metadata by anchor_id")
 def thread_counts(
     anchor_type: str = Query(...),
     anchor_ids: str = Query("", description="Comma-separated list of anchor ids"),
     user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Per-anchor preview payload for listing chips.
+
+    Returns `{anchor_id: {count, thread_id, lemmy_post_id, lemmy_url, title,
+    comment_count, community_name, community_url}}`. For count > 1 (legacy
+    duplicates), the metadata reflects the most recent thread.
+
+    `comment_count` requires one Lemmy `/post/list` call per distinct community
+    in the result set. Degrades to omitting comment_count (chip falls back to
+    thread count only) if Lemmy is unreachable.
+    """
     if anchor_type not in VALID_ANCHOR_TYPES:
         raise HTTPException(status_code=400, detail=f"unsupported anchor_type '{anchor_type}'")
     ids = [s.strip() for s in (anchor_ids or "").split(",") if s.strip()]
     if not ids:
         return {"counts": {}}
-    from sqlalchemy import func as _func
+
+    # All threads for these anchors, newest first — we need both the count
+    # and the freshest thread per anchor for the preview metadata.
     rows = (
-        db.query(Thread.anchor_id, _func.count(Thread.id))
+        db.query(Thread)
         .filter(Thread.anchor_type == anchor_type, Thread.anchor_id.in_(ids))
-        .group_by(Thread.anchor_id)
+        .order_by(Thread.created_at.desc())
         .all()
     )
-    return {"counts": {aid: int(c) for aid, c in rows}}
+
+    # Group: per-anchor count + most-recent thread row.
+    per_anchor: dict[str, dict[str, Any]] = {}
+    latest_by_anchor: dict[str, Thread] = {}
+    for t in rows:
+        slot = per_anchor.setdefault(t.anchor_id, {"count": 0})
+        slot["count"] += 1
+        if t.anchor_id not in latest_by_anchor:
+            latest_by_anchor[t.anchor_id] = t  # rows are ordered desc → first = newest
+
+    # Hydrate metadata from the newest thread per anchor.
+    for aid, t in latest_by_anchor.items():
+        summary = _thread_summary(t, db=db)
+        per_anchor[aid].update({
+            "thread_id": summary["id"],
+            "lemmy_post_id": summary["lemmy_post_id"],
+            "lemmy_url": summary.get("lemmy_url"),
+            "title": summary.get("title"),
+            "community_name": summary.get("community_name"),
+            "community_url": summary.get("community_url"),
+        })
+
+    # Best-effort comment_count enrichment: one /post/list call per distinct
+    # Lemmy community. For media_item search results, this is always 1 call
+    # (everything lives in `stacks`). Silent failure → chips degrade to count only.
+    if rows and is_configured():
+        try:
+            token = get_user_token(db, user)
+        except (LemmyUnavailable, LemmyNotLinked):
+            token = None
+        if token:
+            community_ids: dict[int, list[Thread]] = {}
+            for t in latest_by_anchor.values():
+                community_ids.setdefault(t.lemmy_community_id, []).append(t)
+            for cid, _threads in community_ids.items():
+                try:
+                    counts_map = lemmy_bulk_comment_counts(token, cid, limit=50)
+                except Exception:
+                    counts_map = {}
+                for t in _threads:
+                    cc = counts_map.get(int(t.lemmy_post_id))
+                    if cc is not None:
+                        per_anchor[t.anchor_id]["comment_count"] = cc
+
+    return {"counts": per_anchor}
 
 
 @router.get("", summary="List threads for an anchor")
@@ -218,34 +304,58 @@ def list_threads(
     avail = _availability(user)
     if not avail["configured"] or not avail["linked"] or not rows:
         for t in rows:
-            out.append(_thread_summary(t))
+            out.append(_thread_summary(t, db=db))
         return {"threads": out, **avail}
 
     try:
         token = get_user_token(db, user)
     except (LemmyUnavailable, LemmyNotLinked):
-        return {"threads": [_thread_summary(t) for t in rows], **avail}
+        return {"threads": [_thread_summary(t, db=db) for t in rows], **avail}
 
+    dirty = False
     for t in rows:
         post = None
         try:
             post, _ = lemmy_get_post(token, t.lemmy_post_id)
         except LemmyUnavailable:
             pass
-        out.append(_thread_summary(t, post))
+        if post is not None and post.name and t.title_cache != post.name:
+            t.title_cache = post.name
+            dirty = True
+        out.append(_thread_summary(t, post, db=db))
+    if dirty:
+        db.commit()
     return {"threads": out, **avail}
 
 
-@router.post("", status_code=201, summary="Create a thread")
+@router.post("", summary="Create a thread (or return existing one for media_item)")
 def create_thread(
     body: CreateThreadBody,
     user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Create a thread anchored to the given entity.
+
+    For `anchor_type=media_item` this endpoint is **upsert-shaped**: if a
+    thread already exists for the item, return it (200) instead of creating a
+    duplicate. One canonical discussion per media item — multiple threads add
+    fragmentation without payoff. Project/slot anchors can host many threads.
+    """
     if body.anchor_type not in VALID_ANCHOR_TYPES:
         raise HTTPException(status_code=400, detail=f"unsupported anchor_type '{body.anchor_type}'")
     if not is_configured():
         raise _LemmyError("unavailable", "Discussion is unavailable (Lemmy not configured)")
+
+    # Upsert path: media_item is single-thread by design.
+    if body.anchor_type == "media_item":
+        existing = (
+            db.query(Thread)
+            .filter(Thread.anchor_type == "media_item", Thread.anchor_id == body.anchor_id)
+            .order_by(Thread.created_at.asc())
+            .first()
+        )
+        if existing is not None:
+            return _thread_summary(existing, db=db)
 
     token = _require_token(db, user)
     community_id = _resolve_community_id(db, body.anchor_type, body.anchor_id, token)
@@ -262,6 +372,7 @@ def create_thread(
         lemmy_post_id=post.id,
         lemmy_community_id=community_id,
         created_by=user.id,
+        title_cache=post.name or body.title,
     )
     db.add(thread)
     db.commit()
@@ -277,7 +388,7 @@ def create_thread(
     except Exception:
         logger.exception("slack notify_immediate(latent.thread_created) failed")
 
-    return _thread_summary(thread, post)
+    return _thread_summary(thread, post, db=db)
 
 
 @router.get("/{thread_id}", summary="Get a thread with comments")
@@ -290,7 +401,7 @@ def get_thread(
     if not t:
         raise HTTPException(status_code=404, detail="thread not found")
     avail = _availability(user)
-    base = {**_thread_summary(t), "comments": [], **avail}
+    base = {**_thread_summary(t, db=db), "comments": [], **avail}
     if not avail["configured"] or not avail["linked"]:
         return base
     try:
@@ -298,7 +409,11 @@ def get_thread(
         post, comments = lemmy_get_post(token, t.lemmy_post_id)
     except (LemmyUnavailable, LemmyNotLinked):
         return base
-    return {**_thread_summary(t, post), "comments": [_comment_dict(c) for c in comments], **avail}
+    # Refresh title_cache lazily on individual reads — keeps listing previews fresh.
+    if post is not None and post.name and t.title_cache != post.name:
+        t.title_cache = post.name
+        db.commit()
+    return {**_thread_summary(t, post, db=db), "comments": [_comment_dict(c) for c in comments], **avail}
 
 
 @router.patch("/{thread_id}", summary="Edit a thread (title or body)")
@@ -318,6 +433,9 @@ def update_thread(
         lemmy_edit_post(token, t.lemmy_post_id, title=body.title, body=body.body)
     except LemmyUnavailable as e:
         raise _LemmyError("unavailable", str(e))
+    if body.title is not None:
+        t.title_cache = body.title
+        db.commit()
     return {"ok": True}
 
 

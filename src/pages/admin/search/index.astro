@@ -251,6 +251,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
             <th>Reactions</th>
             <th>Tags</th>
             <th>Created</th>
+            <th>Discussion</th>
           </tr>
         </thead>
         <tbody id="results-tbody"></tbody>
@@ -749,8 +750,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
 
 <!-- Global styles for dynamically rendered grid items (innerHTML) -->
 <style is:global>
-  .grid-item__meta .discuss-chip,
-  .feed-item__meta .discuss-chip {
+  .discuss-chip {
     display: inline-flex;
     align-items: center;
     gap: 3px;
@@ -761,6 +761,84 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     border: 1px solid var(--color-border);
     padding: 0 5px;
     margin-left: 4px;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .discuss-chip:hover {
+    color: var(--color-text);
+    border-color: var(--color-text);
+  }
+  .grid-item__name-link {
+    color: inherit;
+    text-decoration: none;
+  }
+  .grid-item__name-link:hover {
+    text-decoration: underline;
+  }
+  .feed-item__discuss {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 6px 0;
+    border-top: 1px dashed var(--color-border);
+    border-bottom: 1px dashed var(--color-border);
+    font-size: var(--text-sm);
+  }
+  .feed-item__discuss-label {
+    color: var(--color-muted);
+  }
+  .feed-item__discuss-title {
+    color: var(--color-text);
+    text-decoration: none;
+    font-weight: bold;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .feed-item__discuss-title:hover {
+    text-decoration: underline;
+  }
+  .feed-item__discuss-meta {
+    color: var(--color-muted);
+    font-size: 0.75rem;
+  }
+  .feed-item__discuss-meta a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+  .feed-item__discuss-meta a:hover {
+    text-decoration: underline;
+  }
+  .feed-item__reply-toggle {
+    margin-left: auto;
+  }
+  .feed-item__composer {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 0;
+  }
+  .feed-item__composer textarea {
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    padding: 6px 10px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    resize: vertical;
+  }
+  .feed-item__composer-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .feed-item__composer-help {
+    font-size: 0.7rem;
+    color: var(--color-muted);
   }
 </style>
 
@@ -1927,6 +2005,38 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       scrollPageDetectHandler();
     }
 
+    // Cached preview metadata per item — used by the feed inline-reply
+    // composer so it can post into the right thread (and auto-create it if
+    // none exists). Populated by enrichDiscussionCounts.
+    type DiscussPreview = {
+      count: number;
+      thread_id?: string;
+      lemmy_post_id?: number;
+      lemmy_url?: string;
+      title?: string;
+      comment_count?: number;
+      community_name?: string;
+      community_url?: string;
+    };
+    const discussPreview = new Map<string, DiscussPreview>();
+
+    function renderChipMarkup(id: string, p: DiscussPreview): string {
+      const count = p.count || 0;
+      const replies = p.comment_count;
+      const replyTxt = replies != null ? ` · ${replies}` : '';
+      const labelText = `💬 ${count}${replyTxt}`;
+      const tooltip = `${count} thread${count === 1 ? '' : 's'}${replies != null ? `, ${replies} repl${replies === 1 ? 'y' : 'ies'}` : ''}`;
+      // count==1 → link to Lemmy post directly. count>1 (legacy duplicates)
+      // or count==0 (no thread) → link to detail page anchor.
+      const href =
+        count === 1 && p.lemmy_url
+          ? p.lemmy_url
+          : `/admin/search/detail?id=${encodeURIComponent(id)}#threads-island`;
+      const targetAttr =
+        count === 1 && p.lemmy_url ? ' target="_blank" rel="noopener"' : '';
+      return `<a class="discuss-chip" href="${href}"${targetAttr} title="${tooltip}">${labelText}</a>`;
+    }
+
     async function enrichDiscussionCounts(ids: string[]) {
       if (!ids.length) return;
       try {
@@ -1936,25 +2046,66 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         );
         if (!res.ok) return;
         const body = await res.json();
-        const counts: Record<string, number> = body.counts || {};
-        for (const [id, count] of Object.entries(counts)) {
-          if (!count) continue;
-          // Inject into grid + feed tiles; both have `.grid-item__meta` or
-          // `.feed-item__meta` siblings keyed by `data-id`.
-          const tile = document.querySelector(
-            `.grid-item[data-id="${CSS.escape(id)}"] .grid-item__meta, .feed-item[data-id="${CSS.escape(id)}"] .feed-item__meta`,
+        const counts: Record<string, DiscussPreview> = body.counts || {};
+        for (const [id, raw] of Object.entries(counts)) {
+          // Backward compat: counts used to be `{anchor_id: int}`. New shape
+          // is an object. Tolerate both during deploy roll.
+          const p: DiscussPreview =
+            typeof raw === 'number' ? { count: raw } : raw;
+          if (!p.count) continue;
+          discussPreview.set(id, p);
+
+          // Inject chip into grid / list-row / feed meta rows.
+          const selector =
+            `.grid-item[data-id="${CSS.escape(id)}"] .grid-item__meta, ` +
+            `.feed-item[data-id="${CSS.escape(id)}"] .feed-item__meta, ` +
+            `tr[data-id="${CSS.escape(id)}"] .discuss-cell`;
+          document.querySelectorAll(selector).forEach((tile) => {
+            if (tile.querySelector('.discuss-chip')) return;
+            tile.insertAdjacentHTML('beforeend', renderChipMarkup(id, p));
+          });
+
+          // Feed view: inject the preview row (title + community + replies).
+          const feedItem = document.querySelector(
+            `.feed-item[data-id="${CSS.escape(id)}"]`,
           );
-          if (tile && !tile.querySelector('.discuss-chip')) {
-            const chip = document.createElement('span');
-            chip.className = 'discuss-chip';
-            chip.title = `${count} thread${count === 1 ? '' : 's'}`;
-            chip.textContent = `💬 ${count}`;
-            tile.appendChild(chip);
+          if (feedItem && !feedItem.querySelector('.feed-item__discuss')) {
+            const preview = renderFeedDiscussRow(id, p);
+            const body = feedItem.querySelector('.feed-item__body');
+            const actions = body?.querySelector('.feed-item__actions');
+            if (body && actions) body.insertBefore(preview, actions);
           }
         }
       } catch {
         // Silent — discussion is a nice-to-have surface
       }
+    }
+
+    function renderFeedDiscussRow(id: string, p: DiscussPreview): HTMLElement {
+      const wrap = document.createElement('div');
+      wrap.className = 'feed-item__discuss';
+      wrap.dataset.id = id;
+      const titleText = (p.title || '(thread)').slice(0, 60);
+      const titleHref =
+        p.lemmy_url ||
+        `/admin/search/detail?id=${encodeURIComponent(id)}#threads-island`;
+      const titleTarget = p.lemmy_url ? 'target="_blank" rel="noopener"' : '';
+      const replies = p.comment_count;
+      const replyStr =
+        replies != null
+          ? ` · ${replies} ${replies === 1 ? 'reply' : 'replies'}`
+          : '';
+      const communityHTML =
+        p.community_name && p.community_url
+          ? ` · <a href="${p.community_url}" target="_blank" rel="noopener">c/${p.community_name} ↗</a>`
+          : '';
+      wrap.innerHTML = `
+        <span class="feed-item__discuss-label">💬</span>
+        <a class="feed-item__discuss-title" href="${titleHref}" ${titleTarget}>${titleText}</a>
+        <span class="feed-item__discuss-meta">${replyStr}${communityHTML}</span>
+        <button class="action-btn feed-item__reply-toggle" type="button" data-reply-id="${id}">Reply ▾</button>
+      `;
+      return wrap;
     }
 
     function renderResults() {
@@ -2024,7 +2175,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
             <div class="grid-item__info">
               <div class="grid-item__name" title="${item.filename || ''}">
                 <button class="bm-star bm-star--sm" data-bm-type="media_item" data-bm-id="${item.id}" title="Bookmark"></button>
-                ${item.filename || 'Untitled'}
+                <a class="grid-item__name-link" href="/admin/search/detail?id=${encodeURIComponent(item.id)}">${item.filename || 'Untitled'}</a>
               </div>
               <div class="grid-item__meta">
                 ${poster ? `<span>${poster}</span>` : ''}
@@ -2139,7 +2290,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
                 .filter(Boolean)[0] || '--';
             const channel = (item.source_channels || [])[0] || '--';
             const rxn = item.total_reaction_count ?? 0;
-            return `<tr${pageStartAttr}>
+            return `<tr${pageStartAttr} data-id="${item.id}">
             <td><input type="checkbox" data-select="${item.id}" ${checked} /></td>
             <td><a href="/admin/search/detail?id=${item.id}" style="color: var(--color-text); text-decoration: underline;">${item.filename || 'Untitled'}</a></td>
             <td>${item.media_type || '--'}</td>
@@ -2149,6 +2300,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
             <td>${rxn}</td>
             <td>${tags}</td>
             <td style="white-space:nowrap;">${date}</td>
+            <td class="discuss-cell"></td>
           </tr>`;
           })
           .join('');
@@ -2314,6 +2466,44 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         return;
       }
 
+      // Feed-view inline reply toggle. Lazy-renders a composer below the
+      // discuss row on first click; reuses the mounted composer on subsequent
+      // clicks so a draft survives scroll & view switches.
+      const replyToggle = target.closest(
+        '.feed-item__reply-toggle',
+      ) as HTMLElement | null;
+      if (replyToggle) {
+        e.stopPropagation();
+        e.preventDefault();
+        const itemId = replyToggle.dataset.replyId!;
+        const discussRow = replyToggle.closest(
+          '.feed-item__discuss',
+        ) as HTMLElement | null;
+        if (!discussRow) return;
+        let composer = discussRow.nextElementSibling as HTMLElement | null;
+        if (composer && composer.classList.contains('feed-item__composer')) {
+          const isHidden = composer.style.display === 'none';
+          composer.style.display = isHidden ? 'flex' : 'none';
+          if (isHidden) {
+            composer.querySelector('textarea')?.focus();
+          }
+        } else {
+          composer = document.createElement('form');
+          composer.className = 'feed-item__composer';
+          composer.dataset.id = itemId;
+          composer.innerHTML = `
+            <textarea rows="2" placeholder="Reply…" data-reply-text></textarea>
+            <div class="feed-item__composer-row">
+              <span class="feed-item__composer-help">Posts as you in c/stacks.</span>
+              <button class="action-btn" type="submit" data-reply-submit>Post</button>
+            </div>
+          `;
+          discussRow.insertAdjacentElement('afterend', composer);
+          composer.querySelector('textarea')?.focus();
+        }
+        return;
+      }
+
       // Add to workspace button click
       const wsBtn = target.closest(
         '.grid-item__ws, .feed-item__ws',
@@ -2347,6 +2537,13 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         return;
       }
 
+      // Block grid-item navigation when clicking inside the new filename
+      // link — the link's own href handles it, and the parent grid click
+      // would otherwise also fire openViewerForMedia / a second navigation.
+      if (target.closest('.grid-item__name-link')) {
+        return;
+      }
+
       // Grid item click — image or video tiles open the viewer; audio still
       // navigates to detail (audio is better consumed in the persistent
       // Player via its play button).
@@ -2371,6 +2568,132 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         } else if (id) {
           window.location.href = `/admin/search/detail?id=${id}`;
         }
+      }
+    });
+
+    // Feed-view inline composer submit. Auto-creates the thread if the item
+    // has none yet (server POST is upsert-shaped for media_item, so this is
+    // safe — returns the existing thread on repeat calls). Then posts the
+    // comment. On success: bump the chip count, clear textarea, brief toast
+    // linking to the Lemmy post.
+    document.addEventListener('submit', async (e) => {
+      const form = e.target as HTMLElement;
+      if (!form.classList?.contains('feed-item__composer')) return;
+      e.preventDefault();
+      const itemId = (form as HTMLElement).dataset.id!;
+      const textarea = form.querySelector(
+        '[data-reply-text]',
+      ) as HTMLTextAreaElement | null;
+      const submitBtn = form.querySelector(
+        '[data-reply-submit]',
+      ) as HTMLButtonElement | null;
+      if (!textarea || !submitBtn) return;
+      const body = textarea.value.trim();
+      if (!body) return;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Posting…';
+      try {
+        let preview = discussPreview.get(itemId) || { count: 0 };
+        let threadId = preview.thread_id;
+        // First reply to an item with no thread → create one (auto-titled
+        // "Discussion: <filename>") then post the comment.
+        if (!threadId) {
+          const item = allResults.find((r: any) => r.id === itemId);
+          const filename = item?.filename || 'untitled';
+          const createRes = await fetch('/api/threads', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              anchor_type: 'media_item',
+              anchor_id: itemId,
+              title: `Discussion: ${filename}`,
+            }),
+          });
+          if (!createRes.ok) {
+            const err = await createRes.json().catch(() => ({}));
+            throw new Error(
+              err?.detail?.message || err?.detail || 'Failed to start thread',
+            );
+          }
+          const t = await createRes.json();
+          threadId = t.id;
+          preview = {
+            count: 1,
+            thread_id: t.id,
+            lemmy_post_id: t.lemmy_post_id,
+            lemmy_url: t.lemmy_url,
+            title: t.title,
+            community_name: t.community_name,
+            community_url: t.community_url,
+            comment_count: 0,
+          };
+          discussPreview.set(itemId, preview);
+        }
+        const commentRes = await fetch(
+          `/api/threads/${encodeURIComponent(threadId!)}/comments`,
+          {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ body, parent_comment_id: null }),
+          },
+        );
+        if (!commentRes.ok) {
+          const err = await commentRes.json().catch(() => ({}));
+          throw new Error(
+            err?.detail?.message || err?.detail || 'Failed to post',
+          );
+        }
+        // Bump local cache + re-render the chip / preview row in place.
+        preview.comment_count = (preview.comment_count || 0) + 1;
+        discussPreview.set(itemId, preview);
+        const feedItem = document.querySelector(
+          `.feed-item[data-id="${CSS.escape(itemId)}"]`,
+        );
+        if (feedItem) {
+          feedItem.querySelectorAll('.discuss-chip').forEach((c) => c.remove());
+          const meta = feedItem.querySelector('.feed-item__meta');
+          if (meta)
+            meta.insertAdjacentHTML(
+              'beforeend',
+              renderChipMarkup(itemId, preview),
+            );
+          const oldRow = feedItem.querySelector('.feed-item__discuss');
+          if (oldRow) {
+            const fresh = renderFeedDiscussRow(itemId, preview);
+            oldRow.replaceWith(fresh);
+          }
+        }
+        // Mirror chips in grid + list views (in case they're hidden behind tabs).
+        document
+          .querySelectorAll(
+            `.grid-item[data-id="${CSS.escape(itemId)}"] .discuss-chip, tr[data-id="${CSS.escape(itemId)}"] .discuss-chip`,
+          )
+          .forEach((c) => c.remove());
+        document
+          .querySelectorAll(
+            `.grid-item[data-id="${CSS.escape(itemId)}"] .grid-item__meta, tr[data-id="${CSS.escape(itemId)}"] .discuss-cell`,
+          )
+          .forEach((tile) =>
+            tile.insertAdjacentHTML(
+              'beforeend',
+              renderChipMarkup(itemId, preview),
+            ),
+          );
+
+        textarea.value = '';
+        (form as HTMLElement).style.display = 'none';
+        const toast = (window as any).toast;
+        if (toast?.success) {
+          toast.success(preview.lemmy_url ? `Posted — view on fold` : 'Posted');
+        }
+      } catch (err: any) {
+        const toast = (window as any).toast;
+        toast?.error?.(err?.message || 'Failed to post');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Post';
       }
     });
 
