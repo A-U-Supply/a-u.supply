@@ -114,12 +114,23 @@ import Admin from '../../../layouts/Admin.astro';
     background: var(--color-bg);
     color: var(--color-text);
     border: 1px solid var(--color-border);
-    padding: var(--space-sm);
+    padding: var(--space-md);
     font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    line-height: 1.5;
+    font-size: var(--text-md);
+    line-height: 1.55;
     resize: vertical;
     margin-top: 4px;
+    min-height: 7.5em;
+    /* Autosize sets `height` directly via JS; this caps runaway growth on
+       very long descriptions so the page stays usable. */
+    max-height: 70vh;
+    overflow-y: auto;
+    box-sizing: border-box;
+  }
+  :global(.latent-header .desc-input:focus) {
+    outline: none;
+    border-color: var(--color-accent, var(--color-text));
+    box-shadow: 2px 2px 0 var(--color-text);
   }
   :global(.latent-header .desc-saved) {
     display: block;
@@ -337,8 +348,8 @@ import Admin from '../../../layouts/Admin.astro';
       <textarea
         class="desc-input"
         id="desc-input"
-        rows="3"
-        placeholder="Description / synopsis (markdown). Autosaves."
+        rows="5"
+        placeholder="Description / synopsis (markdown). Autosaves. Grows as you type."
       >${escapeHtml(p.description || '')}</textarea>
 
       <details class="meta-details" id="meta-details" ${Object.keys(p.metadata || {}).length ? 'open' : ''}>
@@ -429,15 +440,25 @@ import Admin from '../../../layouts/Admin.astro';
       }, 1200);
     });
 
-    // Description — autosave
+    // Description — autosave + autosize. The textarea grows with the
+    // content (capped via max-height in CSS), so long synopses don't get
+    // crammed into a 3-line slot.
     const descInput = document.getElementById(
       'desc-input',
     ) as HTMLTextAreaElement;
     const descSaved = document.createElement('span');
     descSaved.className = 'desc-saved';
     descInput.insertAdjacentElement('afterend', descSaved);
+    function autosizeDesc() {
+      descInput.style.height = 'auto';
+      descInput.style.height = descInput.scrollHeight + 'px';
+    }
+    // Initial sizing — wait for the element to be laid out so scrollHeight
+    // is meaningful.
+    requestAnimationFrame(autosizeDesc);
     let descTimer: any = null;
     descInput.addEventListener('input', () => {
+      autosizeDesc();
       descSaved.textContent = 'unsaved';
       if (descTimer) clearTimeout(descTimer);
       descTimer = setTimeout(async () => {
