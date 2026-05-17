@@ -524,7 +524,38 @@ def list_slots(
 ):
     _project_or_404(db, project_id)
     slots = db.query(ProjectSlot).filter(ProjectSlot.project_id == project_id).order_by(ProjectSlot.position).all()
-    return {"slots": [_slot_summary(s, _pin_map_for_slot(db, s.id)) for s in slots]}
+    # item_count + thread_count per slot — same bulk-counts shape as
+    # get_project so the LatentSlots component can eagerly load files for
+    # any slot with items > 0.
+    slot_ids = [s.id for s in slots]
+    item_counts: dict[str, int] = {}
+    thread_counts: dict[str, int] = {}
+    if slot_ids:
+        for sid, c in (
+            db.query(ProjectItem.slot_id, func.count(ProjectItem.id))
+            .filter(ProjectItem.project_id == project_id, ProjectItem.slot_id.in_(slot_ids))
+            .group_by(ProjectItem.slot_id)
+            .all()
+        ):
+            item_counts[sid] = int(c)
+        for sid, c in (
+            db.query(Thread.anchor_id, func.count(Thread.id))
+            .filter(Thread.anchor_type == "slot", Thread.anchor_id.in_(slot_ids))
+            .group_by(Thread.anchor_id)
+            .all()
+        ):
+            thread_counts[sid] = int(c)
+    return {
+        "slots": [
+            _slot_summary(
+                s,
+                _pin_map_for_slot(db, s.id),
+                thread_counts.get(s.id, 0),
+                item_counts.get(s.id, 0),
+            )
+            for s in slots
+        ]
+    }
 
 
 @router.post("/{project_id}/slots", status_code=201, summary="Create a slot")
