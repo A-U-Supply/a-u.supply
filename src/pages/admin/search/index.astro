@@ -214,16 +214,34 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
   <div class="results-area">
     <div class="stats-bar" id="stats-bar" style="display:none;"></div>
     <div id="active-filters" class="active-filters" style="display:none;"></div>
-    <div class="batch-bar" id="batch-bar" style="display:none;">
-      <span id="selected-count">0 selected</span>
-      <button class="action-btn" data-batch="tag">Tag</button>
-      <button class="action-btn" data-batch="workspace">+ Workspace</button>
-      <button class="action-btn" data-batch="re-extract">Re-extract</button>
-      <button class="action-btn" data-batch="export">Export</button>
-      <button class="action-btn action-btn--danger" data-batch="delete"
-        >Delete</button
-      >
-      <button class="action-btn" id="clear-selection">Clear</button>
+    <!-- Selection bar — visible whenever results exist. The tri-state
+         "Select" checkbox tracks loaded items (unchecked / indeterminate /
+         all-loaded). Action buttons and the "Select all N matching" link
+         appear only when at least one item is selected. -->
+    <div class="selection-bar" id="selection-bar" style="display:none;">
+      <label class="selection-toggle" title="Select all loaded items">
+        <input type="checkbox" id="select-toggle" />
+        <span class="selection-toggle__label" id="select-toggle-label"
+          >Select</span
+        >
+      </label>
+      <span class="selection-count" id="selected-count" hidden>0 selected</span>
+      <a
+        class="selection-expand"
+        id="select-all-matching"
+        href="#"
+        role="button"
+        hidden></a>
+      <div class="selection-actions" id="selection-actions" hidden>
+        <button class="action-btn" data-batch="tag">Tag</button>
+        <button class="action-btn" data-batch="workspace">+ Workspace</button>
+        <button class="action-btn" data-batch="re-extract">Re-extract</button>
+        <button class="action-btn" data-batch="export">Export</button>
+        <button class="action-btn action-btn--danger" data-batch="delete"
+          >Delete</button
+        >
+        <button class="action-btn" id="clear-selection">Clear</button>
+      </div>
     </div>
 
     <div id="loading" style="color: var(--color-muted);">
@@ -242,7 +260,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       <table class="release-table">
         <thead>
           <tr>
-            <th><input type="checkbox" id="select-all" /></th>
+            <th aria-label="Select"></th>
             <th>Filename</th>
             <th>Type</th>
             <th>Posted By</th>
@@ -668,7 +686,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     font-size: 0.55rem;
   }
 
-  .batch-bar {
+  .selection-bar {
     display: flex;
     align-items: center;
     gap: var(--space-sm);
@@ -678,10 +696,46 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     margin-bottom: var(--space-sm);
     flex-wrap: wrap;
   }
-  .batch-bar span {
+  .selection-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--color-text);
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    user-select: none;
+  }
+  .selection-toggle input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--color-text);
+  }
+  .selection-count {
+    font-family: var(--font-mono);
     font-size: var(--text-sm);
     color: var(--color-muted);
-    margin-right: auto;
+  }
+  .selection-expand {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+  .selection-expand:hover {
+    color: var(--color-accent, var(--color-text));
+  }
+  .selection-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-left: auto;
+    flex-wrap: wrap;
   }
 
   .load-more-sentinel {
@@ -1096,6 +1150,11 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     border-color: var(--color-accent);
     box-shadow: 4px 4px 0 var(--color-accent);
   }
+  /* List view: mirror the selected highlight as a subtle row tint so the
+     state is visible without competing with the table's dense grid. */
+  .release-table tr.selected td {
+    background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  }
   .results-feed .feed-item__check {
     position: absolute;
     top: 8px;
@@ -1209,14 +1268,19 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     .results-grid .grid-item__info {
       font-size: 0.55rem;
     }
-    .batch-bar {
+    .selection-bar {
       font-size: 0.65rem;
       gap: 4px;
     }
-    .batch-bar span {
+    .selection-count,
+    .selection-expand {
       flex: 1 1 100%;
     }
-    .batch-bar .action-btn {
+    .selection-actions {
+      margin-left: 0;
+      width: 100%;
+    }
+    .selection-bar .action-btn {
       font-size: 0.6rem;
       padding: 3px 6px;
     }
@@ -1341,8 +1405,16 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     const footerEl = document.getElementById('results-footer')!;
     const progressEl = document.getElementById('results-progress')!;
     const sentinelEl = document.getElementById('load-more-sentinel')!;
-    const batchBar = document.getElementById('batch-bar')!;
-    const selectedCount = document.getElementById('selected-count')!;
+    const selectionBar = document.getElementById('selection-bar')!;
+    const selectionActions = document.getElementById('selection-actions')!;
+    const selectionCount = document.getElementById('selected-count')!;
+    const selectionExpand = document.getElementById(
+      'select-all-matching',
+    ) as HTMLAnchorElement;
+    const selectToggle = document.getElementById(
+      'select-toggle',
+    ) as HTMLInputElement;
+    const selectToggleLabel = document.getElementById('select-toggle-label')!;
     let isLoadingMore = false;
 
     // View toggle. Choice persists in localStorage (long-lived) so users
@@ -1418,8 +1490,15 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     // Reset scroll + page state when the user changes any filter.
     // Without scrolling back up, switching filters from deep in an
     // infinite-scroll list leaves them stranded in empty space.
+    //
+    // We also clear the selection on filter change. A stale "5,000 selected"
+    // from a previous query is a footgun for batch operations — the IDs may
+    // not match the user's current intent, and the per-tile checkmarks would
+    // be misleading. Selection within a single query (paging, scrolling,
+    // view switching) is preserved as expected.
     function applyAndSearch() {
       currentPage = 1;
+      selectedIds.clear();
       doSearch();
       window.scrollTo({ top: 0, behavior: 'auto' });
     }
@@ -1493,15 +1572,48 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       }
     });
 
-    // Select all
-    document.getElementById('select-all')?.addEventListener('change', (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
-      allResults.forEach((r) => {
-        if (checked) selectedIds.add(r.id);
-        else selectedIds.delete(r.id);
-      });
+    // Tri-state "Select" toggle in the selection bar. Cycles:
+    //   unchecked → adds every loaded item to the selection
+    //   indeterminate or checked → clears the entire selection
+    // "Loaded" means the items currently in `allResults` (the page in grid/list,
+    // or everything scrolled-into-view in feed). To go beyond loaded items —
+    // typical in feed with thousands of matches — use the "Select all N
+    // matching" link that appears next to the toggle.
+    selectToggle?.addEventListener('change', () => {
+      if (selectToggle.checked) {
+        allResults.forEach((r) => selectedIds.add(r.id));
+      } else {
+        selectedIds.clear();
+      }
       updateSelection();
-      renderResults();
+    });
+
+    // "Select all N matching" — expand selection to every server-side hit
+    // for the current query/filters. Single round-trip; capped at 10k.
+    selectionExpand?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const original = selectionExpand.textContent;
+      selectionExpand.textContent = 'Loading…';
+      try {
+        const res = await fetch('/api/search/ids', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(buildSearchBody()),
+        });
+        if (!res.ok) throw new Error('Select-all request failed');
+        const data = await res.json();
+        selectedIds = new Set<string>(data.ids || []);
+        if (data.capped) {
+          (window as any).toast?.info?.(
+            `Selected ${selectedIds.size.toLocaleString()} items (capped — query matches more than 10,000)`,
+          );
+        }
+        updateSelection();
+      } catch (err) {
+        selectionExpand.textContent = original;
+        (window as any).toast?.error?.('Failed to select all matching');
+      }
     });
 
     // Batch actions
@@ -1572,18 +1684,67 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     document
       .getElementById('delete-confirm')
       ?.addEventListener('click', async () => {
+        const btn = document.getElementById(
+          'delete-confirm',
+        ) as HTMLButtonElement;
+        btn.disabled = true;
+        btn.textContent = 'Deleting…';
+        // Snapshot the IDs we're asking the server to delete. We optimistically
+        // remove them from the rendered list once the server confirms — see
+        // the comment further down on why we can't just re-fetch.
+        const targetIds = Array.from(selectedIds);
         try {
-          await fetch('/api/media/batch/delete', {
+          const res = await fetch('/api/media/batch/delete', {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ media_ids: Array.from(selectedIds) }),
+            body: JSON.stringify({ media_ids: targetIds }),
           });
+          // Previously this fell through on any non-2xx status — a silent
+          // success on 401/413/500 looked exactly like "Delete doesn't work"
+          // from the user's seat. Surface the real failure now.
+          if (!res.ok) {
+            let detail = `${res.status} ${res.statusText}`;
+            try {
+              const body = await res.json();
+              if (body?.detail) detail = body.detail;
+            } catch {}
+            throw new Error(detail);
+          }
+          const data = await res.json().catch(() => ({}));
+          const deleted: string[] = data.deleted || [];
+          const notFound: string[] = data.not_found || [];
           document.getElementById('delete-dialog')!.style.display = 'none';
-          selectedIds.clear();
-          doSearch();
-        } catch {
-          (window as any).toast.error('Delete failed');
+
+          // Optimistic local removal. Meilisearch indexes deletes
+          // asynchronously — re-fetching `/api/search` right away typically
+          // returns the just-deleted items, which looks identical to "delete
+          // didn't work" from the user's seat. Drop the rows in-place from
+          // `allResults` + the rendered DOM, decrement totals, and only
+          // re-fetch later (below) once Meili has likely caught up.
+          const removed = new Set<string>([...deleted, ...notFound]);
+          allResults = allResults.filter((r) => !removed.has(r.id));
+          totalResults = Math.max(0, totalResults - removed.size);
+          for (const id of removed) selectedIds.delete(id);
+          renderResults();
+
+          let msg = `Deleted ${deleted.length} item${
+            deleted.length === 1 ? '' : 's'
+          }`;
+          if (notFound.length) msg += ` (${notFound.length} already gone)`;
+          (window as any).toast?.success?.(msg);
+
+          // Background re-sync after Meili has had a moment to process the
+          // delete tasks. Refreshes facet counts + picks up the "next" page's
+          // worth of items where the deleted ones used to be.
+          setTimeout(() => doSearch(), 1500);
+        } catch (err: any) {
+          (window as any).toast?.error?.(
+            'Delete failed: ' + (err?.message || 'unknown error'),
+          );
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Delete';
         }
       });
 
@@ -1808,22 +1969,10 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         : 'block';
     }
 
-    async function doSearch({ append = false }: { append?: boolean } = {}) {
-      if (append) {
-        // Background load — keep existing results visible, show the
-        // bottom "Loading more…" indicator.
-        const moreEl = document.getElementById('results-loading-more');
-        if (moreEl) moreEl.removeAttribute('hidden');
-      } else {
-        loadingEl.style.display = 'block';
-        errorEl.style.display = 'none';
-        emptyEl.style.display = 'none';
-        gridEl.style.display = 'none';
-        feedEl.style.display = 'none';
-        tableEl.style.display = 'none';
-      }
-      footerEl.style.display = 'none';
-
+    // Build the search request body from the current filters. Used by both
+    // doSearch (paginated, sets page/per_page) and selectAllMatching (via
+    // /api/search/ids, which ignores page/per_page).
+    function buildSearchBody(): any {
       const filters = getFilters();
       const sortMap: Record<string, string> = {
         newest: 'created_at:desc',
@@ -1837,24 +1986,16 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         query: searchInput.value,
         media_types: filters.types,
         sort: sortMap[filters.sortBy] || null,
-        page: currentPage,
-        per_page: pageSize,
         filters: {},
       };
-      // Emulsion (Latent uploads) is opt-in. Latent files live in their own
-      // private index; mixing them into Inputs/Outputs pollutes the curated
-      // scrape view. The "include latents" chip below toggles this.
-      if (filters.includeEmulsion) {
-        body.include_emulsion = true;
-      }
+      if (filters.includeEmulsion) body.include_emulsion = true;
       if (filters.channels.length)
         body.filters.source_channels = filters.channels;
       if (filters.poster) body.filters.poster = filters.poster;
       if (filters.outputIndexes.length)
         body.filters.output_index = filters.outputIndexes;
-      if (filters.colorGroups.length) {
+      if (filters.colorGroups.length)
         body.filters.color_group = filters.colorGroups;
-      }
       if (filters.dateFrom || filters.dateTo)
         body.filters.date_range = {
           from: filters.dateFrom || undefined,
@@ -1873,6 +2014,30 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       if (filters.hasTranscript)
         body.filters.has_transcript = filters.hasTranscript === 'yes';
       if (filters.hasText) body.filters.has_text = filters.hasText === 'yes';
+      return body;
+    }
+
+    async function doSearch({ append = false }: { append?: boolean } = {}) {
+      if (append) {
+        // Background load — keep existing results visible, show the
+        // bottom "Loading more…" indicator.
+        const moreEl = document.getElementById('results-loading-more');
+        if (moreEl) moreEl.removeAttribute('hidden');
+      } else {
+        loadingEl.style.display = 'block';
+        errorEl.style.display = 'none';
+        emptyEl.style.display = 'none';
+        gridEl.style.display = 'none';
+        feedEl.style.display = 'none';
+        tableEl.style.display = 'none';
+        selectionBar.style.display = 'none';
+      }
+      footerEl.style.display = 'none';
+
+      const filters = getFilters();
+      const body = buildSearchBody();
+      body.page = currentPage;
+      body.per_page = pageSize;
 
       // Update URL to reflect current search state (shareable, back/forward friendly)
       const stateParams = new URLSearchParams();
@@ -1948,13 +2113,75 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       showActiveFilters();
     }
 
+    // Single source of truth for selection UI state. Call after any change
+    // to `selectedIds` or `allResults`. Updates:
+    //   - tri-state of the master toggle (reflects loaded coverage)
+    //   - counter + actions visibility
+    //   - "Select all N matching" link visibility
+    //   - per-item checkbox + `.selected` class on already-rendered tiles
+    //     (cheap — avoids re-rendering the whole list on a checkbox tick)
     function updateSelection() {
-      if (selectedIds.size > 0) {
-        batchBar.style.display = 'flex';
-        selectedCount.textContent = selectedIds.size + ' selected';
+      const totalSelected = selectedIds.size;
+      // Loaded coverage drives the tri-state. Counting via the Set is O(loaded)
+      // and avoids allocating an intermediate array.
+      let loadedSelected = 0;
+      for (const r of allResults) if (selectedIds.has(r.id)) loadedSelected++;
+      const loadedCount = allResults.length;
+
+      // Tri-state. `indeterminate` must be set as a property, not attribute.
+      if (loadedCount === 0) {
+        selectToggle.checked = false;
+        selectToggle.indeterminate = false;
+      } else if (loadedSelected === 0) {
+        selectToggle.checked = false;
+        selectToggle.indeterminate = false;
+      } else if (loadedSelected === loadedCount) {
+        selectToggle.checked = true;
+        selectToggle.indeterminate = false;
       } else {
-        batchBar.style.display = 'none';
+        selectToggle.checked = false;
+        selectToggle.indeterminate = true;
       }
+
+      // Bar is visible whenever there are results to act on. Hidden during
+      // loading / empty state via doSearch + renderResults.
+      selectionBar.style.display = loadedCount > 0 ? 'flex' : 'none';
+
+      if (totalSelected > 0) {
+        selectionCount.textContent =
+          totalSelected.toLocaleString() + ' selected';
+        selectionCount.hidden = false;
+        selectionActions.hidden = false;
+        selectToggleLabel.textContent = 'Clear';
+      } else {
+        selectionCount.hidden = true;
+        selectionActions.hidden = true;
+        selectToggleLabel.textContent = 'Select';
+      }
+
+      // "Select all N matching" expansion link. Show only when there's more
+      // to select than we have loaded, and at least one is already picked
+      // (so the link is contextually relevant, not a cold-state CTA).
+      if (totalSelected > 0 && totalSelected < totalResults) {
+        selectionExpand.textContent = `Select all ${totalResults.toLocaleString()} matching`;
+        selectionExpand.hidden = false;
+      } else {
+        selectionExpand.hidden = true;
+      }
+
+      // Sync per-item checkboxes + .selected class on already-rendered tiles.
+      document
+        .querySelectorAll<HTMLInputElement>('[data-select]')
+        .forEach((cb) => {
+          const id = cb.dataset.select;
+          if (id) cb.checked = selectedIds.has(id);
+        });
+      document
+        .querySelectorAll<HTMLElement>('.grid-item, .feed-item, tr[data-id]')
+        .forEach((el) => {
+          const id = el.dataset.id;
+          if (id) el.classList.toggle('selected', selectedIds.has(id));
+        });
     }
 
     function formatSize(bytes: number): string {
@@ -2158,6 +2385,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       if (allResults.length === 0) {
         emptyEl.style.display = 'block';
         footerEl.style.display = 'none';
+        selectionBar.style.display = 'none';
         loadMoreObserver?.disconnect();
         if (scrollPageDetectHandler) {
           window.removeEventListener('scroll', scrollPageDetectHandler);
