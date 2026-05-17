@@ -1991,10 +1991,8 @@ import Admin from '../../../layouts/Admin.astro';
             const hopSamples = fftSize >> 2;
             const signal = await istftOLA(editedFrames, phases, maxMag, fftSize, hopSamples,
               p => { btn.textContent = `${Math.round(p * 100)}%`; });
-            const tmpCtx = new AudioContext({ sampleRate });
-            const ab = tmpCtx.createBuffer(1, signal.length, sampleRate);
+            const ab = new AudioBuffer({ numberOfChannels: 1, length: signal.length, sampleRate });
             ab.copyToChannel(signal, 0);
-            await tmpCtx.close();
             editedAudioBuffer = ab;
             editedAudioStale = false;
             updatePlayModeUI();
