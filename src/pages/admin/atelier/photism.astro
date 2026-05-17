@@ -28,6 +28,10 @@ import Admin from '../../../layouts/Admin.astro';
           <div class="ph-waveform-row">
             <button class="ph-play-btn" id="ph-play-btn" title="Play / Stop">▶</button>
             <button class="ph-loop-btn" id="ph-loop-btn" title="Toggle loop">⟳</button>
+            <div class="ph-play-mode" id="ph-play-mode" style="display:none">
+              <button class="ph-pill ph-pill--on" id="ph-mode-orig" title="Play original audio">Orig</button>
+              <button class="ph-pill" id="ph-mode-edit" title="Play with edits applied (synthesizes audio)">Edit</button>
+            </div>
             <canvas id="ph-waveform" width="264" height="52"></canvas>
             <span class="ph-time-display" id="ph-time-display">0:00</span>
           </div>
@@ -149,11 +153,13 @@ import Admin from '../../../layouts/Admin.astro';
               </select>
             </div>
             <button class="ph-export-item" id="ph-frames-btn">⬇ Save Frames</button>
-            <button class="ph-export-item" id="ph-audio-btn">♫ Export Audio</button>
+            <button class="ph-export-item ph-export-item--primary" id="ph-audio-stacks-btn">♫ Send to Stacks</button>
+            <button class="ph-export-item" id="ph-audio-btn">⬇ Download WAV</button>
           </div>
         </div>
         <button class="btn btn--secondary ph-undo-btn" id="ph-undo-btn" disabled>↩ Undo</button>
         <button class="btn btn--secondary ph-paint-btn" id="ph-paint-btn">✏ Paint</button>
+        <button class="btn btn--secondary ph-stamp-btn" id="ph-stamp-btn">⬛ Stamp</button>
         <button class="btn btn--secondary ph-fx-btn" id="ph-fx-btn">✦ FX</button>
       </div>
       <div class="ph-paint-bar" id="ph-paint-bar" style="display:none">
@@ -176,47 +182,56 @@ import Admin from '../../../layouts/Admin.astro';
           <input type="range" class="ph-range ph-brush-slider" id="ph-gain-amount" min="0" max="200" value="150" />
         </div>
         <div class="ph-paint-bar-btns">
-          <button class="btn btn--secondary ph-stamp-btn" id="ph-stamp-btn">⬛ Stamp</button>
-          <button class="btn ph-paint-reset-btn" id="ph-paint-reset-btn">Reset</button>
+          <button class="btn ph-paint-reset-btn" id="ph-paint-reset-btn">Reset Edits</button>
         </div>
       </div>
       <div class="ph-stamp-bar" id="ph-stamp-bar" style="display:none">
-        <div class="ph-stamp-pick-row">
-          <button class="ph-drop-btn" id="ph-stamp-upload-btn">↑ Upload Image</button>
-          <span class="ph-drop-or">or</span>
-          <button class="ph-drop-btn ph-drop-btn--lib" id="ph-stamp-lib-btn">From Library</button>
-          <input type="file" id="ph-stamp-file-input" accept="image/*" style="display:none" />
-        </div>
-        <div class="ph-stamp-preview-row" id="ph-stamp-preview-row" style="display:none">
-          <img id="ph-stamp-thumb" class="ph-stamp-thumb" alt="" />
-          <span class="ph-stamp-img-name" id="ph-stamp-img-name"></span>
-        </div>
-        <div class="ph-field">
-          <label class="ph-label">
-            <span>Time range</span>
-            <span class="ph-val"><span id="ph-stamp-ts-val">0</span>–<span id="ph-stamp-te-val">100</span>%</span>
-          </label>
-          <div class="ph-dual-range">
-            <input type="range" id="ph-stamp-start" min="0" max="100" value="0" />
-            <input type="range" id="ph-stamp-end"   min="0" max="100" value="100" />
+        <div class="ph-stamp-step">
+          <span class="ph-stamp-step-num">1</span>
+          <div class="ph-stamp-step-body">
+            <div class="ph-stamp-pick-row">
+              <button class="ph-drop-btn" id="ph-stamp-upload-btn">↑ Upload Image</button>
+              <span class="ph-drop-or">or</span>
+              <button class="ph-drop-btn ph-drop-btn--lib" id="ph-stamp-lib-btn">From Library</button>
+              <input type="file" id="ph-stamp-file-input" accept="image/*" style="display:none" />
+            </div>
+            <div class="ph-stamp-preview-row" id="ph-stamp-preview-row" style="display:none">
+              <img id="ph-stamp-thumb" class="ph-stamp-thumb" alt="" />
+              <span class="ph-stamp-img-name" id="ph-stamp-img-name"></span>
+            </div>
           </div>
         </div>
-        <div class="ph-stamp-controls">
-          <div class="ph-field">
-            <label class="ph-label" for="ph-stamp-opacity">Opacity <span class="ph-val" id="ph-stamp-op-val">100%</span></label>
-            <input type="range" class="ph-range" id="ph-stamp-opacity" min="0" max="100" value="100" />
-          </div>
-          <div class="ph-field">
-            <label class="ph-label" for="ph-stamp-blend">Blend</label>
-            <select class="ph-select" id="ph-stamp-blend">
-              <option value="add">Add</option>
-              <option value="screen">Screen</option>
-              <option value="multiply">Multiply</option>
-              <option value="replace">Replace</option>
-            </select>
+        <div class="ph-stamp-step">
+          <span class="ph-stamp-step-num">2</span>
+          <div class="ph-stamp-step-body" style="flex:1">
+            <div class="ph-field">
+              <label class="ph-label">
+                <span>Time range</span>
+                <span class="ph-val"><span id="ph-stamp-ts-val">0</span>–<span id="ph-stamp-te-val">100</span>%</span>
+              </label>
+              <div class="ph-dual-range">
+                <input type="range" id="ph-stamp-start" min="0" max="100" value="0" />
+                <input type="range" id="ph-stamp-end"   min="0" max="100" value="100" />
+              </div>
+            </div>
+            <div class="ph-stamp-controls">
+              <div class="ph-field">
+                <label class="ph-label" for="ph-stamp-opacity">Opacity <span class="ph-val" id="ph-stamp-op-val">100%</span></label>
+                <input type="range" class="ph-range" id="ph-stamp-opacity" min="0" max="100" value="100" />
+              </div>
+              <div class="ph-field">
+                <label class="ph-label" for="ph-stamp-blend">Blend</label>
+                <select class="ph-select" id="ph-stamp-blend">
+                  <option value="add">Add</option>
+                  <option value="screen">Screen</option>
+                  <option value="multiply">Multiply</option>
+                  <option value="replace">Replace</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn btn--primary ph-stamp-apply" id="ph-stamp-apply" disabled>Apply Stamp</button>
           </div>
         </div>
-        <button class="btn btn--primary ph-stamp-apply" id="ph-stamp-apply" disabled>Apply Stamp</button>
       </div>
       <div class="ph-fx-bar" id="ph-fx-bar" style="display:none">
         <div class="ph-pill-group" id="ph-fx-group">
@@ -386,9 +401,9 @@ import Admin from '../../../layouts/Admin.astro';
     /* Playhead overlay on spectrogram canvas */
     .ph-playhead {
       position: absolute; top: 0; bottom: 0; width: 2px;
-      background: rgba(255,255,255,0.65); pointer-events: none;
+      background: rgba(255,220,80,0.85); pointer-events: none;
       transform: translateX(-50%); display: none;
-      box-shadow: 0 0 6px rgba(255,255,255,0.25);
+      box-shadow: 0 0 6px rgba(255,220,80,0.4);
     }
 
     /* Dual range */
@@ -433,6 +448,12 @@ import Admin from '../../../layouts/Admin.astro';
       border-top: 1px solid var(--border, #333); border-bottom: 1px solid var(--border, #333);
     }
     .ph-export-fps .ph-select { padding: 0.1rem 0.3rem; font-size: 0.7rem; }
+    .ph-export-item--primary { font-weight: 600; color: var(--accent, #e8c060); }
+
+    /* Play mode toggle (Orig / Edited) */
+    .ph-play-mode { display: flex; gap: 2px; flex-shrink: 0; }
+    .ph-play-mode .ph-pill { font-size: 0.6rem; padding: 0.15rem 0.4rem; margin: 0; }
+    .ph-pill--stale { opacity: 0.4 !important; }
 
     /* Paint mode */
     .ph-paint-btn--active { border-color: var(--accent, #aaa); box-shadow: 0 0 0 1px var(--accent, #aaa); }
@@ -464,7 +485,15 @@ import Admin from '../../../layouts/Admin.astro';
 
     /* Stamp mode */
     .ph-stamp-btn--active { border-color: var(--accent, #aaa); color: var(--accent, #aaa); }
-    .ph-stamp-bar { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.5rem 0; }
+    .ph-stamp-bar { display: flex; flex-direction: column; gap: 0.75rem; padding: 0.5rem 0; }
+    .ph-stamp-step { display: flex; align-items: flex-start; gap: 0.6rem; }
+    .ph-stamp-step-num {
+      background: var(--accent, #e8c060); color: #000;
+      border-radius: 50%; width: 1.25rem; height: 1.25rem; min-width: 1.25rem;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.65rem; font-weight: 700; flex-shrink: 0; margin-top: 0.15rem;
+    }
+    .ph-stamp-step-body { display: flex; flex-direction: column; gap: 0.4rem; flex: 1; min-width: 0; }
     .ph-stamp-pick-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
     .ph-stamp-preview-row { display: flex; align-items: center; gap: 0.5rem; }
     .ph-stamp-thumb {
@@ -477,6 +506,11 @@ import Admin from '../../../layouts/Admin.astro';
       flex: 1; min-width: 0;
     }
     .ph-stamp-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+    .ph-stamp-apply { width: 100%; margin-top: 0.25rem; font-weight: 600; }
+    .ph-stamp-apply:not(:disabled) {
+      background: var(--accent, #e8c060); color: #111;
+      border-color: var(--accent, #e8c060);
+    }
 
     /* Settings toggle (mobile only) */
     .ph-settings-toggle { display: none; }
@@ -681,6 +715,9 @@ import Admin from '../../../layouts/Admin.astro';
     let playbackStartOffset = 0;
     let playbackEndOffset = 0;
     let progressRaf: number | null = null;
+    let editedAudioBuffer: AudioBuffer | null = null;
+    let editedAudioStale = false;
+    let playMode: 'original' | 'edited' = 'original';
 
     const canvas = document.getElementById('ph-canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d')!;
@@ -1066,8 +1103,8 @@ import Admin from '../../../layouts/Admin.astro';
       // Playback cursor
       if (cursor !== undefined) {
         const cx = Math.round(cursor * W);
-        wctx.strokeStyle = 'rgba(255,255,255,0.8)';
-        wctx.lineWidth = 1.5;
+        wctx.strokeStyle = 'rgba(255,220,80,0.9)';
+        wctx.lineWidth = 2;
         wctx.beginPath();
         wctx.moveTo(cx, 0);
         wctx.lineTo(cx, H);
@@ -1091,7 +1128,11 @@ import Admin from '../../../layouts/Admin.astro';
       actionBar.style.display = 'none';
       editedFrames = null;
       undoStack.length = 0;
+      editedAudioBuffer = null;
+      editedAudioStale = false;
+      playMode = 'original';
       updateUndoBtn();
+      updatePlayModeUI();
       if (paintMode) setPaintMode(false);
 
       try {
@@ -1509,6 +1550,44 @@ import Admin from '../../../layouts/Admin.astro';
       }
     }
 
+    async function exportAudioToStacks() {
+      if (!spectrogramData) return;
+      const busyEl = document.getElementById('ph-busy')!;
+      const busyLabel = document.getElementById('ph-busy-label')!;
+      busyEl.style.display = 'flex';
+      exportMenu.style.display = 'none';
+
+      const [t0, t1] = getTimeRange();
+      const { sampleRate, numFrames, phases, maxMag } = spectrogramData;
+      const frames = editedFrames ?? spectrogramData.frames;
+      const fftSize = parseInt((document.getElementById('ph-fft') as HTMLSelectElement).value);
+      const hopSamples = fftSize >> 2;
+      const fStart = Math.floor(t0 * numFrames);
+      const fEnd   = Math.ceil(t1 * numFrames);
+      const trimmedFrames = frames.slice(fStart, fEnd);
+      const trimmedPhases = phases.slice(fStart, fEnd);
+
+      try {
+        const signal = await istftOLA(trimmedFrames, trimmedPhases, maxMag, fftSize, hopSamples, p => {
+          busyLabel.textContent = `Synthesizing… ${Math.round(p * 100)}%`;
+        });
+        busyLabel.textContent = 'Uploading…';
+        const wav = encodeWAV(signal, sampleRate);
+        const filename = `${lastFileName.replace(/\.[^.]+$/, '')}-synth.wav`;
+        const fd = new FormData();
+        fd.append('file', new Blob([wav], { type: 'audio/wav' }), filename);
+        fd.append('tags', 'photism,atelier,audio');
+        fd.append('output_index', 'outputs');
+        const res = await fetch('/api/media/upload', { method: 'POST', body: fd, credentials: 'include' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        (window as any).toast?.success('Audio saved to Stacks');
+      } catch (err: any) {
+        (window as any).toast?.error(`Export failed: ${err.message}`);
+      } finally {
+        busyEl.style.display = 'none';
+      }
+    }
+
     // ─── Playback progress ────────────────────────────────────────────────────
     const playhead  = document.getElementById('ph-playhead')!;
     const timeDisp  = document.getElementById('ph-time-display')!;
@@ -1670,6 +1749,19 @@ import Admin from '../../../layouts/Admin.astro';
       if (btn) btn.disabled = undoStack.length === 0;
     }
 
+    function updatePlayModeUI() {
+      const modeEl = document.getElementById('ph-play-mode')!;
+      if (!editedFrames) {
+        modeEl.style.display = 'none';
+        playMode = 'original';
+        document.getElementById('ph-mode-orig')!.classList.add('ph-pill--on');
+        document.getElementById('ph-mode-edit')!.classList.remove('ph-pill--on');
+      } else {
+        modeEl.style.display = 'flex';
+      }
+      document.getElementById('ph-mode-edit')!.classList.toggle('ph-pill--stale', editedAudioStale);
+    }
+
     function undo() {
       if (undoStack.length === 0) return;
       fxPreviewFrames = null;
@@ -1681,8 +1773,10 @@ import Admin from '../../../layouts/Admin.astro';
           editedFrames = spectrogramData.frames.map(fr => fr.slice());
         if (editedFrames) for (const [f, fr] of entry.diffs) editedFrames[f] = fr;
       }
+      editedAudioStale = true;
       scheduleRender();
       updateUndoBtn();
+      updatePlayModeUI();
     }
 
     // ─── UI wiring ────────────────────────────────────────────────────────────
@@ -1878,19 +1972,46 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     // Play / stop
-    document.getElementById('ph-play-btn')!.addEventListener('click', () => {
+    document.getElementById('ph-play-btn')!.addEventListener('click', async () => {
       const btn = document.getElementById('ph-play-btn') as HTMLButtonElement;
       if (playbackSource) {
         playbackSource.stop(); playbackSource = null;
         btn.textContent = '▶'; stopProgress(); return;
       }
-      if (!currentAudioBuffer) return;
+      if (!currentAudioBuffer || !spectrogramData) return;
+
+      // Synthesize edited audio if needed
+      let bufToPlay = currentAudioBuffer;
+      if (playMode === 'edited' && editedFrames) {
+        if (editedAudioStale || !editedAudioBuffer) {
+          btn.textContent = '…'; btn.disabled = true;
+          try {
+            const { sampleRate, phases, maxMag } = spectrogramData;
+            const fftSize = parseInt((document.getElementById('ph-fft') as HTMLSelectElement).value);
+            const hopSamples = fftSize >> 2;
+            const signal = await istftOLA(editedFrames, phases, maxMag, fftSize, hopSamples,
+              p => { btn.textContent = `${Math.round(p * 100)}%`; });
+            const tmpCtx = new AudioContext({ sampleRate });
+            const ab = tmpCtx.createBuffer(1, signal.length, sampleRate);
+            ab.copyToChannel(signal, 0);
+            await tmpCtx.close();
+            editedAudioBuffer = ab;
+            editedAudioStale = false;
+            updatePlayModeUI();
+          } catch {
+            btn.textContent = '▶'; btn.disabled = false; return;
+          }
+          btn.disabled = false;
+        }
+        bufToPlay = editedAudioBuffer!;
+      }
+
       playbackCtx = new AudioContext();
       playbackSource = playbackCtx.createBufferSource();
-      playbackSource.buffer = currentAudioBuffer;
+      playbackSource.buffer = bufToPlay;
       playbackSource.connect(playbackCtx.destination);
       const [t0, t1] = getTimeRange();
-      const dur = currentAudioBuffer.duration;
+      const dur = bufToPlay.duration;
       playbackStartOffset = t0 * dur;
       playbackEndOffset   = t1 * dur;
       playbackStartTime   = playbackCtx.currentTime;
@@ -1934,7 +2055,20 @@ import Admin from '../../../layouts/Admin.astro';
     document.getElementById('ph-save-btn')!.addEventListener('click', saveImage);
     document.getElementById('ph-record-btn')!.addEventListener('click', () => { exportMenu.style.display = 'none'; recordWebM(); });
     document.getElementById('ph-frames-btn')!.addEventListener('click', () => { exportMenu.style.display = 'none'; saveFrames(); });
+    document.getElementById('ph-audio-stacks-btn')!.addEventListener('click', exportAudioToStacks);
     document.getElementById('ph-audio-btn')!.addEventListener('click', exportAudio);
+
+    // Play mode toggle (Orig / Edited)
+    document.getElementById('ph-mode-orig')!.addEventListener('click', () => {
+      playMode = 'original';
+      document.getElementById('ph-mode-orig')!.classList.add('ph-pill--on');
+      document.getElementById('ph-mode-edit')!.classList.remove('ph-pill--on');
+    });
+    document.getElementById('ph-mode-edit')!.addEventListener('click', () => {
+      playMode = 'edited';
+      document.getElementById('ph-mode-edit')!.classList.add('ph-pill--on');
+      document.getElementById('ph-mode-orig')!.classList.remove('ph-pill--on');
+    });
 
     // Mobile settings toggle
     document.getElementById('ph-settings-toggle')!.addEventListener('click', () => {
@@ -2021,6 +2155,7 @@ import Admin from '../../../layouts/Admin.astro';
       undoStack.push({ kind: 'swap', prev: editedFrames });
       if (undoStack.length > MAX_UNDO) undoStack.shift();
       updateUndoBtn();
+      editedAudioStale = true;
       editedFrames = fxPreviewFrames;
       fxPreviewFrames = null;
       shaderEffect = 'none';
@@ -2030,7 +2165,8 @@ import Admin from '../../../layouts/Admin.astro';
       fxStrengthRow.style.display = 'none';
       fxApplyBtn.style.display    = 'none';
       scheduleRender();
-      (window as any).toast?.success('Effect applied — export audio to hear it');
+      updatePlayModeUI();
+      (window as any).toast?.success('Effect applied — use Edit playback mode to preview');
     });
 
     // Reset edits
@@ -2038,7 +2174,9 @@ import Admin from '../../../layouts/Admin.astro';
       undoStack.push({ kind: 'swap', prev: editedFrames });
       if (undoStack.length > MAX_UNDO) undoStack.shift();
       editedFrames = null;
+      editedAudioStale = true;
       updateUndoBtn();
+      updatePlayModeUI();
       scheduleRender();
     });
 
@@ -2050,7 +2188,9 @@ import Admin from '../../../layouts/Admin.astro';
           ? { kind: 'swap', prev: null }
           : { kind: 'patch', diffs: strokeDiffs });
         if (undoStack.length > MAX_UNDO) undoStack.shift();
+        editedAudioStale = true;
         updateUndoBtn();
+        updatePlayModeUI();
       }
       strokeDiffs = null;
     }
@@ -2117,7 +2257,9 @@ import Admin from '../../../layouts/Admin.astro';
         stampDiffs.set(f, editedFrames[f].slice());
       undoStack.push({ kind: 'patch', diffs: stampDiffs });
       if (undoStack.length > MAX_UNDO) undoStack.shift();
+      editedAudioStale = true;
       updateUndoBtn();
+      updatePlayModeUI();
 
       const imgW = stampImageData.width;
       const imgH = stampImageData.height;
