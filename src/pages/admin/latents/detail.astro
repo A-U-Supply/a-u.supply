@@ -99,6 +99,90 @@ import Admin from '../../../layouts/Admin.astro';
     color: var(--color-muted);
     font-size: var(--text-sm);
   }
+  :global(.latent-header .slug-input) {
+    background: var(--color-bg);
+    color: var(--color-muted);
+    border: 1px solid var(--color-border);
+    padding: 4px 8px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    flex: 0 0 200px;
+  }
+  :global(.latent-header .desc-input) {
+    width: 100%;
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    padding: var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    resize: vertical;
+    margin-top: 4px;
+  }
+  :global(.latent-header .desc-saved) {
+    display: block;
+    color: var(--color-muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    padding: 2px 0;
+  }
+  :global(.latent-header .meta-details) {
+    border: 1px dashed var(--color-border);
+    padding: var(--space-sm);
+    background: #fafafa;
+  }
+  :global(.latent-header .meta-details summary) {
+    cursor: pointer;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    color: var(--color-muted);
+  }
+  :global(.latent-header .meta-details summary .muted) {
+    color: var(--color-muted);
+  }
+  :global(.latent-header .meta-list) {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: var(--space-sm);
+  }
+  :global(.latent-header .meta-row) {
+    display: grid;
+    grid-template-columns: 1fr 2fr auto;
+    gap: 6px;
+  }
+  :global(.latent-header .meta-row input) {
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    padding: 4px 8px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+  :global(.latent-header .meta-row .meta-del) {
+    background: transparent;
+    border: 1px solid var(--color-border);
+    color: var(--color-muted);
+    font-size: 1.1rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 8px;
+  }
+  :global(.latent-header .meta-actions) {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-top: var(--space-sm);
+  }
+  :global(.latent-header .meta-saved) {
+    color: var(--color-muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+  }
   @media (max-width: 640px) {
     :global(.latent-header .name-input) {
       min-width: 0;
@@ -213,9 +297,21 @@ import Admin from '../../../layouts/Admin.astro';
       } catch {}
     }
 
+    const metadataRows = Object.entries(p.metadata || {})
+      .map(
+        ([k, v]) =>
+          `<div class="meta-row">
+            <input class="meta-key" type="text" value="${escapeHtml(k)}" />
+            <input class="meta-val" type="text" value="${escapeHtml(String(v ?? ''))}" />
+            <button class="meta-del" type="button" title="Remove">×</button>
+          </div>`,
+      )
+      .join('');
+
     headerEl.innerHTML = `
       <div class="header-row">
         <input class="name-input" id="name-input" type="text" value="${escapeHtml(p.name)}" />
+        <input class="slug-input" id="slug-input" type="text" value="${escapeHtml(p.slug || '')}" title="URL slug" />
         <select class="kind-select" id="kind-select">
           ${['album', 'video', 'zine', 'other']
             .map(
@@ -235,6 +331,22 @@ import Admin from '../../../layouts/Admin.astro';
         <a class="action-btn" href="/admin/latents">All latents</a>
       </div>
       <p class="summary">${escapeHtml(p.kind)} latent · ${p.item_count} files · ${p.documents.length} document${p.documents.length === 1 ? '' : 's'} · ${p.slots.length} slot${p.slots.length === 1 ? '' : 's'}${p.thread_count ? ' · ' + p.thread_count + ' thread' + (p.thread_count === 1 ? '' : 's') : ''}</p>
+
+      <textarea
+        class="desc-input"
+        id="desc-input"
+        rows="3"
+        placeholder="Description / synopsis (markdown). Autosaves."
+      >${escapeHtml(p.description || '')}</textarea>
+
+      <details class="meta-details" id="meta-details" ${Object.keys(p.metadata || {}).length ? 'open' : ''}>
+        <summary>Metadata <span class="muted">(${Object.keys(p.metadata || {}).length})</span></summary>
+        <div class="meta-list" id="meta-list">${metadataRows}</div>
+        <div class="meta-actions">
+          <button class="action-btn" id="meta-add" type="button">+ Add field</button>
+          <span class="meta-saved" id="meta-saved"></span>
+        </div>
+      </details>
     `;
 
     const nameInput = document.getElementById('name-input') as HTMLInputElement;
@@ -281,6 +393,130 @@ import Admin from '../../../layouts/Admin.astro';
             });
         });
       });
+
+    // Slug change — autosave + replaceState to keep the URL pretty
+    const slugInput = document.getElementById('slug-input') as HTMLInputElement;
+    let slugTimer: any = null;
+    slugInput.addEventListener('input', () => {
+      if (slugTimer) clearTimeout(slugTimer);
+      slugTimer = setTimeout(async () => {
+        const trimmed = slugInput.value.trim();
+        if (!trimmed || trimmed === p.slug) return;
+        const r = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug: trimmed }),
+        });
+        if (r.ok) {
+          const updated = await r.json();
+          p.slug = updated.slug;
+          slugInput.value = updated.slug;
+          try {
+            history.replaceState(
+              history.state,
+              '',
+              `/admin/latents/${updated.slug}`,
+            );
+          } catch {}
+        } else {
+          const err = await r.json().catch(() => ({}));
+          alert(err?.detail || 'Slug change failed');
+          slugInput.value = p.slug || '';
+        }
+      }, 1200);
+    });
+
+    // Description — autosave
+    const descInput = document.getElementById(
+      'desc-input',
+    ) as HTMLTextAreaElement;
+    const descSaved = document.createElement('span');
+    descSaved.className = 'desc-saved';
+    descInput.insertAdjacentElement('afterend', descSaved);
+    let descTimer: any = null;
+    descInput.addEventListener('input', () => {
+      descSaved.textContent = 'unsaved';
+      if (descTimer) clearTimeout(descTimer);
+      descTimer = setTimeout(async () => {
+        descSaved.textContent = 'saving…';
+        const r = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ description: descInput.value }),
+        });
+        descSaved.textContent = r.ok ? 'saved' : 'save failed';
+      }, 1500);
+    });
+
+    // Metadata key/value editor
+    const metaList = document.getElementById('meta-list')!;
+    const metaSaved = document.getElementById('meta-saved') as HTMLSpanElement;
+    let metaSaveTimer: any = null;
+
+    function collectMetadata(): Record<string, string> {
+      const out: Record<string, string> = {};
+      metaList.querySelectorAll<HTMLDivElement>('.meta-row').forEach((row) => {
+        const k = (
+          row.querySelector('.meta-key') as HTMLInputElement
+        ).value.trim();
+        const v = (row.querySelector('.meta-val') as HTMLInputElement).value;
+        if (k) out[k] = v;
+      });
+      return out;
+    }
+
+    function scheduleMetadataSave() {
+      metaSaved.textContent = 'unsaved';
+      if (metaSaveTimer) clearTimeout(metaSaveTimer);
+      metaSaveTimer = setTimeout(async () => {
+        metaSaved.textContent = 'saving…';
+        const r = await fetch(`/api/projects/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ metadata: collectMetadata() }),
+        });
+        metaSaved.textContent = r.ok ? 'saved' : 'save failed';
+      }, 1200);
+    }
+
+    function makeRow(key = '', value = ''): HTMLDivElement {
+      const row = document.createElement('div');
+      row.className = 'meta-row';
+      row.innerHTML = `
+        <input class="meta-key" type="text" value="${escapeHtml(key)}" placeholder="key" />
+        <input class="meta-val" type="text" value="${escapeHtml(value)}" placeholder="value" />
+        <button class="meta-del" type="button" title="Remove">×</button>
+      `;
+      row
+        .querySelectorAll('input')
+        .forEach((i) => i.addEventListener('input', scheduleMetadataSave));
+      row.querySelector('.meta-del')!.addEventListener('click', () => {
+        row.remove();
+        scheduleMetadataSave();
+      });
+      return row;
+    }
+    // Wire any pre-rendered rows
+    metaList.querySelectorAll<HTMLDivElement>('.meta-row').forEach((row) => {
+      row
+        .querySelectorAll('input')
+        .forEach((i) => i.addEventListener('input', scheduleMetadataSave));
+      row.querySelector('.meta-del')!.addEventListener('click', () => {
+        row.remove();
+        scheduleMetadataSave();
+      });
+    });
+    document.getElementById('meta-add')!.addEventListener('click', () => {
+      metaList.appendChild(makeRow());
+      (
+        metaList.lastElementChild!.querySelector(
+          '.meta-key',
+        ) as HTMLInputElement
+      ).focus();
+    });
 
     for (const m of mounted) {
       try {
