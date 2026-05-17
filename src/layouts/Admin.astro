@@ -16,6 +16,20 @@ const { title, current } = Astro.props;
     <link rel="icon" type="image/jpeg" href="/favicon.jpg" />
     <title>{title} — A-U.SUPPLY Admin</title>
     <ViewTransitions />
+    <script is:inline>
+      // Resolve light/dark theme before first paint to avoid a flash.
+      // Reads localStorage.adminTheme (light | dark | auto), defaults to auto
+      // which follows prefers-color-scheme.
+      (() => {
+        const pref = localStorage.getItem('adminTheme') || 'auto';
+        const dark =
+          pref === 'dark' ||
+          (pref === 'auto' &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        document.documentElement.dataset.themePref = pref;
+      })();
+    </script>
   </head>
   <body>
     <button
@@ -234,6 +248,31 @@ const { title, current } = Astro.props;
 
         <div class="sidebar__footer">
           <div class="sidebar__user" id="sidebar-user"></div>
+          <div
+            class="theme-toggle"
+            role="radiogroup"
+            aria-label="Theme preference"
+          >
+            <button
+              class="theme-toggle__btn"
+              data-pref="light"
+              role="radio"
+              aria-label="Light"
+              title="Light">☀</button
+            ><button
+              class="theme-toggle__btn"
+              data-pref="auto"
+              role="radio"
+              aria-label="Auto (system)"
+              title="Auto">◐</button
+            ><button
+              class="theme-toggle__btn"
+              data-pref="dark"
+              role="radio"
+              aria-label="Dark"
+              title="Dark">☾</button
+            >
+          </div>
           <button class="sidebar__logout" id="logout-btn">Log Out</button>
         </div>
       </aside>
@@ -279,9 +318,54 @@ const { title, current } = Astro.props;
   document.addEventListener('astro:after-swap', applyPageBackground);
   document.addEventListener('astro:page-load', applyPageBackground);
 
+  // Theme toggle — runs on every navigation so the buttons stay in sync with
+  // the pre-paint resolver. Re-resolves on OS preference change when in auto.
+  function applyTheme(pref: 'light' | 'dark' | 'auto') {
+    const dark =
+      pref === 'dark' ||
+      (pref === 'auto' &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    document.documentElement.dataset.themePref = pref;
+    document.querySelectorAll('.theme-toggle__btn').forEach((b) => {
+      const el = b as HTMLButtonElement;
+      el.setAttribute(
+        'aria-checked',
+        el.dataset.pref === pref ? 'true' : 'false',
+      );
+    });
+  }
+
+  function wireThemeToggle() {
+    const pref =
+      (localStorage.getItem('adminTheme') as 'light' | 'dark' | 'auto') ||
+      'auto';
+    applyTheme(pref);
+    document.querySelectorAll('.theme-toggle__btn').forEach((b) => {
+      const el = b as HTMLButtonElement;
+      el.addEventListener('click', () => {
+        const next = el.dataset.pref as 'light' | 'dark' | 'auto';
+        localStorage.setItem('adminTheme', next);
+        applyTheme(next);
+      });
+    });
+  }
+
+  // OS preference change only affects us when in auto mode.
+  window
+    .matchMedia('(prefers-color-scheme: dark)')
+    .addEventListener('change', () => {
+      const pref =
+        (localStorage.getItem('adminTheme') as 'light' | 'dark' | 'auto') ||
+        'auto';
+      if (pref === 'auto') applyTheme('auto');
+    });
+
   document.addEventListener('astro:page-load', () => {
     const loader = document.getElementById('page-loading');
     if (loader) loader.style.display = 'none';
+
+    wireThemeToggle();
 
     // Auth check — redirect to login if not authenticated
     // Expose as a promise on window so page scripts can await it

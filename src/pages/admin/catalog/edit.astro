@@ -81,7 +81,7 @@ import Admin from '../../../layouts/Admin.astro';
               type="text"
               id="product-code"
               readonly
-              style="background: #f0f0f0;"
+              style="background: var(--color-surface-2);"
             />
           </div>
         </div>
@@ -336,7 +336,7 @@ import Admin from '../../../layouts/Admin.astro';
     flex-wrap: wrap;
     gap: 4px;
     align-items: center;
-    background: #fff;
+    background: var(--color-bg);
     cursor: text;
   }
   .entity-select:focus-within {
@@ -352,7 +352,7 @@ import Admin from '../../../layouts/Admin.astro';
     gap: 4px;
     padding: 2px 6px;
     font-size: 0.7rem;
-    background: #f0f0f0;
+    background: var(--color-surface-2);
     border: 1px solid var(--color-border);
     text-transform: uppercase;
     letter-spacing: 0.5pt;
@@ -383,7 +383,7 @@ import Admin from '../../../layouts/Admin.astro';
     top: 100%;
     left: -1px;
     right: -1px;
-    background: #fff;
+    background: var(--color-bg);
     border: 1px solid var(--color-border);
     border-top: none;
     max-height: 200px;
@@ -396,7 +396,7 @@ import Admin from '../../../layouts/Admin.astro';
     font-size: var(--text-sm);
   }
   .entity-option:hover {
-    background: #f0f0f0;
+    background: var(--color-surface-2);
   }
   .entity-option--create {
     color: var(--color-accent);
@@ -410,8 +410,8 @@ import Admin from '../../../layouts/Admin.astro';
     font-size: var(--text-sm);
     text-transform: uppercase;
     letter-spacing: 0.5pt;
-    background: #1a1a1a;
-    color: #fff;
+    background: var(--color-fg);
+    color: var(--color-bg);
     border: none;
     cursor: pointer;
   }
@@ -481,7 +481,7 @@ import Admin from '../../../layouts/Admin.astro';
   .track-item__title:hover,
   .track-item__title:focus {
     border-color: var(--color-border);
-    background: #fff;
+    background: var(--color-bg);
   }
   .track-item__duration {
     color: var(--color-muted);
@@ -500,7 +500,7 @@ import Admin from '../../../layouts/Admin.astro';
   }
   .track-item__remove:hover {
     background: #c00;
-    color: #fff;
+    color: var(--color-bg);
   }
 
   .track-item--queued {
@@ -542,7 +542,7 @@ import Admin from '../../../layouts/Admin.astro';
     font-family: var(--font-mono);
     font-size: var(--text-sm);
     border: 1px solid var(--color-border);
-    background: #fff;
+    background: var(--color-bg);
   }
   .link-row select {
     min-width: 130px;
@@ -564,7 +564,7 @@ import Admin from '../../../layouts/Admin.astro';
     font-family: var(--font-mono);
     font-size: var(--text-sm);
     border: 1px solid var(--color-border);
-    background: #fff;
+    background: var(--color-bg);
   }
   .freeform-row input:first-child {
     width: 160px;
@@ -587,7 +587,7 @@ import Admin from '../../../layouts/Admin.astro';
     letter-spacing: 0.5pt;
     border: 1px solid var(--color-border);
     cursor: pointer;
-    background: #fff;
+    background: var(--color-bg);
     font-family: var(--font-mono);
   }
   .chip:hover {
@@ -608,8 +608,8 @@ import Admin from '../../../layouts/Admin.astro';
     font-weight: bold;
     text-transform: uppercase;
     letter-spacing: 1pt;
-    background: #1a1a1a;
-    color: #fff;
+    background: var(--color-fg);
+    color: var(--color-bg);
     border: none;
     cursor: pointer;
   }
