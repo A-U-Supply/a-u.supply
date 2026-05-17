@@ -25,6 +25,7 @@ Graceful degradation
 import base64
 import logging
 import os
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -190,12 +191,25 @@ def status_for_user(user) -> dict:
 # ---------------------------------------------------------------------------
 
 
+_LEMMY_NAME_BAD = re.compile(r"[^a-z0-9_]+")
+
+
+def _lemmy_safe_name(raw: str) -> str:
+    """Lemmy community names are restricted to lowercase alphanumeric + `_`
+    (no hyphens, no dots). Convert our project slug to that vocabulary.
+    """
+    safe = _LEMMY_NAME_BAD.sub("_", (raw or "").lower()).strip("_")
+    if not safe:
+        safe = "latent"
+    return safe[:30]
+
+
 def _community_payload(name: str, title: str, description: str | None = None) -> dict:
     # Lemmy 0.19.17 accepts `Public` or `LocalOnly` (not Private — that's
     # 0.20). LocalOnly + instance-level private + federation-off = nothing
     # ever leaves fold.
     out: dict[str, Any] = {
-        "name": name,
+        "name": _lemmy_safe_name(name),
         "title": title,
         "nsfw": False,
         "visibility": "LocalOnly",
@@ -243,7 +257,7 @@ def ensure_project_community(db, project, token: str) -> int | None:
                 "GET",
                 "/api/v3/community",
                 token=token,
-                params={"name": project.slug},
+                params={"name": _lemmy_safe_name(project.slug)},
             )
             cid = _extract_community_id(resp)
         except LemmyUnavailable:
