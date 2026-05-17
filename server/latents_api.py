@@ -737,6 +737,14 @@ def list_items(
     elif slot_id:
         q = q.filter(ProjectItem.slot_id == slot_id)
     items = q.order_by(ProjectItem.added_at.desc()).all()
+    # Self-heal: any ProjectItem whose media_item vanished (cascade failed
+    # before PRAGMA foreign_keys=ON shipped) gets purged on read so the UI
+    # never has to render "(unknown)" placeholders.
+    orphan_ids = [pi.id for pi in items if pi.media_item is None]
+    if orphan_ids:
+        db.query(ProjectItem).filter(ProjectItem.id.in_(orphan_ids)).delete(synchronize_session=False)
+        db.commit()
+        items = [pi for pi in items if pi.id not in set(orphan_ids)]
     return {"items": [_item_summary(pi) for pi in items]}
 
 
@@ -842,6 +850,59 @@ def set_item_primary(
     db.commit()
     db.refresh(pi)
     return _item_summary(pi)
+
+
+@router.delete("/{project_id}/slots/{slot_id}/items", summary="Detach every item from a slot (optionally purge Emulsion-only uploads)")
+def clear_slot_items(
+    project_id: str,
+    slot_id: str,
+    purge: bool = Query(False, description="If true, also delete media items that live only in Emulsion and aren't attached anywhere else."),
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    _project_or_404(db, project_id)
+    _slot_or_404(db, project_id, slot_id)
+    pis = db.query(ProjectItem).options(joinedload(ProjectItem.media_item)).filter(
+        ProjectItem.project_id == project_id,
+        ProjectItem.slot_id == slot_id,
+    ).all()
+    detached_ids: list[str] = []
+    purged_media: list[tuple[str, str, str | None]] = []  # (id, media_type, file_path) for post-commit cleanup
+    for pi in pis:
+        mi = pi.media_item
+        db.delete(pi)
+        detached_ids.append(pi.id)
+        if purge and mi is not None:
+            # Only nuke media items that won't be referenced from anywhere
+            # else after this detach (other slots/projects), and which live
+            # in the private Emulsion index. Public scrape items stay put.
+            other = db.query(ProjectItem).filter(
+                ProjectItem.media_item_id == mi.id,
+                ProjectItem.id != pi.id,
+            ).count()
+            is_emulsion_only = (mi.output_index is None) and (mi.source_id is None)
+            if other == 0 and is_emulsion_only:
+                purged_media.append((mi.id, mi.media_type, mi.file_path))
+                db.delete(mi)
+    db.commit()
+    # Disk + Meili cleanup for purged items.
+    if purged_media:
+        from server.search_api import _get_search_media_dir
+        media_root = _get_search_media_dir()
+        for mi_id, media_type, file_path in purged_media:
+            if file_path:
+                p = media_root / file_path
+                if p.exists():
+                    p.unlink()
+                thumb = p.with_name(p.stem + "_thumb.webp")
+                if thumb.exists():
+                    thumb.unlink()
+            try:
+                from server.search_client import delete_media_item as meili_delete
+                meili_delete(mi_id, media_type)
+            except Exception:
+                logger.exception("meili delete failed for %s", mi_id)
+    return {"detached": len(detached_ids), "purged": len(purged_media)}
 
 
 @router.delete("/{project_id}/items/{item_id}", status_code=204, summary="Detach a media item")
@@ -1085,6 +1146,11 @@ class CreateLinkBody(BaseModel):
     position: int | None = None
 
 
+class UpdateLinkBody(BaseModel):
+    url: str | None = Field(None, min_length=4)
+    label: str | None = None  # empty string clears label
+
+
 @router.get("/{project_id}/links", summary="List links for a Latent (incl. all its slots)")
 def list_links(
     project_id: str,
@@ -1134,6 +1200,31 @@ def create_link(
         created_by=user.id,
     )
     db.add(link)
+    db.commit()
+    db.refresh(link)
+    return _link_summary(link)
+
+
+@router.patch("/{project_id}/links/{link_id}", summary="Update a link's URL or label")
+def update_link(
+    project_id: str,
+    link_id: str,
+    body: UpdateLinkBody,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    link = db.query(ProjectLink).filter(
+        ProjectLink.id == link_id, ProjectLink.project_id == project_id,
+    ).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="Link not found")
+    if body.url is not None:
+        new_url = body.url.strip()
+        link.url = new_url
+        link.kind = _detect_link_kind(new_url)
+    if body.label is not None:
+        cleaned = body.label.strip()
+        link.label = cleaned or None
     db.commit()
     db.refresh(link)
     return _link_summary(link)

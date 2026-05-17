@@ -25,9 +25,15 @@
 
   let { initial }: Props = $props();
 
-  // Always include the synthetic Inputs option first.
+  // Always include the synthetic Inputs option first, and Emulsion (private
+  // Latents index) right after — Emulsion lives in its own Meilisearch
+  // index, but admins want to select it like any other index.
   let dynamicOptions = $state<string[]>([]);
-  let allValues = $derived<string[]>(['__inputs__', ...dynamicOptions]);
+  let allValues = $derived<string[]>([
+    '__inputs__',
+    '__emulsion__',
+    ...dynamicOptions,
+  ]);
 
   let value = $state<string[]>(['__inputs__']);
 
@@ -35,7 +41,9 @@
   let mounted = $state(false);
 
   function labelFor(v: string): string {
-    return v === '__inputs__' ? 'Inputs' : v;
+    if (v === '__inputs__') return 'Inputs';
+    if (v === '__emulsion__') return 'Emulsion (Latents)';
+    return v;
   }
 
   function triggerLabel(selected: string[]): string {

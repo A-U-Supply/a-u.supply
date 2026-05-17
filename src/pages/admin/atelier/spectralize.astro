@@ -11,16 +11,19 @@ import Admin from '../../../layouts/Admin.astro';
   <div class="sz-shell">
     <!-- ── Controls ─────────────────────────────────────────── -->
     <div class="sz-controls">
-
       <!-- Image upload zone -->
       <div class="sz-drop-zone" id="sz-drop-zone">
         <div class="sz-drop-empty" id="sz-drop-empty">
           <div class="sz-drop-icon">▦</div>
           <div class="sz-drop-hint">Drop image here</div>
           <div class="sz-drop-actions">
-            <button class="sz-drop-btn" id="sz-upload-btn">↑ Upload Image</button>
+            <button class="sz-drop-btn" id="sz-upload-btn"
+              >↑ Upload Image</button
+            >
             <span class="sz-drop-or">or</span>
-            <button class="sz-drop-btn sz-drop-btn--lib" id="sz-lib-btn">From Library</button>
+            <button class="sz-drop-btn sz-drop-btn--lib" id="sz-lib-btn"
+              >From Library</button
+            >
           </div>
           <div class="sz-drop-sub">PNG · JPG · GIF · WEBP</div>
         </div>
@@ -31,7 +34,12 @@ import Admin from '../../../layouts/Admin.astro';
             <button class="sz-change-btn" id="sz-change-btn">Change</button>
           </div>
         </div>
-        <input type="file" id="sz-file-input" accept="image/*" style="display:none" />
+        <input
+          type="file"
+          id="sz-file-input"
+          accept="image/*"
+          style="display:none"
+        />
       </div>
 
       <div class="sz-divider"></div>
@@ -42,33 +50,69 @@ import Admin from '../../../layouts/Admin.astro';
           <span>Freq Min</span>
           <span class="sz-val" id="sz-fmin-val">200 Hz</span>
         </label>
-        <input class="sz-range" type="range" id="sz-freq-min" min="20" max="4000" step="10" value="200" />
+        <input
+          class="sz-range"
+          type="range"
+          id="sz-freq-min"
+          min="20"
+          max="4000"
+          step="10"
+          value="200"
+        />
       </div>
       <div class="sz-field">
         <label class="sz-label">
           <span>Freq Max</span>
           <span class="sz-val" id="sz-fmax-val">8 kHz</span>
         </label>
-        <input class="sz-range" type="range" id="sz-freq-max" min="2000" max="20000" step="100" value="8000" />
+        <input
+          class="sz-range"
+          type="range"
+          id="sz-freq-max"
+          min="2000"
+          max="20000"
+          step="100"
+          value="8000"
+        />
       </div>
       <div class="sz-field">
         <label class="sz-label">
           <span>Duration</span>
           <span class="sz-val" id="sz-dur-val">8 s</span>
         </label>
-        <input class="sz-range" type="range" id="sz-duration" min="1" max="30" step="1" value="8" />
+        <input
+          class="sz-range"
+          type="range"
+          id="sz-duration"
+          min="1"
+          max="30"
+          step="1"
+          value="8"
+        />
       </div>
       <div class="sz-field">
         <label class="sz-label">
           <span>Contrast</span>
           <span class="sz-val" id="sz-contrast-val">4</span>
         </label>
-        <input class="sz-range" type="range" id="sz-contrast" min="1" max="8" step="0.5" value="4" />
+        <input
+          class="sz-range"
+          type="range"
+          id="sz-contrast"
+          min="1"
+          max="8"
+          step="0.5"
+          value="4"
+        />
       </div>
 
       <div class="sz-divider"></div>
 
-      <button class="btn btn--primary sz-generate-btn" id="sz-generate-btn" disabled>Generate Audio</button>
+      <button
+        class="btn btn--primary sz-generate-btn"
+        id="sz-generate-btn"
+        disabled>Generate Audio</button
+      >
     </div>
 
     <!-- ── Stage ──────────────────────────────────────────────── -->
@@ -82,8 +126,12 @@ import Admin from '../../../layouts/Admin.astro';
       </div>
 
       <div class="sz-action-bar" id="sz-action-bar" style="display:none">
-        <button class="btn btn--secondary" id="sz-download-btn">⬇ Download WAV</button>
-        <button class="btn btn--secondary" id="sz-save-btn">☁ Save to Library</button>
+        <button class="btn btn--secondary" id="sz-download-btn"
+          >⬇ Download WAV</button
+        >
+        <button class="btn btn--secondary" id="sz-save-btn"
+          >☁ Save to Library</button
+        >
       </div>
     </div>
   </div>
@@ -96,7 +144,12 @@ import Admin from '../../../layouts/Admin.astro';
         <button class="sz-modal__close" id="sz-modal-close">✕</button>
       </div>
       <div class="sz-modal__toolbar">
-        <input class="sz-modal__search" type="text" id="sz-modal-search" placeholder="Search…" />
+        <input
+          class="sz-modal__search"
+          type="text"
+          id="sz-modal-search"
+          placeholder="Search…"
+        />
       </div>
       <div class="sz-modal__grid" id="sz-modal-grid">
         <div class="sz-modal__loading">Loading…</div>
@@ -137,101 +190,271 @@ import Admin from '../../../layouts/Admin.astro';
       align-items: center;
       justify-content: center;
     }
-    .sz-drop-zone.drag-over { border-color: var(--accent, #888); border-style: solid; }
-    .sz-drop-empty { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.15rem; }
-    .sz-drop-icon { font-size: 1.6rem; opacity: 0.4; margin-bottom: 0.2rem; }
-    .sz-drop-hint { font-size: 0.8rem; opacity: 0.6; }
-    .sz-drop-actions { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.65rem; }
+    .sz-drop-zone.drag-over {
+      border-color: var(--accent, #888);
+      border-style: solid;
+    }
+    .sz-drop-empty {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.15rem;
+    }
+    .sz-drop-icon {
+      font-size: 1.6rem;
+      opacity: 0.4;
+      margin-bottom: 0.2rem;
+    }
+    .sz-drop-hint {
+      font-size: 0.8rem;
+      opacity: 0.6;
+    }
+    .sz-drop-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.65rem;
+    }
     .sz-drop-btn {
-      font-size: 0.75rem; padding: 0.3rem 0.8rem;
-      border: 1px solid var(--border, #444); border-radius: 3px;
-      background: var(--bg2, #1a1a1a); color: inherit; cursor: pointer;
+      font-size: 0.75rem;
+      padding: 0.3rem 0.8rem;
+      border: 1px solid var(--border, #444);
+      border-radius: 3px;
+      background: var(--bg2, #1a1a1a);
+      color: inherit;
+      cursor: pointer;
       transition: border-color 0.1s;
     }
-    .sz-drop-btn:hover { border-color: var(--accent, #888); }
-    .sz-drop-btn--lib { border-color: var(--accent, #777); }
-    .sz-drop-or { font-size: 0.65rem; opacity: 0.35; }
-    .sz-drop-sub { font-size: 0.65rem; opacity: 0.35; margin-top: 0.5rem; }
-    .sz-loaded-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 0.3rem; width: 100%; }
-    .sz-meta { font-size: 0.65rem; opacity: 0.5; }
-    .sz-change-btn { font-size: 0.65rem; opacity: 0.45; background: none; border: none; color: inherit; cursor: pointer; padding: 0; }
-    .sz-change-btn:hover { opacity: 1; }
-    #sz-preview-canvas { width: 100%; border-radius: 2px; display: block; }
+    .sz-drop-btn:hover {
+      border-color: var(--accent, #888);
+    }
+    .sz-drop-btn--lib {
+      border-color: var(--accent, #777);
+    }
+    .sz-drop-or {
+      font-size: 0.65rem;
+      opacity: 0.35;
+    }
+    .sz-drop-sub {
+      font-size: 0.65rem;
+      opacity: 0.35;
+      margin-top: 0.5rem;
+    }
+    .sz-loaded-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 0.3rem;
+      width: 100%;
+    }
+    .sz-meta {
+      font-size: 0.65rem;
+      opacity: 0.5;
+    }
+    .sz-change-btn {
+      font-size: 0.65rem;
+      opacity: 0.45;
+      background: none;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      padding: 0;
+    }
+    .sz-change-btn:hover {
+      opacity: 1;
+    }
+    #sz-preview-canvas {
+      width: 100%;
+      border-radius: 2px;
+      display: block;
+    }
 
     /* Divider */
-    .sz-divider { height: 1px; background: var(--border, #333); margin: 0.25rem 0; }
+    .sz-divider {
+      height: 1px;
+      background: var(--border, #333);
+      margin: 0.25rem 0;
+    }
 
     /* Fields */
-    .sz-field { display: flex; flex-direction: column; gap: 0.2rem; }
-    .sz-label {
-      font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.07em;
-      opacity: 0.55; display: flex; justify-content: space-between;
+    .sz-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
     }
-    .sz-val { opacity: 0.9; font-variant-numeric: tabular-nums; }
-    .sz-range { width: 100%; accent-color: var(--accent, #888); cursor: pointer; }
+    .sz-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      opacity: 0.55;
+      display: flex;
+      justify-content: space-between;
+    }
+    .sz-val {
+      opacity: 0.9;
+      font-variant-numeric: tabular-nums;
+    }
+    .sz-range {
+      width: 100%;
+      accent-color: var(--accent, #888);
+      cursor: pointer;
+    }
 
     /* Generate button */
-    .sz-generate-btn { width: 100%; }
-    .sz-generate-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .sz-generate-btn {
+      width: 100%;
+    }
+    .sz-generate-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
 
     /* Canvas */
     .sz-canvas-wrap {
-      position: relative; background: #0a0a0a; border-radius: 4px; overflow: hidden;
+      position: relative;
+      background: #0a0a0a;
+      border-radius: 4px;
+      overflow: hidden;
     }
-    #sz-canvas { display: block; width: 100%; height: auto; aspect-ratio: 3/2; }
-    .sz-empty, .sz-busy {
-      position: absolute; inset: 0; display: flex; align-items: center;
-      justify-content: center; font-size: 0.8rem; opacity: 0.35; pointer-events: none;
+    #sz-canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 3/2;
     }
-    .sz-busy { opacity: 0.7; }
+    .sz-empty,
+    .sz-busy {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      opacity: 0.35;
+      pointer-events: none;
+    }
+    .sz-busy {
+      opacity: 0.7;
+    }
 
     /* Action bar */
-    .sz-action-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .sz-action-bar {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
 
     /* Library modal */
     .sz-modal-overlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,0.78);
-      z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 1rem;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.78);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
     }
     .sz-modal {
-      background: var(--bg, #111); color: var(--fg, #e8e8e8);
-      border: 1px solid var(--border, #333); border-radius: 6px;
-      width: min(560px, 100%); max-height: 80vh;
-      display: flex; flex-direction: column; overflow: hidden;
+      background: var(--bg, #111);
+      color: var(--fg, #e8e8e8);
+      border: 1px solid var(--border, #333);
+      border-radius: 6px;
+      width: min(560px, 100%);
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
-    .sz-modal__header { display: flex; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border, #333); }
-    .sz-modal__title { font-size: 0.9rem; margin: 0; flex: 1; }
-    .sz-modal__close { background: none; border: none; color: inherit; cursor: pointer; opacity: 0.5; font-size: 1rem; padding: 0.25rem 0.5rem; }
-    .sz-modal__close:hover { opacity: 1; }
-    .sz-modal__toolbar { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border, #222); }
+    .sz-modal__header {
+      display: flex;
+      align-items: center;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border, #333);
+    }
+    .sz-modal__title {
+      font-size: 0.9rem;
+      margin: 0;
+      flex: 1;
+    }
+    .sz-modal__close {
+      background: none;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      opacity: 0.5;
+      font-size: 1rem;
+      padding: 0.25rem 0.5rem;
+    }
+    .sz-modal__close:hover {
+      opacity: 1;
+    }
+    .sz-modal__toolbar {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--border, #222);
+    }
     .sz-modal__search {
-      width: 100%; box-sizing: border-box; font-size: 0.8rem; padding: 0.35rem 0.5rem;
-      background: var(--bg2, #1a1a1a); border: 1px solid var(--border, #333);
-      color: inherit; border-radius: 3px;
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 0.8rem;
+      padding: 0.35rem 0.5rem;
+      background: var(--bg2, #1a1a1a);
+      border: 1px solid var(--border, #333);
+      color: inherit;
+      border-radius: 3px;
     }
     .sz-modal__grid {
-      flex: 1; overflow-y: auto; padding: 0.5rem;
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-      gap: 0.4rem; align-content: start;
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.5rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 0.4rem;
+      align-content: start;
     }
-    .sz-modal__loading { grid-column: 1/-1; text-align: center; padding: 2rem; font-size: 0.75rem; opacity: 0.4; }
+    .sz-modal__loading {
+      grid-column: 1/-1;
+      text-align: center;
+      padding: 2rem;
+      font-size: 0.75rem;
+      opacity: 0.4;
+    }
     .sz-thumb {
-      width: 100%; aspect-ratio: 1; object-fit: cover; cursor: pointer;
-      border-radius: 3px; border: 1px solid var(--border, #333);
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      cursor: pointer;
+      border-radius: 3px;
+      border: 1px solid var(--border, #333);
       transition: border-color 0.1s;
     }
-    .sz-thumb:hover { border-color: var(--accent, #888); }
+    .sz-thumb:hover {
+      border-color: var(--accent, #888);
+    }
 
     /* Responsive */
     @media (max-width: 700px) {
-      .sz-shell { flex-direction: column; }
-      .sz-stage { order: -1; }
-      .sz-controls { width: 100%; }
+      .sz-shell {
+        flex-direction: column;
+      }
+      .sz-stage {
+        order: -1;
+      }
+      .sz-controls {
+        width: 100%;
+      }
     }
     @media (max-width: 500px) {
-      #sz-canvas { aspect-ratio: 1/1; }
-      .sz-action-bar { flex-direction: column; }
-      .sz-action-bar .btn { width: 100%; }
+      #sz-canvas {
+        aspect-ratio: 1/1;
+      }
+      .sz-action-bar {
+        flex-direction: column;
+      }
+      .sz-action-bar .btn {
+        width: 100%;
+      }
     }
   </style>
 
@@ -242,20 +465,23 @@ import Admin from '../../../layouts/Admin.astro';
     let lastWavBuf: ArrayBuffer | null = null;
     let lastImageName = 'image';
 
-    const canvas   = document.getElementById('sz-canvas') as HTMLCanvasElement;
-    const ctx      = canvas.getContext('2d')!;
-    const emptyEl  = document.getElementById('sz-empty')!;
-    const busyEl   = document.getElementById('sz-busy')!;
+    const canvas = document.getElementById('sz-canvas') as HTMLCanvasElement;
+    const ctx = canvas.getContext('2d')!;
+    const emptyEl = document.getElementById('sz-empty')!;
+    const busyEl = document.getElementById('sz-busy')!;
     const busyLabel = document.getElementById('sz-busy-label')!;
     const actionBar = document.getElementById('sz-action-bar')!;
-    const generateBtn = document.getElementById('sz-generate-btn') as HTMLButtonElement;
+    const generateBtn = document.getElementById(
+      'sz-generate-btn',
+    ) as HTMLButtonElement;
 
     // ─── Params ───────────────────────────────────────────────────────────────
     function getParams() {
-      const num = (id: string) => parseFloat((document.getElementById(id) as HTMLInputElement).value);
+      const num = (id: string) =>
+        parseFloat((document.getElementById(id) as HTMLInputElement).value);
       return {
-        freqMin:  num('sz-freq-min'),
-        freqMax:  num('sz-freq-max'),
+        freqMin: num('sz-freq-min'),
+        freqMax: num('sz-freq-max'),
         duration: num('sz-duration'),
         contrast: num('sz-contrast'),
         sampleRate: 44100,
@@ -263,7 +489,12 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     // ─── Image → magnitude matrix ─────────────────────────────────────────────
-    function imageToMatrix(img: HTMLImageElement, numFrames: number, numBins: number, contrast: number): Float32Array[] {
+    function imageToMatrix(
+      img: HTMLImageElement,
+      numFrames: number,
+      numBins: number,
+      contrast: number,
+    ): Float32Array[] {
       const oc = new OffscreenCanvas(numFrames, numBins);
       const octx = oc.getContext('2d')!;
       octx.drawImage(img, 0, 0, numFrames, numBins);
@@ -274,7 +505,8 @@ import Admin from '../../../layouts/Admin.astro';
         for (let b = 0; b < numBins; b++) {
           const y = numBins - 1 - b; // flip: bottom = low freq
           const i = (y * numFrames + f) * 4;
-          const luma = (0.299 * px[i] + 0.587 * px[i+1] + 0.114 * px[i+2]) / 255;
+          const luma =
+            (0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]) / 255;
           frame[b] = Math.pow(luma, contrast);
         }
         matrix.push(frame);
@@ -284,26 +516,35 @@ import Admin from '../../../layouts/Admin.astro';
 
     // ─── Spectrogram preview ──────────────────────────────────────────────────
     function renderPreview(matrix: Float32Array[], numBins: number) {
-      const W = canvas.width, H = canvas.height;
+      const W = canvas.width,
+        H = canvas.height;
       const numFrames = matrix.length;
       const img = ctx.createImageData(W, H);
       const d = img.data;
       // Hot palette inline
       const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-      const hot = [[0,0,0],[0.33,0,0],[0.67,0.35,0],[0.9,0.9,0],[1,1,1]];
+      const hot = [
+        [0, 0, 0],
+        [0.33, 0, 0],
+        [0.67, 0.35, 0],
+        [0.9, 0.9, 0],
+        [1, 1, 1],
+      ];
       for (let y = 0; y < H; y++) {
-        const b = Math.floor((H - 1 - y) / (H - 1) * (numBins - 1));
+        const b = Math.floor(((H - 1 - y) / (H - 1)) * (numBins - 1));
         for (let x = 0; x < W; x++) {
-          const f = Math.floor(x / W * numFrames);
+          const f = Math.floor((x / W) * numFrames);
           const mag = matrix[f]?.[b] ?? 0;
-          const t = mag; const seg = t * (hot.length - 1);
-          const lo = Math.floor(seg), hi = Math.min(lo + 1, hot.length - 1);
+          const t = mag;
+          const seg = t * (hot.length - 1);
+          const lo = Math.floor(seg),
+            hi = Math.min(lo + 1, hot.length - 1);
           const frac = seg - lo;
           const di = (y * W + x) * 4;
-          d[di]   = Math.round(lerp(hot[lo][0], hot[hi][0], frac) * 255);
-          d[di+1] = Math.round(lerp(hot[lo][1], hot[hi][1], frac) * 255);
-          d[di+2] = Math.round(lerp(hot[lo][2], hot[hi][2], frac) * 255);
-          d[di+3] = 255;
+          d[di] = Math.round(lerp(hot[lo][0], hot[hi][0], frac) * 255);
+          d[di + 1] = Math.round(lerp(hot[lo][1], hot[hi][1], frac) * 255);
+          d[di + 2] = Math.round(lerp(hot[lo][2], hot[hi][2], frac) * 255);
+          d[di + 3] = 255;
         }
       }
       ctx.putImageData(img, 0, 0);
@@ -314,26 +555,45 @@ import Admin from '../../../layouts/Admin.astro';
       const n = signal.length;
       const buf = new ArrayBuffer(44 + n * 2);
       const v = new DataView(buf);
-      const ws = (off: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i)); };
-      ws(0,'RIFF'); v.setUint32(4, 36 + n*2, true);
-      ws(8,'WAVE'); ws(12,'fmt ');
-      v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
-      v.setUint32(24,sampleRate,true); v.setUint32(28,sampleRate*2,true);
-      v.setUint16(32,2,true); v.setUint16(34,16,true);
-      ws(36,'data'); v.setUint32(40,n*2,true);
-      for (let i = 0; i < n; i++) v.setInt16(44+i*2, Math.max(-32768,Math.min(32767,Math.round(signal[i]*32767))), true);
+      const ws = (off: number, s: string) => {
+        for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i));
+      };
+      ws(0, 'RIFF');
+      v.setUint32(4, 36 + n * 2, true);
+      ws(8, 'WAVE');
+      ws(12, 'fmt ');
+      v.setUint32(16, 16, true);
+      v.setUint16(20, 1, true);
+      v.setUint16(22, 1, true);
+      v.setUint32(24, sampleRate, true);
+      v.setUint32(28, sampleRate * 2, true);
+      v.setUint16(32, 2, true);
+      v.setUint16(34, 16, true);
+      ws(36, 'data');
+      v.setUint32(40, n * 2, true);
+      for (let i = 0; i < n; i++)
+        v.setInt16(
+          44 + i * 2,
+          Math.max(-32768, Math.min(32767, Math.round(signal[i] * 32767))),
+          true,
+        );
       return buf;
     }
 
-    function yieldToUI(): Promise<void> { return new Promise(r => setTimeout(r, 0)); }
+    function yieldToUI(): Promise<void> {
+      return new Promise((r) => setTimeout(r, 0));
+    }
 
     // ─── Additive synthesis ───────────────────────────────────────────────────
     async function synthesize(
-      matrix: Float32Array[], freqMin: number, freqMax: number,
-      sampleRate: number, duration: number,
+      matrix: Float32Array[],
+      freqMin: number,
+      freqMax: number,
+      sampleRate: number,
+      duration: number,
     ): Promise<Float32Array> {
       const numFrames = matrix.length;
-      const numBins   = matrix[0]?.length ?? 0;
+      const numBins = matrix[0]?.length ?? 0;
       const totalSamples = Math.ceil(sampleRate * duration);
       const samplesPerFrame = Math.ceil(totalSamples / numFrames);
       const signal = new Float32Array(totalSamples);
@@ -347,20 +607,27 @@ import Admin from '../../../layouts/Admin.astro';
           const amp = frame[b];
           if (amp < 0.005) continue;
           const freq = freqMin + (freqMax - freqMin) * (b / (numBins - 1));
-          const sampleOffset = Math.floor(f * totalSamples / numFrames);
-          const sampleEnd = Math.min(sampleOffset + samplesPerFrame, totalSamples);
+          const sampleOffset = Math.floor((f * totalSamples) / numFrames);
+          const sampleEnd = Math.min(
+            sampleOffset + samplesPerFrame,
+            totalSamples,
+          );
           for (let i = sampleOffset; i < sampleEnd; i++) {
-            signal[i] += Math.sin(TWO_PI * freq * (tStart + (i - sampleOffset) / sampleRate)) * amp;
+            signal[i] +=
+              Math.sin(
+                TWO_PI * freq * (tStart + (i - sampleOffset) / sampleRate),
+              ) * amp;
           }
         }
         if (f % CHUNK === CHUNK - 1) {
-          busyLabel.textContent = `Synthesizing… ${Math.round(f / numFrames * 100)}%`;
+          busyLabel.textContent = `Synthesizing… ${Math.round((f / numFrames) * 100)}%`;
           await yieldToUI();
         }
       }
 
       let peak = 0;
-      for (let i = 0; i < totalSamples; i++) if (Math.abs(signal[i]) > peak) peak = Math.abs(signal[i]);
+      for (let i = 0; i < totalSamples; i++)
+        if (Math.abs(signal[i]) > peak) peak = Math.abs(signal[i]);
       if (peak > 0) for (let i = 0; i < totalSamples; i++) signal[i] /= peak;
       return signal;
     }
@@ -374,14 +641,19 @@ import Admin from '../../../layouts/Admin.astro';
         lastImageName = name;
         document.getElementById('sz-drop-empty')!.style.display = 'none';
         document.getElementById('sz-loaded-zone')!.style.display = 'block';
-        document.getElementById('sz-image-meta')!.textContent = `${name} · ${img.naturalWidth}×${img.naturalHeight}`;
+        document.getElementById('sz-image-meta')!.textContent =
+          `${name} · ${img.naturalWidth}×${img.naturalHeight}`;
         // Draw scaled preview
-        const pc = document.getElementById('sz-preview-canvas') as HTMLCanvasElement;
+        const pc = document.getElementById(
+          'sz-preview-canvas',
+        ) as HTMLCanvasElement;
         const pctx = pc.getContext('2d')!;
         pctx.drawImage(img, 0, 0, pc.width, pc.height);
         // Compute matrix + render preview
-        const { freqMin, freqMax, duration, contrast, sampleRate } = getParams();
-        const numFrames = 300, numBins = 150;
+        const { freqMin, freqMax, duration, contrast, sampleRate } =
+          getParams();
+        const numFrames = 300,
+          numBins = 150;
         magnitudeMatrix = imageToMatrix(img, numFrames, numBins, contrast);
         renderPreview(magnitudeMatrix, numBins);
         emptyEl.style.display = 'none';
@@ -389,7 +661,9 @@ import Admin from '../../../layouts/Admin.astro';
         actionBar.style.display = 'none';
         lastWavBuf = null;
       };
-      img.onerror = () => { (window as any).toast?.error('Failed to load image'); };
+      img.onerror = () => {
+        (window as any).toast?.error('Failed to load image');
+      };
       img.src = url;
     }
 
@@ -403,11 +677,18 @@ import Admin from '../../../layouts/Admin.astro';
 
       const { freqMin, freqMax, duration, contrast, sampleRate } = getParams();
       // Recompute matrix with current contrast
-      const numFrames = magnitudeMatrix.length, numBins = magnitudeMatrix[0].length;
+      const numFrames = magnitudeMatrix.length,
+        numBins = magnitudeMatrix[0].length;
       const matrix = imageToMatrix(sourceImage, numFrames, numBins, contrast);
 
       try {
-        const signal = await synthesize(matrix, freqMin, freqMax, sampleRate, duration);
+        const signal = await synthesize(
+          matrix,
+          freqMin,
+          freqMax,
+          sampleRate,
+          duration,
+        );
         lastWavBuf = encodeWAV(signal, sampleRate);
         busyEl.style.display = 'none';
         actionBar.style.display = 'flex';
@@ -422,23 +703,37 @@ import Admin from '../../../layouts/Admin.astro';
 
     // ─── Drop zone wiring ─────────────────────────────────────────────────────
     const dropZone = document.getElementById('sz-drop-zone')!;
-    const fileInput = document.getElementById('sz-file-input') as HTMLInputElement;
-    document.getElementById('sz-upload-btn')!.addEventListener('click', e => { e.stopPropagation(); fileInput.click(); });
+    const fileInput = document.getElementById(
+      'sz-file-input',
+    ) as HTMLInputElement;
+    document.getElementById('sz-upload-btn')!.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fileInput.click();
+    });
     fileInput.addEventListener('change', () => {
       const f = fileInput.files?.[0];
       if (f) loadImage(URL.createObjectURL(f), f.name);
     });
-    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-    dropZone.addEventListener('drop', e => {
-      e.preventDefault(); dropZone.classList.remove('drag-over');
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', () =>
+      dropZone.classList.remove('drag-over'),
+    );
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
       const f = e.dataTransfer?.files[0];
-      if (f && f.type.startsWith('image/')) loadImage(URL.createObjectURL(f), f.name);
+      if (f && f.type.startsWith('image/'))
+        loadImage(URL.createObjectURL(f), f.name);
     });
     document.getElementById('sz-change-btn')!.addEventListener('click', () => {
       document.getElementById('sz-drop-empty')!.style.display = '';
       document.getElementById('sz-loaded-zone')!.style.display = 'none';
-      sourceImage = null; magnitudeMatrix = null; lastWavBuf = null;
+      sourceImage = null;
+      magnitudeMatrix = null;
+      lastWavBuf = null;
       generateBtn.disabled = true;
       actionBar.style.display = 'none';
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -447,25 +742,46 @@ import Admin from '../../../layouts/Admin.astro';
 
     // ─── Library modal ────────────────────────────────────────────────────────
     const modalOverlay = document.getElementById('sz-modal-overlay')!;
-    const modalGrid    = document.getElementById('sz-modal-grid')!;
-    const modalSearch  = document.getElementById('sz-modal-search') as HTMLInputElement;
+    const modalGrid = document.getElementById('sz-modal-grid')!;
+    const modalSearch = document.getElementById(
+      'sz-modal-search',
+    ) as HTMLInputElement;
     let libSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
-    function openLibrary() { modalOverlay.style.display = 'flex'; modalSearch.value = ''; loadLibItems(''); }
-    function closeLibrary() { modalOverlay.style.display = 'none'; }
+    function openLibrary() {
+      modalOverlay.style.display = 'flex';
+      modalSearch.value = '';
+      loadLibItems('');
+    }
+    function closeLibrary() {
+      modalOverlay.style.display = 'none';
+    }
 
     async function loadLibItems(q: string) {
       modalGrid.innerHTML = '<div class="sz-modal__loading">Loading…</div>';
       try {
         const res = await fetch('/api/search', {
-          method: 'POST', credentials: 'include',
+          method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: q, media_types: ['image'], sort: 'created_at:desc', page: 1, per_page: 48, filters: {} }),
+          body: JSON.stringify({
+            query: q,
+            media_types: ['image'],
+            sort: 'created_at:desc',
+            page: 1,
+            per_page: 48,
+            filters: {},
+          }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        const items: { id: string; filename?: string }[] = data.results ?? data.hits ?? [];
-        if (items.length === 0) { modalGrid.innerHTML = '<div class="sz-modal__loading">No images found</div>'; return; }
+        const items: { id: string; filename?: string }[] =
+          data.results ?? data.hits ?? [];
+        if (items.length === 0) {
+          modalGrid.innerHTML =
+            '<div class="sz-modal__loading">No images found</div>';
+          return;
+        }
         modalGrid.innerHTML = '';
         for (const item of items) {
           const img = document.createElement('img');
@@ -479,56 +795,99 @@ import Admin from '../../../layouts/Admin.astro';
           });
           modalGrid.appendChild(img);
         }
-      } catch { modalGrid.innerHTML = '<div class="sz-modal__loading">Failed to load</div>'; }
+      } catch {
+        modalGrid.innerHTML =
+          '<div class="sz-modal__loading">Failed to load</div>';
+      }
     }
 
-    document.getElementById('sz-lib-btn')!.addEventListener('click', openLibrary);
-    document.getElementById('sz-modal-close')!.addEventListener('click', closeLibrary);
-    modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) closeLibrary(); });
+    document
+      .getElementById('sz-lib-btn')!
+      .addEventListener('click', openLibrary);
+    document
+      .getElementById('sz-modal-close')!
+      .addEventListener('click', closeLibrary);
+    modalOverlay.addEventListener('click', (e) => {
+      if (e.target === modalOverlay) closeLibrary();
+    });
     modalSearch.addEventListener('input', () => {
       if (libSearchTimer) clearTimeout(libSearchTimer);
-      libSearchTimer = setTimeout(() => loadLibItems(modalSearch.value.trim()), 300);
+      libSearchTimer = setTimeout(
+        () => loadLibItems(modalSearch.value.trim()),
+        300,
+      );
     });
 
     // ─── Sliders ──────────────────────────────────────────────────────────────
     const sliderDefs: [string, string, (v: string) => string][] = [
-      ['sz-freq-min',  'sz-fmin-val',  v => parseInt(v) >= 1000 ? `${(parseInt(v)/1000).toFixed(1)} kHz` : `${v} Hz`],
-      ['sz-freq-max',  'sz-fmax-val',  v => `${Math.round(parseInt(v)/100)/10} kHz`],
-      ['sz-duration',  'sz-dur-val',   v => `${v} s`],
-      ['sz-contrast',  'sz-contrast-val', v => v],
+      [
+        'sz-freq-min',
+        'sz-fmin-val',
+        (v) =>
+          parseInt(v) >= 1000
+            ? `${(parseInt(v) / 1000).toFixed(1)} kHz`
+            : `${v} Hz`,
+      ],
+      [
+        'sz-freq-max',
+        'sz-fmax-val',
+        (v) => `${Math.round(parseInt(v) / 100) / 10} kHz`,
+      ],
+      ['sz-duration', 'sz-dur-val', (v) => `${v} s`],
+      ['sz-contrast', 'sz-contrast-val', (v) => v],
     ];
     for (const [id, valId, fmt] of sliderDefs) {
       const el = document.getElementById(id) as HTMLInputElement;
       const valEl = document.getElementById(valId)!;
-      el.addEventListener('input', () => { valEl.textContent = fmt(el.value); });
+      el.addEventListener('input', () => {
+        valEl.textContent = fmt(el.value);
+      });
     }
 
     // ─── Actions ──────────────────────────────────────────────────────────────
     generateBtn.addEventListener('click', generate);
 
-    document.getElementById('sz-download-btn')!.addEventListener('click', () => {
-      if (!lastWavBuf) return;
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([lastWavBuf], { type: 'audio/wav' }));
-      a.download = `${lastImageName.replace(/\.[^.]+$/, '')}-spectralize.wav`;
-      a.click();
-    });
+    document
+      .getElementById('sz-download-btn')!
+      .addEventListener('click', () => {
+        if (!lastWavBuf) return;
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(
+          new Blob([lastWavBuf], { type: 'audio/wav' }),
+        );
+        a.download = `${lastImageName.replace(/\.[^.]+$/, '')}-spectralize.wav`;
+        a.click();
+      });
 
-    document.getElementById('sz-save-btn')!.addEventListener('click', async () => {
-      if (!lastWavBuf) return;
-      const btn = document.getElementById('sz-save-btn') as HTMLButtonElement;
-      btn.disabled = true; btn.textContent = 'Saving…';
-      try {
-        const fd = new FormData();
-        fd.append('file', new Blob([lastWavBuf], { type: 'audio/wav' }), `${lastImageName.replace(/\.[^.]+$/, '')}-spectralize.wav`);
-        fd.append('tags', 'spectralize,atelier');
-        fd.append('output_index', 'outputs');
-        const res = await fetch('/api/media/upload', { method: 'POST', body: fd, credentials: 'include' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        (window as any).toast?.success('Saved to library');
-      } catch (err: any) {
-        (window as any).toast?.error(`Save failed: ${err.message}`);
-      } finally { btn.disabled = false; btn.textContent = '☁ Save to Library'; }
-    });
+    document
+      .getElementById('sz-save-btn')!
+      .addEventListener('click', async () => {
+        if (!lastWavBuf) return;
+        const btn = document.getElementById('sz-save-btn') as HTMLButtonElement;
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        try {
+          const fd = new FormData();
+          fd.append(
+            'file',
+            new Blob([lastWavBuf], { type: 'audio/wav' }),
+            `${lastImageName.replace(/\.[^.]+$/, '')}-spectralize.wav`,
+          );
+          fd.append('tags', 'spectralize,atelier');
+          fd.append('output_index', 'outputs');
+          const res = await fetch('/api/media/upload', {
+            method: 'POST',
+            body: fd,
+            credentials: 'include',
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          (window as any).toast?.success('Saved to library');
+        } catch (err: any) {
+          (window as any).toast?.error(`Save failed: ${err.message}`);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = '☁ Save to Library';
+        }
+      });
   </script>
 </Admin>

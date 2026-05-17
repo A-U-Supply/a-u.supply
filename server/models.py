@@ -28,6 +28,10 @@ def _set_sqlite_pragma(dbapi_connection, connection_record):
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.execute("PRAGMA busy_timeout=5000")
+    # Without this, SQLite silently ignores every ON DELETE CASCADE in our
+    # schema — deleting a media_items row leaves orphan project_items rows
+    # behind, which surface in the UI as "(unknown)" entries.
+    cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()
 
 

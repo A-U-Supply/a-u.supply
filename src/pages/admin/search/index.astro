@@ -151,17 +151,6 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       <input type="number" id="filter-tags-min" min="0" value="0" />
     </div>
 
-    <div class="filter-group">
-      <label class="filter-label">Latents</label>
-      <label class="filter-check">
-        <input type="checkbox" id="filter-include-emulsion" />
-        Include Emulsion (Latent uploads)
-      </label>
-      <div style="font-size:0.6rem; color: var(--color-muted); margin-top:2px;">
-        Off by default — Latent uploads live in their own private index.
-      </div>
-    </div>
-
     <div class="filter-group" id="filter-group-transcript">
       <label class="filter-label">Transcript</label>
       <select id="filter-has-transcript">
@@ -1743,12 +1732,10 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         'filter-has-text',
       ) as HTMLSelectElement;
       const hasText = textEl.disabled ? '' : textEl.value;
-      const includeEmulsionEl = document.getElementById(
-        'filter-include-emulsion',
-      ) as HTMLInputElement | null;
-      const includeEmulsion = !!(
-        includeEmulsionEl && includeEmulsionEl.checked
-      );
+      // Emulsion is now selected via the IndexFilter dropdown (option
+      // value="__emulsion__"). The legacy checkbox is gone; this derives
+      // the include_emulsion flag from the dropdown selection.
+      const includeEmulsion = outputIndexes.includes('__emulsion__');
       return {
         types,
         channels,
