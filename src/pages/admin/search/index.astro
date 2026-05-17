@@ -814,6 +814,23 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     border-top: 1px solid var(--color-border);
     border-bottom: 1px solid var(--color-border);
   }
+  .feed-item__discuss-panel-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    color: var(--color-muted);
+  }
+  .feed-item__discuss-panel-fold a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+  .feed-item__discuss-panel-fold a:hover {
+    text-decoration: underline;
+  }
   .feed-item__comments {
     list-style: none;
     margin: 0;
@@ -841,11 +858,21 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     text-transform: uppercase;
     letter-spacing: 0.5pt;
   }
-  .feed-item__comment-meta .feed-item__comment-reply {
+  .feed-item__comment-meta .feed-item__comment-reply,
+  .feed-item__cancel-reply {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    margin: 0;
     color: var(--color-accent);
     text-decoration: none;
+    cursor: pointer;
+    font: inherit;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
   }
-  .feed-item__comment-meta .feed-item__comment-reply:hover {
+  .feed-item__comment-meta .feed-item__comment-reply:hover,
+  .feed-item__cancel-reply:hover {
     text-decoration: underline;
   }
   .feed-item__comment-body {
@@ -2562,8 +2589,9 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         ) as HTMLElement | null;
         if (indicator) {
           indicator.textContent = `Replying to comment #${parentId} — `;
-          const cancel = document.createElement('a');
-          cancel.href = '#';
+          const cancel = document.createElement('button');
+          cancel.type = 'button';
+          cancel.className = 'feed-item__cancel-reply';
           cancel.textContent = 'cancel';
           cancel.dataset.cancelReply = '';
           indicator.appendChild(cancel);
@@ -2686,6 +2714,10 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       panel.className = 'feed-item__discuss-panel';
       panel.dataset.id = itemId;
       panel.innerHTML = `
+        <div class="feed-item__discuss-panel-head">
+          <span class="feed-item__discuss-panel-title">Comments</span>
+          <span class="feed-item__discuss-panel-fold" data-fold-link></span>
+        </div>
         <ul class="feed-item__comments" data-comments-list></ul>
         <div class="feed-item__composer">
           <div class="feed-item__composer-help" data-reply-parent-indicator style="display:none"></div>
@@ -2696,7 +2728,24 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
           </div>
         </div>
       `;
+      // Render the fold link if we already know about the thread.
+      updateFoldLink(itemId, panel);
       return panel;
+    }
+
+    function updateFoldLink(itemId: string, panel: HTMLElement) {
+      const slot = panel.querySelector(
+        '[data-fold-link]',
+      ) as HTMLElement | null;
+      if (!slot) return;
+      const preview = discussPreview.get(itemId);
+      if (preview?.lemmy_url) {
+        slot.innerHTML = `<a href="${preview.lemmy_url}" target="_blank" rel="noopener">↗ view on fold</a>`;
+      } else if (preview?.community_url) {
+        slot.innerHTML = `<a href="${preview.community_url}" target="_blank" rel="noopener">↗ c/${preview.community_name || 'stacks'}</a>`;
+      } else {
+        slot.innerHTML = '';
+      }
     }
 
     async function loadCommentsIntoPanel(itemId: string, panel: HTMLElement) {
@@ -2748,7 +2797,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
             <div class="feed-item__comment-meta">
               <span>user #${c.creator_id}</span>
               <span>${c.published ? new Date(c.published).toLocaleString() : ''}</span>
-              <a href="#" class="feed-item__comment-reply" data-parent-id="${c.id}">Reply</a>
+              <button type="button" class="feed-item__comment-reply" data-parent-id="${c.id}">Reply</button>
             </div>
             <div class="feed-item__comment-body">${body}</div>
           </li>`;
@@ -2846,6 +2895,9 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
           indicator.style.display = 'none';
         }
         await loadCommentsIntoPanel(itemId, panel);
+        // After a possible first-post that minted the thread, the fold link
+        // becomes available — refresh the panel header so it shows up.
+        updateFoldLink(itemId, panel);
         // Refresh chips in grid + list views too (mirror the count).
         document
           .querySelectorAll(
