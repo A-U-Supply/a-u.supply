@@ -569,6 +569,20 @@ class ProjectDocumentRevision(Base):
     saver = relationship("User")
 
 
+class FoldWatcherState(Base):
+    """High-water marks for the fold (Lemmy) → #supply-side poller.
+
+    One row per tracked stream — keys: ``last_community_id``, ``last_post_id``.
+    Bootstrapped on first run so historical content isn't backflooded to Slack.
+    """
+
+    __tablename__ = "fold_watcher_state"
+
+    key = Column(String, primary_key=True)
+    value = Column(Integer, nullable=False)
+    updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
+
+
 class Thread(Base):
     """Generic, anchor-typed discussion thread backed by a Lemmy post."""
 
