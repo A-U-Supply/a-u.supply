@@ -27,6 +27,7 @@
     notes_updated_at: string | null;
     pinned: Record<string, string>;
     thread_count?: number;
+    item_count?: number;
     repo_id?: string | null;
     repo_path?: string | null;
     repo_ref?: string | null;
@@ -143,6 +144,13 @@
     }
     // Always reload the repo meta alongside slots so source links stay fresh.
     loadRepoMeta();
+    // Eagerly fetch items for every slot that has any. Visible-by-default
+    // means the cards are unhelpful without this.
+    for (const s of slots) {
+      if ((s.item_count ?? 0) > 0 && !itemsBySlot[s.id]) {
+        loadItems(s.id);
+      }
+    }
   }
 
   async function loadRepoMeta() {
@@ -484,6 +492,32 @@
     return `/api/media/${encodeURIComponent(mediaId)}/thumbnail?size=sm`;
   }
 
+  function playInPlayer(mediaId: string, mediaType: string, title: string) {
+    document.dispatchEvent(
+      new CustomEvent('player:queue', {
+        detail: {
+          tracks: [
+            {
+              track_id: mediaId,
+              title: title || 'Untitled',
+              release_title: '',
+              release_code: '',
+              media_type: mediaType,
+              stream_url: `/api/media/${encodeURIComponent(mediaId)}/file`,
+              cover_url:
+                mediaType === 'image' || mediaType === 'video'
+                  ? `/api/media/${encodeURIComponent(mediaId)}/thumbnail`
+                  : '/assets/default-cover.jpg',
+              duration: 0,
+              entity_name: '',
+            },
+          ],
+          startIndex: 0,
+        },
+      }),
+    );
+  }
+
   function statusColor(s: string): string {
     return (
       (
@@ -569,19 +603,11 @@
             {/each}
           </div>
           <div class="slot__actions">
-            <button
-              class="btn-primary slot__upload-btn"
-              type="button"
-              onclick={() => {
-                if (!(openSlot === slot.id && openSection === 'files')) {
-                  toggleSection(slot.id, 'files');
-                }
-              }}>+ Upload</button
-            >
-            <button
-              class="action-btn"
-              type="button"
-              onclick={() => toggleSection(slot.id, 'files')}>Files</button
+            <!-- Files are always visible inline below; no Files toggle needed. -->
+            <span class="slot__file-count"
+              >{slot.item_count ?? 0} file{(slot.item_count ?? 0) === 1
+                ? ''
+                : 's'}</span
             >
             <button
               class="action-btn"
@@ -702,33 +728,73 @@
         {/if}
 
         <!--
-          The rigid image/audio/video/session pin grid was removed in favour of
-          a per-file ★ toggle that lives inline in the Files panel below. Old
-          slot_primary_pins rows are still written by the worker on auto-pin
-          so existing data isn't lost; the API still returns `pinned` for any
-          consumer that wants it.
+          Files are ALWAYS visible inline. No click-to-expand. The slot card
+          eagerly loads its items on mount so users see what's there without
+          a hidden affordance. Drag-and-drop / +Upload dropzone sits at the
+          bottom of the panel; "+ Pull from index" is right next to it.
         -->
-        {#if Object.values(slot.pinned).length > 0}
-          <div class="slot__pinned-strip">
-            <span class="muted">Primary:</span>
-            {#each Object.entries(slot.pinned) as [mt, mediaId]}
-              <a
-                class="pinned-tile"
-                title={mt}
-                href={`/admin/search/detail?id=${encodeURIComponent(mediaId)}`}
-              >
-                {#if mt === 'image'}
-                  <img src={thumbUrl(mediaId)} alt={mt} />
-                {:else}
-                  <span class="icon">{mt}</span>
-                {/if}
-              </a>
-            {/each}
-          </div>
-        {/if}
-
-        {#if openSlot === slot.id && openSection === 'files'}
-          <div class="slot__panel">
+        <div class="slot__panel">
+          {#if (itemsBySlot[slot.id] || []).length > 0}
+            <ul class="grid">
+              {#each itemsBySlot[slot.id] as it (it.id)}
+                <li
+                  class="tile"
+                  class:tile--primary={it.is_primary}
+                  data-type={it.media?.media_type}
+                >
+                  <button
+                    class="tile__star"
+                    type="button"
+                    title={it.is_primary
+                      ? 'Primary file (click to unstar)'
+                      : 'Mark as primary'}
+                    onclick={() => togglePrimary(slot, it)}
+                    aria-pressed={it.is_primary}
+                    >{it.is_primary ? '★' : '☆'}</button
+                  >
+                  <a
+                    class="tile__thumb"
+                    href={`/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
+                  >
+                    {#if it.media?.media_type === 'image'}
+                      <img
+                        src={thumbUrl(it.media_item_id)}
+                        alt={it.media?.filename}
+                      />
+                    {:else if it.media?.media_type === 'session'}
+                      <span class="icon">▣ session</span>
+                    {:else}
+                      <span class="icon">{it.media?.media_type || 'file'}</span>
+                    {/if}
+                  </a>
+                  <div class="tile__name" title={it.media?.filename}>
+                    {it.media?.filename || '?'}
+                  </div>
+                  <div class="tile__actions">
+                    {#if it.media?.media_type === 'audio' || it.media?.media_type === 'video'}
+                      <button
+                        class="action-btn"
+                        type="button"
+                        title="Play (queues in the persistent Player)"
+                        onclick={() =>
+                          playInPlayer(
+                            it.media_item_id,
+                            it.media!.media_type,
+                            it.media?.filename || '',
+                          )}>▶</button
+                      >
+                    {/if}
+                    <button
+                      class="action-btn action-btn--danger"
+                      type="button"
+                      onclick={() => detachItem(slot, it)}>Detach</button
+                    >
+                  </div>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+          <div class="slot__add">
             <Uploader
               destination="project"
               {projectId}
@@ -736,62 +802,13 @@
               compact={true}
               onUploaded={() => loadItems(slot.id)}
             />
-            <div class="slot__panel-actions">
-              <button
-                class="action-btn"
-                type="button"
-                onclick={() => openPull(slot.id)}>+ Pull from index</button
-              >
-            </div>
-            {#if (itemsBySlot[slot.id] || []).length === 0}
-              <div class="muted">No files in this slot yet.</div>
-            {:else}
-              <ul class="grid">
-                {#each itemsBySlot[slot.id] as it (it.id)}
-                  <li class="tile" data-type={it.media?.media_type}>
-                    <a
-                      class="tile__thumb"
-                      href={`/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
-                    >
-                      {#if it.media?.media_type === 'image'}
-                        <img
-                          src={thumbUrl(it.media_item_id)}
-                          alt={it.media?.filename}
-                        />
-                      {:else if it.media?.media_type === 'session'}
-                        <span class="icon">▣ session</span>
-                      {:else}
-                        <span class="icon"
-                          >{it.media?.media_type || 'file'}</span
-                        >
-                      {/if}
-                    </a>
-                    <div class="tile__name" title={it.media?.filename}>
-                      {it.media?.filename || '?'}
-                    </div>
-                    <div class="tile__actions">
-                      <button
-                        class="action-btn"
-                        type="button"
-                        title={it.is_primary
-                          ? 'Unstar (no longer primary)'
-                          : 'Star as primary file'}
-                        onclick={() => togglePrimary(slot, it)}
-                        aria-pressed={it.is_primary}
-                        >{it.is_primary ? '★' : '☆'}</button
-                      >
-                      <button
-                        class="action-btn action-btn--danger"
-                        type="button"
-                        onclick={() => detachItem(slot, it)}>Detach</button
-                      >
-                    </div>
-                  </li>
-                {/each}
-              </ul>
-            {/if}
+            <button
+              class="action-btn"
+              type="button"
+              onclick={() => openPull(slot.id)}>+ Pull from index</button
+            >
           </div>
-        {/if}
+        </div>
 
         {#if openSlot === slot.id && openSection === 'notes'}
           <div class="slot__panel">
@@ -968,34 +985,47 @@
     padding: 3px 10px;
     font-size: 0.7rem;
   }
-  .slot__pinned-strip {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px var(--space-sm);
-    border-top: 1px dashed var(--color-border);
-    flex-wrap: wrap;
-  }
-  .slot__pinned-strip .muted {
+  .slot__file-count {
+    color: var(--color-muted);
+    font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 1pt;
-    font-size: 0.65rem;
+    margin-right: auto;
   }
-  .pinned-tile {
-    width: 32px;
-    height: 32px;
-    background: #f4f4f4;
-    border: 1px solid var(--color-border);
+  .slot__add {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    text-decoration: none;
-    color: inherit;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: var(--space-sm);
+    padding-top: var(--space-sm);
+    border-top: 1px dashed var(--color-border);
   }
-  .pinned-tile img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+  .slot__add > :global(.uploader) {
+    /* compact uploader sits naturally */
+  }
+  .tile {
+    position: relative;
+  }
+  .tile__star {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid var(--color-border);
+    color: var(--color-muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 0 4px;
+    z-index: 1;
+  }
+  .tile--primary {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 1px var(--color-accent) inset;
+  }
+  .tile--primary .tile__star {
+    color: var(--color-accent);
+    background: var(--color-bg);
   }
   .slot__pins {
     display: grid;
