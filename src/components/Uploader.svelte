@@ -118,6 +118,11 @@
       next.push(item);
     }
     items = [...items, ...next];
+    // Auto-fire the upload — staging files behind a separate "Upload" button
+    // was confusing as hell. uploadAll() is a no-op if already busy or empty.
+    if (next.length > 0) {
+      void uploadAll();
+    }
   }
 
   function removeAt(i: number) {
