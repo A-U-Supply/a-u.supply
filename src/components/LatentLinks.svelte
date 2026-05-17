@@ -50,6 +50,10 @@
   let adding = $state(false);
   let addUrl = $state('');
   let addLabel = $state('');
+  let editingId = $state<string | null>(null);
+  let editUrl = $state('');
+  let editLabel = $state('');
+  let savingEdit = $state(false);
 
   // Slack icon — keep it inline so it doesn't pull a font.
   const SLACK_SVG = `<svg viewBox="0 0 122.8 122.8" width="12" height="12" aria-hidden="true"><path d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z" fill="#e01e5a"/><path d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2zm0 6.5c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z" fill="#ecb22e"/><path d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2zm-6.5 0c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z" fill="#2eb67d"/><path d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9zm0-6.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z" fill="#36c5f0"/></svg>`;
@@ -149,6 +153,50 @@
     }
   }
 
+  function beginEdit(link: Link) {
+    editingId = link.id;
+    editUrl = link.url;
+    editLabel = link.label || '';
+  }
+
+  function cancelEdit() {
+    editingId = null;
+    editUrl = '';
+    editLabel = '';
+  }
+
+  async function saveEdit(link: Link) {
+    if (!link.project_id) return;
+    if (!editUrl.trim()) return;
+    savingEdit = true;
+    error = null;
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(link.project_id)}/links/${encodeURIComponent(link.id)}`,
+        {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: editUrl.trim(),
+            label: editLabel.trim(),
+          }),
+        },
+      );
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b?.detail || `Save failed (${res.status})`);
+      }
+      const updated = await res.json();
+      links = links.map((l) => (l.id === link.id ? { ...l, ...updated } : l));
+      cancelEdit();
+    } catch (e: any) {
+      error = e?.message || 'Save failed';
+    } finally {
+      savingEdit = false;
+    }
+  }
+
   async function removeLink(link: Link) {
     if (!projectId || !link.project_id) return;
     if (!confirm('Remove this link?')) return;
@@ -184,30 +232,66 @@
   {:else if links.length > 0}
     <ul class="chips">
       {#each links as link (link.id)}
-        <li class="chip" data-kind={link.kind}>
-          <a href={link.url} target="_blank" rel="noopener" title={link.url}>
-            <span class="chip__icon">{@html kindIcon(link.kind)}</span>
-            <span class="chip__label">
-              {shortLabel(link)}
-              {#if readOnly && (link.project_name || link.slot_label)}
-                <span class="chip__context"
-                  >· {link.project_name || ''}
-                  {#if link.slot_label}
-                    / {link.slot_label}
-                  {/if}
-                </span>
-              {/if}
-            </span>
-          </a>
-          {#if !readOnly}
-            <button
-              class="chip__remove"
-              type="button"
-              title="Remove"
-              onclick={() => removeLink(link)}>×</button
+        {#if editingId === link.id && !readOnly}
+          <li class="chip chip--editing" data-kind={link.kind}>
+            <form
+              class="chip__edit"
+              onsubmit={(e) => {
+                e.preventDefault();
+                saveEdit(link);
+              }}
             >
-          {/if}
-        </li>
+              <input
+                type="url"
+                placeholder="URL"
+                bind:value={editUrl}
+                required
+              />
+              <input
+                type="text"
+                placeholder="Label (optional)"
+                bind:value={editLabel}
+              />
+              <button class="action-btn" type="submit" disabled={savingEdit}
+                >Save</button
+              >
+              <button class="action-btn" type="button" onclick={cancelEdit}
+                >Cancel</button
+              >
+            </form>
+          </li>
+        {:else}
+          <li class="chip" data-kind={link.kind}>
+            <a href={link.url} target="_blank" rel="noopener" title={link.url}>
+              <span class="chip__icon">{@html kindIcon(link.kind)}</span>
+              <span class="chip__label">
+                {shortLabel(link)}
+                {#if readOnly && (link.project_name || link.slot_label)}
+                  <span class="chip__context"
+                    >· {link.project_name || ''}
+                    {#if link.slot_label}
+                      / {link.slot_label}
+                    {/if}
+                  </span>
+                {/if}
+              </span>
+            </a>
+            {#if !readOnly}
+              <button
+                class="chip__edit-btn"
+                type="button"
+                title="Edit"
+                onclick={() => beginEdit(link)}>✎</button
+              >
+              <button
+                class="chip__remove"
+                type="button"
+                title="Remove"
+                onclick={() => removeLink(link)}>×</button
+              >
+            {/if}
+          </li>
+        {/if}
       {/each}
     </ul>
   {/if}
@@ -300,7 +384,8 @@
     color: var(--color-muted);
     font-size: 0.7rem;
   }
-  .chip__remove {
+  .chip__remove,
+  .chip__edit-btn {
     background: transparent;
     border: 0;
     color: var(--color-muted);
@@ -312,6 +397,36 @@
   }
   .chip__remove:hover {
     color: #c00;
+  }
+  .chip__edit-btn:hover {
+    color: var(--color-text);
+  }
+  .chip--editing {
+    flex: 1 1 100%;
+    padding: 4px;
+  }
+  .chip__edit {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    align-items: center;
+    width: 100%;
+  }
+  .chip__edit input[type='url'] {
+    flex: 2;
+    min-width: 200px;
+  }
+  .chip__edit input[type='text'] {
+    flex: 1;
+    min-width: 120px;
+  }
+  .chip__edit input {
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    padding: 4px 8px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
   }
   .link-add {
     display: flex;

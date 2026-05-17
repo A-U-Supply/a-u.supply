@@ -478,6 +478,27 @@
     }
   }
 
+  async function clearSlotItems(slot: Slot) {
+    const count = slot.item_count ?? 0;
+    if (
+      !confirm(
+        `Clear all ${count} file${count === 1 ? '' : 's'} from "${slot.label}"?\n\nAny Emulsion-only uploads on this slot are permanently deleted from the index. Files shared with other slots/projects are just detached.\n\nCannot be undone.`,
+      )
+    )
+      return;
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/slots/${encodeURIComponent(slot.id)}/items?purge=true`,
+        { method: 'DELETE', credentials: 'include' },
+      );
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      itemsBySlot = { ...itemsBySlot, [slot.id]: [] };
+      await load();
+    } catch (e: any) {
+      error = e?.message || 'Clear failed';
+    }
+  }
+
   async function detachItem(slot: Slot, item: Item) {
     if (!confirm('Detach this file from the slot?')) return;
     try {
@@ -661,6 +682,14 @@
                 class="action-btn"
                 type="button"
                 onclick={() => toggleSection(slot.id, 'runs')}>Runs</button
+              >
+            {/if}
+            {#if (slot.item_count ?? 0) > 0}
+              <button
+                class="action-btn action-btn--danger"
+                type="button"
+                title="Detach + permanently delete every Emulsion file on this slot"
+                onclick={() => clearSlotItems(slot)}>Clear files</button
               >
             {/if}
             <button

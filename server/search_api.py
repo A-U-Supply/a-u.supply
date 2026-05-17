@@ -498,10 +498,22 @@ def _build_meili_filter(filters: SearchFilters | None) -> str | None:
             parts.append(f"tag_count <= {filters.tag_count['max']}")
 
     if filters.output_index:
-        wants_inputs = "__inputs__" in filters.output_index
-        wants_any_output = "__outputs__" in filters.output_index
-        # Inputs + any-output = everything → no filter needed.
-        if not (wants_inputs and wants_any_output):
+        # `__emulsion__` is a UI-only marker meaning "also include the
+        # private Emulsion index in the result set" — it's handled at the
+        # multi_search layer (include_emulsion=True) and never becomes a
+        # filter clause on its own.
+        public_selections = [n for n in filters.output_index if n != "__emulsion__"]
+        wants_inputs = "__inputs__" in public_selections
+        wants_any_output = "__outputs__" in public_selections
+        wants_emulsion_only = (
+            "__emulsion__" in filters.output_index and not public_selections
+        )
+        if wants_emulsion_only:
+            # Emulsion-only is enforced at the multi_search layer by
+            # restricting media_types to ["emulsion"]; we deliberately add
+            # *no* filter clause here so emulsion docs aren't filtered out.
+            pass
+        elif not (wants_inputs and wants_any_output):
             clauses = []
             if wants_inputs:
                 clauses.append("output_index IS NULL")
@@ -509,7 +521,7 @@ def _build_meili_filter(filters: SearchFilters | None) -> str | None:
                 # Subsumes any specific named output, so we skip the named list.
                 clauses.append("output_index IS NOT NULL")
             else:
-                for name in filters.output_index:
+                for name in public_selections:
                     if name and name not in ("__inputs__", "__outputs__"):
                         clauses.append(f'output_index = "{_escape_filter_value(name)}"')
             if clauses:
@@ -583,6 +595,20 @@ def search_media(
     if body.filters and (body.filters.color or body.filters.color_group):
         media_types = ["image"]
 
+    # IndexFilter selection containing only `__emulsion__` means "search the
+    # Emulsion index only" — force media_types so multi_search skips the
+    # public per-type indexes entirely.
+    include_emulsion = body.include_emulsion
+    if body.filters and body.filters.output_index:
+        if (
+            "__emulsion__" in body.filters.output_index
+            and not any(n != "__emulsion__" for n in body.filters.output_index)
+        ):
+            media_types = ["emulsion"]
+            include_emulsion = True
+        elif "__emulsion__" in body.filters.output_index:
+            include_emulsion = True
+
     results = multi_search(
         query=body.query,
         media_types=media_types,
@@ -590,7 +616,7 @@ def search_media(
         sort=sort_list,
         page=body.page,
         per_page=body.per_page,
-        include_emulsion=body.include_emulsion,
+        include_emulsion=include_emulsion,
     )
     return results
 
@@ -618,6 +644,17 @@ def search_stats(
     if body.filters and (body.filters.color or body.filters.color_group):
         media_types = ["image"]
 
+    include_emulsion = body.include_emulsion
+    if body.filters and body.filters.output_index:
+        if (
+            "__emulsion__" in body.filters.output_index
+            and not any(n != "__emulsion__" for n in body.filters.output_index)
+        ):
+            media_types = ["emulsion"]
+            include_emulsion = True
+        elif "__emulsion__" in body.filters.output_index:
+            include_emulsion = True
+
     # Search with limit=0: we only want facets and stats, not hits
     results = multi_search(
         query=body.query,
@@ -626,6 +663,7 @@ def search_stats(
         sort=None,
         page=1,
         per_page=0,
+        include_emulsion=include_emulsion,
     )
 
     facets = results.get("facets", {})
@@ -1674,6 +1712,13 @@ def delete_media(
     thumb = file_path.with_name(file_path.stem + "_thumb.webp")
     if thumb.exists():
         thumb.unlink()
+
+    # Explicit project_items cleanup. The FK is ON DELETE CASCADE, but for
+    # databases provisioned before PRAGMA foreign_keys=ON shipped, the
+    # cascade never ran — surface those rows as gone here so the UI never
+    # shows "(unknown)" stragglers.
+    from server.models import ProjectItem  # local import: avoid cycle on module load
+    db.query(ProjectItem).filter(ProjectItem.media_item_id == media_id).delete(synchronize_session=False)
 
     db.delete(item)
     db.commit()

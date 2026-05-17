@@ -11,26 +11,40 @@ import Admin from '../../../layouts/Admin.astro';
   <div class="ph-shell">
     <!-- ── Controls ─────────────────────────────────────────── -->
     <div class="ph-controls">
-
       <!-- Upload zone -->
       <div class="ph-drop-zone" id="ph-drop-zone">
         <div class="ph-drop-empty" id="ph-drop-empty">
           <div class="ph-drop-icon">♫</div>
           <div class="ph-drop-hint">Drop audio here</div>
           <div class="ph-drop-actions">
-            <button class="ph-drop-btn" id="ph-upload-btn">↑ Upload File</button>
+            <button class="ph-drop-btn" id="ph-upload-btn">↑ Upload File</button
+            >
             <span class="ph-drop-or">or</span>
-            <button class="ph-drop-btn ph-drop-btn--lib" id="ph-lib-btn">From Library</button>
+            <button class="ph-drop-btn ph-drop-btn--lib" id="ph-lib-btn"
+              >From Library</button
+            >
           </div>
           <div class="ph-drop-sub">MP3 · WAV · OGG · FLAC · M4A</div>
         </div>
         <div id="ph-loaded-zone" style="display:none">
           <div class="ph-waveform-row">
-            <button class="ph-play-btn" id="ph-play-btn" title="Play / Stop">▶</button>
-            <button class="ph-loop-btn" id="ph-loop-btn" title="Toggle loop">⟳</button>
+            <button class="ph-play-btn" id="ph-play-btn" title="Play / Stop"
+              >▶</button
+            >
+            <button class="ph-loop-btn" id="ph-loop-btn" title="Toggle loop"
+              >⟳</button
+            >
             <div class="ph-play-mode" id="ph-play-mode" style="display:none">
-              <button class="ph-pill ph-pill--on" id="ph-mode-orig" title="Play original audio">Orig</button>
-              <button class="ph-pill" id="ph-mode-edit" title="Play with edits applied (synthesizes audio)">Edit</button>
+              <button
+                class="ph-pill ph-pill--on"
+                id="ph-mode-orig"
+                title="Play original audio">Orig</button
+              >
+              <button
+                class="ph-pill"
+                id="ph-mode-edit"
+                title="Play with edits applied (synthesizes audio)">Edit</button
+              >
             </div>
             <canvas id="ph-waveform" width="264" height="52"></canvas>
             <span class="ph-time-display" id="ph-time-display">0:00</span>
@@ -40,7 +54,12 @@ import Admin from '../../../layouts/Admin.astro';
             <button class="ph-change-btn" id="ph-change-btn">Change</button>
           </div>
         </div>
-        <input type="file" id="ph-file-input" accept="audio/*" style="display:none" />
+        <input
+          type="file"
+          id="ph-file-input"
+          accept="audio/*"
+          style="display:none"
+        />
       </div>
 
       <div class="ph-divider"></div>
@@ -48,7 +67,9 @@ import Admin from '../../../layouts/Admin.astro';
       <!-- Mode -->
       <div class="ph-label-row">Mode</div>
       <div class="ph-pill-group" id="ph-mode-group">
-        <button class="ph-pill ph-pill--on" data-val="waterfall">Waterfall</button>
+        <button class="ph-pill ph-pill--on" data-val="waterfall"
+          >Waterfall</button
+        >
         <button class="ph-pill" data-val="radial">Radial</button>
         <button class="ph-pill" data-val="glitch">Glitch</button>
         <button class="ph-pill" data-val="hybrid">Hybrid</button>
@@ -79,11 +100,14 @@ import Admin from '../../../layouts/Admin.astro';
       <div class="ph-field">
         <label class="ph-label">
           <span>Trim</span>
-          <span class="ph-val"><span id="ph-ts-val">0</span>–<span id="ph-te-val">100</span>%</span>
+          <span class="ph-val"
+            ><span id="ph-ts-val">0</span>–<span id="ph-te-val">100</span
+            >%</span
+          >
         </label>
         <div class="ph-dual-range">
           <input type="range" id="ph-time-start" min="0" max="100" value="0" />
-          <input type="range" id="ph-time-end"   min="0" max="100" value="100" />
+          <input type="range" id="ph-time-end" min="0" max="100" value="100" />
         </div>
       </div>
 
@@ -92,39 +116,87 @@ import Admin from '../../../layouts/Admin.astro';
       <!-- Waterfall params -->
       <div class="ph-mode-params" data-ph-mode="waterfall">
         <div class="ph-field">
-          <label class="ph-label" for="ph-freq-max">Max Freq <span class="ph-val" id="ph-fmax-val">8 kHz</span></label>
-          <input class="ph-range" type="range" id="ph-freq-max" min="1000" max="22050" step="100" value="8000" />
+          <label class="ph-label" for="ph-freq-max"
+            >Max Freq <span class="ph-val" id="ph-fmax-val">8 kHz</span></label
+          >
+          <input
+            class="ph-range"
+            type="range"
+            id="ph-freq-max"
+            min="1000"
+            max="22050"
+            step="100"
+            value="8000"
+          />
         </div>
       </div>
 
       <!-- Radial params -->
       <div class="ph-mode-params" data-ph-mode="radial" style="display:none">
         <div class="ph-field">
-          <label class="ph-label" for="ph-rotation">Rotation <span class="ph-val" id="ph-rot-val">0°</span></label>
-          <input class="ph-range" type="range" id="ph-rotation" min="0" max="360" value="0" />
+          <label class="ph-label" for="ph-rotation"
+            >Rotation <span class="ph-val" id="ph-rot-val">0°</span></label
+          >
+          <input
+            class="ph-range"
+            type="range"
+            id="ph-rotation"
+            min="0"
+            max="360"
+            value="0"
+          />
         </div>
       </div>
 
       <!-- Glitch params -->
       <div class="ph-mode-params" data-ph-mode="glitch" style="display:none">
         <div class="ph-field">
-          <label class="ph-label" for="ph-warp">Warp <span class="ph-val" id="ph-warp-val">8</span></label>
-          <input class="ph-range" type="range" id="ph-warp" min="0" max="20" step="0.5" value="8" />
+          <label class="ph-label" for="ph-warp"
+            >Warp <span class="ph-val" id="ph-warp-val">8</span></label
+          >
+          <input
+            class="ph-range"
+            type="range"
+            id="ph-warp"
+            min="0"
+            max="20"
+            step="0.5"
+            value="8"
+          />
         </div>
         <div class="ph-field">
-          <label class="ph-label" for="ph-noise">Noise <span class="ph-val" id="ph-noise-val">0.30</span></label>
-          <input class="ph-range" type="range" id="ph-noise" min="0" max="1" step="0.01" value="0.3" />
+          <label class="ph-label" for="ph-noise"
+            >Noise <span class="ph-val" id="ph-noise-val">0.30</span></label
+          >
+          <input
+            class="ph-range"
+            type="range"
+            id="ph-noise"
+            min="0"
+            max="1"
+            step="0.01"
+            value="0.3"
+          />
         </div>
       </div>
 
       <!-- Hybrid params -->
       <div class="ph-mode-params" data-ph-mode="hybrid" style="display:none">
         <div class="ph-field">
-          <label class="ph-label" for="ph-split">Split <span class="ph-val" id="ph-split-val">0.50</span></label>
-          <input class="ph-range" type="range" id="ph-split" min="0.2" max="0.8" step="0.01" value="0.5" />
+          <label class="ph-label" for="ph-split"
+            >Split <span class="ph-val" id="ph-split-val">0.50</span></label
+          >
+          <input
+            class="ph-range"
+            type="range"
+            id="ph-split"
+            min="0.2"
+            max="0.8"
+            step="0.01"
+            value="0.5"
+          />
         </div>
       </div>
-
     </div>
 
     <!-- ── Stage ──────────────────────────────────────────────── -->
@@ -139,11 +211,17 @@ import Admin from '../../../layouts/Admin.astro';
       </div>
 
       <div class="ph-action-bar" id="ph-action-bar" style="display:none">
-        <button class="btn btn--primary ph-save-btn" id="ph-save-btn">☁ Save Image</button>
+        <button class="btn btn--primary ph-save-btn" id="ph-save-btn"
+          >☁ Save Image</button
+        >
         <div class="ph-export-wrap">
-          <button class="btn btn--secondary ph-export-btn" id="ph-export-btn">Export ▾</button>
+          <button class="btn btn--secondary ph-export-btn" id="ph-export-btn"
+            >Export ▾</button
+          >
           <div class="ph-export-menu" id="ph-export-menu" style="display:none">
-            <button class="ph-export-item" id="ph-record-btn">⏺ Record WebM</button>
+            <button class="ph-export-item" id="ph-record-btn"
+              >⏺ Record WebM</button
+            >
             <div class="ph-export-fps">
               <span>FPS</span>
               <select class="ph-select" id="ph-fps">
@@ -152,15 +230,29 @@ import Admin from '../../../layouts/Admin.astro';
                 <option value="30">30</option>
               </select>
             </div>
-            <button class="ph-export-item" id="ph-frames-btn">⬇ Save Frames</button>
-            <button class="ph-export-item ph-export-item--primary" id="ph-audio-stacks-btn">♫ Send to Stacks</button>
-            <button class="ph-export-item" id="ph-audio-btn">⬇ Download WAV</button>
+            <button class="ph-export-item" id="ph-frames-btn"
+              >⬇ Save Frames</button
+            >
+            <button
+              class="ph-export-item ph-export-item--primary"
+              id="ph-audio-stacks-btn">♫ Send to Stacks</button
+            >
+            <button class="ph-export-item" id="ph-audio-btn"
+              >⬇ Download WAV</button
+            >
           </div>
         </div>
-        <button class="btn btn--secondary ph-undo-btn" id="ph-undo-btn" disabled>↩ Undo</button>
-        <button class="btn btn--secondary ph-paint-btn" id="ph-paint-btn">✏ Paint</button>
-        <button class="btn btn--secondary ph-stamp-btn" id="ph-stamp-btn">⬛ Stamp</button>
-        <button class="btn btn--secondary ph-fx-btn" id="ph-fx-btn">✦ FX</button>
+        <button class="btn btn--secondary ph-undo-btn" id="ph-undo-btn" disabled
+          >↩ Undo</button
+        >
+        <button class="btn btn--secondary ph-paint-btn" id="ph-paint-btn"
+          >✏ Paint</button
+        >
+        <button class="btn btn--secondary ph-stamp-btn" id="ph-stamp-btn"
+          >⬛ Stamp</button
+        >
+        <button class="btn btn--secondary ph-fx-btn" id="ph-fx-btn">✦ FX</button
+        >
       </div>
       <div class="ph-paint-bar" id="ph-paint-bar" style="display:none">
         <div class="ph-paint-tool-row">
@@ -174,15 +266,35 @@ import Admin from '../../../layouts/Admin.astro';
           </div>
         </div>
         <div class="ph-paint-size-row">
-          <span class="ph-paint-label">Size <span id="ph-brush-val">8</span>px</span>
-          <input type="range" class="ph-range ph-brush-slider" id="ph-brush-size" min="2" max="30" value="8" />
+          <span class="ph-paint-label"
+            >Size <span id="ph-brush-val">8</span>px</span
+          >
+          <input
+            type="range"
+            class="ph-range ph-brush-slider"
+            id="ph-brush-size"
+            min="2"
+            max="30"
+            value="8"
+          />
         </div>
         <div class="ph-gain-row" id="ph-gain-row" style="display:none">
-          <span class="ph-paint-label">Gain <span id="ph-gain-val">1.5×</span></span>
-          <input type="range" class="ph-range ph-brush-slider" id="ph-gain-amount" min="0" max="200" value="150" />
+          <span class="ph-paint-label"
+            >Gain <span id="ph-gain-val">1.5×</span></span
+          >
+          <input
+            type="range"
+            class="ph-range ph-brush-slider"
+            id="ph-gain-amount"
+            min="0"
+            max="200"
+            value="150"
+          />
         </div>
         <div class="ph-paint-bar-btns">
-          <button class="btn ph-paint-reset-btn" id="ph-paint-reset-btn">Reset Edits</button>
+          <button class="btn ph-paint-reset-btn" id="ph-paint-reset-btn"
+            >Reset Edits</button
+          >
         </div>
       </div>
       <div class="ph-stamp-bar" id="ph-stamp-bar" style="display:none">
@@ -190,12 +302,25 @@ import Admin from '../../../layouts/Admin.astro';
           <span class="ph-stamp-step-num">1</span>
           <div class="ph-stamp-step-body">
             <div class="ph-stamp-pick-row">
-              <button class="ph-drop-btn" id="ph-stamp-upload-btn">↑ Upload Image</button>
+              <button class="ph-drop-btn" id="ph-stamp-upload-btn"
+                >↑ Upload Image</button
+              >
               <span class="ph-drop-or">or</span>
-              <button class="ph-drop-btn ph-drop-btn--lib" id="ph-stamp-lib-btn">From Library</button>
-              <input type="file" id="ph-stamp-file-input" accept="image/*" style="display:none" />
+              <button class="ph-drop-btn ph-drop-btn--lib" id="ph-stamp-lib-btn"
+                >From Library</button
+              >
+              <input
+                type="file"
+                id="ph-stamp-file-input"
+                accept="image/*"
+                style="display:none"
+              />
             </div>
-            <div class="ph-stamp-preview-row" id="ph-stamp-preview-row" style="display:none">
+            <div
+              class="ph-stamp-preview-row"
+              id="ph-stamp-preview-row"
+              style="display:none"
+            >
               <img id="ph-stamp-thumb" class="ph-stamp-thumb" alt="" />
               <span class="ph-stamp-img-name" id="ph-stamp-img-name"></span>
             </div>
@@ -207,17 +332,43 @@ import Admin from '../../../layouts/Admin.astro';
             <div class="ph-field">
               <label class="ph-label">
                 <span>Time range</span>
-                <span class="ph-val"><span id="ph-stamp-ts-val">0</span>–<span id="ph-stamp-te-val">100</span>%</span>
+                <span class="ph-val"
+                  ><span id="ph-stamp-ts-val">0</span>–<span
+                    id="ph-stamp-te-val">100</span
+                  >%</span
+                >
               </label>
               <div class="ph-dual-range">
-                <input type="range" id="ph-stamp-start" min="0" max="100" value="0" />
-                <input type="range" id="ph-stamp-end"   min="0" max="100" value="100" />
+                <input
+                  type="range"
+                  id="ph-stamp-start"
+                  min="0"
+                  max="100"
+                  value="0"
+                />
+                <input
+                  type="range"
+                  id="ph-stamp-end"
+                  min="0"
+                  max="100"
+                  value="100"
+                />
               </div>
             </div>
             <div class="ph-stamp-controls">
               <div class="ph-field">
-                <label class="ph-label" for="ph-stamp-opacity">Opacity <span class="ph-val" id="ph-stamp-op-val">100%</span></label>
-                <input type="range" class="ph-range" id="ph-stamp-opacity" min="0" max="100" value="100" />
+                <label class="ph-label" for="ph-stamp-opacity"
+                  >Opacity <span class="ph-val" id="ph-stamp-op-val">100%</span
+                  ></label
+                >
+                <input
+                  type="range"
+                  class="ph-range"
+                  id="ph-stamp-opacity"
+                  min="0"
+                  max="100"
+                  value="100"
+                />
               </div>
               <div class="ph-field">
                 <label class="ph-label" for="ph-stamp-blend">Blend</label>
@@ -229,7 +380,11 @@ import Admin from '../../../layouts/Admin.astro';
                 </select>
               </div>
             </div>
-            <button class="btn btn--primary ph-stamp-apply" id="ph-stamp-apply" disabled>Apply Stamp</button>
+            <button
+              class="btn btn--primary ph-stamp-apply"
+              id="ph-stamp-apply"
+              disabled>Apply Stamp</button
+            >
           </div>
         </div>
       </div>
@@ -243,13 +398,32 @@ import Admin from '../../../layouts/Admin.astro';
           <button class="ph-pill" data-fx="reverse">Reverse</button>
           <button class="ph-pill" data-fx="pixelate">Pixelate</button>
         </div>
-        <div class="ph-fx-strength-row" id="ph-fx-strength-row" style="display:none">
-          <span class="ph-paint-label">Amount <span id="ph-fx-str-val">5</span></span>
-          <input type="range" class="ph-range ph-brush-slider" id="ph-fx-strength" min="1" max="20" value="5" />
+        <div
+          class="ph-fx-strength-row"
+          id="ph-fx-strength-row"
+          style="display:none"
+        >
+          <span class="ph-paint-label"
+            >Amount <span id="ph-fx-str-val">5</span></span
+          >
+          <input
+            type="range"
+            class="ph-range ph-brush-slider"
+            id="ph-fx-strength"
+            min="1"
+            max="20"
+            value="5"
+          />
         </div>
-        <button class="btn btn--primary ph-fx-apply" id="ph-fx-apply" style="display:none">Apply to Audio</button>
+        <button
+          class="btn btn--primary ph-fx-apply"
+          id="ph-fx-apply"
+          style="display:none">Apply to Audio</button
+        >
       </div>
-      <button class="ph-settings-toggle" id="ph-settings-toggle">Settings ▾</button>
+      <button class="ph-settings-toggle" id="ph-settings-toggle"
+        >Settings ▾</button
+      >
     </div>
   </div>
 
@@ -288,29 +462,95 @@ import Admin from '../../../layouts/Admin.astro';
       justify-content: center;
       gap: 0.25rem;
     }
-    .ph-drop-zone.drag-over { border-color: var(--accent, #888); border-style: solid; }
-    .ph-drop-empty { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.15rem; }
-    .ph-drop-icon { font-size: 1.6rem; opacity: 0.4; margin-bottom: 0.2rem; }
-    .ph-drop-hint { font-size: 0.8rem; opacity: 0.6; }
-    .ph-drop-actions { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.65rem; }
-    .ph-drop-btn {
-      font-size: 0.75rem; padding: 0.3rem 0.8rem;
-      border: 1px solid var(--border, #444); border-radius: 3px;
-      background: var(--bg2, #1a1a1a); color: inherit; cursor: pointer;
-      transition: border-color 0.1s, opacity 0.1s;
+    .ph-drop-zone.drag-over {
+      border-color: var(--accent, #888);
+      border-style: solid;
     }
-    .ph-drop-btn:hover { border-color: var(--accent, #888); }
-    .ph-drop-btn--lib { border-color: var(--accent, #777); }
-    .ph-drop-or { font-size: 0.65rem; opacity: 0.50; }
-    .ph-drop-sub { font-size: 0.65rem; opacity: 0.50; margin-top: 0.5rem; }
-    .ph-loaded-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 0.3rem; width: 100%; }
-    .ph-audio-meta { font-size: 0.65rem; opacity: 0.65; }
-    .ph-change-btn { font-size: 0.65rem; opacity: 0.60; background: none; border: none; color: inherit; cursor: pointer; padding: 0; flex-shrink: 0; }
-    .ph-change-btn:hover { opacity: 1; }
-    #ph-waveform { width: 100%; border-radius: 2px; display: block; }
+    .ph-drop-empty {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.15rem;
+    }
+    .ph-drop-icon {
+      font-size: 1.6rem;
+      opacity: 0.4;
+      margin-bottom: 0.2rem;
+    }
+    .ph-drop-hint {
+      font-size: 0.8rem;
+      opacity: 0.6;
+    }
+    .ph-drop-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.65rem;
+    }
+    .ph-drop-btn {
+      font-size: 0.75rem;
+      padding: 0.3rem 0.8rem;
+      border: 1px solid var(--border, #444);
+      border-radius: 3px;
+      background: var(--bg2, #1a1a1a);
+      color: inherit;
+      cursor: pointer;
+      transition:
+        border-color 0.1s,
+        opacity 0.1s;
+    }
+    .ph-drop-btn:hover {
+      border-color: var(--accent, #888);
+    }
+    .ph-drop-btn--lib {
+      border-color: var(--accent, #777);
+    }
+    .ph-drop-or {
+      font-size: 0.65rem;
+      opacity: 0.5;
+    }
+    .ph-drop-sub {
+      font-size: 0.65rem;
+      opacity: 0.5;
+      margin-top: 0.5rem;
+    }
+    .ph-loaded-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 0.3rem;
+      width: 100%;
+    }
+    .ph-audio-meta {
+      font-size: 0.65rem;
+      opacity: 0.65;
+    }
+    .ph-change-btn {
+      font-size: 0.65rem;
+      opacity: 0.6;
+      background: none;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      padding: 0;
+      flex-shrink: 0;
+    }
+    .ph-change-btn:hover {
+      opacity: 1;
+    }
+    #ph-waveform {
+      width: 100%;
+      border-radius: 2px;
+      display: block;
+    }
 
     /* Divider */
-    .ph-divider { height: 1px; background: var(--border, #333); margin: 0.25rem 0; }
+    .ph-divider {
+      height: 1px;
+      background: var(--border, #333);
+      margin: 0.25rem 0;
+    }
 
     /* Labels */
     .ph-label-row {
@@ -322,7 +562,12 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     /* Pill groups */
-    .ph-pill-group { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.5rem; }
+    .ph-pill-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      margin-bottom: 0.5rem;
+    }
     .ph-pill {
       font-size: 0.7rem;
       padding: 0.2rem 0.55rem;
@@ -332,13 +577,24 @@ import Admin from '../../../layouts/Admin.astro';
       color: inherit;
       cursor: pointer;
       opacity: 0.65;
-      transition: opacity 0.1s, border-color 0.1s;
+      transition:
+        opacity 0.1s,
+        border-color 0.1s;
     }
-    .ph-pill:hover { opacity: 0.85; }
-    .ph-pill--on { opacity: 1; border-color: var(--accent, #aaa); }
+    .ph-pill:hover {
+      opacity: 0.85;
+    }
+    .ph-pill--on {
+      opacity: 1;
+      border-color: var(--accent, #aaa);
+    }
 
     /* Fields */
-    .ph-field { display: flex; flex-direction: column; gap: 0.2rem; }
+    .ph-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
     .ph-label {
       font-size: 0.7rem;
       text-transform: uppercase;
@@ -347,7 +603,10 @@ import Admin from '../../../layouts/Admin.astro';
       display: flex;
       justify-content: space-between;
     }
-    .ph-val { opacity: 0.9; font-variant-numeric: tabular-nums; }
+    .ph-val {
+      opacity: 0.9;
+      font-variant-numeric: tabular-nums;
+    }
     .ph-select {
       font-size: 0.75rem;
       padding: 0.2rem 0.4rem;
@@ -370,7 +629,8 @@ import Admin from '../../../layouts/Admin.astro';
       height: auto;
       aspect-ratio: 3/2;
     }
-    .ph-empty, .ph-busy {
+    .ph-empty,
+    .ph-busy {
       position: absolute;
       inset: 0;
       display: flex;
@@ -380,146 +640,360 @@ import Admin from '../../../layouts/Admin.astro';
       opacity: 0.55;
       pointer-events: none;
     }
-    .ph-busy { opacity: 0.8; }
+    .ph-busy {
+      opacity: 0.8;
+    }
 
     /* Play / loop buttons */
-    .ph-waveform-row { display: flex; align-items: center; gap: 0.4rem; width: 100%; }
-    .ph-waveform-row #ph-waveform { flex: 1; min-width: 0; }
-    .ph-play-btn, .ph-loop-btn {
-      flex-shrink: 0; width: 2rem; height: 2rem;
-      background: var(--bg2, #1a1a1a); border: 1px solid var(--border, #444);
-      border-radius: 50%; color: inherit; cursor: pointer; font-size: 0.65rem;
-      display: flex; align-items: center; justify-content: center;
+    .ph-waveform-row {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      width: 100%;
+    }
+    .ph-waveform-row #ph-waveform {
+      flex: 1;
+      min-width: 0;
+    }
+    .ph-play-btn,
+    .ph-loop-btn {
+      flex-shrink: 0;
+      width: 2rem;
+      height: 2rem;
+      background: var(--bg2, #1a1a1a);
+      border: 1px solid var(--border, #444);
+      border-radius: 50%;
+      color: inherit;
+      cursor: pointer;
+      font-size: 0.65rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       transition: border-color 0.1s;
     }
-    .ph-play-btn:hover, .ph-loop-btn:hover { border-color: var(--accent, #888); }
-    .ph-loop-btn--on { border-color: var(--accent, #aaa); color: var(--accent, #aaa); }
+    .ph-play-btn:hover,
+    .ph-loop-btn:hover {
+      border-color: var(--accent, #888);
+    }
+    .ph-loop-btn--on {
+      border-color: var(--accent, #aaa);
+      color: var(--accent, #aaa);
+    }
     .ph-time-display {
-      font-size: 0.65rem; opacity: 0.65;
-      font-variant-numeric: tabular-nums; flex-shrink: 0; white-space: nowrap;
+      font-size: 0.65rem;
+      opacity: 0.65;
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+      white-space: nowrap;
     }
     /* Playhead overlay on spectrogram canvas */
     .ph-playhead {
-      position: absolute; top: 0; bottom: 0; width: 2px;
-      background: rgba(255,220,80,0.85); pointer-events: none;
-      transform: translateX(-50%); display: none;
-      box-shadow: 0 0 6px rgba(255,220,80,0.4);
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: rgba(255, 220, 80, 0.85);
+      pointer-events: none;
+      transform: translateX(-50%);
+      display: none;
+      box-shadow: 0 0 6px rgba(255, 220, 80, 0.4);
     }
 
     /* Dual range */
-    .ph-dual-range { position: relative; height: 1.5rem; margin-top: 0.2rem; }
-    .ph-dual-range input[type=range] {
-      position: absolute; inset: 0; width: 100%;
-      appearance: none; -webkit-appearance: none;
-      background: transparent; pointer-events: none;
-      margin: 0; height: 100%;
+    .ph-dual-range {
+      position: relative;
+      height: 1.5rem;
+      margin-top: 0.2rem;
     }
-    .ph-dual-range input[type=range]::-webkit-slider-runnable-track { height: 3px; background: var(--border, #444); border-radius: 2px; }
-    .ph-dual-range input[type=range]::-moz-range-track { height: 3px; background: var(--border, #444); border-radius: 2px; }
-    .ph-dual-range input[type=range]::-webkit-slider-thumb {
-      appearance: none; -webkit-appearance: none;
-      pointer-events: all; width: 14px; height: 14px;
-      border-radius: 50%; background: var(--accent, #888); cursor: pointer; margin-top: -5.5px;
+    .ph-dual-range input[type='range'] {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      appearance: none;
+      -webkit-appearance: none;
+      background: transparent;
+      pointer-events: none;
+      margin: 0;
+      height: 100%;
     }
-    .ph-dual-range input[type=range]::-moz-range-thumb {
-      pointer-events: all; width: 14px; height: 14px;
-      border-radius: 50%; background: var(--accent, #888); border: none; cursor: pointer;
+    .ph-dual-range input[type='range']::-webkit-slider-runnable-track {
+      height: 3px;
+      background: var(--border, #444);
+      border-radius: 2px;
+    }
+    .ph-dual-range input[type='range']::-moz-range-track {
+      height: 3px;
+      background: var(--border, #444);
+      border-radius: 2px;
+    }
+    .ph-dual-range input[type='range']::-webkit-slider-thumb {
+      appearance: none;
+      -webkit-appearance: none;
+      pointer-events: all;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent, #888);
+      cursor: pointer;
+      margin-top: -5.5px;
+    }
+    .ph-dual-range input[type='range']::-moz-range-thumb {
+      pointer-events: all;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent, #888);
+      border: none;
+      cursor: pointer;
     }
 
     /* Action bar */
-    .ph-action-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-    .ph-save-btn { flex-shrink: 0; }
-    .ph-export-wrap { position: relative; }
+    .ph-action-bar {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .ph-save-btn {
+      flex-shrink: 0;
+    }
+    .ph-export-wrap {
+      position: relative;
+    }
     .ph-export-menu {
-      position: absolute; top: calc(100% + 4px); right: 0;
-      background: var(--bg, #111); border: 1px solid var(--border, #333);
-      border-radius: 4px; min-width: 160px; z-index: 100;
-      display: flex; flex-direction: column; overflow: hidden;
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      background: var(--bg, #111);
+      border: 1px solid var(--border, #333);
+      border-radius: 4px;
+      min-width: 160px;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
     .ph-export-item {
-      padding: 0.5rem 0.75rem; font-size: 0.75rem; text-align: left;
-      background: none; border: none; color: inherit; cursor: pointer;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.75rem;
+      text-align: left;
+      background: none;
+      border: none;
+      color: inherit;
+      cursor: pointer;
       transition: background 0.1s;
     }
-    .ph-export-item:hover { background: rgba(255,255,255,0.06); }
-    .ph-export-fps {
-      display: flex; align-items: center; gap: 0.5rem;
-      padding: 0.35rem 0.75rem; font-size: 0.7rem; opacity: 0.75;
-      border-top: 1px solid var(--border, #333); border-bottom: 1px solid var(--border, #333);
+    .ph-export-item:hover {
+      background: rgba(255, 255, 255, 0.06);
     }
-    .ph-export-fps .ph-select { padding: 0.1rem 0.3rem; font-size: 0.7rem; }
-    .ph-export-item--primary { font-weight: 600; color: var(--accent, #e8c060); }
+    .ph-export-fps {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0.75rem;
+      font-size: 0.7rem;
+      opacity: 0.75;
+      border-top: 1px solid var(--border, #333);
+      border-bottom: 1px solid var(--border, #333);
+    }
+    .ph-export-fps .ph-select {
+      padding: 0.1rem 0.3rem;
+      font-size: 0.7rem;
+    }
+    .ph-export-item--primary {
+      font-weight: 600;
+      color: var(--accent, #e8c060);
+    }
 
     /* Play mode toggle (Orig / Edited) */
-    .ph-play-mode { display: flex; gap: 2px; flex-shrink: 0; }
-    .ph-play-mode .ph-pill { font-size: 0.6rem; padding: 0.15rem 0.4rem; margin: 0; }
-    .ph-pill--stale { opacity: 0.4 !important; }
+    .ph-play-mode {
+      display: flex;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .ph-play-mode .ph-pill {
+      font-size: 0.6rem;
+      padding: 0.15rem 0.4rem;
+      margin: 0;
+    }
+    .ph-pill--stale {
+      opacity: 0.4 !important;
+    }
 
     /* Paint mode */
-    .ph-paint-btn--active { border-color: var(--accent, #aaa); box-shadow: 0 0 0 1px var(--accent, #aaa); }
-    .ph-canvas-wrap--paint #ph-canvas { cursor: crosshair; user-select: none; }
+    .ph-paint-btn--active {
+      border-color: var(--accent, #aaa);
+      box-shadow: 0 0 0 1px var(--accent, #aaa);
+    }
+    .ph-canvas-wrap--paint #ph-canvas {
+      cursor: crosshair;
+      user-select: none;
+    }
     .ph-paint-bar {
-      align-items: center; gap: 0.5rem; flex-wrap: wrap;
-      padding: 0.35rem 0; font-size: 0.7rem;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      padding: 0.35rem 0;
+      font-size: 0.7rem;
     }
-    .ph-paint-label { opacity: 0.65; flex-shrink: 0; white-space: nowrap; }
-    .ph-brush-slider { width: 80px; }
-    .ph-erase-btn--active { border-color: #e67; color: #e67; }
+    .ph-paint-label {
+      opacity: 0.65;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .ph-brush-slider {
+      width: 80px;
+    }
+    .ph-erase-btn--active {
+      border-color: #e67;
+      color: #e67;
+    }
     .ph-paint-reset-btn {
-      font-size: 0.7rem; padding: 0.2rem 0.6rem;
-      background: none; border: 1px solid var(--border, #444); border-radius: 3px;
-      color: inherit; cursor: pointer; opacity: 0.55;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.6rem;
+      background: none;
+      border: 1px solid var(--border, #444);
+      border-radius: 3px;
+      color: inherit;
+      cursor: pointer;
+      opacity: 0.55;
     }
-    .ph-paint-reset-btn:hover { opacity: 1; }
+    .ph-paint-reset-btn:hover {
+      opacity: 1;
+    }
 
     /* Tool pills in paint bar */
-    .ph-paint-tool-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-    .ph-tool-group { margin: 0; }
-    .ph-paint-size-row { display: flex; align-items: center; gap: 0.5rem; }
-    .ph-gain-row { display: flex; align-items: center; gap: 0.5rem; }
+    .ph-paint-tool-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .ph-tool-group {
+      margin: 0;
+    }
+    .ph-paint-size-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .ph-gain-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
     /* FX bar */
-    .ph-fx-btn--active { border-color: var(--accent, #aaa); box-shadow: 0 0 0 1px var(--accent, #aaa); }
-    .ph-fx-bar { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.35rem 0; }
-    .ph-fx-strength-row { display: flex; align-items: center; gap: 0.5rem; }
-    .ph-fx-apply { align-self: flex-start; }
+    .ph-fx-btn--active {
+      border-color: var(--accent, #aaa);
+      box-shadow: 0 0 0 1px var(--accent, #aaa);
+    }
+    .ph-fx-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      padding: 0.35rem 0;
+    }
+    .ph-fx-strength-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .ph-fx-apply {
+      align-self: flex-start;
+    }
 
     /* Stamp mode */
-    .ph-stamp-btn--active { border-color: var(--accent, #aaa); color: var(--accent, #aaa); }
-    .ph-stamp-bar { display: flex; flex-direction: column; gap: 0.75rem; padding: 0.5rem 0; }
-    .ph-stamp-step { display: flex; align-items: flex-start; gap: 0.6rem; }
-    .ph-stamp-step-num {
-      background: var(--accent, #e8c060); color: #000;
-      border-radius: 50%; width: 1.25rem; height: 1.25rem; min-width: 1.25rem;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 0.65rem; font-weight: 700; flex-shrink: 0; margin-top: 0.15rem;
+    .ph-stamp-btn--active {
+      border-color: var(--accent, #aaa);
+      color: var(--accent, #aaa);
     }
-    .ph-stamp-step-body { display: flex; flex-direction: column; gap: 0.4rem; flex: 1; min-width: 0; }
-    .ph-stamp-pick-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-    .ph-stamp-preview-row { display: flex; align-items: center; gap: 0.5rem; }
+    .ph-stamp-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+    }
+    .ph-stamp-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+    }
+    .ph-stamp-step-num {
+      background: var(--accent, #e8c060);
+      color: #000;
+      border-radius: 50%;
+      width: 1.25rem;
+      height: 1.25rem;
+      min-width: 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 0.15rem;
+    }
+    .ph-stamp-step-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      flex: 1;
+      min-width: 0;
+    }
+    .ph-stamp-pick-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .ph-stamp-preview-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
     .ph-stamp-thumb {
-      width: 48px; height: 48px; object-fit: cover;
-      border-radius: 3px; border: 1px solid var(--border, #444); flex-shrink: 0;
+      width: 48px;
+      height: 48px;
+      object-fit: cover;
+      border-radius: 3px;
+      border: 1px solid var(--border, #444);
+      flex-shrink: 0;
     }
     .ph-stamp-img-name {
-      font-size: 0.65rem; opacity: 0.65;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      flex: 1; min-width: 0;
+      font-size: 0.65rem;
+      opacity: 0.65;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+      min-width: 0;
     }
-    .ph-stamp-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-    .ph-stamp-apply { width: 100%; margin-top: 0.25rem; font-weight: 600; }
+    .ph-stamp-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+    }
+    .ph-stamp-apply {
+      width: 100%;
+      margin-top: 0.25rem;
+      font-weight: 600;
+    }
     .ph-stamp-apply:not(:disabled) {
-      background: var(--accent, #e8c060); color: #111;
+      background: var(--accent, #e8c060);
+      color: #111;
       border-color: var(--accent, #e8c060);
     }
 
     /* Settings toggle (mobile only) */
-    .ph-settings-toggle { display: none; }
+    .ph-settings-toggle {
+      display: none;
+    }
 
     /* Library modal */
     .ph-modal-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.78);
+      background: rgba(0, 0, 0, 0.78);
       z-index: 1000;
       display: flex;
       align-items: center;
@@ -543,85 +1017,207 @@ import Admin from '../../../layouts/Admin.astro';
       padding: 0.75rem 1rem;
       border-bottom: 1px solid var(--border, #333);
     }
-    .ph-modal__title { font-size: 0.9rem; margin: 0; flex: 1; }
+    .ph-modal__title {
+      font-size: 0.9rem;
+      margin: 0;
+      flex: 1;
+    }
     .ph-modal__close {
-      background: none; border: none; color: inherit; cursor: pointer;
-      opacity: 0.5; font-size: 1rem; padding: 0.25rem 0.5rem;
+      background: none;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      opacity: 0.5;
+      font-size: 1rem;
+      padding: 0.25rem 0.5rem;
     }
-    .ph-modal__close:hover { opacity: 1; }
-    .ph-modal__tabs { display: flex; border-bottom: 1px solid var(--border, #333); }
+    .ph-modal__close:hover {
+      opacity: 1;
+    }
+    .ph-modal__tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border, #333);
+    }
     .ph-modal__tab {
-      flex: 1; padding: 0.5rem; font-size: 0.7rem;
-      text-transform: uppercase; letter-spacing: 0.06em;
-      background: none; border: none; color: inherit; cursor: pointer;
-      opacity: 0.60; border-bottom: 2px solid transparent; transition: opacity 0.1s;
+      flex: 1;
+      padding: 0.5rem;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: none;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      opacity: 0.6;
+      border-bottom: 2px solid transparent;
+      transition: opacity 0.1s;
     }
-    .ph-modal__tab:hover { opacity: 0.8; }
-    .ph-modal__tab--active { opacity: 1; border-bottom-color: var(--accent, #888); }
-    .ph-modal__toolbar { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border, #222); }
+    .ph-modal__tab:hover {
+      opacity: 0.8;
+    }
+    .ph-modal__tab--active {
+      opacity: 1;
+      border-bottom-color: var(--accent, #888);
+    }
+    .ph-modal__toolbar {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--border, #222);
+    }
     .ph-modal__search {
-      width: 100%; box-sizing: border-box; font-size: 0.8rem; padding: 0.35rem 0.5rem;
-      background: var(--bg2, #1a1a1a); border: 1px solid var(--border, #333);
-      color: inherit; border-radius: 3px;
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 0.8rem;
+      padding: 0.35rem 0.5rem;
+      background: var(--bg2, #1a1a1a);
+      border: 1px solid var(--border, #333);
+      color: inherit;
+      border-radius: 3px;
     }
     .ph-modal__grid {
-      flex: 1; overflow-y: auto; padding: 0.5rem;
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-      gap: 0.4rem; align-content: start;
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.5rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.4rem;
+      align-content: start;
     }
     .ph-modal__loading {
-      grid-column: 1/-1; text-align: center;
-      padding: 2rem; font-size: 0.75rem; opacity: 0.55;
+      grid-column: 1/-1;
+      text-align: center;
+      padding: 2rem;
+      font-size: 0.75rem;
+      opacity: 0.55;
     }
     .ph-audio-card {
-      border: 1px solid var(--border, #333); border-radius: 4px;
-      padding: 0.6rem 0.7rem; cursor: pointer;
+      border: 1px solid var(--border, #333);
+      border-radius: 4px;
+      padding: 0.6rem 0.7rem;
+      cursor: pointer;
       background: var(--bg2, #1a1a1a);
-      transition: border-color 0.1s, background 0.1s;
-      display: flex; flex-direction: column; gap: 0.2rem; min-width: 0;
+      transition:
+        border-color 0.1s,
+        background 0.1s;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      min-width: 0;
     }
-    .ph-audio-card:hover { border-color: var(--accent, #888); background: rgba(255,255,255,0.06); }
-    .ph-audio-card__icon { font-size: 0.85rem; opacity: 0.55; font-family: sans-serif; }
+    .ph-audio-card:hover {
+      border-color: var(--accent, #888);
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .ph-audio-card__icon {
+      font-size: 0.85rem;
+      opacity: 0.55;
+      font-family: sans-serif;
+    }
     .ph-audio-card__name {
-      font-size: 0.65rem; opacity: 0.8;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      font-size: 0.65rem;
+      opacity: 0.8;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .ph-audio-card__meta { font-size: 0.6rem; opacity: 0.4; }
+    .ph-audio-card__meta {
+      font-size: 0.6rem;
+      opacity: 0.4;
+    }
 
     /* Range touch target */
-    .ph-range { width: 100%; accent-color: var(--accent, #888); cursor: pointer; }
+    .ph-range {
+      width: 100%;
+      accent-color: var(--accent, #888);
+      cursor: pointer;
+    }
 
     /* Responsive */
     @media (max-width: 700px) {
-      .ph-shell { flex-direction: column; }
-      .ph-stage { order: -1; }
-      .ph-controls { width: 100%; display: none; }
-      .ph-controls--open { display: flex; }
-      .ph-settings-toggle {
-        display: block; width: 100%; margin-top: 0.5rem;
-        font-size: 0.75rem; padding: 0.45rem;
-        background: none; border: 1px solid var(--border, #444);
-        border-radius: 4px; color: inherit; cursor: pointer;
-        text-align: center; opacity: 0.6;
+      .ph-shell {
+        flex-direction: column;
       }
-      .ph-settings-toggle:hover { opacity: 1; }
+      .ph-stage {
+        order: -1;
+      }
+      .ph-controls {
+        width: 100%;
+        display: none;
+      }
+      .ph-controls--open {
+        display: flex;
+      }
+      .ph-settings-toggle {
+        display: block;
+        width: 100%;
+        margin-top: 0.5rem;
+        font-size: 0.75rem;
+        padding: 0.45rem;
+        background: none;
+        border: 1px solid var(--border, #444);
+        border-radius: 4px;
+        color: inherit;
+        cursor: pointer;
+        text-align: center;
+        opacity: 0.6;
+      }
+      .ph-settings-toggle:hover {
+        opacity: 1;
+      }
     }
     @media (max-width: 500px) {
-      #ph-canvas { aspect-ratio: 1 / 1; }
-      .ph-pill { padding: 0.45rem 0.75rem; font-size: 0.8rem; }
-      .ph-dual-range input[type=range]::-webkit-slider-thumb { width: 20px; height: 20px; margin-top: -8.5px; }
-      .ph-dual-range input[type=range]::-moz-range-thumb { width: 20px; height: 20px; }
-      .ph-action-bar { flex-direction: column; }
-      .ph-action-bar .btn, .ph-export-wrap { width: 100%; }
-      .ph-export-btn { width: 100%; }
-      .ph-export-menu { left: 0; right: 0; }
-      .ph-label { font-size: 0.75rem; }
+      #ph-canvas {
+        aspect-ratio: 1 / 1;
+      }
+      .ph-pill {
+        padding: 0.45rem 0.75rem;
+        font-size: 0.8rem;
+      }
+      .ph-dual-range input[type='range']::-webkit-slider-thumb {
+        width: 20px;
+        height: 20px;
+        margin-top: -8.5px;
+      }
+      .ph-dual-range input[type='range']::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+      }
+      .ph-action-bar {
+        flex-direction: column;
+      }
+      .ph-action-bar .btn,
+      .ph-export-wrap {
+        width: 100%;
+      }
+      .ph-export-btn {
+        width: 100%;
+      }
+      .ph-export-menu {
+        left: 0;
+        right: 0;
+      }
+      .ph-label {
+        font-size: 0.75rem;
+      }
       /* 44px touch targets for play/loop on mobile */
-      .ph-play-btn, .ph-loop-btn { width: 2.75rem; height: 2.75rem; font-size: 0.85rem; }
+      .ph-play-btn,
+      .ph-loop-btn {
+        width: 2.75rem;
+        height: 2.75rem;
+        font-size: 0.85rem;
+      }
       /* Paint bar: slider full-width, buttons below */
-      .ph-paint-bar { flex-direction: column; align-items: flex-start; gap: 0.4rem; }
-      .ph-brush-slider { width: 100%; }
-      .ph-paint-bar-btns { display: flex; gap: 0.4rem; }
+      .ph-paint-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.4rem;
+      }
+      .ph-brush-slider {
+        width: 100%;
+      }
+      .ph-paint-bar-btns {
+        display: flex;
+        gap: 0.4rem;
+      }
     }
   </style>
 
@@ -633,12 +1229,19 @@ import Admin from '../../../layouts/Admin.astro';
         <button class="ph-modal__close" id="ph-modal-close">✕</button>
       </div>
       <div class="ph-modal__tabs" id="ph-modal-tabs">
-        <button class="ph-modal__tab ph-modal__tab--active" data-tab="inputs">Inputs</button>
+        <button class="ph-modal__tab ph-modal__tab--active" data-tab="inputs"
+          >Inputs</button
+        >
         <button class="ph-modal__tab" data-tab="outputs">Outputs</button>
         <button class="ph-modal__tab" data-tab="workspace">Workspace</button>
       </div>
       <div class="ph-modal__toolbar">
-        <input class="ph-modal__search" type="text" id="ph-modal-search" placeholder="Search…" />
+        <input
+          class="ph-modal__search"
+          type="text"
+          id="ph-modal-search"
+          placeholder="Search…"
+        />
       </div>
       <div class="ph-modal__grid" id="ph-modal-grid">
         <div class="ph-modal__loading">Loading…</div>
@@ -654,11 +1257,18 @@ import Admin from '../../../layouts/Admin.astro';
         <button class="ph-modal__close" id="ph-img-modal-close">✕</button>
       </div>
       <div class="ph-modal__tabs" id="ph-img-modal-tabs">
-        <button class="ph-modal__tab ph-modal__tab--active" data-tab="inputs">Inputs</button>
+        <button class="ph-modal__tab ph-modal__tab--active" data-tab="inputs"
+          >Inputs</button
+        >
         <button class="ph-modal__tab" data-tab="outputs">Outputs</button>
       </div>
       <div class="ph-modal__toolbar">
-        <input class="ph-modal__search" type="text" id="ph-img-modal-search" placeholder="Search…" />
+        <input
+          class="ph-modal__search"
+          type="text"
+          id="ph-img-modal-search"
+          placeholder="Search…"
+        />
       </div>
       <div class="ph-modal__grid" id="ph-img-modal-grid">
         <div class="ph-modal__loading">Loading…</div>
@@ -670,8 +1280,8 @@ import Admin from '../../../layouts/Admin.astro';
     // ─── Types ────────────────────────────────────────────────────────────────
     interface SpectrogramData {
       frames: Float32Array[];
-      phases: Float32Array[];   // raw phase per bin per frame (atan2 of FFT output)
-      maxMag: number;           // raw magnitude peak before log normalization
+      phases: Float32Array[]; // raw phase per bin per frame (atan2 of FFT output)
+      maxMag: number; // raw magnitude peak before log normalization
       numFrames: number;
       numBins: number;
       sampleRate: number;
@@ -704,7 +1314,7 @@ import Admin from '../../../layouts/Admin.astro';
     let fxPreviewFrames: Float32Array[] | null = null;
     let stampImageData: ImageData | null = null;
     type UndoEntry =
-      | { kind: 'swap';  prev: Float32Array[] | null }
+      | { kind: 'swap'; prev: Float32Array[] | null }
       | { kind: 'patch'; diffs: Map<number, Float32Array> };
     const undoStack: UndoEntry[] = [];
     const MAX_UNDO = 20;
@@ -730,24 +1340,34 @@ import Admin from '../../../layouts/Admin.astro';
         for (; j & bit; bit >>= 1) j ^= bit;
         j ^= bit;
         if (i < j) {
-          let t = re[i]; re[i] = re[j]; re[j] = t;
-          t = im[i]; im[i] = im[j]; im[j] = t;
+          let t = re[i];
+          re[i] = re[j];
+          re[j] = t;
+          t = im[i];
+          im[i] = im[j];
+          im[j] = t;
         }
       }
       for (let len = 2; len <= n; len <<= 1) {
-        const ang = -2 * Math.PI / len;
-        const wRe = Math.cos(ang), wIm = Math.sin(ang);
+        const ang = (-2 * Math.PI) / len;
+        const wRe = Math.cos(ang),
+          wIm = Math.sin(ang);
         for (let i = 0; i < n; i += len) {
-          let curRe = 1, curIm = 0;
+          let curRe = 1,
+            curIm = 0;
           const half = len >> 1;
           for (let j = 0; j < half; j++) {
-            const uRe = re[i + j], uIm = im[i + j];
+            const uRe = re[i + j],
+              uIm = im[i + j];
             const vRe = re[i + j + half] * curRe - im[i + j + half] * curIm;
             const vIm = re[i + j + half] * curIm + im[i + j + half] * curRe;
-            re[i + j]        = uRe + vRe; im[i + j]        = uIm + vIm;
-            re[i + j + half] = uRe - vRe; im[i + j + half] = uIm - vIm;
+            re[i + j] = uRe + vRe;
+            im[i + j] = uIm + vIm;
+            re[i + j + half] = uRe - vRe;
+            im[i + j + half] = uIm - vIm;
             const nr = curRe * wRe - curIm * wIm;
-            curIm = curRe * wIm + curIm * wRe; curRe = nr;
+            curIm = curRe * wIm + curIm * wRe;
+            curRe = nr;
           }
         }
       }
@@ -755,21 +1375,33 @@ import Admin from '../../../layouts/Admin.astro';
 
     function hannWindow(n: number): Float32Array {
       const w = new Float32Array(n);
-      for (let i = 0; i < n; i++) w[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (n - 1)));
+      for (let i = 0; i < n; i++)
+        w[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (n - 1)));
       return w;
     }
 
-    function hzToMel(hz: number): number { return 2595 * Math.log10(1 + hz / 700); }
-    function melToHz(mel: number): number { return 700 * (Math.pow(10, mel / 2595) - 1); }
+    function hzToMel(hz: number): number {
+      return 2595 * Math.log10(1 + hz / 700);
+    }
+    function melToHz(mel: number): number {
+      return 700 * (Math.pow(10, mel / 2595) - 1);
+    }
 
     // ─── Spectrogram computation ──────────────────────────────────────────────
-    async function computeSpectrogram(audioBuffer: AudioBuffer, fftSize: number, progressCb: (p: number) => void): Promise<SpectrogramData> {
+    async function computeSpectrogram(
+      audioBuffer: AudioBuffer,
+      fftSize: number,
+      progressCb: (p: number) => void,
+    ): Promise<SpectrogramData> {
       const pcm = audioBuffer.getChannelData(0);
       const sampleRate = audioBuffer.sampleRate;
       const hop = fftSize >> 2;
       const hann = hannWindow(fftSize);
       const numBins = fftSize >> 1;
-      const numFrames = Math.max(1, Math.floor((pcm.length - fftSize) / hop) + 1);
+      const numFrames = Math.max(
+        1,
+        Math.floor((pcm.length - fftSize) / hop) + 1,
+      );
       const frames: Float32Array[] = [];
       const phases: Float32Array[] = [];
       const re = new Float64Array(fftSize);
@@ -778,7 +1410,8 @@ import Admin from '../../../layouts/Admin.astro';
 
       for (let f = 0; f < numFrames; f++) {
         const start = f * hop;
-        re.fill(0); im.fill(0);
+        re.fill(0);
+        im.fill(0);
         for (let i = 0; i < fftSize; i++) {
           re[i] = (start + i < pcm.length ? pcm[start + i] : 0) * hann[i];
         }
@@ -791,7 +1424,10 @@ import Admin from '../../../layouts/Admin.astro';
         }
         frames.push(mag);
         phases.push(phase);
-        if (f % CHUNK === CHUNK - 1) { progressCb(f / numFrames); await yieldToUI(); }
+        if (f % CHUNK === CHUNK - 1) {
+          progressCb(f / numFrames);
+          await yieldToUI();
+        }
       }
 
       // Log-magnitude normalize — store raw peak before modifying frames
@@ -799,9 +1435,10 @@ import Admin from '../../../layouts/Admin.astro';
       for (const fr of frames) for (const v of fr) if (v > maxMag) maxMag = v;
       if (maxMag > 0) {
         const scale = 1 / maxMag;
-        for (const fr of frames) for (let i = 0; i < fr.length; i++) {
-          fr[i] = Math.log1p(fr[i] * scale * 100) / Math.log(101);
-        }
+        for (const fr of frames)
+          for (let i = 0; i < fr.length; i++) {
+            fr[i] = Math.log1p(fr[i] * scale * 100) / Math.log(101);
+          }
       }
 
       // Waveform: RMS per frame
@@ -814,43 +1451,82 @@ import Admin from '../../../layouts/Admin.astro';
         waveform[f] = Math.sqrt(rms / (end - start));
       }
 
-      return { frames, phases, maxMag, numFrames, numBins, sampleRate, duration: audioBuffer.duration, waveform };
+      return {
+        frames,
+        phases,
+        maxMag,
+        numFrames,
+        numBins,
+        sampleRate,
+        duration: audioBuffer.duration,
+        waveform,
+      };
     }
 
-    function yieldToUI(): Promise<void> { return new Promise(r => setTimeout(r, 0)); }
+    function yieldToUI(): Promise<void> {
+      return new Promise((r) => setTimeout(r, 0));
+    }
 
     // ─── Palette builder ──────────────────────────────────────────────────────
     function buildPaletteLUT(name: string): Uint8ClampedArray {
       const lut = new Uint8ClampedArray(256 * 3);
       const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
       const stops: Record<string, number[][]> = {
-        hot:    [[0,0,0],[0.33,0,0],[0.67,0.35,0],[0.9,0.9,0],[1,1,1]],
-        viridis:[[0.267,0.005,0.329],[0.229,0.322,0.545],[0.127,0.566,0.551],[0.369,0.788,0.384],[0.993,0.906,0.144]],
-        mono:   [[0,0,0],[1,1,1]],
-        acid:   [[0,0,0],[0.05,0.9,0.05],[0.5,0.05,0.85],[1,1,1]],
+        hot: [
+          [0, 0, 0],
+          [0.33, 0, 0],
+          [0.67, 0.35, 0],
+          [0.9, 0.9, 0],
+          [1, 1, 1],
+        ],
+        viridis: [
+          [0.267, 0.005, 0.329],
+          [0.229, 0.322, 0.545],
+          [0.127, 0.566, 0.551],
+          [0.369, 0.788, 0.384],
+          [0.993, 0.906, 0.144],
+        ],
+        mono: [
+          [0, 0, 0],
+          [1, 1, 1],
+        ],
+        acid: [
+          [0, 0, 0],
+          [0.05, 0.9, 0.05],
+          [0.5, 0.05, 0.85],
+          [1, 1, 1],
+        ],
       };
       const pal = stops[name] ?? stops.hot;
       for (let i = 0; i < 256; i++) {
         const t = i / 255;
         const seg = t * (pal.length - 1);
-        const lo = Math.floor(seg), hi = Math.min(lo + 1, pal.length - 1);
+        const lo = Math.floor(seg),
+          hi = Math.min(lo + 1, pal.length - 1);
         const f = seg - lo;
-        lut[i*3]   = Math.round(lerp(pal[lo][0], pal[hi][0], f) * 255);
-        lut[i*3+1] = Math.round(lerp(pal[lo][1], pal[hi][1], f) * 255);
-        lut[i*3+2] = Math.round(lerp(pal[lo][2], pal[hi][2], f) * 255);
+        lut[i * 3] = Math.round(lerp(pal[lo][0], pal[hi][0], f) * 255);
+        lut[i * 3 + 1] = Math.round(lerp(pal[lo][1], pal[hi][1], f) * 255);
+        lut[i * 3 + 2] = Math.round(lerp(pal[lo][2], pal[hi][2], f) * 255);
       }
       return lut;
     }
 
     // ─── Visualization modes ──────────────────────────────────────────────────
     function getTimeRange(): [number, number] {
-      const s = parseInt((document.getElementById('ph-time-start') as HTMLInputElement).value) / 100;
-      const e = parseInt((document.getElementById('ph-time-end') as HTMLInputElement).value) / 100;
+      const s =
+        parseInt(
+          (document.getElementById('ph-time-start') as HTMLInputElement).value,
+        ) / 100;
+      const e =
+        parseInt(
+          (document.getElementById('ph-time-end') as HTMLInputElement).value,
+        ) / 100;
       return [Math.min(s, e), Math.max(s, e + 0.001)];
     }
 
     function getParams() {
-      const num = (id: string) => parseFloat((document.getElementById(id) as HTMLInputElement).value);
+      const num = (id: string) =>
+        parseFloat((document.getElementById(id) as HTMLInputElement).value);
       return {
         freqMax: num('ph-freq-max'),
         rotation: num('ph-rotation'),
@@ -860,52 +1536,74 @@ import Admin from '../../../layouts/Admin.astro';
       };
     }
 
-    function renderWaterfall(data: SpectrogramData, lut: Uint8ClampedArray, t0: number, t1: number, params: ReturnType<typeof getParams>) {
+    function renderWaterfall(
+      data: SpectrogramData,
+      lut: Uint8ClampedArray,
+      t0: number,
+      t1: number,
+      params: ReturnType<typeof getParams>,
+    ) {
       const { frames, numBins, sampleRate } = data;
-      const W = canvas.width, H = canvas.height;
+      const W = canvas.width,
+        H = canvas.height;
       const fStart = Math.floor(t0 * data.numFrames);
-      const fEnd   = Math.ceil(t1 * data.numFrames);
+      const fEnd = Math.ceil(t1 * data.numFrames);
       const numVis = Math.max(1, fEnd - fStart);
       const freqMax = Math.min(params.freqMax, sampleRate / 2);
       const nyquist = sampleRate / 2;
-      const melMin = hzToMel(20), melMax = hzToMel(freqMax);
+      const melMin = hzToMel(20),
+        melMax = hzToMel(freqMax);
 
       const img = ctx.createImageData(W, H);
       const d = img.data;
 
       for (let y = 0; y < H; y++) {
         const melFrac = (H - 1 - y) / (H - 1);
-        const bin = Math.floor(melToHz(melMin + melFrac * (melMax - melMin)) / nyquist * numBins);
+        const bin = Math.floor(
+          (melToHz(melMin + melFrac * (melMax - melMin)) / nyquist) * numBins,
+        );
         if (bin < 0 || bin >= numBins) continue;
         for (let x = 0; x < W; x++) {
-          const fi = Math.floor(x / W * numVis) + fStart;
+          const fi = Math.floor((x / W) * numVis) + fStart;
           if (fi < 0 || fi >= frames.length) continue;
           const mag = frames[fi][bin];
           const pi = Math.floor(mag * 255) * 3;
           const di = (y * W + x) * 4;
-          d[di] = lut[pi]; d[di+1] = lut[pi+1]; d[di+2] = lut[pi+2]; d[di+3] = 255;
+          d[di] = lut[pi];
+          d[di + 1] = lut[pi + 1];
+          d[di + 2] = lut[pi + 2];
+          d[di + 3] = 255;
         }
       }
       ctx.putImageData(img, 0, 0);
     }
 
-    function renderRadial(data: SpectrogramData, lut: Uint8ClampedArray, t0: number, t1: number, params: ReturnType<typeof getParams>) {
+    function renderRadial(
+      data: SpectrogramData,
+      lut: Uint8ClampedArray,
+      t0: number,
+      t1: number,
+      params: ReturnType<typeof getParams>,
+    ) {
       const { frames, numBins } = data;
-      const W = canvas.width, H = canvas.height;
-      const cx = W / 2, cy = H / 2;
+      const W = canvas.width,
+        H = canvas.height;
+      const cx = W / 2,
+        cy = H / 2;
       const maxR = Math.min(cx, cy) * 0.96;
       const minR = maxR * 0.04;
       const fStart = Math.floor(t0 * data.numFrames);
-      const fEnd   = Math.ceil(t1 * data.numFrames);
+      const fEnd = Math.ceil(t1 * data.numFrames);
       const numVis = Math.max(1, fEnd - fStart);
-      const rotOff = params.rotation * Math.PI / 180;
+      const rotOff = (params.rotation * Math.PI) / 180;
 
       const img = ctx.createImageData(W, H);
       const d = img.data;
 
       for (let y = 0; y < H; y++) {
         for (let x = 0; x < W; x++) {
-          const dx = x - cx, dy = y - cy;
+          const dx = x - cx,
+            dy = y - cy;
           const r = Math.sqrt(dx * dx + dy * dy);
           if (r < minR || r > maxR) continue;
           let angle = Math.atan2(dy, dx) - rotOff;
@@ -919,20 +1617,30 @@ import Admin from '../../../layouts/Admin.astro';
           const mag = frames[fi][bin];
           const pi = Math.floor(mag * 255) * 3;
           const di = (y * W + x) * 4;
-          d[di] = lut[pi]; d[di+1] = lut[pi+1]; d[di+2] = lut[pi+2]; d[di+3] = 255;
+          d[di] = lut[pi];
+          d[di + 1] = lut[pi + 1];
+          d[di + 2] = lut[pi + 2];
+          d[di + 3] = 255;
         }
       }
       ctx.putImageData(img, 0, 0);
     }
 
-    function renderGlitch(data: SpectrogramData, lut: Uint8ClampedArray, t0: number, t1: number, params: ReturnType<typeof getParams>) {
+    function renderGlitch(
+      data: SpectrogramData,
+      lut: Uint8ClampedArray,
+      t0: number,
+      t1: number,
+      params: ReturnType<typeof getParams>,
+    ) {
       // Base: waterfall
       renderWaterfall(data, lut, t0, t1, params);
 
       const { frames, numBins } = data;
-      const W = canvas.width, H = canvas.height;
+      const W = canvas.width,
+        H = canvas.height;
       const fStart = Math.floor(t0 * data.numFrames);
-      const fEnd   = Math.ceil(t1 * data.numFrames);
+      const fEnd = Math.ceil(t1 * data.numFrames);
       const numVis = Math.max(1, fEnd - fStart);
       const warp = params.warpStrength;
       const noise = params.noiseAmount;
@@ -941,9 +1649,13 @@ import Admin from '../../../layouts/Admin.astro';
       const flux = new Float32Array(numVis);
       for (let f = 1; f < numVis; f++) {
         const fi = f + fStart;
-        if (fi >= frames.length || fi - 1 < 0 || fi - 1 >= frames.length) continue;
+        if (fi >= frames.length || fi - 1 < 0 || fi - 1 >= frames.length)
+          continue;
         let sum = 0;
-        for (let b = 0; b < numBins; b++) { const d = frames[fi][b] - frames[fi-1][b]; if (d > 0) sum += d; }
+        for (let b = 0; b < numBins; b++) {
+          const d = frames[fi][b] - frames[fi - 1][b];
+          if (d > 0) sum += d;
+        }
         flux[f] = sum / numBins;
       }
       let maxFlux = 0;
@@ -954,51 +1666,76 @@ import Admin from '../../../layouts/Admin.astro';
       const srcD = new Uint8ClampedArray(src.data);
       const dst = src.data;
 
-      const hash = (v: number) => Math.abs(Math.sin(v * 127.1 + v * 311.7) * 43758.5453) % 1;
+      const hash = (v: number) =>
+        Math.abs(Math.sin(v * 127.1 + v * 311.7) * 43758.5453) % 1;
 
       for (let y = 0; y < H; y++) {
         const fiIdx = Math.floor((1 - y / H) * numVis);
         const fl = flux[Math.max(0, Math.min(numVis - 1, fiIdx))] || 0;
         const shift = Math.round(fl * warp * (hash(y) > 0.5 ? 1 : -1));
         for (let x = 0; x < W; x++) {
-          const sx = ((x - shift) % W + W) % W;
+          const sx = (((x - shift) % W) + W) % W;
           const si = (y * W + sx) * 4;
           const di = (y * W + x) * 4;
-          let r = srcD[si], g = srcD[si+1], b = srcD[si+2];
+          let r = srcD[si],
+            g = srcD[si + 1],
+            b = srcD[si + 2];
           // Hue rotate on high-flux rows
           if (fl > 0.4) {
-            const hue = (fl - 0.4) * (1/0.6) * 120 * Math.PI / 180;
-            const cs = Math.cos(hue), sn = Math.sin(hue);
-            const nr = r*(0.213+cs*0.787-sn*0.213) + g*(0.213-cs*0.213+sn*0.143) + b*(0.213-cs*0.213-sn*0.787);
-            const ng = r*(0.715-cs*0.715-sn*0.715) + g*(0.715+cs*0.285+sn*0.140) + b*(0.715-cs*0.715+sn*0.140);
-            const nb = r*(0.072-cs*0.072+sn*0.928) + g*(0.072-cs*0.072-sn*0.283) + b*(0.072+cs*0.928+sn*0.072);
+            const hue = ((fl - 0.4) * (1 / 0.6) * 120 * Math.PI) / 180;
+            const cs = Math.cos(hue),
+              sn = Math.sin(hue);
+            const nr =
+              r * (0.213 + cs * 0.787 - sn * 0.213) +
+              g * (0.213 - cs * 0.213 + sn * 0.143) +
+              b * (0.213 - cs * 0.213 - sn * 0.787);
+            const ng =
+              r * (0.715 - cs * 0.715 - sn * 0.715) +
+              g * (0.715 + cs * 0.285 + sn * 0.14) +
+              b * (0.715 - cs * 0.715 + sn * 0.14);
+            const nb =
+              r * (0.072 - cs * 0.072 + sn * 0.928) +
+              g * (0.072 - cs * 0.072 - sn * 0.283) +
+              b * (0.072 + cs * 0.928 + sn * 0.072);
             r = Math.min(255, Math.max(0, nr));
             g = Math.min(255, Math.max(0, ng));
             b = Math.min(255, Math.max(0, nb));
           }
           if (noise > 0) {
-            const n = (hash(x * 0.3 + y * 0.71 + fl) - 0.5) * 2 * noise * 128 * fl;
+            const n =
+              (hash(x * 0.3 + y * 0.71 + fl) - 0.5) * 2 * noise * 128 * fl;
             r = Math.min(255, Math.max(0, r + n));
             g = Math.min(255, Math.max(0, g + n));
             b = Math.min(255, Math.max(0, b + n));
           }
-          dst[di] = r; dst[di+1] = g; dst[di+2] = b; dst[di+3] = 255;
+          dst[di] = r;
+          dst[di + 1] = g;
+          dst[di + 2] = b;
+          dst[di + 3] = 255;
         }
       }
       ctx.putImageData(src, 0, 0);
     }
 
-    function renderHybrid(data: SpectrogramData, lut: Uint8ClampedArray, t0: number, t1: number, params: ReturnType<typeof getParams>) {
+    function renderHybrid(
+      data: SpectrogramData,
+      lut: Uint8ClampedArray,
+      t0: number,
+      t1: number,
+      params: ReturnType<typeof getParams>,
+    ) {
       const { frames, numBins, sampleRate, waveform } = data;
-      const W = canvas.width, H = canvas.height;
+      const W = canvas.width,
+        H = canvas.height;
       const fStart = Math.floor(t0 * data.numFrames);
-      const fEnd   = Math.ceil(t1 * data.numFrames);
+      const fEnd = Math.ceil(t1 * data.numFrames);
       const numVis = Math.max(1, fEnd - fStart);
       const split = params.split;
       const splitY = Math.floor(H * (1 - split));
       const freqMax = Math.min(params.freqMax, sampleRate / 2);
       const nyquist = sampleRate / 2;
-      const melMin = hzToMel(20), melMax = hzToMel(freqMax);
+      const melMin = hzToMel(20),
+        melMax = hzToMel(freqMax);
 
       const img = ctx.createImageData(W, H);
       const d = img.data;
@@ -1007,14 +1744,17 @@ import Admin from '../../../layouts/Admin.astro';
       for (let y = 0; y < splitY; y++) {
         const midY = splitY * 0.5;
         for (let x = 0; x < W; x++) {
-          const fi = Math.floor(x / W * numVis) + fStart;
+          const fi = Math.floor((x / W) * numVis) + fStart;
           if (fi < 0 || fi >= waveform.length) continue;
           const amp = waveform[fi];
           if (Math.abs(y - midY) < amp * midY * 0.9) {
             const mag = amp;
             const pi = Math.floor(mag * 255) * 3;
             const di = (y * W + x) * 4;
-            d[di] = lut[pi]; d[di+1] = lut[pi+1]; d[di+2] = lut[pi+2]; d[di+3] = 255;
+            d[di] = lut[pi];
+            d[di + 1] = lut[pi + 1];
+            d[di + 2] = lut[pi + 2];
+            d[di + 3] = 255;
           }
         }
       }
@@ -1023,28 +1763,40 @@ import Admin from '../../../layouts/Admin.astro';
       const specH = H - splitY;
       for (let y = splitY; y < H; y++) {
         const melFrac = (specH - 1 - (y - splitY)) / (specH - 1);
-        const bin = Math.floor(melToHz(melMin + melFrac * (melMax - melMin)) / nyquist * numBins);
+        const bin = Math.floor(
+          (melToHz(melMin + melFrac * (melMax - melMin)) / nyquist) * numBins,
+        );
         if (bin < 0 || bin >= numBins) continue;
         for (let x = 0; x < W; x++) {
-          const fi = Math.floor(x / W * numVis) + fStart;
+          const fi = Math.floor((x / W) * numVis) + fStart;
           if (fi < 0 || fi >= frames.length) continue;
           const mag = frames[fi][bin];
           const pi = Math.floor(mag * 255) * 3;
           const di = (y * W + x) * 4;
-          d[di] = lut[pi]; d[di+1] = lut[pi+1]; d[di+2] = lut[pi+2]; d[di+3] = 255;
+          d[di] = lut[pi];
+          d[di + 1] = lut[pi + 1];
+          d[di + 2] = lut[pi + 2];
+          d[di + 3] = 255;
         }
       }
 
       // Seam interference
       const seamH = 3;
-      for (let y = Math.max(0, splitY - seamH); y < Math.min(H, splitY + seamH); y++) {
+      for (
+        let y = Math.max(0, splitY - seamH);
+        y < Math.min(H, splitY + seamH);
+        y++
+      ) {
         for (let x = 0; x < W; x++) {
-          const fi = Math.floor(x / W * numVis) + fStart;
+          const fi = Math.floor((x / W) * numVis) + fStart;
           const wv = fi >= 0 && fi < waveform.length ? waveform[fi] : 0;
-          const t = (Math.sin(x * 0.15 + wv * 8) * 0.5 + 0.5);
+          const t = Math.sin(x * 0.15 + wv * 8) * 0.5 + 0.5;
           const pi = Math.floor(t * 255) * 3;
           const di = (y * W + x) * 4;
-          d[di] = lut[pi]; d[di+1] = lut[pi+1]; d[di+2] = lut[pi+2]; d[di+3] = 255;
+          d[di] = lut[pi];
+          d[di + 1] = lut[pi + 1];
+          d[di + 2] = lut[pi + 2];
+          d[di + 3] = 255;
         }
       }
 
@@ -1056,28 +1808,42 @@ import Admin from '../../../layouts/Admin.astro';
       if (!spectrogramData) return;
       const [a, b] = t0 !== undefined ? [t0, t1!] : getTimeRange();
       const params = getParams();
-      const data = fxPreviewFrames ? { ...spectrogramData, frames: fxPreviewFrames }
-                 : editedFrames   ? { ...spectrogramData, frames: editedFrames }
-                 : spectrogramData;
+      const data = fxPreviewFrames
+        ? { ...spectrogramData, frames: fxPreviewFrames }
+        : editedFrames
+          ? { ...spectrogramData, frames: editedFrames }
+          : spectrogramData;
       switch (currentMode) {
-        case 'waterfall': renderWaterfall(data, paletteLUT, a, b, params); break;
-        case 'radial':    renderRadial(data, paletteLUT, a, b, params); break;
-        case 'glitch':    renderGlitch(data, paletteLUT, a, b, params); break;
-        case 'hybrid':    renderHybrid(data, paletteLUT, a, b, params); break;
+        case 'waterfall':
+          renderWaterfall(data, paletteLUT, a, b, params);
+          break;
+        case 'radial':
+          renderRadial(data, paletteLUT, a, b, params);
+          break;
+        case 'glitch':
+          renderGlitch(data, paletteLUT, a, b, params);
+          break;
+        case 'hybrid':
+          renderHybrid(data, paletteLUT, a, b, params);
+          break;
       }
     }
 
     function scheduleRender() {
       if (renderPending) return;
       renderPending = true;
-      requestAnimationFrame(() => { renderPending = false; render(); });
+      requestAnimationFrame(() => {
+        renderPending = false;
+        render();
+      });
     }
 
     // ─── Mini waveform ────────────────────────────────────────────────────────
     function drawMiniWaveform(waveform: Float32Array, cursor?: number) {
       const wc = document.getElementById('ph-waveform') as HTMLCanvasElement;
       const wctx = wc.getContext('2d')!;
-      const W = wc.width, H = wc.height;
+      const W = wc.width,
+        H = wc.height;
       wctx.clearRect(0, 0, W, H);
       wctx.fillStyle = '#111';
       wctx.fillRect(0, 0, W, H);
@@ -1086,7 +1852,7 @@ import Admin from '../../../layouts/Admin.astro';
       const mid = H / 2;
       wctx.beginPath();
       for (let x = 0; x < W; x++) {
-        const fi = Math.floor(x / W * waveform.length);
+        const fi = Math.floor((x / W) * waveform.length);
         const amp = waveform[fi] * mid * 0.9;
         if (x === 0) wctx.moveTo(x, mid - amp);
         else wctx.lineTo(x, mid - amp);
@@ -1094,7 +1860,7 @@ import Admin from '../../../layouts/Admin.astro';
       wctx.stroke();
       wctx.beginPath();
       for (let x = 0; x < W; x++) {
-        const fi = Math.floor(x / W * waveform.length);
+        const fi = Math.floor((x / W) * waveform.length);
         const amp = waveform[fi] * mid * 0.9;
         if (x === 0) wctx.moveTo(x, mid + amp);
         else wctx.lineTo(x, mid + amp);
@@ -1118,7 +1884,9 @@ import Admin from '../../../layouts/Admin.astro';
       const busyLabel = document.getElementById('ph-busy-label')!;
       const emptyEl = document.getElementById('ph-empty')!;
       const dropEmpty = document.getElementById('ph-drop-empty')!;
-      const waveformCanvas = document.getElementById('ph-waveform') as HTMLCanvasElement;
+      const waveformCanvas = document.getElementById(
+        'ph-waveform',
+      ) as HTMLCanvasElement;
       const metaEl = document.getElementById('ph-audio-meta')!;
       const actionBar = document.getElementById('ph-action-bar')!;
 
@@ -1144,16 +1912,22 @@ import Admin from '../../../layouts/Admin.astro';
         currentAudioBuffer = audioBuffer;
 
         busyLabel.textContent = 'Analyzing…';
-        const fftSize = parseInt((document.getElementById('ph-fft') as HTMLSelectElement).value);
-        spectrogramData = await computeSpectrogram(audioBuffer, fftSize, (p) => {
-          busyLabel.textContent = `Analyzing… ${Math.round(p * 100)}%`;
-        });
+        const fftSize = parseInt(
+          (document.getElementById('ph-fft') as HTMLSelectElement).value,
+        );
+        spectrogramData = await computeSpectrogram(
+          audioBuffer,
+          fftSize,
+          (p) => {
+            busyLabel.textContent = `Analyzing… ${Math.round(p * 100)}%`;
+          },
+        );
 
         drawMiniWaveform(spectrogramData.waveform);
         dropEmpty.style.display = 'none';
         const mins = Math.floor(audioBuffer.duration / 60);
         const secs = Math.floor(audioBuffer.duration % 60);
-        metaEl.textContent = `${name} · ${mins}:${String(secs).padStart(2,'0')}`;
+        metaEl.textContent = `${name} · ${mins}:${String(secs).padStart(2, '0')}`;
         document.getElementById('ph-loaded-zone')!.style.display = 'block';
 
         busyEl.style.display = 'none';
@@ -1178,22 +1952,32 @@ import Admin from '../../../layouts/Admin.astro';
       const t = new Uint32Array(256);
       for (let i = 0; i < 256; i++) {
         let c = i;
-        for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        for (let j = 0; j < 8; j++)
+          c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
         t[i] = c;
       }
       return t;
     })();
 
     function crc32(data: Uint8Array): number {
-      let crc = 0xFFFFFFFF;
-      for (const byte of data) crc = CRC_TABLE[(crc ^ byte) & 0xFF] ^ (crc >>> 8);
-      return (crc ^ 0xFFFFFFFF) >>> 0;
+      let crc = 0xffffffff;
+      for (const byte of data)
+        crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+      return (crc ^ 0xffffffff) >>> 0;
     }
 
     // ─── ZIP builder (STORE, no compression) ─────────────────────────────────
-    function buildZip(files: { name: string; data: Uint8Array }[]): ArrayBuffer {
+    function buildZip(
+      files: { name: string; data: Uint8Array }[],
+    ): ArrayBuffer {
       const enc = new TextEncoder();
-      type Entry = { header: Uint8Array; data: Uint8Array; nameB: Uint8Array; crc: number; off: number };
+      type Entry = {
+        header: Uint8Array;
+        data: Uint8Array;
+        nameB: Uint8Array;
+        crc: number;
+        off: number;
+      };
       const entries: Entry[] = [];
       let off = 0;
 
@@ -1204,7 +1988,7 @@ import Admin from '../../../layouts/Admin.astro';
         const v = new DataView(hdr.buffer);
         v.setUint32(0, 0x04034b50, true);
         v.setUint16(4, 20, true);
-        v.setUint16(8, 0, true);   // method: STORE
+        v.setUint16(8, 0, true); // method: STORE
         v.setUint32(14, crc, true);
         v.setUint32(18, f.data.length, true);
         v.setUint32(22, f.data.length, true);
@@ -1243,8 +2027,16 @@ import Admin from '../../../layouts/Admin.astro';
 
       const out = new Uint8Array(cdOff + cdSize + 22);
       let pos = 0;
-      for (const e of entries) { out.set(e.header, pos); pos += e.header.length; out.set(e.data, pos); pos += e.data.length; }
-      for (const cd of cdParts) { out.set(cd, pos); pos += cd.length; }
+      for (const e of entries) {
+        out.set(e.header, pos);
+        pos += e.header.length;
+        out.set(e.data, pos);
+        pos += e.data.length;
+      }
+      for (const cd of cdParts) {
+        out.set(cd, pos);
+        pos += cd.length;
+      }
       out.set(eocd, pos);
       return out.buffer;
     }
@@ -1253,40 +2045,65 @@ import Admin from '../../../layouts/Admin.astro';
     async function saveImage() {
       if (!spectrogramData) return;
       const btn = document.getElementById('ph-save-btn') as HTMLButtonElement;
-      btn.disabled = true; btn.textContent = 'Saving…';
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
       try {
-        const blob = await new Promise<Blob>(res => canvas.toBlob(b => res(b!), 'image/png'));
+        const blob = await new Promise<Blob>((res) =>
+          canvas.toBlob((b) => res(b!), 'image/png'),
+        );
         const fd = new FormData();
         fd.append('file', blob, 'photism.png');
         fd.append('tags', 'photism,atelier');
         fd.append('output_index', 'outputs');
-        const res = await fetch('/api/media/upload', { method: 'POST', body: fd, credentials: 'include' });
+        const res = await fetch('/api/media/upload', {
+          method: 'POST',
+          body: fd,
+          credentials: 'include',
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         (window as any).toast?.success('Saved to outputs');
       } catch (err: any) {
         (window as any).toast?.error(`Save failed: ${err.message}`);
-      } finally { btn.disabled = false; btn.textContent = '☁ Save Image'; }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '☁ Save Image';
+      }
     }
 
     async function recordWebM() {
       if (!spectrogramData) return;
       const btn = document.getElementById('ph-record-btn') as HTMLButtonElement;
-      const fps = parseInt((document.getElementById('ph-fps') as HTMLSelectElement).value);
+      const fps = parseInt(
+        (document.getElementById('ph-fps') as HTMLSelectElement).value,
+      );
       const durationSec = 6;
       const totalFrames = fps * durationSec;
       btn.disabled = true;
 
       let stream: MediaStream;
-      try { stream = (canvas as any).captureStream(fps); } catch { btn.disabled = false; return; }
+      try {
+        stream = (canvas as any).captureStream(fps);
+      } catch {
+        btn.disabled = false;
+        return;
+      }
 
-      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
+      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+        ? 'video/webm;codecs=vp9'
+        : 'video/webm';
       const recorder = new MediaRecorder(stream, { mimeType });
       const chunks: BlobPart[] = [];
-      recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
       recorder.onstop = () => {
         const blob = new Blob(chunks, { type: 'video/webm' });
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'photism.webm'; a.click();
-        btn.disabled = false; btn.textContent = '⏺ Record WebM';
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'photism.webm';
+        a.click();
+        btn.disabled = false;
+        btn.textContent = '⏺ Record WebM';
       };
 
       recorder.start(100);
@@ -1294,7 +2111,7 @@ import Admin from '../../../layouts/Admin.astro';
         const p = i / totalFrames;
         render(0, p);
         btn.textContent = `${Math.round(p * 100)}%`;
-        await new Promise(r => setTimeout(r, 1000 / fps));
+        await new Promise((r) => setTimeout(r, 1000 / fps));
       }
       recorder.stop();
       render(); // restore current view
@@ -1309,16 +2126,25 @@ import Admin from '../../../layouts/Admin.astro';
       for (let i = 0; i < N; i++) {
         render(0, i / (N - 1));
         btn.textContent = `${i + 1}/${N}`;
-        const blob = await new Promise<Blob>(res => canvas.toBlob(b => res(b!), 'image/png'));
-        pngFiles.push({ name: `photism-${String(i).padStart(4,'0')}.png`, data: new Uint8Array(await blob.arrayBuffer()) });
+        const blob = await new Promise<Blob>((res) =>
+          canvas.toBlob((b) => res(b!), 'image/png'),
+        );
+        pngFiles.push({
+          name: `photism-${String(i).padStart(4, '0')}.png`,
+          data: new Uint8Array(await blob.arrayBuffer()),
+        });
         await yieldToUI();
       }
       render(); // restore
       const zip = buildZip(pngFiles);
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([zip], { type: 'application/zip' }));
-      a.download = 'photism-frames.zip'; a.click();
-      btn.disabled = false; btn.textContent = '⬇ Save Frames';
+      a.href = URL.createObjectURL(
+        new Blob([zip], { type: 'application/zip' }),
+      );
+      a.download = 'photism-frames.zip';
+      a.click();
+      btn.disabled = false;
+      btn.textContent = '⬇ Save Frames';
     }
 
     // ─── WAV encoding ─────────────────────────────────────────────────────────
@@ -1326,15 +2152,28 @@ import Admin from '../../../layouts/Admin.astro';
       const numSamples = signal.length;
       const buf = new ArrayBuffer(44 + numSamples * 2);
       const v = new DataView(buf);
-      const writeStr = (off: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i)); };
-      writeStr(0, 'RIFF'); v.setUint32(4, 36 + numSamples * 2, true);
-      writeStr(8, 'WAVE'); writeStr(12, 'fmt ');
-      v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-      v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true);
-      v.setUint16(32, 2, true); v.setUint16(34, 16, true);
-      writeStr(36, 'data'); v.setUint32(40, numSamples * 2, true);
+      const writeStr = (off: number, s: string) => {
+        for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i));
+      };
+      writeStr(0, 'RIFF');
+      v.setUint32(4, 36 + numSamples * 2, true);
+      writeStr(8, 'WAVE');
+      writeStr(12, 'fmt ');
+      v.setUint32(16, 16, true);
+      v.setUint16(20, 1, true);
+      v.setUint16(22, 1, true);
+      v.setUint32(24, sampleRate, true);
+      v.setUint32(28, sampleRate * 2, true);
+      v.setUint16(32, 2, true);
+      v.setUint16(34, 16, true);
+      writeStr(36, 'data');
+      v.setUint32(40, numSamples * 2, true);
       for (let i = 0; i < numSamples; i++) {
-        v.setInt16(44 + i * 2, Math.max(-32768, Math.min(32767, Math.round(signal[i] * 32767))), true);
+        v.setInt16(
+          44 + i * 2,
+          Math.max(-32768, Math.min(32767, Math.round(signal[i] * 32767))),
+          true,
+        );
       }
       return buf;
     }
@@ -1344,18 +2183,22 @@ import Admin from '../../../layouts/Admin.astro';
     // phases: raw atan2 phase per bin per frame
     // maxMag: raw peak magnitude stored during analysis (used to invert log)
     async function istftOLA(
-      frames: Float32Array[], phases: Float32Array[], maxMag: number,
-      fftSize: number, hopSamples: number, progressCb: (p: number) => void,
+      frames: Float32Array[],
+      phases: Float32Array[],
+      maxMag: number,
+      fftSize: number,
+      hopSamples: number,
+      progressCb: (p: number) => void,
     ): Promise<Float32Array> {
       const numFrames = frames.length;
       const numBins = fftSize >> 1;
       const totalSamples = (numFrames - 1) * hopSamples + fftSize;
       const signal = new Float32Array(totalSamples);
-      const norm   = new Float32Array(totalSamples);
-      const hann   = hannWindow(fftSize);
-      const re     = new Float64Array(fftSize);
-      const im     = new Float64Array(fftSize);
-      const CHUNK  = 8;
+      const norm = new Float32Array(totalSamples);
+      const hann = hannWindow(fftSize);
+      const re = new Float64Array(fftSize);
+      const im = new Float64Array(fftSize);
+      const CHUNK = 8;
 
       for (let f = 0; f < numFrames; f++) {
         const frame = frames[f];
@@ -1364,9 +2207,10 @@ import Admin from '../../../layouts/Admin.astro';
         // Reconstruct complex spectrum from log-normalized mag + raw phase
         // Inverse of: v = log1p(raw/maxMag * 100) / log(101)
         // → raw = maxMag * (101^v - 1) / 100
-        re.fill(0); im.fill(0);
+        re.fill(0);
+        im.fill(0);
         for (let b = 0; b < numBins; b++) {
-          const rawMag = maxMag * (Math.pow(101, frame[b]) - 1) / 100;
+          const rawMag = (maxMag * (Math.pow(101, frame[b]) - 1)) / 100;
           re[b] = rawMag * Math.cos(phase[b]);
           im[b] = rawMag * Math.sin(phase[b]);
         }
@@ -1380,7 +2224,10 @@ import Admin from '../../../layouts/Admin.astro';
         for (let i = 0; i < fftSize; i++) im[i] = -im[i];
         fft(re, im);
         const inv = 1 / fftSize;
-        for (let i = 0; i < fftSize; i++) { re[i] *= inv; im[i] = -im[i] * inv; }
+        for (let i = 0; i < fftSize; i++) {
+          re[i] *= inv;
+          im[i] = -im[i] * inv;
+        }
         // re[i] is the time-domain frame; im should be ~0 (conjugate symmetry ensures real output)
 
         // Overlap-add with Hann window + accumulate normalization
@@ -1390,10 +2237,13 @@ import Admin from '../../../layouts/Admin.astro';
           if (idx >= totalSamples) break;
           const w = hann[i];
           signal[idx] += re[i] * w;
-          norm[idx]   += w * w;
+          norm[idx] += w * w;
         }
 
-        if (f % CHUNK === CHUNK - 1) { progressCb(f / numFrames); await yieldToUI(); }
+        if (f % CHUNK === CHUNK - 1) {
+          progressCb(f / numFrames);
+          await yieldToUI();
+        }
       }
 
       // Normalize by accumulated window energy, then peak-normalize
@@ -1401,7 +2251,8 @@ import Admin from '../../../layouts/Admin.astro';
         if (norm[i] > 1e-8) signal[i] /= norm[i];
       }
       let peak = 0;
-      for (let i = 0; i < totalSamples; i++) if (Math.abs(signal[i]) > peak) peak = Math.abs(signal[i]);
+      for (let i = 0; i < totalSamples; i++)
+        if (Math.abs(signal[i]) > peak) peak = Math.abs(signal[i]);
       if (peak > 0) for (let i = 0; i < totalSamples; i++) signal[i] /= peak;
       return signal;
     }
@@ -1409,18 +2260,23 @@ import Admin from '../../../layouts/Admin.astro';
     // ─── Spectral effects (operate directly on Float32 magnitude data) ────────
     // These modify editedFrames, so they affect both display AND audio export.
 
-    function fxGaussianBlur(frames: Float32Array[], radius: number): Float32Array[] {
-      const nF = frames.length, nB = frames[0].length;
+    function fxGaussianBlur(
+      frames: Float32Array[],
+      radius: number,
+    ): Float32Array[] {
+      const nF = frames.length,
+        nB = frames[0].length;
       // Pre-compute Gaussian weights
       const weights: number[] = [];
       let wSum = 0;
       for (let k = -radius; k <= radius; k++) {
-        const w = Math.exp(-k * k / (2 * (radius / 2) * (radius / 2) + 1e-6));
-        weights.push(w); wSum += w;
+        const w = Math.exp((-k * k) / (2 * (radius / 2) * (radius / 2) + 1e-6));
+        weights.push(w);
+        wSum += w;
       }
       for (let i = 0; i < weights.length; i++) weights[i] /= wSum;
       // Frequency pass
-      const tmp: Float32Array[] = frames.map(fr => new Float32Array(nB));
+      const tmp: Float32Array[] = frames.map((fr) => new Float32Array(nB));
       for (let f = 0; f < nF; f++) {
         for (let b = 0; b < nB; b++) {
           let v = 0;
@@ -1451,19 +2307,26 @@ import Admin from '../../../layouts/Admin.astro';
       return frames.map((fr, f) => {
         const out = new Float32Array(fr.length);
         for (let b = 0; b < fr.length; b++) {
-          out[b] = Math.max(0, Math.min(1, fr[b] + amount * (fr[b] - blurred[f][b])));
+          out[b] = Math.max(
+            0,
+            Math.min(1, fr[b] + amount * (fr[b] - blurred[f][b])),
+          );
         }
         return out;
       });
     }
 
-    function fxPitchShift(frames: Float32Array[], semitones: number): Float32Array[] {
+    function fxPitchShift(
+      frames: Float32Array[],
+      semitones: number,
+    ): Float32Array[] {
       const ratio = Math.pow(2, semitones / 12);
-      return frames.map(fr => {
+      return frames.map((fr) => {
         const out = new Float32Array(fr.length);
         for (let b = 0; b < fr.length; b++) {
           const srcB = b / ratio;
-          const lo = Math.floor(srcB), hi = Math.ceil(srcB);
+          const lo = Math.floor(srcB),
+            hi = Math.ceil(srcB);
           const t = srcB - lo;
           const loV = lo >= 0 && lo < fr.length ? fr[lo] : 0;
           const hiV = hi >= 0 && hi < fr.length ? fr[hi] : 0;
@@ -1474,28 +2337,39 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     function fxReverse(frames: Float32Array[]): Float32Array[] {
-      return [...frames].reverse().map(fr => fr.slice());
+      return [...frames].reverse().map((fr) => fr.slice());
     }
 
-    function fxPixelate(frames: Float32Array[], blockW: number, blockH: number): Float32Array[] {
-      const nF = frames.length, nB = frames[0].length;
+    function fxPixelate(
+      frames: Float32Array[],
+      blockW: number,
+      blockH: number,
+    ): Float32Array[] {
+      const nF = frames.length,
+        nB = frames[0].length;
       // Pre-compute block averages
       const out = frames.map(() => new Float32Array(nB));
       for (let bf = 0; bf < Math.ceil(nF / blockW); bf++) {
         for (let bb = 0; bb < Math.ceil(nB / blockH); bb++) {
-          let sum = 0, count = 0;
+          let sum = 0,
+            count = 0;
           for (let df = 0; df < blockW; df++) {
-            const f = bf * blockW + df; if (f >= nF) continue;
+            const f = bf * blockW + df;
+            if (f >= nF) continue;
             for (let db = 0; db < blockH; db++) {
-              const b = bb * blockH + db; if (b >= nB) continue;
-              sum += frames[f][b]; count++;
+              const b = bb * blockH + db;
+              if (b >= nB) continue;
+              sum += frames[f][b];
+              count++;
             }
           }
           const avg = count > 0 ? sum / count : 0;
           for (let df = 0; df < blockW; df++) {
-            const f = bf * blockW + df; if (f >= nF) continue;
+            const f = bf * blockW + df;
+            if (f >= nF) continue;
             for (let db = 0; db < blockH; db++) {
-              const b = bb * blockH + db; if (b >= nB) continue;
+              const b = bb * blockH + db;
+              if (b >= nB) continue;
               out[f][b] = avg;
             }
           }
@@ -1505,17 +2379,31 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     // Map effect name + strength (1–20) → transformed frames for preview
-    function computeFxPreview(effect: string, strength: number): Float32Array[] | null {
+    function computeFxPreview(
+      effect: string,
+      strength: number,
+    ): Float32Array[] | null {
       if (!spectrogramData) return null;
       const src = editedFrames ?? spectrogramData.frames;
       switch (effect) {
-        case 'blur':      return fxGaussianBlur(src, Math.max(1, Math.round(strength / 2)));
-        case 'sharpen':   return fxSharpen(src, strength * 0.15);
-        case 'pitch-up':  return fxPitchShift(src, strength * 0.6);
-        case 'pitch-dn':  return fxPitchShift(src, -strength * 0.6);
-        case 'reverse':   return fxReverse(src);
-        case 'pixelate':  return fxPixelate(src, Math.max(2, strength), Math.max(2, Math.round(strength / 2)));
-        default: return null;
+        case 'blur':
+          return fxGaussianBlur(src, Math.max(1, Math.round(strength / 2)));
+        case 'sharpen':
+          return fxSharpen(src, strength * 0.15);
+        case 'pitch-up':
+          return fxPitchShift(src, strength * 0.6);
+        case 'pitch-dn':
+          return fxPitchShift(src, -strength * 0.6);
+        case 'reverse':
+          return fxReverse(src);
+        case 'pixelate':
+          return fxPixelate(
+            src,
+            Math.max(2, strength),
+            Math.max(2, Math.round(strength / 2)),
+          );
+        default:
+          return null;
       }
     }
 
@@ -1529,17 +2417,26 @@ import Admin from '../../../layouts/Admin.astro';
       const [t0, t1] = getTimeRange();
       const { sampleRate, numFrames, phases, maxMag } = spectrogramData;
       const frames = editedFrames ?? spectrogramData.frames;
-      const fftSize = parseInt((document.getElementById('ph-fft') as HTMLSelectElement).value);
+      const fftSize = parseInt(
+        (document.getElementById('ph-fft') as HTMLSelectElement).value,
+      );
       const hopSamples = fftSize >> 2;
       const fStart = Math.floor(t0 * numFrames);
-      const fEnd   = Math.ceil(t1 * numFrames);
+      const fEnd = Math.ceil(t1 * numFrames);
       const trimmedFrames = frames.slice(fStart, fEnd);
       const trimmedPhases = phases.slice(fStart, fEnd);
 
       try {
-        const signal = await istftOLA(trimmedFrames, trimmedPhases, maxMag, fftSize, hopSamples, p => {
-          busyLabel.textContent = `Synthesizing… ${Math.round(p * 100)}%`;
-        });
+        const signal = await istftOLA(
+          trimmedFrames,
+          trimmedPhases,
+          maxMag,
+          fftSize,
+          hopSamples,
+          (p) => {
+            busyLabel.textContent = `Synthesizing… ${Math.round(p * 100)}%`;
+          },
+        );
         const wav = encodeWAV(signal, sampleRate);
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }));
@@ -1560,17 +2457,26 @@ import Admin from '../../../layouts/Admin.astro';
       const [t0, t1] = getTimeRange();
       const { sampleRate, numFrames, phases, maxMag } = spectrogramData;
       const frames = editedFrames ?? spectrogramData.frames;
-      const fftSize = parseInt((document.getElementById('ph-fft') as HTMLSelectElement).value);
+      const fftSize = parseInt(
+        (document.getElementById('ph-fft') as HTMLSelectElement).value,
+      );
       const hopSamples = fftSize >> 2;
       const fStart = Math.floor(t0 * numFrames);
-      const fEnd   = Math.ceil(t1 * numFrames);
+      const fEnd = Math.ceil(t1 * numFrames);
       const trimmedFrames = frames.slice(fStart, fEnd);
       const trimmedPhases = phases.slice(fStart, fEnd);
 
       try {
-        const signal = await istftOLA(trimmedFrames, trimmedPhases, maxMag, fftSize, hopSamples, p => {
-          busyLabel.textContent = `Synthesizing… ${Math.round(p * 100)}%`;
-        });
+        const signal = await istftOLA(
+          trimmedFrames,
+          trimmedPhases,
+          maxMag,
+          fftSize,
+          hopSamples,
+          (p) => {
+            busyLabel.textContent = `Synthesizing… ${Math.round(p * 100)}%`;
+          },
+        );
         busyLabel.textContent = 'Uploading…';
         const wav = encodeWAV(signal, sampleRate);
         const filename = `${lastFileName.replace(/\.[^.]+$/, '')}-synth.wav`;
@@ -1578,7 +2484,11 @@ import Admin from '../../../layouts/Admin.astro';
         fd.append('file', new Blob([wav], { type: 'audio/wav' }), filename);
         fd.append('tags', 'photism,atelier,audio');
         fd.append('output_index', 'outputs');
-        const res = await fetch('/api/media/upload', { method: 'POST', body: fd, credentials: 'include' });
+        const res = await fetch('/api/media/upload', {
+          method: 'POST',
+          body: fd,
+          credentials: 'include',
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         (window as any).toast?.success('Audio saved to Stacks');
       } catch (err: any) {
@@ -1589,8 +2499,8 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     // ─── Playback progress ────────────────────────────────────────────────────
-    const playhead  = document.getElementById('ph-playhead')!;
-    const timeDisp  = document.getElementById('ph-time-display')!;
+    const playhead = document.getElementById('ph-playhead')!;
+    const timeDisp = document.getElementById('ph-time-display')!;
 
     function fmtTime(secs: number): string {
       const m = Math.floor(secs / 60);
@@ -1599,7 +2509,10 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     function stopProgress() {
-      if (progressRaf !== null) { cancelAnimationFrame(progressRaf); progressRaf = null; }
+      if (progressRaf !== null) {
+        cancelAnimationFrame(progressRaf);
+        progressRaf = null;
+      }
       playhead.style.display = 'none';
       timeDisp.textContent = '0:00';
       if (spectrogramData) drawMiniWaveform(spectrogramData.waveform);
@@ -1612,12 +2525,19 @@ import Admin from '../../../layouts/Admin.astro';
       let audioTime: number;
       if (loopEnabled && playbackEndOffset > playbackStartOffset) {
         const loopDur = playbackEndOffset - playbackStartOffset;
-        audioTime = playbackStartOffset + ((elapsed % loopDur) + loopDur) % loopDur;
+        audioTime =
+          playbackStartOffset + (((elapsed % loopDur) + loopDur) % loopDur);
       } else {
         audioTime = Math.min(playbackStartOffset + elapsed, playbackEndOffset);
       }
       const trimDur = playbackEndOffset - playbackStartOffset;
-      const progressInTrim = trimDur > 0 ? Math.max(0, Math.min(1, (audioTime - playbackStartOffset) / trimDur)) : 0;
+      const progressInTrim =
+        trimDur > 0
+          ? Math.max(
+              0,
+              Math.min(1, (audioTime - playbackStartOffset) / trimDur),
+            )
+          : 0;
       // Update time display (relative to full track)
       timeDisp.textContent = fmtTime(audioTime);
       // Move playhead on spectrogram canvas
@@ -1625,14 +2545,21 @@ import Admin from '../../../layouts/Admin.astro';
       playhead.style.left = `${progressInTrim * 100}%`;
       // Update waveform cursor (position within full track)
       const trackFrac = dur > 0 ? audioTime / dur : 0;
-      drawMiniWaveform(spectrogramData.waveform, Math.max(0, Math.min(1, trackFrac)));
+      drawMiniWaveform(
+        spectrogramData.waveform,
+        Math.max(0, Math.min(1, trackFrac)),
+      );
       progressRaf = requestAnimationFrame(tickProgress);
     }
 
     // ─── Paint mode ───────────────────────────────────────────────────────────
     function setPaintMode(on: boolean) {
       paintMode = on;
-      if (!on) { isPainting = false; smearPrevCx = null; smearPrevCy = null; }
+      if (!on) {
+        isPainting = false;
+        smearPrevCx = null;
+        smearPrevCy = null;
+      }
       const btn = document.getElementById('ph-paint-btn')!;
       const paintBar = document.getElementById('ph-paint-bar')!;
       const wrap = document.getElementById('ph-canvas-wrap')!;
@@ -1643,8 +2570,11 @@ import Admin from '../../../layouts/Admin.astro';
 
     function setTool(tool: BrushTool) {
       brushTool = tool;
-      document.querySelectorAll('#ph-tool-group .ph-pill').forEach(b => {
-        b.classList.toggle('ph-pill--on', (b as HTMLButtonElement).dataset.tool === tool);
+      document.querySelectorAll('#ph-tool-group .ph-pill').forEach((b) => {
+        b.classList.toggle(
+          'ph-pill--on',
+          (b as HTMLButtonElement).dataset.tool === tool,
+        );
       });
       const gainRow = document.getElementById('ph-gain-row')!;
       gainRow.style.display = tool === 'gain' ? 'flex' : 'none';
@@ -1654,63 +2584,88 @@ import Admin from '../../../layouts/Admin.astro';
     function canvasYtoBin(cy: number): number {
       if (!spectrogramData) return 0;
       const { numBins, sampleRate } = spectrogramData;
-      if (currentMode === 'waterfall' || currentMode === 'glitch' || currentMode === 'hybrid') {
-        const freqMax = parseFloat((document.getElementById('ph-freq-max') as HTMLInputElement).value);
+      if (
+        currentMode === 'waterfall' ||
+        currentMode === 'glitch' ||
+        currentMode === 'hybrid'
+      ) {
+        const freqMax = parseFloat(
+          (document.getElementById('ph-freq-max') as HTMLInputElement).value,
+        );
         const nyquist = sampleRate / 2;
         const melMin = hzToMel(20);
         const melMax = hzToMel(Math.min(freqMax, nyquist));
         const H = canvas.height;
         const melFrac = Math.max(0, Math.min(1, (H - 1 - cy) / (H - 1)));
         const hz = melToHz(melMin + melFrac * (melMax - melMin));
-        return Math.max(0, Math.min(numBins - 1, Math.floor(hz / nyquist * numBins)));
+        return Math.max(
+          0,
+          Math.min(numBins - 1, Math.floor((hz / nyquist) * numBins)),
+        );
       }
       // Radial: linear mapping
-      return Math.max(0, Math.min(numBins - 1, numBins - 1 - Math.floor(cy / canvas.height * numBins)));
+      return Math.max(
+        0,
+        Math.min(
+          numBins - 1,
+          numBins - 1 - Math.floor((cy / canvas.height) * numBins),
+        ),
+      );
     }
 
     function applyBrush(clientX: number, clientY: number) {
       if (!spectrogramData || stampMode) return;
-      if (!editedFrames) editedFrames = spectrogramData.frames.map(fr => fr.slice());
+      if (!editedFrames)
+        editedFrames = spectrogramData.frames.map((fr) => fr.slice());
 
       const rect = canvas.getBoundingClientRect();
-      const cx = (clientX - rect.left) / rect.width * canvas.width;
-      const cy = (clientY - rect.top) / rect.height * canvas.height;
+      const cx = ((clientX - rect.left) / rect.width) * canvas.width;
+      const cy = ((clientY - rect.top) / rect.height) * canvas.height;
       const [t0, t1] = getTimeRange();
       const { numFrames, numBins } = spectrogramData;
       const fStart = Math.floor(t0 * numFrames);
-      const fEnd   = Math.ceil(t1 * numFrames);
+      const fEnd = Math.ceil(t1 * numFrames);
       const numVis = Math.max(1, fEnd - fStart);
-      const fCenter = Math.floor(cx / canvas.width * numVis) + fStart;
-      const fRadius = Math.max(1, Math.ceil(brushSize * numVis / rect.width));
-      const brushPxCanvas = brushSize * canvas.height / rect.height;
+      const fCenter = Math.floor((cx / canvas.width) * numVis) + fStart;
+      const fRadius = Math.max(1, Math.ceil((brushSize * numVis) / rect.width));
+      const brushPxCanvas = (brushSize * canvas.height) / rect.height;
       const bHi = canvasYtoBin(Math.max(0, cy - brushPxCanvas));
       const bLo = canvasYtoBin(Math.min(canvas.height - 1, cy + brushPxCanvas));
 
       // Snapshot frames into strokeDiffs before first modification (for undo)
       const captureFrame = (f: number) => {
-        if (strokeDiffs && !strokeDiffs.has(f)) strokeDiffs.set(f, editedFrames![f].slice());
+        if (strokeDiffs && !strokeDiffs.has(f))
+          strokeDiffs.set(f, editedFrames![f].slice());
       };
 
       if (brushTool === 'smear') {
         const prevCx = smearPrevCx ?? cx;
         const prevCy = smearPrevCy ?? cy;
-        const dFrames = Math.round((cx - prevCx) / canvas.width * numVis);
-        const dBins   = canvasYtoBin(cy) - canvasYtoBin(prevCy);
-        smearPrevCx = cx; smearPrevCy = cy;
-        if (dFrames === 0 && dBins === 0) { scheduleRender(); return; }
+        const dFrames = Math.round(((cx - prevCx) / canvas.width) * numVis);
+        const dBins = canvasYtoBin(cy) - canvasYtoBin(prevCy);
+        smearPrevCx = cx;
+        smearPrevCy = cy;
+        if (dFrames === 0 && dBins === 0) {
+          scheduleRender();
+          return;
+        }
         for (let df = -fRadius; df <= fRadius; df++) {
           const f = fCenter + df;
           if (f < 0 || f >= editedFrames.length) continue;
           captureFrame(f);
-          const srcF = Math.max(0, Math.min(editedFrames.length - 1, f - dFrames));
+          const srcF = Math.max(
+            0,
+            Math.min(editedFrames.length - 1, f - dFrames),
+          );
           for (let b = bLo; b <= bHi; b++) {
             if (b < 0 || b >= numBins) continue;
             const srcB = Math.max(0, Math.min(numBins - 1, b - dBins));
-            editedFrames[f][b] = editedFrames[srcF][srcB] * 0.7 + editedFrames[f][b] * 0.3;
+            editedFrames[f][b] =
+              editedFrames[srcF][srcB] * 0.7 + editedFrames[f][b] * 0.3;
           }
         }
       } else if (brushTool === 'blur') {
-        const kernel = [0.06, 0.24, 0.40, 0.24, 0.06];
+        const kernel = [0.06, 0.24, 0.4, 0.24, 0.06];
         const kHalf = 2;
         for (let df = -fRadius; df <= fRadius; df++) {
           const f = fCenter + df;
@@ -1720,7 +2675,10 @@ import Admin from '../../../layouts/Admin.astro';
             if (b < 0 || b >= numBins) continue;
             let sum = 0;
             for (let k = 0; k < kernel.length; k++) {
-              sum += editedFrames[f][Math.max(0, Math.min(numBins - 1, b - kHalf + k))] * kernel[k];
+              sum +=
+                editedFrames[f][
+                  Math.max(0, Math.min(numBins - 1, b - kHalf + k))
+                ] * kernel[k];
             }
             editedFrames[f][b] = sum;
           }
@@ -1733,7 +2691,10 @@ import Admin from '../../../layouts/Admin.astro';
           for (let b = bLo; b <= bHi; b++) {
             if (b < 0 || b >= numBins) continue;
             if (brushTool === 'gain') {
-              editedFrames[f][b] = Math.max(0, Math.min(1, editedFrames[f][b] * gainAmount));
+              editedFrames[f][b] = Math.max(
+                0,
+                Math.min(1, editedFrames[f][b] * gainAmount),
+              );
             } else {
               editedFrames[f][b] = brushTool === 'draw' ? 1 : 0;
             }
@@ -1755,11 +2716,15 @@ import Admin from '../../../layouts/Admin.astro';
         modeEl.style.display = 'none';
         playMode = 'original';
         document.getElementById('ph-mode-orig')!.classList.add('ph-pill--on');
-        document.getElementById('ph-mode-edit')!.classList.remove('ph-pill--on');
+        document
+          .getElementById('ph-mode-edit')!
+          .classList.remove('ph-pill--on');
       } else {
         modeEl.style.display = 'flex';
       }
-      document.getElementById('ph-mode-edit')!.classList.toggle('ph-pill--stale', editedAudioStale);
+      document
+        .getElementById('ph-mode-edit')!
+        .classList.toggle('ph-pill--stale', editedAudioStale);
     }
 
     function undo() {
@@ -1770,8 +2735,9 @@ import Admin from '../../../layouts/Admin.astro';
         editedFrames = entry.prev;
       } else {
         if (!editedFrames && spectrogramData)
-          editedFrames = spectrogramData.frames.map(fr => fr.slice());
-        if (editedFrames) for (const [f, fr] of entry.diffs) editedFrames[f] = fr;
+          editedFrames = spectrogramData.frames.map((fr) => fr.slice());
+        if (editedFrames)
+          for (const [f, fr] of entry.diffs) editedFrames[f] = fr;
       }
       editedAudioStale = true;
       scheduleRender();
@@ -1783,13 +2749,26 @@ import Admin from '../../../layouts/Admin.astro';
 
     // Drop zone
     const dropZone = document.getElementById('ph-drop-zone')!;
-    const fileInput = document.getElementById('ph-file-input') as HTMLInputElement;
-    document.getElementById('ph-upload-btn')!.addEventListener('click', e => { e.stopPropagation(); fileInput.click(); });
-    fileInput.addEventListener('change', () => { if (fileInput.files?.[0]) loadAudioFile(fileInput.files[0]); });
-    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-    dropZone.addEventListener('drop', e => {
-      e.preventDefault(); dropZone.classList.remove('drag-over');
+    const fileInput = document.getElementById(
+      'ph-file-input',
+    ) as HTMLInputElement;
+    document.getElementById('ph-upload-btn')!.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fileInput.click();
+    });
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files?.[0]) loadAudioFile(fileInput.files[0]);
+    });
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', () =>
+      dropZone.classList.remove('drag-over'),
+    );
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
       const f = e.dataTransfer?.files[0];
       if (f && f.type.startsWith('audio/')) loadAudioFile(f);
     });
@@ -1804,9 +2783,11 @@ import Admin from '../../../layouts/Admin.astro';
     let libCurrentTab: LibTab = 'inputs';
     let libSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const modalOverlay  = document.getElementById('ph-modal-overlay')!;
-    const modalGrid     = document.getElementById('ph-modal-grid')!;
-    const modalSearch   = document.getElementById('ph-modal-search') as HTMLInputElement;
+    const modalOverlay = document.getElementById('ph-modal-overlay')!;
+    const modalGrid = document.getElementById('ph-modal-grid')!;
+    const modalSearch = document.getElementById(
+      'ph-modal-search',
+    ) as HTMLInputElement;
 
     function openLibrary() {
       modalOverlay.style.display = 'flex';
@@ -1814,11 +2795,13 @@ import Admin from '../../../layouts/Admin.astro';
       setLibTab('inputs');
     }
 
-    function closeLibrary() { modalOverlay.style.display = 'none'; }
+    function closeLibrary() {
+      modalOverlay.style.display = 'none';
+    }
 
     function setLibTab(tab: LibTab) {
       libCurrentTab = tab;
-      document.querySelectorAll<HTMLElement>('.ph-modal__tab').forEach(b => {
+      document.querySelectorAll<HTMLElement>('.ph-modal__tab').forEach((b) => {
         b.classList.toggle('ph-modal__tab--active', b.dataset.tab === tab);
       });
       loadLibItems('');
@@ -1827,32 +2810,50 @@ import Admin from '../../../layouts/Admin.astro';
     async function loadLibItems(q: string) {
       modalGrid.innerHTML = '<div class="ph-modal__loading">Loading…</div>';
       try {
-        let items: { id: string; filename?: string; original_filename?: string; media_type?: string }[] = [];
+        let items: {
+          id: string;
+          filename?: string;
+          original_filename?: string;
+          media_type?: string;
+        }[] = [];
 
         if (libCurrentTab === 'workspace') {
           // Fetch active workspace then its items
-          const wsRes = await fetch('/api/workspaces/active', { credentials: 'include' });
+          const wsRes = await fetch('/api/workspaces/active', {
+            credentials: 'include',
+          });
           if (wsRes.ok) {
             const ws = await wsRes.json();
             const wsId = ws.id || ws.workspace_id;
             if (wsId) {
-              const itemsRes = await fetch(`/api/workspaces/${wsId}/items?per_page=100`, { credentials: 'include' });
+              const itemsRes = await fetch(
+                `/api/workspaces/${wsId}/items?per_page=100`,
+                { credentials: 'include' },
+              );
               if (itemsRes.ok) {
                 const data = await itemsRes.json();
-                items = (data.items || []).filter((i: any) => i.media_type === 'audio');
+                items = (data.items || []).filter(
+                  (i: any) => i.media_type === 'audio',
+                );
               }
             }
           }
         } else {
           const res = await fetch('/api/search', {
-            method: 'POST', credentials: 'include',
+            method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               query: q,
               media_types: ['audio'],
               sort: 'created_at:desc',
-              page: 1, per_page: 48,
-              filters: { output_index: [libCurrentTab === 'inputs' ? '__inputs__' : '__outputs__'] },
+              page: 1,
+              per_page: 48,
+              filters: {
+                output_index: [
+                  libCurrentTab === 'inputs' ? '__inputs__' : '__outputs__',
+                ],
+              },
             }),
           });
           if (res.ok) {
@@ -1863,13 +2864,17 @@ import Admin from '../../../layouts/Admin.astro';
 
         renderLibGrid(items);
       } catch (err) {
-        modalGrid.innerHTML = '<div class="ph-modal__loading">Failed to load</div>';
+        modalGrid.innerHTML =
+          '<div class="ph-modal__loading">Failed to load</div>';
       }
     }
 
-    function renderLibGrid(items: { id: string; filename?: string; original_filename?: string }[]) {
+    function renderLibGrid(
+      items: { id: string; filename?: string; original_filename?: string }[],
+    ) {
       if (items.length === 0) {
-        modalGrid.innerHTML = '<div class="ph-modal__loading">No audio files found</div>';
+        modalGrid.innerHTML =
+          '<div class="ph-modal__loading">No audio files found</div>';
         return;
       }
       modalGrid.innerHTML = '';
@@ -1886,7 +2891,9 @@ import Admin from '../../../layouts/Admin.astro';
           busyEl.style.display = 'flex';
           busyLabel.textContent = 'Fetching…';
           try {
-            const res = await fetch(`/api/media/${item.id}/file`, { credentials: 'include' });
+            const res = await fetch(`/api/media/${item.id}/file`, {
+              credentials: 'include',
+            });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const arrayBuf = await res.arrayBuffer();
             await loadAudioData(arrayBuf, name);
@@ -1899,43 +2906,66 @@ import Admin from '../../../layouts/Admin.astro';
       }
     }
 
-    document.getElementById('ph-lib-btn')!.addEventListener('click', openLibrary);
-    document.getElementById('ph-modal-close')!.addEventListener('click', closeLibrary);
-    modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) closeLibrary(); });
+    document
+      .getElementById('ph-lib-btn')!
+      .addEventListener('click', openLibrary);
+    document
+      .getElementById('ph-modal-close')!
+      .addEventListener('click', closeLibrary);
+    modalOverlay.addEventListener('click', (e) => {
+      if (e.target === modalOverlay) closeLibrary();
+    });
 
-    document.getElementById('ph-modal-tabs')!.addEventListener('click', e => {
-      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.ph-modal__tab');
+    document.getElementById('ph-modal-tabs')!.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(
+        '.ph-modal__tab',
+      );
       if (btn?.dataset.tab) setLibTab(btn.dataset.tab as LibTab);
     });
 
     modalSearch.addEventListener('input', () => {
       if (libSearchTimer) clearTimeout(libSearchTimer);
-      libSearchTimer = setTimeout(() => loadLibItems(modalSearch.value.trim()), 300);
+      libSearchTimer = setTimeout(
+        () => loadLibItems(modalSearch.value.trim()),
+        300,
+      );
     });
 
     // Mode buttons
-    document.getElementById('ph-mode-group')!.addEventListener('click', e => {
-      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.ph-pill');
+    document.getElementById('ph-mode-group')!.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(
+        '.ph-pill',
+      );
       if (!btn) return;
-      document.querySelectorAll('#ph-mode-group .ph-pill').forEach(b => b.classList.remove('ph-pill--on'));
+      document
+        .querySelectorAll('#ph-mode-group .ph-pill')
+        .forEach((b) => b.classList.remove('ph-pill--on'));
       btn.classList.add('ph-pill--on');
       currentMode = btn.dataset.val!;
-      document.querySelectorAll<HTMLElement>('.ph-mode-params').forEach(el => {
-        el.style.display = el.dataset.phMode === currentMode ? '' : 'none';
-      });
+      document
+        .querySelectorAll<HTMLElement>('.ph-mode-params')
+        .forEach((el) => {
+          el.style.display = el.dataset.phMode === currentMode ? '' : 'none';
+        });
       scheduleRender();
     });
 
     // Palette buttons
-    document.getElementById('ph-palette-group')!.addEventListener('click', e => {
-      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.ph-pill');
-      if (!btn) return;
-      document.querySelectorAll('#ph-palette-group .ph-pill').forEach(b => b.classList.remove('ph-pill--on'));
-      btn.classList.add('ph-pill--on');
-      currentPalette = btn.dataset.val!;
-      paletteLUT = buildPaletteLUT(currentPalette);
-      scheduleRender();
-    });
+    document
+      .getElementById('ph-palette-group')!
+      .addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(
+          '.ph-pill',
+        );
+        if (!btn) return;
+        document
+          .querySelectorAll('#ph-palette-group .ph-pill')
+          .forEach((b) => b.classList.remove('ph-pill--on'));
+        btn.classList.add('ph-pill--on');
+        currentPalette = btn.dataset.val!;
+        paletteLUT = buildPaletteLUT(currentPalette);
+        scheduleRender();
+      });
 
     // FFT size — recompute spectrogram
     document.getElementById('ph-fft')!.addEventListener('change', () => {
@@ -1944,89 +2974,130 @@ import Admin from '../../../layouts/Admin.astro';
     });
 
     // Dual range trim — clamp so handles don't cross
-    const startEl = document.getElementById('ph-time-start') as HTMLInputElement;
-    const endEl   = document.getElementById('ph-time-end')   as HTMLInputElement;
-    const tsVal   = document.getElementById('ph-ts-val')!;
-    const teVal   = document.getElementById('ph-te-val')!;
+    const startEl = document.getElementById(
+      'ph-time-start',
+    ) as HTMLInputElement;
+    const endEl = document.getElementById('ph-time-end') as HTMLInputElement;
+    const tsVal = document.getElementById('ph-ts-val')!;
+    const teVal = document.getElementById('ph-te-val')!;
     startEl.addEventListener('input', () => {
-      if (parseInt(startEl.value) > parseInt(endEl.value)) startEl.value = endEl.value;
-      tsVal.textContent = startEl.value; scheduleRender();
+      if (parseInt(startEl.value) > parseInt(endEl.value))
+        startEl.value = endEl.value;
+      tsVal.textContent = startEl.value;
+      scheduleRender();
     });
     endEl.addEventListener('input', () => {
-      if (parseInt(endEl.value) < parseInt(startEl.value)) endEl.value = startEl.value;
-      teVal.textContent = endEl.value; scheduleRender();
+      if (parseInt(endEl.value) < parseInt(startEl.value))
+        endEl.value = startEl.value;
+      teVal.textContent = endEl.value;
+      scheduleRender();
     });
 
     // Other sliders
     const sliderDefs: [string, string, (v: string) => string][] = [
-      ['ph-freq-max',   'ph-fmax-val', v => `${Math.round(parseInt(v) / 100) / 10} kHz`],
-      ['ph-rotation',   'ph-rot-val',  v => `${v}°`],
-      ['ph-warp',       'ph-warp-val', v => v],
-      ['ph-noise',      'ph-noise-val',v => parseFloat(v).toFixed(2)],
-      ['ph-split',      'ph-split-val',v => parseFloat(v).toFixed(2)],
+      [
+        'ph-freq-max',
+        'ph-fmax-val',
+        (v) => `${Math.round(parseInt(v) / 100) / 10} kHz`,
+      ],
+      ['ph-rotation', 'ph-rot-val', (v) => `${v}°`],
+      ['ph-warp', 'ph-warp-val', (v) => v],
+      ['ph-noise', 'ph-noise-val', (v) => parseFloat(v).toFixed(2)],
+      ['ph-split', 'ph-split-val', (v) => parseFloat(v).toFixed(2)],
     ];
     for (const [id, valId, fmt] of sliderDefs) {
       const el = document.getElementById(id) as HTMLInputElement;
       const valEl = document.getElementById(valId)!;
-      el.addEventListener('input', () => { valEl.textContent = fmt(el.value); scheduleRender(); });
+      el.addEventListener('input', () => {
+        valEl.textContent = fmt(el.value);
+        scheduleRender();
+      });
     }
 
     // Play / stop
-    document.getElementById('ph-play-btn')!.addEventListener('click', async () => {
-      const btn = document.getElementById('ph-play-btn') as HTMLButtonElement;
-      if (playbackSource) {
-        playbackSource.stop(); playbackSource = null;
-        btn.textContent = '▶'; stopProgress(); return;
-      }
-      if (!currentAudioBuffer || !spectrogramData) return;
-
-      // Synthesize edited audio if needed
-      let bufToPlay = currentAudioBuffer;
-      if (playMode === 'edited' && editedFrames) {
-        if (editedAudioStale || !editedAudioBuffer) {
-          btn.textContent = '…'; btn.disabled = true;
-          try {
-            const { sampleRate, phases, maxMag } = spectrogramData;
-            const fftSize = parseInt((document.getElementById('ph-fft') as HTMLSelectElement).value);
-            const hopSamples = fftSize >> 2;
-            const signal = await istftOLA(editedFrames, phases, maxMag, fftSize, hopSamples,
-              p => { btn.textContent = `${Math.round(p * 100)}%`; });
-            const ab = new AudioBuffer({ numberOfChannels: 1, length: signal.length, sampleRate });
-            ab.copyToChannel(signal, 0);
-            editedAudioBuffer = ab;
-            editedAudioStale = false;
-            updatePlayModeUI();
-          } catch {
-            btn.textContent = '▶'; btn.disabled = false; return;
-          }
-          btn.disabled = false;
+    document
+      .getElementById('ph-play-btn')!
+      .addEventListener('click', async () => {
+        const btn = document.getElementById('ph-play-btn') as HTMLButtonElement;
+        if (playbackSource) {
+          playbackSource.stop();
+          playbackSource = null;
+          btn.textContent = '▶';
+          stopProgress();
+          return;
         }
-        bufToPlay = editedAudioBuffer!;
-      }
+        if (!currentAudioBuffer || !spectrogramData) return;
 
-      playbackCtx = new AudioContext();
-      playbackSource = playbackCtx.createBufferSource();
-      playbackSource.buffer = bufToPlay;
-      playbackSource.connect(playbackCtx.destination);
-      const [t0, t1] = getTimeRange();
-      const dur = bufToPlay.duration;
-      playbackStartOffset = t0 * dur;
-      playbackEndOffset   = t1 * dur;
-      playbackStartTime   = playbackCtx.currentTime;
-      if (loopEnabled) {
-        playbackSource.loop      = true;
-        playbackSource.loopStart = playbackStartOffset;
-        playbackSource.loopEnd   = playbackEndOffset;
-        playbackSource.start(0, playbackStartOffset);
-      } else {
-        playbackSource.start(0, playbackStartOffset, playbackEndOffset - playbackStartOffset);
-      }
-      btn.textContent = '⏹';
-      progressRaf = requestAnimationFrame(tickProgress);
-      playbackSource.onended = () => {
-        playbackSource = null; btn.textContent = '▶'; stopProgress();
-      };
-    });
+        // Synthesize edited audio if needed
+        let bufToPlay = currentAudioBuffer;
+        if (playMode === 'edited' && editedFrames) {
+          if (editedAudioStale || !editedAudioBuffer) {
+            btn.textContent = '…';
+            btn.disabled = true;
+            try {
+              const { sampleRate, phases, maxMag } = spectrogramData;
+              const fftSize = parseInt(
+                (document.getElementById('ph-fft') as HTMLSelectElement).value,
+              );
+              const hopSamples = fftSize >> 2;
+              const signal = await istftOLA(
+                editedFrames,
+                phases,
+                maxMag,
+                fftSize,
+                hopSamples,
+                (p) => {
+                  btn.textContent = `${Math.round(p * 100)}%`;
+                },
+              );
+              const ab = new AudioBuffer({
+                numberOfChannels: 1,
+                length: signal.length,
+                sampleRate,
+              });
+              ab.copyToChannel(signal, 0);
+              editedAudioBuffer = ab;
+              editedAudioStale = false;
+              updatePlayModeUI();
+            } catch {
+              btn.textContent = '▶';
+              btn.disabled = false;
+              return;
+            }
+            btn.disabled = false;
+          }
+          bufToPlay = editedAudioBuffer!;
+        }
+
+        playbackCtx = new AudioContext();
+        playbackSource = playbackCtx.createBufferSource();
+        playbackSource.buffer = bufToPlay;
+        playbackSource.connect(playbackCtx.destination);
+        const [t0, t1] = getTimeRange();
+        const dur = bufToPlay.duration;
+        playbackStartOffset = t0 * dur;
+        playbackEndOffset = t1 * dur;
+        playbackStartTime = playbackCtx.currentTime;
+        if (loopEnabled) {
+          playbackSource.loop = true;
+          playbackSource.loopStart = playbackStartOffset;
+          playbackSource.loopEnd = playbackEndOffset;
+          playbackSource.start(0, playbackStartOffset);
+        } else {
+          playbackSource.start(
+            0,
+            playbackStartOffset,
+            playbackEndOffset - playbackStartOffset,
+          );
+        }
+        btn.textContent = '⏹';
+        progressRaf = requestAnimationFrame(tickProgress);
+        playbackSource.onended = () => {
+          playbackSource = null;
+          btn.textContent = '▶';
+          stopProgress();
+        };
+      });
 
     // Loop toggle
     document.getElementById('ph-loop-btn')!.addEventListener('click', () => {
@@ -2034,27 +3105,42 @@ import Admin from '../../../layouts/Admin.astro';
       const btn = document.getElementById('ph-loop-btn')!;
       btn.classList.toggle('ph-loop-btn--on', loopEnabled);
       if (playbackSource) {
-        playbackSource.loop      = loopEnabled;
+        playbackSource.loop = loopEnabled;
         playbackSource.loopStart = playbackStartOffset;
-        playbackSource.loopEnd   = playbackEndOffset;
+        playbackSource.loopEnd = playbackEndOffset;
       }
     });
 
     // Export dropdown
-    const exportBtn  = document.getElementById('ph-export-btn')!;
+    const exportBtn = document.getElementById('ph-export-btn')!;
     const exportMenu = document.getElementById('ph-export-menu')!;
-    exportBtn.addEventListener('click', e => {
+    exportBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      exportMenu.style.display = exportMenu.style.display === 'none' ? 'flex' : 'none';
+      exportMenu.style.display =
+        exportMenu.style.display === 'none' ? 'flex' : 'none';
     });
-    document.addEventListener('click', () => { exportMenu.style.display = 'none'; });
+    document.addEventListener('click', () => {
+      exportMenu.style.display = 'none';
+    });
 
     // Output actions
-    document.getElementById('ph-save-btn')!.addEventListener('click', saveImage);
-    document.getElementById('ph-record-btn')!.addEventListener('click', () => { exportMenu.style.display = 'none'; recordWebM(); });
-    document.getElementById('ph-frames-btn')!.addEventListener('click', () => { exportMenu.style.display = 'none'; saveFrames(); });
-    document.getElementById('ph-audio-stacks-btn')!.addEventListener('click', exportAudioToStacks);
-    document.getElementById('ph-audio-btn')!.addEventListener('click', exportAudio);
+    document
+      .getElementById('ph-save-btn')!
+      .addEventListener('click', saveImage);
+    document.getElementById('ph-record-btn')!.addEventListener('click', () => {
+      exportMenu.style.display = 'none';
+      recordWebM();
+    });
+    document.getElementById('ph-frames-btn')!.addEventListener('click', () => {
+      exportMenu.style.display = 'none';
+      saveFrames();
+    });
+    document
+      .getElementById('ph-audio-stacks-btn')!
+      .addEventListener('click', exportAudioToStacks);
+    document
+      .getElementById('ph-audio-btn')!
+      .addEventListener('click', exportAudio);
 
     // Play mode toggle (Orig / Edited)
     document.getElementById('ph-mode-orig')!.addEventListener('click', () => {
@@ -2069,47 +3155,63 @@ import Admin from '../../../layouts/Admin.astro';
     });
 
     // Mobile settings toggle
-    document.getElementById('ph-settings-toggle')!.addEventListener('click', () => {
-      const ctrl = document.querySelector('.ph-controls') as HTMLElement;
-      const btn  = document.getElementById('ph-settings-toggle') as HTMLButtonElement;
-      const open = ctrl.classList.toggle('ph-controls--open');
-      btn.textContent = open ? 'Settings ▴' : 'Settings ▾';
-    });
+    document
+      .getElementById('ph-settings-toggle')!
+      .addEventListener('click', () => {
+        const ctrl = document.querySelector('.ph-controls') as HTMLElement;
+        const btn = document.getElementById(
+          'ph-settings-toggle',
+        ) as HTMLButtonElement;
+        const open = ctrl.classList.toggle('ph-controls--open');
+        btn.textContent = open ? 'Settings ▴' : 'Settings ▾';
+      });
 
     // Undo button + keyboard shortcut
     document.getElementById('ph-undo-btn')!.addEventListener('click', undo);
-    document.addEventListener('keydown', e => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
     });
 
     // Paint mode toggle
-    document.getElementById('ph-paint-btn')!.addEventListener('click', () => setPaintMode(!paintMode));
+    document
+      .getElementById('ph-paint-btn')!
+      .addEventListener('click', () => setPaintMode(!paintMode));
 
     // Tool selection
-    document.getElementById('ph-tool-group')!.addEventListener('click', e => {
-      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.ph-pill[data-tool]');
+    document.getElementById('ph-tool-group')!.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(
+        '.ph-pill[data-tool]',
+      );
       if (btn?.dataset.tool) setTool(btn.dataset.tool as BrushTool);
     });
 
     // Brush size
-    document.getElementById('ph-brush-size')!.addEventListener('input', e => {
+    document.getElementById('ph-brush-size')!.addEventListener('input', (e) => {
       brushSize = parseInt((e.target as HTMLInputElement).value);
       document.getElementById('ph-brush-val')!.textContent = String(brushSize);
     });
 
     // Gain amount
-    document.getElementById('ph-gain-amount')!.addEventListener('input', e => {
-      gainAmount = parseInt((e.target as HTMLInputElement).value) / 100;
-      document.getElementById('ph-gain-val')!.textContent = `${gainAmount.toFixed(1)}×`;
-    });
+    document
+      .getElementById('ph-gain-amount')!
+      .addEventListener('input', (e) => {
+        gainAmount = parseInt((e.target as HTMLInputElement).value) / 100;
+        document.getElementById('ph-gain-val')!.textContent =
+          `${gainAmount.toFixed(1)}×`;
+      });
 
     // FX toggle
     const fxBtn = document.getElementById('ph-fx-btn')!;
     const fxBar = document.getElementById('ph-fx-bar')!;
     const fxStrengthRow = document.getElementById('ph-fx-strength-row')!;
-    const fxApplyBtn    = document.getElementById('ph-fx-apply')!;
-    const fxStrengthEl  = document.getElementById('ph-fx-strength') as HTMLInputElement;
-    const fxStrVal      = document.getElementById('ph-fx-str-val')!;
+    const fxApplyBtn = document.getElementById('ph-fx-apply')!;
+    const fxStrengthEl = document.getElementById(
+      'ph-fx-strength',
+    ) as HTMLInputElement;
+    const fxStrVal = document.getElementById('ph-fx-str-val')!;
 
     fxBtn.addEventListener('click', () => {
       const open = fxBar.style.display === 'none';
@@ -2124,20 +3226,27 @@ import Admin from '../../../layouts/Admin.astro';
     });
 
     function updateFxPreview() {
-      fxPreviewFrames = shaderEffect === 'none' ? null : computeFxPreview(shaderEffect, parseInt(fxStrengthEl.value));
+      fxPreviewFrames =
+        shaderEffect === 'none'
+          ? null
+          : computeFxPreview(shaderEffect, parseInt(fxStrengthEl.value));
       scheduleRender();
     }
 
     // FX pill selection
-    document.getElementById('ph-fx-group')!.addEventListener('click', e => {
-      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.ph-pill[data-fx]');
+    document.getElementById('ph-fx-group')!.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(
+        '.ph-pill[data-fx]',
+      );
       if (!btn) return;
-      document.querySelectorAll('#ph-fx-group .ph-pill').forEach(b => b.classList.remove('ph-pill--on'));
+      document
+        .querySelectorAll('#ph-fx-group .ph-pill')
+        .forEach((b) => b.classList.remove('ph-pill--on'));
       btn.classList.add('ph-pill--on');
       shaderEffect = btn.dataset.fx!;
-      const hasStrength = !['none','reverse'].includes(shaderEffect);
+      const hasStrength = !['none', 'reverse'].includes(shaderEffect);
       fxStrengthRow.style.display = hasStrength ? 'flex' : 'none';
-      fxApplyBtn.style.display    = shaderEffect !== 'none' ? '' : 'none';
+      fxApplyBtn.style.display = shaderEffect !== 'none' ? '' : 'none';
       updateFxPreview();
     });
 
@@ -2157,34 +3266,45 @@ import Admin from '../../../layouts/Admin.astro';
       editedFrames = fxPreviewFrames;
       fxPreviewFrames = null;
       shaderEffect = 'none';
-      document.querySelectorAll('#ph-fx-group .ph-pill').forEach(b => {
-        b.classList.toggle('ph-pill--on', (b as HTMLButtonElement).dataset.fx === 'none');
+      document.querySelectorAll('#ph-fx-group .ph-pill').forEach((b) => {
+        b.classList.toggle(
+          'ph-pill--on',
+          (b as HTMLButtonElement).dataset.fx === 'none',
+        );
       });
       fxStrengthRow.style.display = 'none';
-      fxApplyBtn.style.display    = 'none';
+      fxApplyBtn.style.display = 'none';
       scheduleRender();
       updatePlayModeUI();
-      (window as any).toast?.success('Effect applied — use Edit playback mode to preview');
+      (window as any).toast?.success(
+        'Effect applied — use Edit playback mode to preview',
+      );
     });
 
     // Reset edits
-    document.getElementById('ph-paint-reset-btn')!.addEventListener('click', () => {
-      undoStack.push({ kind: 'swap', prev: editedFrames });
-      if (undoStack.length > MAX_UNDO) undoStack.shift();
-      editedFrames = null;
-      editedAudioStale = true;
-      updateUndoBtn();
-      updatePlayModeUI();
-      scheduleRender();
-    });
+    document
+      .getElementById('ph-paint-reset-btn')!
+      .addEventListener('click', () => {
+        undoStack.push({ kind: 'swap', prev: editedFrames });
+        if (undoStack.length > MAX_UNDO) undoStack.shift();
+        editedFrames = null;
+        editedAudioStale = true;
+        updateUndoBtn();
+        updatePlayModeUI();
+        scheduleRender();
+      });
 
     // Canvas mouse paint
     function commitStroke() {
-      isPainting = false; smearPrevCx = null; smearPrevCy = null;
+      isPainting = false;
+      smearPrevCx = null;
+      smearPrevCy = null;
       if (strokeDiffs && strokeDiffs.size > 0) {
-        undoStack.push(strokeWasNull
-          ? { kind: 'swap', prev: null }
-          : { kind: 'patch', diffs: strokeDiffs });
+        undoStack.push(
+          strokeWasNull
+            ? { kind: 'swap', prev: null }
+            : { kind: 'patch', diffs: strokeDiffs },
+        );
         if (undoStack.length > MAX_UNDO) undoStack.shift();
         editedAudioStale = true;
         updateUndoBtn();
@@ -2195,8 +3315,11 @@ import Admin from '../../../layouts/Admin.astro';
 
     canvas.addEventListener('mousedown', (e) => {
       if (!paintMode) return;
-      isPainting = true; smearPrevCx = null; smearPrevCy = null;
-      strokeDiffs = new Map(); strokeWasNull = editedFrames === null;
+      isPainting = true;
+      smearPrevCx = null;
+      smearPrevCy = null;
+      strokeDiffs = new Map();
+      strokeWasNull = editedFrames === null;
       applyBrush(e.clientX, e.clientY);
     });
     canvas.addEventListener('mousemove', (e) => {
@@ -2207,18 +3330,29 @@ import Admin from '../../../layouts/Admin.astro';
     canvas.addEventListener('mouseleave', commitStroke);
 
     // Canvas touch paint
-    canvas.addEventListener('touchstart', (e) => {
-      if (!paintMode) return;
-      e.preventDefault();
-      isPainting = true; smearPrevCx = null; smearPrevCy = null;
-      strokeDiffs = new Map(); strokeWasNull = editedFrames === null;
-      applyBrush(e.touches[0].clientX, e.touches[0].clientY);
-    }, { passive: false });
-    canvas.addEventListener('touchmove', (e) => {
-      if (!paintMode || !isPainting) return;
-      e.preventDefault();
-      applyBrush(e.touches[0].clientX, e.touches[0].clientY);
-    }, { passive: false });
+    canvas.addEventListener(
+      'touchstart',
+      (e) => {
+        if (!paintMode) return;
+        e.preventDefault();
+        isPainting = true;
+        smearPrevCx = null;
+        smearPrevCy = null;
+        strokeDiffs = new Map();
+        strokeWasNull = editedFrames === null;
+        applyBrush(e.touches[0].clientX, e.touches[0].clientY);
+      },
+      { passive: false },
+    );
+    canvas.addEventListener(
+      'touchmove',
+      (e) => {
+        if (!paintMode || !isPainting) return;
+        e.preventDefault();
+        applyBrush(e.touches[0].clientX, e.touches[0].clientY);
+      },
+      { passive: false },
+    );
     canvas.addEventListener('touchend', commitStroke);
 
     // ─── Stamp mode ───────────────────────────────────────────────────────────
@@ -2232,21 +3366,36 @@ import Admin from '../../../layouts/Admin.astro';
 
     function stampImageToFrames() {
       if (!spectrogramData || !stampImageData) return;
-      if (!editedFrames) editedFrames = spectrogramData.frames.map(fr => fr.slice());
+      if (!editedFrames)
+        editedFrames = spectrogramData.frames.map((fr) => fr.slice());
 
       const { numBins, sampleRate, numFrames } = spectrogramData;
       const nyquist = sampleRate / 2;
-      const freqMax = parseFloat((document.getElementById('ph-freq-max') as HTMLInputElement).value);
+      const freqMax = parseFloat(
+        (document.getElementById('ph-freq-max') as HTMLInputElement).value,
+      );
       const melMin = hzToMel(20);
       const melMax = hzToMel(Math.min(freqMax, nyquist));
 
-      const stampStart = parseInt((document.getElementById('ph-stamp-start') as HTMLInputElement).value) / 100;
-      const stampEnd   = parseInt((document.getElementById('ph-stamp-end')   as HTMLInputElement).value) / 100;
-      const opacity    = parseInt((document.getElementById('ph-stamp-opacity') as HTMLInputElement).value) / 100;
-      const blend      = (document.getElementById('ph-stamp-blend') as HTMLSelectElement).value;
+      const stampStart =
+        parseInt(
+          (document.getElementById('ph-stamp-start') as HTMLInputElement).value,
+        ) / 100;
+      const stampEnd =
+        parseInt(
+          (document.getElementById('ph-stamp-end') as HTMLInputElement).value,
+        ) / 100;
+      const opacity =
+        parseInt(
+          (document.getElementById('ph-stamp-opacity') as HTMLInputElement)
+            .value,
+        ) / 100;
+      const blend = (
+        document.getElementById('ph-stamp-blend') as HTMLSelectElement
+      ).value;
 
       const fStart = Math.floor(stampStart * numFrames);
-      const fEnd   = Math.ceil(stampEnd * numFrames);
+      const fEnd = Math.ceil(stampEnd * numFrames);
       const numStampFrames = Math.max(1, fEnd - fStart);
 
       // Snapshot affected frames for undo
@@ -2266,27 +3415,49 @@ import Admin from '../../../layouts/Admin.astro';
       for (let b = 0; b < numBins; b++) {
         const freq = (b / numBins) * nyquist;
         const mel = hzToMel(Math.max(20, freq));
-        const melFrac = Math.max(0, Math.min(1, (mel - melMin) / (melMax - melMin)));
+        const melFrac = Math.max(
+          0,
+          Math.min(1, (mel - melMin) / (melMax - melMin)),
+        );
         // High mel → top of image row 0; low mel → bottom row imgH-1
-        const imgRow = Math.min(imgH - 1, Math.round((1 - melFrac) * (imgH - 1)));
+        const imgRow = Math.min(
+          imgH - 1,
+          Math.round((1 - melFrac) * (imgH - 1)),
+        );
 
         for (let df = 0; df < numStampFrames; df++) {
           const f = fStart + df;
           if (f < 0 || f >= editedFrames.length) continue;
-          const imgCol = Math.min(imgW - 1, Math.round(df / Math.max(1, numStampFrames - 1) * (imgW - 1)));
+          const imgCol = Math.min(
+            imgW - 1,
+            Math.round((df / Math.max(1, numStampFrames - 1)) * (imgW - 1)),
+          );
 
           const pIdx = (imgRow * imgW + imgCol) * 4;
-          const r = imgPx[pIdx], g = imgPx[pIdx + 1], bC = imgPx[pIdx + 2], a = imgPx[pIdx + 3];
-          const stampVal = (0.299 * r + 0.587 * g + 0.114 * bC) / 255 * (a / 255);
+          const r = imgPx[pIdx],
+            g = imgPx[pIdx + 1],
+            bC = imgPx[pIdx + 2],
+            a = imgPx[pIdx + 3];
+          const stampVal =
+            ((0.299 * r + 0.587 * g + 0.114 * bC) / 255) * (a / 255);
 
           const existing = editedFrames[f][b];
           let result: number;
           switch (blend) {
-            case 'add':      result = Math.min(1, existing + stampVal * opacity); break;
-            case 'screen':   result = 1 - (1 - existing) * (1 - stampVal * opacity); break;
-            case 'multiply': result = existing * (stampVal * opacity + (1 - opacity)); break;
-            case 'replace':  result = existing * (1 - opacity) + stampVal * opacity; break;
-            default:         result = Math.min(1, existing + stampVal * opacity);
+            case 'add':
+              result = Math.min(1, existing + stampVal * opacity);
+              break;
+            case 'screen':
+              result = 1 - (1 - existing) * (1 - stampVal * opacity);
+              break;
+            case 'multiply':
+              result = existing * (stampVal * opacity + (1 - opacity));
+              break;
+            case 'replace':
+              result = existing * (1 - opacity) + stampVal * opacity;
+              break;
+            default:
+              result = Math.min(1, existing + stampVal * opacity);
           }
           editedFrames[f][b] = Math.max(0, Math.min(1, result));
         }
@@ -2299,58 +3470,85 @@ import Admin from '../../../layouts/Admin.astro';
       const img = new Image();
       img.onload = () => {
         const oc = document.createElement('canvas');
-        oc.width = img.naturalWidth; oc.height = img.naturalHeight;
+        oc.width = img.naturalWidth;
+        oc.height = img.naturalHeight;
         const octx = oc.getContext('2d')!;
         octx.drawImage(img, 0, 0);
         stampImageData = octx.getImageData(0, 0, oc.width, oc.height);
         URL.revokeObjectURL(url);
-        const thumbEl = document.getElementById('ph-stamp-thumb') as HTMLImageElement;
+        const thumbEl = document.getElementById(
+          'ph-stamp-thumb',
+        ) as HTMLImageElement;
         const blobUrl = URL.createObjectURL(file);
         thumbEl.src = blobUrl;
         thumbEl.onload = () => URL.revokeObjectURL(blobUrl);
         document.getElementById('ph-stamp-img-name')!.textContent = file.name;
         document.getElementById('ph-stamp-preview-row')!.style.display = 'flex';
-        (document.getElementById('ph-stamp-apply') as HTMLButtonElement).disabled = false;
+        (
+          document.getElementById('ph-stamp-apply') as HTMLButtonElement
+        ).disabled = false;
       };
       img.src = url;
     }
 
-    function loadStampImageFromBuffer(buf: ArrayBuffer, name: string, mimeType = 'image/jpeg') {
+    function loadStampImageFromBuffer(
+      buf: ArrayBuffer,
+      name: string,
+      mimeType = 'image/jpeg',
+    ) {
       const file = new File([buf], name, { type: mimeType });
       loadStampImageData(file);
     }
 
     // Stamp button toggle
-    document.getElementById('ph-stamp-btn')!.addEventListener('click', () => setStampMode(!stampMode));
+    document
+      .getElementById('ph-stamp-btn')!
+      .addEventListener('click', () => setStampMode(!stampMode));
 
     // Stamp upload
-    const stampFileInput = document.getElementById('ph-stamp-file-input') as HTMLInputElement;
-    document.getElementById('ph-stamp-upload-btn')!.addEventListener('click', () => stampFileInput.click());
+    const stampFileInput = document.getElementById(
+      'ph-stamp-file-input',
+    ) as HTMLInputElement;
+    document
+      .getElementById('ph-stamp-upload-btn')!
+      .addEventListener('click', () => stampFileInput.click());
     stampFileInput.addEventListener('change', () => {
-      if (stampFileInput.files?.[0]) loadStampImageData(stampFileInput.files[0]);
+      if (stampFileInput.files?.[0])
+        loadStampImageData(stampFileInput.files[0]);
     });
 
     // Stamp time range clamp
-    const stampStartEl = document.getElementById('ph-stamp-start') as HTMLInputElement;
-    const stampEndEl   = document.getElementById('ph-stamp-end')   as HTMLInputElement;
-    const stampTsVal   = document.getElementById('ph-stamp-ts-val')!;
-    const stampTeVal   = document.getElementById('ph-stamp-te-val')!;
+    const stampStartEl = document.getElementById(
+      'ph-stamp-start',
+    ) as HTMLInputElement;
+    const stampEndEl = document.getElementById(
+      'ph-stamp-end',
+    ) as HTMLInputElement;
+    const stampTsVal = document.getElementById('ph-stamp-ts-val')!;
+    const stampTeVal = document.getElementById('ph-stamp-te-val')!;
     stampStartEl.addEventListener('input', () => {
-      if (parseInt(stampStartEl.value) > parseInt(stampEndEl.value)) stampStartEl.value = stampEndEl.value;
+      if (parseInt(stampStartEl.value) > parseInt(stampEndEl.value))
+        stampStartEl.value = stampEndEl.value;
       stampTsVal.textContent = stampStartEl.value;
     });
     stampEndEl.addEventListener('input', () => {
-      if (parseInt(stampEndEl.value) < parseInt(stampStartEl.value)) stampEndEl.value = stampStartEl.value;
+      if (parseInt(stampEndEl.value) < parseInt(stampStartEl.value))
+        stampEndEl.value = stampStartEl.value;
       stampTeVal.textContent = stampEndEl.value;
     });
 
     // Stamp opacity display
-    document.getElementById('ph-stamp-opacity')!.addEventListener('input', e => {
-      document.getElementById('ph-stamp-op-val')!.textContent = `${(e.target as HTMLInputElement).value}%`;
-    });
+    document
+      .getElementById('ph-stamp-opacity')!
+      .addEventListener('input', (e) => {
+        document.getElementById('ph-stamp-op-val')!.textContent =
+          `${(e.target as HTMLInputElement).value}%`;
+      });
 
     // Apply stamp
-    document.getElementById('ph-stamp-apply')!.addEventListener('click', stampImageToFrames);
+    document
+      .getElementById('ph-stamp-apply')!
+      .addEventListener('click', stampImageToFrames);
 
     // ─── Image library modal ──────────────────────────────────────────────────
     type ImgLibTab = 'inputs' | 'outputs';
@@ -2358,21 +3556,27 @@ import Admin from '../../../layouts/Admin.astro';
     let imgLibSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
     const imgModalOverlay = document.getElementById('ph-img-modal-overlay')!;
-    const imgModalGrid    = document.getElementById('ph-img-modal-grid')!;
-    const imgModalSearch  = document.getElementById('ph-img-modal-search') as HTMLInputElement;
+    const imgModalGrid = document.getElementById('ph-img-modal-grid')!;
+    const imgModalSearch = document.getElementById(
+      'ph-img-modal-search',
+    ) as HTMLInputElement;
 
     function openImgLibrary() {
       imgModalOverlay.style.display = 'flex';
       imgModalSearch.value = '';
       setImgLibTab('inputs');
     }
-    function closeImgLibrary() { imgModalOverlay.style.display = 'none'; }
+    function closeImgLibrary() {
+      imgModalOverlay.style.display = 'none';
+    }
 
     function setImgLibTab(tab: ImgLibTab) {
       imgLibTab = tab;
-      document.querySelectorAll<HTMLElement>('#ph-img-modal-tabs .ph-modal__tab').forEach(b => {
-        b.classList.toggle('ph-modal__tab--active', b.dataset.tab === tab);
-      });
+      document
+        .querySelectorAll<HTMLElement>('#ph-img-modal-tabs .ph-modal__tab')
+        .forEach((b) => {
+          b.classList.toggle('ph-modal__tab--active', b.dataset.tab === tab);
+        });
       loadImgLibItems('');
     }
 
@@ -2380,21 +3584,32 @@ import Admin from '../../../layouts/Admin.astro';
       imgModalGrid.innerHTML = '<div class="ph-modal__loading">Loading…</div>';
       try {
         const res = await fetch('/api/search', {
-          method: 'POST', credentials: 'include',
+          method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             query: q,
             media_types: ['image'],
             sort: 'created_at:desc',
-            page: 1, per_page: 48,
-            filters: { output_index: [imgLibTab === 'inputs' ? '__inputs__' : '__outputs__'] },
+            page: 1,
+            per_page: 48,
+            filters: {
+              output_index: [
+                imgLibTab === 'inputs' ? '__inputs__' : '__outputs__',
+              ],
+            },
           }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        const items: { id: string; filename?: string; original_filename?: string }[] = data.results ?? data.hits ?? [];
+        const items: {
+          id: string;
+          filename?: string;
+          original_filename?: string;
+        }[] = data.results ?? data.hits ?? [];
         if (items.length === 0) {
-          imgModalGrid.innerHTML = '<div class="ph-modal__loading">No images found</div>';
+          imgModalGrid.innerHTML =
+            '<div class="ph-modal__loading">No images found</div>';
           return;
         }
         imgModalGrid.innerHTML = '';
@@ -2407,7 +3622,9 @@ import Admin from '../../../layouts/Admin.astro';
           card.addEventListener('click', async () => {
             closeImgLibrary();
             try {
-              const r = await fetch(`/api/media/${item.id}/file`, { credentials: 'include' });
+              const r = await fetch(`/api/media/${item.id}/file`, {
+                credentials: 'include',
+              });
               if (!r.ok) throw new Error(`HTTP ${r.status}`);
               const buf = await r.arrayBuffer();
               loadStampImageFromBuffer(buf, name);
@@ -2418,20 +3635,34 @@ import Admin from '../../../layouts/Admin.astro';
           imgModalGrid.appendChild(card);
         }
       } catch {
-        imgModalGrid.innerHTML = '<div class="ph-modal__loading">Failed to load</div>';
+        imgModalGrid.innerHTML =
+          '<div class="ph-modal__loading">Failed to load</div>';
       }
     }
 
-    document.getElementById('ph-stamp-lib-btn')!.addEventListener('click', openImgLibrary);
-    document.getElementById('ph-img-modal-close')!.addEventListener('click', closeImgLibrary);
-    imgModalOverlay.addEventListener('click', e => { if (e.target === imgModalOverlay) closeImgLibrary(); });
-    document.getElementById('ph-img-modal-tabs')!.addEventListener('click', e => {
-      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.ph-modal__tab');
-      if (btn?.dataset.tab) setImgLibTab(btn.dataset.tab as ImgLibTab);
+    document
+      .getElementById('ph-stamp-lib-btn')!
+      .addEventListener('click', openImgLibrary);
+    document
+      .getElementById('ph-img-modal-close')!
+      .addEventListener('click', closeImgLibrary);
+    imgModalOverlay.addEventListener('click', (e) => {
+      if (e.target === imgModalOverlay) closeImgLibrary();
     });
+    document
+      .getElementById('ph-img-modal-tabs')!
+      .addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(
+          '.ph-modal__tab',
+        );
+        if (btn?.dataset.tab) setImgLibTab(btn.dataset.tab as ImgLibTab);
+      });
     imgModalSearch.addEventListener('input', () => {
       if (imgLibSearchTimer) clearTimeout(imgLibSearchTimer);
-      imgLibSearchTimer = setTimeout(() => loadImgLibItems(imgModalSearch.value.trim()), 300);
+      imgLibSearchTimer = setTimeout(
+        () => loadImgLibItems(imgModalSearch.value.trim()),
+        300,
+      );
     });
   </script>
 </Admin>
