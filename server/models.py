@@ -585,6 +585,32 @@ class Thread(Base):
     creator = relationship("User")
 
 
+class ProjectLink(Base):
+    """Free-form URL pinned to a Latent or one of its slots.
+
+    Typical use: a Slack permalink to the message where the band discussed
+    a track, a Drive link, a SoundCloud preview. Anchored to either a
+    project (project_id set, slot_id null) or a slot (slot_id set; project_id
+    redundantly set for fast lookup by project).
+    """
+
+    __tablename__ = "project_links"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    project_id = Column(String, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    slot_id = Column(String, ForeignKey("project_slots.id", ondelete="CASCADE"), nullable=True, index=True)
+    url = Column(String, nullable=False)
+    label = Column(String, nullable=True)              # optional display name
+    kind = Column(String, nullable=False, default="link")   # auto-detected: slack, drive, soundcloud, youtube, …
+    position = Column(Integer, nullable=False, default=0)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+
+    project = relationship("Project")
+    slot = relationship("ProjectSlot")
+    creator = relationship("User")
+
+
 # --- GitHub repo integration ---
 
 

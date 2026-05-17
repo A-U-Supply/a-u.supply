@@ -9,6 +9,7 @@
   import Uploader from './Uploader.svelte';
   import Threads from './Threads.svelte';
   import PullFromIndex from './PullFromIndex.svelte';
+  import LatentLinks from './LatentLinks.svelte';
 
   type Props = {
     projectId: string;
@@ -426,6 +427,32 @@
     }
   }
 
+  async function deleteMediaItem(slot: Slot, item: Item) {
+    const name = item.media?.filename || 'this file';
+    if (
+      !confirm(
+        `Permanently delete "${name}" from Emulsion?\n\nThis removes it from every Latent and every slot it's attached to, and from the search index. Cannot be undone.`,
+      )
+    )
+      return;
+    try {
+      const res = await fetch(
+        `/api/media/${encodeURIComponent(item.media_item_id)}`,
+        { method: 'DELETE', credentials: 'include' },
+      );
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      itemsBySlot = {
+        ...itemsBySlot,
+        [slot.id]: (itemsBySlot[slot.id] || []).filter(
+          (i) => i.media_item_id !== item.media_item_id,
+        ),
+      };
+      await load(); // refresh counts
+    } catch (e: any) {
+      error = e?.message || 'Delete failed';
+    }
+  }
+
   async function togglePrimary(slot: Slot, item: Item) {
     try {
       const next = !item.is_primary;
@@ -490,6 +517,14 @@
 
   function thumbUrl(mediaId: string): string {
     return `/api/media/${encodeURIComponent(mediaId)}/thumbnail?size=sm`;
+  }
+
+  function fmtBytes(n: number | null | undefined): string {
+    if (n == null) return '';
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+    if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
   }
 
   function playInPlayer(mediaId: string, mediaType: string, title: string) {
@@ -735,42 +770,53 @@
         -->
         <div class="slot__panel">
           {#if (itemsBySlot[slot.id] || []).length > 0}
-            <ul class="grid">
+            <ul class="file-list">
               {#each itemsBySlot[slot.id] as it (it.id)}
                 <li
-                  class="tile"
-                  class:tile--primary={it.is_primary}
+                  class="file-row"
+                  class:file-row--primary={it.is_primary}
                   data-type={it.media?.media_type}
                 >
                   <button
-                    class="tile__star"
+                    class="file-row__star"
                     type="button"
                     title={it.is_primary
-                      ? 'Primary file (click to unstar)'
+                      ? 'Primary (click to unstar)'
                       : 'Mark as primary'}
                     onclick={() => togglePrimary(slot, it)}
                     aria-pressed={it.is_primary}
                     >{it.is_primary ? '★' : '☆'}</button
                   >
                   <a
-                    class="tile__thumb"
+                    class="file-row__thumb"
                     href={`/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
+                    title="Open in Stacks"
                   >
                     {#if it.media?.media_type === 'image'}
                       <img
                         src={thumbUrl(it.media_item_id)}
                         alt={it.media?.filename}
                       />
-                    {:else if it.media?.media_type === 'session'}
-                      <span class="icon">▣ session</span>
                     {:else}
-                      <span class="icon">{it.media?.media_type || 'file'}</span>
+                      <span class="icon"
+                        >{it.media?.media_type?.[0]?.toUpperCase() || '?'}</span
+                      >
                     {/if}
                   </a>
-                  <div class="tile__name" title={it.media?.filename}>
-                    {it.media?.filename || '?'}
-                  </div>
-                  <div class="tile__actions">
+                  <a
+                    class="file-row__name"
+                    href={`/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
+                    title={it.media?.filename}
+                  >
+                    {it.media?.filename || '(unknown)'}
+                  </a>
+                  <span class="file-row__type" title={it.media?.mime_type}
+                    >{it.media?.media_type || 'file'}</span
+                  >
+                  <span class="file-row__size"
+                    >{fmtBytes(it.media?.file_size_bytes)}</span
+                  >
+                  <div class="file-row__actions">
                     {#if it.media?.media_type === 'audio' || it.media?.media_type === 'video'}
                       <button
                         class="action-btn"
@@ -785,15 +831,28 @@
                       >
                     {/if}
                     <button
+                      class="action-btn"
+                      type="button"
+                      title="Remove from slot. File stays in Emulsion."
+                      onclick={() => detachItem(slot, it)}>×</button
+                    >
+                    <button
                       class="action-btn action-btn--danger"
                       type="button"
-                      onclick={() => detachItem(slot, it)}>Detach</button
+                      title="Permanently delete from Emulsion. Cannot be undone."
+                      onclick={() => deleteMediaItem(slot, it)}>🗑</button
                     >
                   </div>
                 </li>
               {/each}
             </ul>
           {/if}
+          <LatentLinks
+            {projectId}
+            slotId={slot.id}
+            title="Slot links"
+            compact={true}
+          />
           <div class="slot__add">
             <Uploader
               destination="project"
@@ -1003,6 +1062,108 @@
   .slot__add > :global(.uploader) {
     /* compact uploader sits naturally */
   }
+  /* Dense file list — replaces the old grid of square tiles. */
+  .file-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+  }
+  .file-row {
+    display: grid;
+    grid-template-columns: 24px 32px 1fr auto auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--color-border);
+    font-size: var(--text-sm);
+  }
+  .file-row:last-child {
+    border-bottom: 0;
+  }
+  .file-row:hover {
+    background: #fafafa;
+  }
+  .file-row--primary {
+    background: rgba(184, 134, 11, 0.06);
+  }
+  .file-row__star {
+    background: transparent;
+    border: 0;
+    color: var(--color-muted);
+    cursor: pointer;
+    font-size: 0.95rem;
+    line-height: 1;
+    padding: 0;
+  }
+  .file-row--primary .file-row__star {
+    color: var(--color-accent);
+  }
+  .file-row__thumb {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f4f4f4;
+    text-decoration: none;
+    color: var(--color-muted);
+    overflow: hidden;
+  }
+  .file-row__thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .file-row__thumb .icon {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 0.85rem;
+  }
+  .file-row__name {
+    color: var(--color-text);
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .file-row__name:hover {
+    color: var(--color-accent);
+  }
+  .file-row__type {
+    color: var(--color-muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+  }
+  .file-row__size {
+    color: var(--color-muted);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+  .file-row__actions {
+    display: flex;
+    gap: 2px;
+  }
+  .file-row__actions .action-btn {
+    padding: 2px 6px;
+    font-size: 0.75rem;
+  }
+  @media (max-width: 640px) {
+    .file-row {
+      grid-template-columns: 24px 32px 1fr auto;
+    }
+    .file-row__type,
+    .file-row__size {
+      display: none;
+    }
+  }
+
+  /* Old grid tile styles kept only for back-compat with any consumer; the
+     slot UI uses .file-list above. */
   .tile {
     position: relative;
   }
