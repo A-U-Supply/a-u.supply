@@ -34,11 +34,15 @@
 
   type Item = {
     file: File;
-    status: 'pending' | 'uploading' | 'done' | 'error';
+    status: 'pending' | 'uploading' | 'processing' | 'done' | 'error';
     message?: string;
     preview?: string;
     sessionTool?: string | null;
     isSession?: boolean;
+    progress?: number; // 0..1 during upload
+    bytesSent?: number;
+    bytesTotal?: number;
+    speedBps?: number; // smoothed bytes/sec
   };
 
   let items = $state<Item[]>([]);
@@ -145,6 +149,71 @@
     if (fileInput) fileInput.value = '';
   }
 
+  function uploadWithProgress(
+    fd: FormData,
+    onProgress: (sent: number, total: number, speedBps: number) => void,
+  ): Promise<any> {
+    // Use XHR so we can observe upload progress (fetch can't expose it).
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/media/upload');
+      xhr.withCredentials = true;
+      let lastTs = performance.now();
+      let lastSent = 0;
+      let speed = 0;
+      xhr.upload.onprogress = (ev) => {
+        const total = ev.lengthComputable ? ev.total : 0;
+        const sent = ev.loaded;
+        const now = performance.now();
+        const dt = (now - lastTs) / 1000;
+        if (dt > 0.25) {
+          const inst = (sent - lastSent) / dt; // bytes/sec
+          // EMA smoothing
+          speed = speed ? speed * 0.7 + inst * 0.3 : inst;
+          lastTs = now;
+          lastSent = sent;
+        }
+        onProgress(sent, total, speed);
+      };
+      xhr.upload.onload = () => {
+        // All bytes have hit the server; we're waiting on the response now.
+        onProgress(
+          xhr.upload && (xhr.upload as any).total
+            ? (xhr.upload as any).total
+            : 1,
+          (xhr.upload as any).total || 1,
+          speed,
+        );
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch {
+            resolve(null);
+          }
+        } else {
+          let detail = `Error ${xhr.status}`;
+          try {
+            const body = JSON.parse(xhr.responseText);
+            detail = body?.detail || detail;
+          } catch {}
+          reject(new Error(detail));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Network error'));
+      xhr.ontimeout = () => reject(new Error('Timed out'));
+      xhr.send(fd);
+    });
+  }
+
+  function fmtSpeed(bps: number): string {
+    if (!bps || bps < 1) return '';
+    if (bps < 1024) return `${bps.toFixed(0)} B/s`;
+    if (bps < 1024 * 1024) return `${(bps / 1024).toFixed(0)} KB/s`;
+    return `${(bps / (1024 * 1024)).toFixed(1)} MB/s`;
+  }
+
   async function uploadAll() {
     if (items.length === 0 || busy) return;
     busy = true;
@@ -175,37 +244,34 @@
       }
 
       try {
-        const res = await fetch('/api/media/upload', {
-          method: 'POST',
-          credentials: 'include',
-          body: fd,
-        });
-        if (res.ok) {
-          ok++;
-          it.status = 'done';
-          it.message = 'Uploaded';
-          try {
-            const body = await res.json();
-            onUploaded?.({
-              media_item_id: body?.id,
-              project_id: projectId || null,
-              slot_id: slotId || null,
-            });
-          } catch {}
-        } else {
-          fail++;
-          it.status = 'error';
-          try {
-            const err = await res.json();
-            it.message = err?.detail || `Error ${res.status}`;
-          } catch {
-            it.message = `Error ${res.status}`;
+        const body = await uploadWithProgress(fd, (sent, total, speed) => {
+          it.progress = total > 0 ? sent / total : 0;
+          it.bytesSent = sent;
+          it.bytesTotal = total;
+          it.speedBps = speed;
+          if (sent < total) {
+            it.status = 'uploading';
+          } else {
+            // Upload bytes done, server is processing (sha + index + attach).
+            it.status = 'processing';
           }
-        }
+          items = [...items];
+        });
+        ok++;
+        it.status = 'done';
+        it.message = 'Uploaded';
+        it.progress = 1;
+        try {
+          onUploaded?.({
+            media_item_id: body?.id,
+            project_id: projectId || null,
+            slot_id: slotId || null,
+          });
+        } catch {}
       } catch (e: any) {
         fail++;
         it.status = 'error';
-        it.message = e?.message || 'Network error';
+        it.message = e?.message || 'Upload failed';
       }
       items = [...items];
     }
@@ -282,15 +348,30 @@
               {#if it.isSession && it.sessionTool}
                 · session · {it.sessionTool}
               {/if}
+              {#if it.status === 'uploading' && it.speedBps}
+                · {fmtSpeed(it.speedBps)}
+              {/if}
             </div>
+            {#if it.status === 'uploading' || it.status === 'processing'}
+              <div class="file__bar" aria-hidden="true">
+                <div
+                  class="file__bar-fill"
+                  class:indeterminate={it.status === 'processing'}
+                  style="width: {((it.progress ?? 0) * 100).toFixed(1)}%"
+                ></div>
+              </div>
+            {/if}
           </div>
           <span class="file__status">
             {#if it.status === 'pending'}Pending{/if}
-            {#if it.status === 'uploading'}Uploading…{/if}
+            {#if it.status === 'uploading'}
+              {Math.round((it.progress ?? 0) * 100)}%
+            {/if}
+            {#if it.status === 'processing'}Processing…{/if}
             {#if it.status === 'done'}Done{/if}
             {#if it.status === 'error'}{it.message || 'Error'}{/if}
           </span>
-          {#if it.status !== 'uploading'}
+          {#if it.status !== 'uploading' && it.status !== 'processing'}
             <button
               class="file__remove"
               onclick={() => removeAt(i)}
@@ -436,6 +517,41 @@
     color: var(--color-muted);
     font-size: 0.7rem;
   }
+  .file__bar {
+    margin-top: 4px;
+    height: 4px;
+    background: #eee;
+    border: 1px solid var(--color-border);
+    position: relative;
+    overflow: hidden;
+  }
+  .file__bar-fill {
+    height: 100%;
+    background: var(--color-accent);
+    transition: width 0.15s linear;
+  }
+  .file__bar-fill.indeterminate {
+    width: 100% !important;
+    background-image: linear-gradient(
+      90deg,
+      var(--color-accent) 0%,
+      var(--color-accent) 40%,
+      rgba(184, 134, 11, 0.4) 40%,
+      rgba(184, 134, 11, 0.4) 60%,
+      var(--color-accent) 60%,
+      var(--color-accent) 100%
+    );
+    background-size: 200% 100%;
+    animation: bar-pulse 1.4s linear infinite;
+  }
+  @keyframes bar-pulse {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
   .file__status {
     font-size: 0.7rem;
     text-transform: uppercase;
@@ -449,7 +565,8 @@
   .file[data-status='error'] .file__status {
     color: #c00;
   }
-  .file[data-status='uploading'] .file__status {
+  .file[data-status='uploading'] .file__status,
+  .file[data-status='processing'] .file__status {
     color: var(--color-accent);
   }
   .file__remove {
