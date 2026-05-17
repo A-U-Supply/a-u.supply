@@ -158,10 +158,51 @@
   function onDragLeave() {
     dragOver = false;
   }
-  function onDrop(e: DragEvent) {
+  async function onDrop(e: DragEvent) {
     e.preventDefault();
     dragOver = false;
-    if (e.dataTransfer?.files) addFiles(e.dataTransfer.files);
+    const dt = e.dataTransfer;
+    if (!dt) return;
+
+    // Prefer the entries API so directories can be explicitly rejected
+    // rather than slipping through as zero-byte File objects.
+    const items = dt.items;
+    if (
+      items &&
+      items.length &&
+      typeof (items[0] as any).webkitGetAsEntry === 'function'
+    ) {
+      const files: File[] = [];
+      const dirNames: string[] = [];
+      const entries = Array.from(items)
+        .map((it) => (it as any).webkitGetAsEntry?.())
+        .filter(Boolean);
+      for (const entry of entries) {
+        if (entry.isDirectory) {
+          dirNames.push(entry.name);
+          continue;
+        }
+        const f = await new Promise<File | null>((resolve) => {
+          entry.file?.(
+            (file: File) => resolve(file),
+            () => resolve(null),
+          );
+        });
+        if (f) files.push(f);
+      }
+      if (dirNames.length) {
+        alert(
+          `Folders can't be uploaded directly. Skipped: ${dirNames.join(', ')}\n\n` +
+            `Open the folder and drop the files inside instead.`,
+        );
+      }
+      if (files.length) addFiles(files);
+      return;
+    }
+
+    // Older browsers: fall back to dataTransfer.files; addFiles still
+    // filters out anything that looks like a directory placeholder.
+    if (dt.files && dt.files.length) addFiles(dt.files);
   }
   function onPickClick() {
     fileInput?.click();
