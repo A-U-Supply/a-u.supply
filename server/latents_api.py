@@ -129,6 +129,10 @@ def _slot_summary(s: ProjectSlot, pins: dict[str, str] | None = None, thread_cou
         "notes_updated_at": s.notes_updated_at.isoformat() if s.notes_updated_at else None,
         "pinned": pin_map,
         "thread_count": int(thread_count),
+        "repo_id": s.repo_id,
+        "repo_path": s.repo_path,
+        "repo_ref": s.repo_ref,
+        "run_command": s.run_command,
         "created_at": s.created_at.isoformat() if s.created_at else None,
         "updated_at": s.updated_at.isoformat() if s.updated_at else None,
     }

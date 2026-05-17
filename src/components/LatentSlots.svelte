@@ -73,10 +73,21 @@
   let linkPath = $state('');
   let linkCmd = $state('');
 
+  function suggestedPath(slot: Slot): string {
+    const pos = String(slot.position).padStart(2, '0');
+    const lab = (slot.label || `track-${pos}`)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_|_$/g, '');
+    return `tracks/${pos}_${lab}.py`;
+  }
+
   function startLink(slot: Slot) {
     linkingSlot = slot.id;
-    linkPath = slot.repo_path || '';
-    linkCmd = slot.run_command || '';
+    // Pre-fill rather than rely on placeholders, so clicking Save with no
+    // edits actually persists the suggested path.
+    linkPath = slot.repo_path || suggestedPath(slot);
+    linkCmd = slot.run_command || `python ${linkPath}`;
   }
   function cancelLink() {
     linkingSlot = null;
@@ -564,18 +575,37 @@
                   if (e.key === 'Escape') cancelLink();
                 }}
               />
-              <button class="btn-primary btn-run" type="button" onclick={() => saveLink(slot)}>Save</button>
-              <button class="action-btn" type="button" onclick={cancelLink}>Cancel</button>
+              <button
+                class="btn-primary btn-run"
+                type="button"
+                onclick={() => saveLink(slot)}>Save</button
+              >
+              <button class="action-btn" type="button" onclick={cancelLink}
+                >Cancel</button
+              >
             {:else if slot.repo_path}
               <span class="muted">Source:</span>
-              <a class="repo-path" href={blobUrl(slot) || '#'} target="_blank" rel="noopener"
-                >{slot.repo_path}</a
+              <a
+                class="repo-path"
+                href={blobUrl(slot) || '#'}
+                target="_blank"
+                rel="noopener">{slot.repo_path}</a
               >
               {#if slot.repo_ref}
-                <span class="ref-pill" title={slot.repo_ref}>{slot.repo_ref.slice(0, 7)}</span>
+                <span class="ref-pill" title={slot.repo_ref}
+                  >{slot.repo_ref.slice(0, 7)}</span
+                >
               {/if}
-              <button class="link link--small" type="button" onclick={() => startLink(slot)}>edit</button>
-              <button class="link link--small link--danger" type="button" onclick={() => clearLink(slot)}>unlink</button>
+              <button
+                class="link link--small"
+                type="button"
+                onclick={() => startLink(slot)}>edit</button
+              >
+              <button
+                class="link link--small link--danger"
+                type="button"
+                onclick={() => clearLink(slot)}>unlink</button
+              >
               <span class="spacer"></span>
               <button
                 class="btn-primary btn-run"
@@ -586,7 +616,11 @@
               >
             {:else}
               <span class="muted">No source linked.</span>
-              <button class="action-btn" type="button" onclick={() => startLink(slot)}>+ Link a repo file</button>
+              <button
+                class="action-btn"
+                type="button"
+                onclick={() => startLink(slot)}>+ Link a repo file</button
+              >
             {/if}
           </div>
         {/if}
