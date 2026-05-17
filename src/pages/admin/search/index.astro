@@ -776,50 +776,76 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     text-decoration: underline;
   }
   .feed-item__discuss {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-    padding: 6px 0;
+    padding: 4px 0;
     border-top: 1px dashed var(--color-border);
-    border-bottom: 1px dashed var(--color-border);
     font-size: var(--text-sm);
   }
-  .feed-item__discuss-label {
-    color: var(--color-muted);
-  }
-  .feed-item__discuss-title {
+  .feed-item__discuss-toggle {
+    background: transparent;
+    border: 0;
+    padding: 4px 8px;
+    margin: 0;
+    cursor: pointer;
     color: var(--color-text);
-    text-decoration: none;
-    font-weight: bold;
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    font: inherit;
+    font-size: var(--text-sm);
+    text-align: left;
   }
-  .feed-item__discuss-title:hover {
+  .feed-item__discuss-toggle:hover {
     text-decoration: underline;
   }
-  .feed-item__discuss-meta {
-    color: var(--color-muted);
-    font-size: 0.75rem;
+  .feed-item__discuss-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    padding: var(--space-sm);
+    background: #fafafa;
+    border-top: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
   }
-  .feed-item__discuss-meta a {
+  .feed-item__comments {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+  .feed-item__comments-empty {
+    padding: 4px 0;
+  }
+  .feed-item__comment {
+    border-left: 2px solid var(--color-border);
+    padding: 4px 8px;
+    background: var(--color-bg);
+  }
+  .feed-item__comment-meta {
+    color: var(--color-muted);
+    font-size: 0.65rem;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+  .feed-item__comment-meta .feed-item__comment-reply {
     color: var(--color-accent);
     text-decoration: none;
   }
-  .feed-item__discuss-meta a:hover {
+  .feed-item__comment-meta .feed-item__comment-reply:hover {
     text-decoration: underline;
   }
-  .feed-item__reply-toggle {
-    margin-left: auto;
+  .feed-item__comment-body {
+    white-space: pre-wrap;
+    font-size: var(--text-sm);
+    margin-top: 2px;
   }
   .feed-item__composer {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    padding: 6px 0;
   }
   .feed-item__composer textarea {
     background: var(--color-bg);
@@ -839,6 +865,9 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
   .feed-item__composer-help {
     font-size: 0.7rem;
     color: var(--color-muted);
+  }
+  .feed-item__composer-help a {
+    color: var(--color-accent);
   }
 </style>
 
@@ -2048,64 +2077,37 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         const body = await res.json();
         const counts: Record<string, DiscussPreview> = body.counts || {};
         for (const [id, raw] of Object.entries(counts)) {
-          // Backward compat: counts used to be `{anchor_id: int}`. New shape
-          // is an object. Tolerate both during deploy roll.
+          // Backward compat: counts used to be `{anchor_id: int}`.
           const p: DiscussPreview =
             typeof raw === 'number' ? { count: raw } : raw;
           if (!p.count) continue;
           discussPreview.set(id, p);
-
-          // Inject chip into grid / list-row / feed meta rows.
+          // Grid + list chip (link out to Lemmy).
           const selector =
             `.grid-item[data-id="${CSS.escape(id)}"] .grid-item__meta, ` +
-            `.feed-item[data-id="${CSS.escape(id)}"] .feed-item__meta, ` +
             `tr[data-id="${CSS.escape(id)}"] .discuss-cell`;
           document.querySelectorAll(selector).forEach((tile) => {
             if (tile.querySelector('.discuss-chip')) return;
             tile.insertAdjacentHTML('beforeend', renderChipMarkup(id, p));
           });
-
-          // Feed view: inject the preview row (title + community + replies).
-          const feedItem = document.querySelector(
-            `.feed-item[data-id="${CSS.escape(id)}"]`,
-          );
-          if (feedItem && !feedItem.querySelector('.feed-item__discuss')) {
-            const preview = renderFeedDiscussRow(id, p);
-            const body = feedItem.querySelector('.feed-item__body');
-            const actions = body?.querySelector('.feed-item__actions');
-            if (body && actions) body.insertBefore(preview, actions);
-          }
+          // Feed view: just update the toggle label with the count.
+          updateCommentsToggleLabel(id, p.comment_count ?? null);
         }
       } catch {
         // Silent — discussion is a nice-to-have surface
       }
     }
 
-    function renderFeedDiscussRow(id: string, p: DiscussPreview): HTMLElement {
-      const wrap = document.createElement('div');
-      wrap.className = 'feed-item__discuss';
-      wrap.dataset.id = id;
-      const titleText = (p.title || '(thread)').slice(0, 60);
-      const titleHref =
-        p.lemmy_url ||
-        `/admin/search/detail?id=${encodeURIComponent(id)}#threads-island`;
-      const titleTarget = p.lemmy_url ? 'target="_blank" rel="noopener"' : '';
-      const replies = p.comment_count;
-      const replyStr =
-        replies != null
-          ? ` · ${replies} ${replies === 1 ? 'reply' : 'replies'}`
-          : '';
-      const communityHTML =
-        p.community_name && p.community_url
-          ? ` · <a href="${p.community_url}" target="_blank" rel="noopener">c/${p.community_name} ↗</a>`
-          : '';
-      wrap.innerHTML = `
-        <span class="feed-item__discuss-label">💬</span>
-        <a class="feed-item__discuss-title" href="${titleHref}" ${titleTarget}>${titleText}</a>
-        <span class="feed-item__discuss-meta">${replyStr}${communityHTML}</span>
-        <button class="action-btn feed-item__reply-toggle" type="button" data-reply-id="${id}">Reply ▾</button>
-      `;
-      return wrap;
+    function updateCommentsToggleLabel(id: string, count: number | null) {
+      const btn = document.querySelector(
+        `.feed-item[data-id="${CSS.escape(id)}"] .feed-item__discuss-toggle`,
+      ) as HTMLElement | null;
+      if (!btn) return;
+      if (count == null || count === 0) {
+        btn.textContent = '💬 Comments';
+      } else {
+        btn.textContent = `💬 ${count} comment${count === 1 ? '' : 's'}`;
+      }
     }
 
     function renderResults() {
@@ -2250,6 +2252,14 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
               `<a class="action-btn" href="/admin/search/detail?id=${item.id}">Details</a>`,
             );
 
+            // Comments toggle is rendered eagerly so it works even when the
+            // item has zero comments yet — the first comment auto-creates a
+            // backing Lemmy thread server-side. enrichDiscussionCounts swaps
+            // "Comments" → "N comments" once counts are known.
+            const commentsToggle = `<div class="feed-item__discuss" data-id="${item.id}">
+              <button class="feed-item__discuss-toggle" type="button" data-comments-id="${item.id}">💬 Comments</button>
+            </div>`;
+
             return `<article class="feed-item${selectedClass}" data-id="${item.id}"${pageStartAttr}>
               <input type="checkbox" class="feed-item__check" data-select="${item.id}" ${checked} aria-label="Select" />
               <div class="feed-item__media">${media}</div>
@@ -2265,6 +2275,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
                   <span>${item.tag_count ?? 0} tags</span>
                   ${date ? `<span>${date}</span>` : ''}
                 </div>
+                ${commentsToggle}
                 <div class="feed-item__actions">${actions.join('')}</div>
               </div>
             </article>`;
@@ -2466,41 +2477,106 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         return;
       }
 
-      // Feed-view inline reply toggle. Lazy-renders a composer below the
-      // discuss row on first click; reuses the mounted composer on subsequent
-      // clicks so a draft survives scroll & view switches.
-      const replyToggle = target.closest(
-        '.feed-item__reply-toggle',
+      // Feed-view 💬 Comments toggle. Lazy-renders + populates an inline
+      // panel with the comments list and a composer. Reuses the panel on
+      // subsequent toggles so drafts and the scroll position survive.
+      const commentsToggle = target.closest(
+        '.feed-item__discuss-toggle',
       ) as HTMLElement | null;
-      if (replyToggle) {
+      if (commentsToggle) {
         e.stopPropagation();
         e.preventDefault();
-        const itemId = replyToggle.dataset.replyId!;
-        const discussRow = replyToggle.closest(
+        const itemId = commentsToggle.dataset.commentsId!;
+        const discussRow = commentsToggle.closest(
           '.feed-item__discuss',
         ) as HTMLElement | null;
         if (!discussRow) return;
-        let composer = discussRow.nextElementSibling as HTMLElement | null;
-        if (composer && composer.classList.contains('feed-item__composer')) {
-          const isHidden = composer.style.display === 'none';
-          composer.style.display = isHidden ? 'flex' : 'none';
-          if (isHidden) {
-            composer.querySelector('textarea')?.focus();
-          }
+        let panel = discussRow.nextElementSibling as HTMLElement | null;
+        if (panel && panel.classList.contains('feed-item__discuss-panel')) {
+          const isHidden = panel.style.display === 'none';
+          panel.style.display = isHidden ? 'flex' : 'none';
+          if (isHidden)
+            (
+              panel.querySelector(
+                '[data-reply-text]',
+              ) as HTMLTextAreaElement | null
+            )?.focus();
         } else {
-          composer = document.createElement('form');
-          composer.className = 'feed-item__composer';
-          composer.dataset.id = itemId;
-          composer.innerHTML = `
-            <textarea rows="2" placeholder="Reply…" data-reply-text></textarea>
-            <div class="feed-item__composer-row">
-              <span class="feed-item__composer-help">Posts as you in c/stacks.</span>
-              <button class="action-btn" type="submit" data-reply-submit>Post</button>
-            </div>
-          `;
-          discussRow.insertAdjacentElement('afterend', composer);
-          composer.querySelector('textarea')?.focus();
+          panel = buildCommentsPanel(itemId);
+          discussRow.insertAdjacentElement('afterend', panel);
+          loadCommentsIntoPanel(itemId, panel);
+          (
+            panel.querySelector(
+              '[data-reply-text]',
+            ) as HTMLTextAreaElement | null
+          )?.focus();
         }
+        return;
+      }
+
+      // Reply-to-comment link inside an open panel.
+      const inlineReply = target.closest(
+        '.feed-item__comment-reply',
+      ) as HTMLElement | null;
+      if (inlineReply) {
+        e.stopPropagation();
+        e.preventDefault();
+        const panel = inlineReply.closest(
+          '.feed-item__discuss-panel',
+        ) as HTMLElement | null;
+        if (!panel) return;
+        const parentId = inlineReply.dataset.parentId!;
+        panel.dataset.replyParent = parentId;
+        const indicator = panel.querySelector(
+          '[data-reply-parent-indicator]',
+        ) as HTMLElement | null;
+        if (indicator) {
+          indicator.textContent = `Replying to comment #${parentId} — `;
+          const cancel = document.createElement('a');
+          cancel.href = '#';
+          cancel.textContent = 'cancel';
+          cancel.dataset.cancelReply = '';
+          indicator.appendChild(cancel);
+          indicator.style.display = '';
+        }
+        (
+          panel.querySelector('[data-reply-text]') as HTMLTextAreaElement | null
+        )?.focus();
+        return;
+      }
+
+      // Cancel the "replying to comment #X" pin.
+      const cancelReply = target.closest(
+        '[data-cancel-reply]',
+      ) as HTMLElement | null;
+      if (cancelReply) {
+        e.stopPropagation();
+        e.preventDefault();
+        const panel = cancelReply.closest(
+          '.feed-item__discuss-panel',
+        ) as HTMLElement | null;
+        if (panel) {
+          delete panel.dataset.replyParent;
+          const indicator = panel.querySelector(
+            '[data-reply-parent-indicator]',
+          ) as HTMLElement | null;
+          if (indicator) {
+            indicator.textContent = '';
+            indicator.style.display = 'none';
+          }
+        }
+        return;
+      }
+
+      // Post button inside the inline panel — pure click handler (no <form>
+      // → no default submit → no page-refresh-via-stray-Enter risk).
+      const postBtn = target.closest(
+        '[data-reply-submit]',
+      ) as HTMLButtonElement | null;
+      if (postBtn) {
+        e.stopPropagation();
+        e.preventDefault();
+        await submitInlineComment(postBtn);
         return;
       }
 
@@ -2571,33 +2647,114 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       }
     });
 
-    // Feed-view inline composer submit. Auto-creates the thread if the item
-    // has none yet (server POST is upsert-shaped for media_item, so this is
-    // safe — returns the existing thread on repeat calls). Then posts the
-    // comment. On success: bump the chip count, clear textarea, brief toast
-    // linking to the Lemmy post.
-    document.addEventListener('submit', async (e) => {
-      const form = e.target as HTMLElement;
-      if (!form.classList?.contains('feed-item__composer')) return;
-      e.preventDefault();
-      const itemId = (form as HTMLElement).dataset.id!;
-      const textarea = form.querySelector(
+    // ------------------------------------------------------------------
+    // Inline comments panel (feed view)
+    // ------------------------------------------------------------------
+
+    function buildCommentsPanel(itemId: string): HTMLDivElement {
+      const panel = document.createElement('div');
+      panel.className = 'feed-item__discuss-panel';
+      panel.dataset.id = itemId;
+      panel.innerHTML = `
+        <ul class="feed-item__comments" data-comments-list></ul>
+        <div class="feed-item__composer">
+          <div class="feed-item__composer-help" data-reply-parent-indicator style="display:none"></div>
+          <textarea rows="2" placeholder="Add a comment…" data-reply-text></textarea>
+          <div class="feed-item__composer-row">
+            <span class="feed-item__composer-help">Posts to fold (c/stacks) as you.</span>
+            <button class="action-btn" type="button" data-reply-submit data-item-id="${itemId}">Post</button>
+          </div>
+        </div>
+      `;
+      return panel;
+    }
+
+    async function loadCommentsIntoPanel(itemId: string, panel: HTMLElement) {
+      const list = panel.querySelector(
+        '[data-comments-list]',
+      ) as HTMLElement | null;
+      if (!list) return;
+      list.innerHTML = `<li class="feed-item__comments-empty muted">Loading…</li>`;
+      const preview = discussPreview.get(itemId);
+      // No thread yet → show empty-state and let the post-button kick off
+      // create-then-comment in one shot.
+      if (!preview?.thread_id) {
+        list.innerHTML = `<li class="feed-item__comments-empty muted">No comments yet. Be the first.</li>`;
+        return;
+      }
+      try {
+        const res = await fetch(
+          `/api/threads/${encodeURIComponent(preview.thread_id)}`,
+          { credentials: 'include' },
+        );
+        if (!res.ok) {
+          list.innerHTML = `<li class="feed-item__comments-empty muted">Failed to load comments.</li>`;
+          return;
+        }
+        const body = await res.json();
+        renderCommentsList(list, body.comments || []);
+      } catch {
+        list.innerHTML = `<li class="feed-item__comments-empty muted">Failed to load comments.</li>`;
+      }
+    }
+
+    function renderCommentsList(list: HTMLElement, comments: any[]) {
+      if (!comments.length) {
+        list.innerHTML = `<li class="feed-item__comments-empty muted">No comments yet. Be the first.</li>`;
+        return;
+      }
+      // Sort by Lemmy comment path (lexicographic preserves parent/child order)
+      // and infer depth from path segment count.
+      const sorted = [...comments].sort((a, b) =>
+        (a.path || '').localeCompare(b.path || ''),
+      );
+      list.innerHTML = sorted
+        .map((c) => {
+          const path = String(c.path || '');
+          const depth = Math.max(0, path.split('.').filter(Boolean).length - 2);
+          const indent = Math.min(depth, 6) * 16;
+          const body = c.deleted ? '(deleted)' : escapeHtml(c.content || '');
+          return `<li class="feed-item__comment" style="margin-left: ${indent}px">
+            <div class="feed-item__comment-meta">
+              <span>user #${c.creator_id}</span>
+              <span>${c.published ? new Date(c.published).toLocaleString() : ''}</span>
+              <a href="#" class="feed-item__comment-reply" data-parent-id="${c.id}">Reply</a>
+            </div>
+            <div class="feed-item__comment-body">${body}</div>
+          </li>`;
+        })
+        .join('');
+    }
+
+    function escapeHtml(s: string): string {
+      return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    async function submitInlineComment(postBtn: HTMLButtonElement) {
+      const itemId = postBtn.dataset.itemId!;
+      const panel = postBtn.closest(
+        '.feed-item__discuss-panel',
+      ) as HTMLElement | null;
+      if (!panel) return;
+      const textarea = panel.querySelector(
         '[data-reply-text]',
       ) as HTMLTextAreaElement | null;
-      const submitBtn = form.querySelector(
-        '[data-reply-submit]',
-      ) as HTMLButtonElement | null;
-      if (!textarea || !submitBtn) return;
+      if (!textarea) return;
       const body = textarea.value.trim();
       if (!body) return;
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Posting…';
+      const parentRaw = panel.dataset.replyParent;
+      const parentId = parentRaw ? Number(parentRaw) : null;
+      postBtn.disabled = true;
+      postBtn.textContent = 'Posting…';
       try {
         let preview = discussPreview.get(itemId) || { count: 0 };
         let threadId = preview.thread_id;
-        // First reply to an item with no thread → create one (auto-titled
-        // "Discussion: <filename>") then post the comment.
         if (!threadId) {
+          // No thread yet — create one silently (POST is upsert for media_item).
           const item = allResults.find((r: any) => r.id === itemId);
           const filename = item?.filename || 'untitled';
           const createRes = await fetch('/api/threads', {
@@ -2636,7 +2793,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ body, parent_comment_id: null }),
+            body: JSON.stringify({ body, parent_comment_id: parentId }),
           },
         );
         if (!commentRes.ok) {
@@ -2645,27 +2802,21 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
             err?.detail?.message || err?.detail || 'Failed to post',
           );
         }
-        // Bump local cache + re-render the chip / preview row in place.
+        // Bump local cache, refresh the panel's comment list, clear textarea.
         preview.comment_count = (preview.comment_count || 0) + 1;
         discussPreview.set(itemId, preview);
-        const feedItem = document.querySelector(
-          `.feed-item[data-id="${CSS.escape(itemId)}"]`,
-        );
-        if (feedItem) {
-          feedItem.querySelectorAll('.discuss-chip').forEach((c) => c.remove());
-          const meta = feedItem.querySelector('.feed-item__meta');
-          if (meta)
-            meta.insertAdjacentHTML(
-              'beforeend',
-              renderChipMarkup(itemId, preview),
-            );
-          const oldRow = feedItem.querySelector('.feed-item__discuss');
-          if (oldRow) {
-            const fresh = renderFeedDiscussRow(itemId, preview);
-            oldRow.replaceWith(fresh);
-          }
+        updateCommentsToggleLabel(itemId, preview.comment_count);
+        textarea.value = '';
+        delete panel.dataset.replyParent;
+        const indicator = panel.querySelector(
+          '[data-reply-parent-indicator]',
+        ) as HTMLElement | null;
+        if (indicator) {
+          indicator.textContent = '';
+          indicator.style.display = 'none';
         }
-        // Mirror chips in grid + list views (in case they're hidden behind tabs).
+        await loadCommentsIntoPanel(itemId, panel);
+        // Refresh chips in grid + list views too (mirror the count).
         document
           .querySelectorAll(
             `.grid-item[data-id="${CSS.escape(itemId)}"] .discuss-chip, tr[data-id="${CSS.escape(itemId)}"] .discuss-chip`,
@@ -2681,21 +2832,14 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
               renderChipMarkup(itemId, preview),
             ),
           );
-
-        textarea.value = '';
-        (form as HTMLElement).style.display = 'none';
-        const toast = (window as any).toast;
-        if (toast?.success) {
-          toast.success(preview.lemmy_url ? `Posted — view on fold` : 'Posted');
-        }
       } catch (err: any) {
         const toast = (window as any).toast;
         toast?.error?.(err?.message || 'Failed to post');
       } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Post';
+        postBtn.disabled = false;
+        postBtn.textContent = 'Post';
       }
-    });
+    }
 
     function openViewerForMedia(startId: string) {
       // Build a list of all image/video items on the current page —
