@@ -460,7 +460,12 @@ def sync_media_item(db: Session, media_item: MediaItem) -> None:
         logger.exception("Failed to sync media item %s to Meilisearch", media_item.id)
 
 
-def delete_media_item(media_item_id: str, media_type: str, *, source_type: str | None = None) -> None:
+def delete_media_item(
+    media_item_id: str,
+    media_type: str | None = None,
+    *,
+    source_type: str | None = None,
+) -> None:
     """Remove a media item from the Meilisearch index.
 
     A media item's index depends on both `media_type` and `source_type`
@@ -470,12 +475,19 @@ def delete_media_item(media_item_id: str, media_type: str, *, source_type: str |
     state, we issue a delete against every plausible index for the given
     media_type and let Meilisearch no-op on the misses.
 
+    When ``media_type`` is also unknown (e.g. cleaning up a stale Meili doc
+    whose DB row was already deleted), we sweep every index.
+
     This was the cause of "Delete didn't work" on emulsion items: the call
     was hitting the wrong index, the DB row got removed but Meili kept
     returning the doc, and the next search showed the item still there.
     """
     candidate_indexes: list[str] = []
-    if source_type == "manual_upload" or media_type == "session":
+    if media_type is None:
+        # Cleaning up a stale Meili entry where we don't know the original
+        # routing. Sweep all four indexes; misses are silent.
+        candidate_indexes = list(INDEX_NAMES.values()) + [EMULSION_INDEX]
+    elif source_type == "manual_upload" or media_type == "session":
         candidate_indexes.append(EMULSION_INDEX)
     else:
         type_index = INDEX_NAMES.get(media_type)
@@ -491,14 +503,30 @@ def delete_media_item(media_item_id: str, media_type: str, *, source_type: str |
         return
 
     client = get_client()
+    task_uids: list[int] = []
     for index_name in candidate_indexes:
         try:
-            client.index(index_name).delete_document(media_item_id)
+            task = client.index(index_name).delete_document(media_item_id)
+            uid = getattr(task, "task_uid", None) or getattr(task, "uid", None)
+            if uid is not None:
+                task_uids.append(int(uid))
         except Exception:
             logger.exception(
-                "Failed to delete media item %s from Meilisearch index %s",
+                "Failed to enqueue delete of media item %s from Meilisearch index %s",
                 media_item_id,
                 index_name,
+            )
+
+    # Wait for Meili to actually process the deletes before returning.
+    # Otherwise the client's "refresh and verify it's gone" round-trip races
+    # the indexer, and just-deleted items briefly reappear in search results
+    # — the exact "delete doesn't work" symptom we keep chasing.
+    for uid in task_uids:
+        try:
+            client.wait_for_task(uid, timeout_in_ms=5000, interval_in_ms=50)
+        except Exception:
+            logger.warning(
+                "Meilisearch delete task %s did not finish in time", uid
             )
 
 
