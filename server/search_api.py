@@ -626,6 +626,34 @@ def search_media(
 SELECT_ALL_CAP = 10000
 
 
+def _resolve_index_routing(body: SearchRequest) -> tuple[list[str] | None, bool]:
+    """Mirror the index-routing decisions /api/search applies, so callers like
+    ``/api/search/stats`` and ``/api/search/ids`` produce the same result set
+    as the visible page.
+
+    Returns ``(media_types, include_emulsion)`` — pass straight to
+    ``multi_search``. Handles:
+      - color filters narrow to the image index
+      - ``__emulsion__`` alone in ``output_index`` forces emulsion-only
+      - ``__emulsion__`` alongside other indexes turns on include_emulsion
+    """
+    media_types = body.media_types
+    include_emulsion = body.include_emulsion
+    if body.filters and (body.filters.color or body.filters.color_group):
+        media_types = ["image"]
+    if body.filters and body.filters.output_index:
+        only_emulsion = (
+            "__emulsion__" in body.filters.output_index
+            and not any(n != "__emulsion__" for n in body.filters.output_index)
+        )
+        if only_emulsion:
+            media_types = ["emulsion"]
+            include_emulsion = True
+        elif "__emulsion__" in body.filters.output_index:
+            include_emulsion = True
+    return media_types, include_emulsion
+
+
 @router.post("/search/ids", tags=["Media Search"], summary="Get all matching IDs")
 def search_media_ids(
     body: SearchRequest,
@@ -649,9 +677,11 @@ def search_media_ids(
     meili_filter = _build_meili_filter(body.filters)
     sort_list = [body.sort] if body.sort else None
 
-    media_types = body.media_types
-    if body.filters and (body.filters.color or body.filters.color_group):
-        media_types = ["image"]
+    # Must use the exact same routing as /api/search — otherwise a user on the
+    # emulsion-only view sees "Select all 97 matching" but the IDs endpoint
+    # ignores the emulsion routing, searches the public indexes instead, and
+    # returns thousands of unrelated items. That bug almost got me killed.
+    media_types, include_emulsion = _resolve_index_routing(body)
 
     # multi_search already fetches up to 10,000 per index internally and
     # slices to the requested page. Asking for page=1 with per_page=CAP
@@ -663,7 +693,7 @@ def search_media_ids(
         sort=sort_list,
         page=1,
         per_page=SELECT_ALL_CAP,
-        include_emulsion=body.include_emulsion,
+        include_emulsion=include_emulsion,
     )
     hits = results.get("hits", [])
     ids = [h["id"] for h in hits if "id" in h]
@@ -1349,10 +1379,21 @@ def batch_delete(
     for media_id in body.media_ids:
         item = db.query(MediaItem).filter(MediaItem.id == media_id).first()
         if not item:
+            # Item is gone from the DB but might still be a stale doc in
+            # Meili — that's exactly how a user ends up "deleting" rows that
+            # come back on refresh. Sweep every index to be sure.
+            meili_delete(media_id)
             not_found.append(media_id)
             continue
 
         media_type = item.media_type
+        # Capture source_type *before* db.delete cascades the sources away.
+        # Without this, emulsion items would route to the wrong Meili index.
+        source_type = (
+            item.sources[0].source_type
+            if item.sources and getattr(item.sources[0], "source_type", None)
+            else None
+        )
         file_path = _get_search_media_dir() / item.file_path
         if file_path.exists():
             file_path.unlink()
@@ -1361,7 +1402,7 @@ def batch_delete(
             thumb.unlink()
 
         db.delete(item)
-        meili_delete(media_id, media_type)
+        meili_delete(media_id, media_type, source_type=source_type)
         deleted.append(media_id)
 
     db.commit()
