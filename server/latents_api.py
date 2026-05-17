@@ -205,6 +205,10 @@ class UpdateSlotBody(BaseModel):
     label: str | None = None
     status: str | None = None
     notes: str | None = None
+    repo_id: str | None = None       # set to "" to clear
+    repo_path: str | None = None     # set to "" to clear
+    repo_ref: str | None = None      # set to "" to clear (falls back to repo default branch)
+    run_command: str | None = None   # set to "" to clear (falls back to `python <path>`)
 
 
 class ReorderSlotsBody(BaseModel):
@@ -303,6 +307,24 @@ def get_project(
     db: Session = Depends(get_db),
 ):
     p = _project_or_404(db, project_id)
+
+    # Lazy Lemmy community provisioning: if the calling user is fold-linked
+    # and the Latent doesn't have a community yet, fire it off best-effort
+    # so threads work the moment they're opened. Silent on any failure.
+    if not p.lemmy_community_id and getattr(user, "lemmy_token_encrypted", None):
+        try:
+            from server.lemmy_client import (
+                ensure_project_community,
+                get_user_token,
+                is_configured,
+            )
+            if is_configured():
+                token = get_user_token(db, user)
+                ensure_project_community(db, p, token)
+                db.refresh(p)
+        except Exception:
+            logger.exception("Lazy Lemmy provisioning failed for project %s", project_id)
+
     slots = db.query(ProjectSlot).filter(ProjectSlot.project_id == project_id).order_by(ProjectSlot.position).all()
     slot_pins = {s.id: _pin_map_for_slot(db, s.id) for s in slots}
     documents = db.query(ProjectDocument).filter(ProjectDocument.project_id == project_id).order_by(ProjectDocument.position).all()
@@ -332,6 +354,37 @@ def get_project(
         "loose_item_count": int(loose_count),
         "thread_count": int(project_thread_count),
     }
+
+
+@router.post("/{project_id}/lemmy/provision", summary="Provision the Latent's Lemmy community now")
+def provision_community(
+    project_id: str,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Trigger Lemmy community creation explicitly. Useful for repos linked
+    before the lazy-provision behavior shipped, or after fold link changes.
+    """
+    from server.lemmy_client import (
+        LemmyNotLinked,
+        LemmyUnavailable,
+        ensure_project_community,
+        get_user_token,
+        is_configured,
+    )
+    p = _project_or_404(db, project_id)
+    if not is_configured():
+        raise HTTPException(status_code=503, detail="Lemmy not configured")
+    try:
+        token = get_user_token(db, user)
+    except LemmyNotLinked as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    try:
+        cid = ensure_project_community(db, p, token)
+    except LemmyUnavailable as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    db.refresh(p)
+    return {"lemmy_community_id": cid, "project_slug": p.slug}
 
 
 @router.patch("/{project_id}", summary="Update a Latent")
@@ -445,6 +498,24 @@ def update_slot(
     if body.notes is not None:
         s.notes = body.notes
         s.notes_updated_at = _utcnow()
+    # Repo file linkage. Empty string clears the field.
+    if body.repo_id is not None:
+        if body.repo_id == "":
+            s.repo_id = None
+        else:
+            from server.models import ProjectRepo
+            repo = db.query(ProjectRepo).filter(
+                ProjectRepo.id == body.repo_id, ProjectRepo.project_id == project_id,
+            ).first()
+            if not repo:
+                raise HTTPException(status_code=400, detail="repo_id not linked to this project")
+            s.repo_id = body.repo_id
+    if body.repo_path is not None:
+        s.repo_path = body.repo_path or None
+    if body.repo_ref is not None:
+        s.repo_ref = body.repo_ref or None
+    if body.run_command is not None:
+        s.run_command = body.run_command or None
     db.commit()
     db.refresh(s)
     return _slot_summary(s, _pin_map_for_slot(db, s.id))

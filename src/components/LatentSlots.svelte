@@ -68,6 +68,37 @@
   let runsBySlot = $state<Record<string, any[]>>({});
   let runningSlots = $state<Set<string>>(new Set());
 
+  // Inline "link a repo file" editor state — one slot at a time.
+  let linkingSlot = $state<string | null>(null);
+  let linkPath = $state('');
+  let linkCmd = $state('');
+
+  function startLink(slot: Slot) {
+    linkingSlot = slot.id;
+    linkPath = slot.repo_path || '';
+    linkCmd = slot.run_command || '';
+  }
+  function cancelLink() {
+    linkingSlot = null;
+    linkPath = '';
+    linkCmd = '';
+  }
+  async function saveLink(slot: Slot) {
+    if (!repoMeta) return;
+    const path = linkPath.trim();
+    if (!path) return;
+    await patchSlot(slot, {
+      repo_id: repoMeta.id,
+      repo_path: path,
+      run_command: linkCmd.trim() || '',
+    });
+    cancelLink();
+  }
+  async function clearLink(slot: Slot) {
+    if (!confirm('Unlink this slot from its repo file?')) return;
+    await patchSlot(slot, { repo_id: '', repo_path: '', run_command: '' });
+  }
+
   let pullOpenForSlot = $state<string | null>(null);
   let pullOpen = $state(false);
 
@@ -510,28 +541,53 @@
           </div>
         </div>
 
-        {#if slot.repo_path && repoMeta}
+        {#if repoMeta}
           <div class="slot__repo">
-            <span class="muted">Source:</span>
-            <a
-              class="repo-path"
-              href={blobUrl(slot) || '#'}
-              target="_blank"
-              rel="noopener">{slot.repo_path}</a
-            >
-            {#if slot.repo_ref}
-              <span class="ref-pill" title={slot.repo_ref}
-                >{slot.repo_ref.slice(0, 7)}</span
+            {#if linkingSlot === slot.id}
+              <input
+                type="text"
+                class="link-input"
+                placeholder="tracks/01_wtf.py"
+                bind:value={linkPath}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter') saveLink(slot);
+                  if (e.key === 'Escape') cancelLink();
+                }}
+              />
+              <input
+                type="text"
+                class="link-input link-input--cmd"
+                placeholder="python tracks/01_wtf.py (optional)"
+                bind:value={linkCmd}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter') saveLink(slot);
+                  if (e.key === 'Escape') cancelLink();
+                }}
+              />
+              <button class="btn-primary btn-run" type="button" onclick={() => saveLink(slot)}>Save</button>
+              <button class="action-btn" type="button" onclick={cancelLink}>Cancel</button>
+            {:else if slot.repo_path}
+              <span class="muted">Source:</span>
+              <a class="repo-path" href={blobUrl(slot) || '#'} target="_blank" rel="noopener"
+                >{slot.repo_path}</a
               >
+              {#if slot.repo_ref}
+                <span class="ref-pill" title={slot.repo_ref}>{slot.repo_ref.slice(0, 7)}</span>
+              {/if}
+              <button class="link link--small" type="button" onclick={() => startLink(slot)}>edit</button>
+              <button class="link link--small link--danger" type="button" onclick={() => clearLink(slot)}>unlink</button>
+              <span class="spacer"></span>
+              <button
+                class="btn-primary btn-run"
+                type="button"
+                onclick={() => runSlot(slot)}
+                disabled={runningSlots.has(slot.id)}
+                >{runningSlots.has(slot.id) ? '⟳ Running…' : '▶ Run'}</button
+              >
+            {:else}
+              <span class="muted">No source linked.</span>
+              <button class="action-btn" type="button" onclick={() => startLink(slot)}>+ Link a repo file</button>
             {/if}
-            <span class="spacer"></span>
-            <button
-              class="btn-primary btn-run"
-              type="button"
-              onclick={() => runSlot(slot)}
-              disabled={runningSlots.has(slot.id)}
-              >{runningSlots.has(slot.id) ? '⟳ Running…' : '▶ Run'}</button
-            >
           </div>
         {/if}
 
@@ -889,6 +945,26 @@
   .btn-run {
     padding: 3px 10px;
     font-size: 0.75rem;
+  }
+  .link--small {
+    font-size: 0.7rem;
+  }
+  .link--danger {
+    color: #c00;
+  }
+  .link-input {
+    flex: 1;
+    min-width: 160px;
+    padding: 4px 8px;
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
+  .link-input--cmd {
+    flex: 1.5;
+    min-width: 200px;
   }
   .runs-list {
     list-style: none;
