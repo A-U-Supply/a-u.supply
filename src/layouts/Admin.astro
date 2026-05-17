@@ -16,6 +16,22 @@ const { title, current } = Astro.props;
     <link rel="icon" type="image/jpeg" href="/favicon.jpg" />
     <title>{title} — A-U.SUPPLY Admin</title>
     <ViewTransitions />
+    <script is:inline>
+      // Resolve theme pre-paint so there's no flash. localStorage.adminTheme
+      // is "light" | "dark" | "auto"; auto follows prefers-color-scheme.
+      (function () {
+        try {
+          var pref = localStorage.getItem('adminTheme') || 'auto';
+          var dark =
+            pref === 'dark' ||
+            (pref === 'auto' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var root = document.documentElement;
+          root.setAttribute('data-theme', dark ? 'dark' : 'light');
+          root.setAttribute('data-theme-pref', pref);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <button
@@ -234,6 +250,24 @@ const { title, current } = Astro.props;
 
         <div class="sidebar__footer">
           <div class="sidebar__user" id="sidebar-user"></div>
+          <div class="theme-toggle" id="theme-toggle" aria-label="Theme">
+            <button
+              type="button"
+              class="theme-toggle__btn"
+              data-pref="light"
+              title="Light">☀</button
+            ><button
+              type="button"
+              class="theme-toggle__btn"
+              data-pref="auto"
+              title="System">◐</button
+            ><button
+              type="button"
+              class="theme-toggle__btn"
+              data-pref="dark"
+              title="Dark">☾</button
+            >
+          </div>
           <button class="sidebar__logout" id="logout-btn">Log Out</button>
         </div>
       </aside>
@@ -249,6 +283,68 @@ const { title, current } = Astro.props;
       <Player client:only="svelte" />
     </div>
     <div class="toast-container" id="toast-container"></div>
+
+    <script is:inline>
+      // Theme toggle — pure JS, no TS, runs uncompiled so it's robust to any
+      // Astro bundling quirks. Pre-paint resolver in <head> handles initial
+      // data-theme; this wires the buttons and re-applies on every navigation.
+      (function () {
+        function readPref() {
+          var v = localStorage.getItem('adminTheme');
+          return v === 'light' || v === 'dark' || v === 'auto' ? v : 'auto';
+        }
+        function applyTheme(pref) {
+          var dark =
+            pref === 'dark' ||
+            (pref === 'auto' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var root = document.documentElement;
+          root.setAttribute('data-theme', dark ? 'dark' : 'light');
+          root.setAttribute('data-theme-pref', pref);
+          var btns = document.querySelectorAll('.theme-toggle__btn');
+          for (var i = 0; i < btns.length; i++) {
+            btns[i].setAttribute(
+              'aria-pressed',
+              btns[i].getAttribute('data-pref') === pref ? 'true' : 'false',
+            );
+          }
+        }
+        function wire() {
+          applyTheme(readPref());
+          var btns = document.querySelectorAll('.theme-toggle__btn');
+          for (var i = 0; i < btns.length; i++) {
+            // Replace node to drop stale listeners across ViewTransitions —
+            // cheap and idempotent.
+            var fresh = btns[i].cloneNode(true);
+            btns[i].parentNode.replaceChild(fresh, btns[i]);
+          }
+          var liveBtns = document.querySelectorAll('.theme-toggle__btn');
+          for (var j = 0; j < liveBtns.length; j++) {
+            (function (el) {
+              el.addEventListener('click', function () {
+                var next = el.getAttribute('data-pref') || 'auto';
+                localStorage.setItem('adminTheme', next);
+                applyTheme(next);
+              });
+            })(liveBtns[j]);
+          }
+        }
+        // Initial wire on first parse.
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', wire);
+        } else {
+          wire();
+        }
+        // Re-wire on every Astro navigation (ViewTransitions replace the body).
+        document.addEventListener('astro:page-load', wire);
+        // React to OS preference change in auto mode.
+        window
+          .matchMedia('(prefers-color-scheme: dark)')
+          .addEventListener('change', function () {
+            if (readPref() === 'auto') applyTheme('auto');
+          });
+      })();
+    </script>
   </body>
 </html>
 

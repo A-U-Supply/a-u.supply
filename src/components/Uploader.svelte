@@ -583,7 +583,7 @@
   .file__bar {
     margin-top: 4px;
     height: 4px;
-    background: #eee;
+    background: var(--color-surface-2);
     border: 1px solid var(--color-border);
     position: relative;
     overflow: hidden;

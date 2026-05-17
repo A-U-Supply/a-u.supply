@@ -103,6 +103,36 @@
   border-color: #888;
 }
 
+/* Theme toggle — segmented 3-state (☀ ◐ ☾). Sidebar-local colors because the
+ * sidebar stays dark in both modes. */
+.theme-toggle {
+  display: flex;
+  border: 1px solid #444;
+  margin-bottom: var(--space-xs);
+}
+.theme-toggle__btn {
+  flex: 1;
+  background: none;
+  border: none;
+  border-right: 1px solid #444;
+  color: #888;
+  padding: 4px 0;
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  cursor: pointer;
+  line-height: 1;
+}
+.theme-toggle__btn:last-child {
+  border-right: none;
+}
+.theme-toggle__btn:hover {
+  color: #fff;
+}
+.theme-toggle__btn[aria-pressed='true'] {
+  background: #2a2a2a;
+  color: var(--color-accent);
+}
+
 /* Mobile toggle */
 .sidebar__toggle {
   display: none;
@@ -239,7 +269,7 @@
   font-size: var(--text-base);
   border: 1px solid var(--color-border);
   margin-bottom: var(--space-sm);
-  background: #fff;
+  background: var(--color-bg);
   color: var(--color-text);
 }
 
@@ -256,15 +286,15 @@
   font-weight: bold;
   text-transform: uppercase;
   letter-spacing: 1pt;
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--color-fg);
+  color: var(--color-bg);
   border: none;
   cursor: pointer;
   margin-top: var(--space-xs);
 }
 
 .login-form button:hover {
-  background: #333;
+  background: color-mix(in srgb, var(--color-fg) 80%, var(--color-bg));
 }
 
 .login-form button:disabled {
@@ -307,15 +337,15 @@
   font-weight: bold;
   text-transform: uppercase;
   letter-spacing: 1pt;
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--color-fg);
+  color: var(--color-bg);
   border: none;
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
 }
 .btn-primary:hover {
-  background: #333;
+  background: color-mix(in srgb, var(--color-fg) 80%, var(--color-bg));
 }
 .btn-primary:disabled {
   opacity: 0.5;
@@ -505,7 +535,7 @@
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   border: 1px solid var(--color-border);
-  background: #fff;
+  background: var(--color-bg);
   color: var(--color-text);
 }
 .form-group input:focus,
@@ -527,7 +557,7 @@
   padding: var(--space-sm);
 }
 .dialog {
-  background: #fff;
+  background: var(--color-bg);
   padding: var(--space-md);
   border: 2px solid var(--color-text);
   max-width: 400px;
@@ -628,7 +658,7 @@
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   border: 2px solid var(--color-text);
-  background: #fff;
+  background: var(--color-bg);
   color: var(--color-text);
   max-width: 360px;
   display: flex;
