@@ -3593,12 +3593,23 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       });
     }
 
-    // Scroll restoration: when the user taps a search result and comes back,
-    // load the same number of pages they had loaded and restore their scroll
-    // position so they land exactly where they left off. Astro VT's
-    // history.state-driven scroll restore alone isn't enough because we only
-    // load `?page=N` results on a fresh visit — the saved scrollY would
-    // point past the bottom of a too-short DOM.
+    // Scroll restoration: when the user taps a search result and comes back
+    // (or hits refresh), restore the loaded page range AND scroll position so
+    // they land exactly where they left off.
+    //
+    // Why bother with manual restoration when browsers already restore scroll?
+    // 1. We only load `?page=N` results on a fresh visit, so the DOM is
+    //    shorter than it was when they left → browser-restored scrollY lands
+    //    past the bottom and gets clamped to wherever it can.
+    // 2. Astro's ClientRouter has its own restore that runs against the
+    //    not-yet-tall-enough DOM, with the same problem.
+    //
+    // We take over: scrollRestoration='manual' silences the browser, we
+    // save on every nav-away path we know about, and on restore we keep
+    // re-scrolling until the DOM is actually tall enough.
+    if ('scrollRestoration' in history) {
+      history.scrollRestoration = 'manual';
+    }
     const SCROLL_KEY = 'au.searchScroll';
     type SavedScroll = { search: string; scrollY: number; maxPage: number };
 
@@ -3615,21 +3626,59 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
 
     function saveScrollState() {
       try {
+        // Don't overwrite a meaningful state with a fresh-load zero. If we're
+        // mid-restore and haven't scrolled yet, the existing entry is more
+        // accurate than what we'd capture now.
+        const y = window.scrollY;
+        const mx = maxLoadedPage();
+        if (y === 0 && mx <= 1) {
+          const existing = sessionStorage.getItem(SCROLL_KEY);
+          if (existing) {
+            try {
+              const prev = JSON.parse(existing) as SavedScroll;
+              if (prev.search === window.location.search && prev.scrollY > 0) {
+                return;
+              }
+            } catch {}
+          }
+        }
         sessionStorage.setItem(
           SCROLL_KEY,
           JSON.stringify({
             search: window.location.search,
-            scrollY: window.scrollY,
-            maxPage: maxLoadedPage(),
+            scrollY: y,
+            maxPage: mx,
           }),
         );
       } catch {}
     }
 
-    // Save on every form of navigation away (covers in-tab nav, tab close,
-    // bfcache eviction, Astro VT navigations).
+    // Save on every nav-away path we know about. Belt-and-suspenders:
+    //  - capture-phase click on result links: synchronous save before the
+    //    handler that triggers navigation gets a chance to schedule things;
+    //  - pagehide: full nav (window.location.href = ...) + tab close;
+    //  - astro:before-preparation: Astro VT in-tab nav;
+    //  - visibilitychange: covers mobile tab-switch + some refresh paths.
+    document.addEventListener(
+      'click',
+      (e) => {
+        const target = e.target as HTMLElement | null;
+        if (!target) return;
+        // Any link that navigates away from the search results page should
+        // capture state. Match links inside grid/feed/list tiles + the
+        // filename links specifically.
+        const navLink = target.closest(
+          'a[href^="/admin/search/detail"], .grid-item__name-link, .feed-item__title-row a, .results-grid a, .results-feed a, .results-table a',
+        );
+        if (navLink) saveScrollState();
+      },
+      true, // capture phase — fire before delegated handlers cancel anything
+    );
     window.addEventListener('pagehide', saveScrollState);
     document.addEventListener('astro:before-preparation', saveScrollState);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') saveScrollState();
+    });
 
     // Restore form state from URL, load facets, then run first search
     restoreFromUrl();
@@ -3638,10 +3687,10 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
 
     const savedScroll = readSavedScroll();
     if (savedScroll) {
-      // Coming back from a detail page. In feed view we accumulate pages,
-      // so re-load every page they had to rebuild the DOM height, then
-      // restore scroll. In grid/list (paginated) the URL already points to
-      // their page; one fetch is enough.
+      // Coming back from a detail page (or refreshed in place). For feed
+      // view we accumulate pages, so re-load every page they had to rebuild
+      // DOM height. For grid/list the URL already points at their page
+      // (restoreFromUrl set currentPage), so one fetch is enough.
       if (currentView === 'feed' && savedScroll.maxPage > 1) {
         const targetMax = savedScroll.maxPage;
         currentPage = 1;
@@ -3653,8 +3702,31 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       } else {
         await doSearch();
       }
-      await new Promise((r) => requestAnimationFrame(() => r(null)));
-      window.scrollTo(0, savedScroll.scrollY);
+      // Don't scroll until the DOM is actually tall enough to contain the
+      // saved Y — chip enrichment, image lazy-load, and async layout can all
+      // grow height over the next few frames. Poll until height fits AND
+      // we've actually landed on the right Y, or ~2 seconds elapses.
+      const targetY = savedScroll.scrollY;
+      await new Promise<void>((resolve) => {
+        const deadline = performance.now() + 2000;
+        let lastHeight = -1;
+        const tick = () => {
+          const h = document.documentElement.scrollHeight;
+          if (h !== lastHeight) {
+            window.scrollTo(0, targetY);
+            lastHeight = h;
+          }
+          const enough = h >= targetY + window.innerHeight;
+          const landed = Math.abs(window.scrollY - targetY) < 4;
+          if ((enough && landed) || performance.now() > deadline) {
+            window.scrollTo(0, targetY);
+            resolve();
+            return;
+          }
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
     } else {
       doSearch();
     }
