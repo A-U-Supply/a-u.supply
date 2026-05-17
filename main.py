@@ -312,6 +312,9 @@ async def lifespan(app: FastAPI):
     logger.info("Slack activity rollup enabled (every %ds)", _ROLLUP)
     tasks.append(asyncio.create_task(_rollup_loop()))
 
+    from server.fold_watcher import watcher_loop as _fold_watcher_loop
+    tasks.append(asyncio.create_task(_fold_watcher_loop()))
+
     yield
 
     for task in tasks:

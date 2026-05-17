@@ -35,6 +35,7 @@ SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
 SLACK_LOG_CHANNEL = os.environ.get("SLACK_LOG_CHANNEL", "C0AUNJ6BMJT")  # #supply-side
 SLACK_LOG_ENABLED = os.environ.get("SLACK_LOG_ENABLED", "true").lower() in ("1", "true", "yes")
 SITE_URL = os.environ.get("SITE_URL", "https://a-u.supply")
+FOLD_BASE_URL = os.environ.get("FOLD_BASE_URL", "https://fold.a-u.supply.com").rstrip("/")
 ROLLUP_INTERVAL_SECONDS = int(os.environ.get("SLACK_ROLLUP_INTERVAL", "1800"))  # 30 min
 
 _API_URL = "https://slack.com/api/chat.postMessage"
@@ -570,6 +571,53 @@ def _format_latent_abandoned(u: str, d: dict) -> dict:
 _FOLD_EMOJI = "🗯"
 
 
+def _fold_user(u: str, d: dict) -> str:
+    """Use the linked a-u.supply User name if we have one; otherwise fall back
+    to the Lemmy display_name / username from the payload (for fold-native users
+    who don't have an a-u.supply account)."""
+    if u and u != "someone":
+        return u
+    return d.get("lemmy_display_name") or d.get("lemmy_username") or "someone"
+
+
+def _fold_community_url(name: str) -> str:
+    return f"{FOLD_BASE_URL}/c/{quote(name, safe='')}" if name else FOLD_BASE_URL
+
+
+def _fold_post_url(post_id: int | str) -> str:
+    return f"{FOLD_BASE_URL}/post/{post_id}" if post_id else FOLD_BASE_URL
+
+
+def _format_fold_community_created(u: str, d: dict) -> dict:
+    name = d.get("name") or ""
+    title = d.get("title") or name or "(untitled)"
+    description = d.get("description") or ""
+    actor = _fold_user(u, d)
+    verb = _pick(name, ["opened", "founded", "spun up", "started"])
+    text = f"{_FOLD_EMOJI} *{actor}* {verb} a new fold community: *{title}* `{name}`"
+    if description:
+        snippet = description.split("\n", 1)[0][:160]
+        text += f"\n_{snippet}_"
+    text += f"\n<{_fold_community_url(name)}|open community>"
+    return {"text": text, "unfurl_links": False}
+
+
+def _format_fold_post_created(u: str, d: dict) -> dict:
+    post_id = d.get("post_id") or ""
+    title = d.get("title") or "(untitled)"
+    community_name = d.get("community_name") or ""
+    community_title = d.get("community_title") or community_name or "fold"
+    body = d.get("body") or ""
+    actor = _fold_user(u, d)
+    verb = _pick(str(post_id), ["posted", "dropped", "filed", "shared"])
+    text = f"{_FOLD_EMOJI} *{actor}* {verb} in *{community_title}* on fold: *{title}*"
+    if body:
+        snippet = body.split("\n", 1)[0][:160]
+        text += f"\n_{snippet}_"
+    text += f"\n<{_fold_post_url(post_id)}|read>"
+    return {"text": text, "unfurl_links": False}
+
+
 def _format_latent_thread_created(u: str, d: dict) -> dict:
     anchor_type = d.get("anchor_type") or "project"
     anchor_id = d.get("anchor_id") or ""
@@ -624,6 +672,8 @@ _IMMEDIATE_FORMATTERS = {
     "latent.abandoned": _format_latent_abandoned,
     "latent.thread_created": _format_latent_thread_created,
     "latent.thread_reply": _format_latent_thread_reply,
+    "fold.community_created": _format_fold_community_created,
+    "fold.post_created": _format_fold_post_created,
 }
 
 
