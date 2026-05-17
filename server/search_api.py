@@ -595,6 +595,56 @@ def search_media(
     return results
 
 
+# Cap "Select all matching" expansions. Keeps batch ops sane and protects
+# against runaway selections in a query that suddenly matches everything.
+SELECT_ALL_CAP = 10000
+
+
+@router.post("/search/ids", tags=["Media Search"], summary="Get all matching IDs")
+def search_media_ids(
+    body: SearchRequest,
+    _auth=Depends(require_scope("read")),
+    db: Session = Depends(get_db),
+):
+    """Return just the IDs of every item matching the search, up to a cap.
+
+    Backs the "Select all N matching" affordance on the search page — the
+    grid/feed/list views only load a page (or a few pages) at a time, so
+    expanding a selection beyond what's loaded needs a server round-trip.
+
+    Same request body as ``/api/search``; ``page`` and ``per_page`` are
+    ignored. Returns ``{ids, total, capped}``. If the matching set exceeds
+    ``SELECT_ALL_CAP`` (10,000), ``ids`` is truncated and ``capped: true``.
+
+    **Scope required:** ``read``
+    """
+    from server.search_client import multi_search
+
+    meili_filter = _build_meili_filter(body.filters)
+    sort_list = [body.sort] if body.sort else None
+
+    media_types = body.media_types
+    if body.filters and (body.filters.color or body.filters.color_group):
+        media_types = ["image"]
+
+    # multi_search already fetches up to 10,000 per index internally and
+    # slices to the requested page. Asking for page=1 with per_page=CAP
+    # returns the full set in one call without a second code path.
+    results = multi_search(
+        query=body.query,
+        media_types=media_types,
+        filters=meili_filter,
+        sort=sort_list,
+        page=1,
+        per_page=SELECT_ALL_CAP,
+        include_emulsion=body.include_emulsion,
+    )
+    hits = results.get("hits", [])
+    ids = [h["id"] for h in hits if "id" in h]
+    total = results.get("total", len(ids))
+    return {"ids": ids, "total": total, "capped": total > len(ids)}
+
+
 @router.post("/search/stats", tags=["Media Search"], summary="Search aggregation stats")
 def search_stats(
     body: SearchRequest,

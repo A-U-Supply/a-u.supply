@@ -463,22 +463,43 @@ def sync_media_item(db: Session, media_item: MediaItem) -> None:
 def delete_media_item(media_item_id: str, media_type: str, *, source_type: str | None = None) -> None:
     """Remove a media item from the Meilisearch index.
 
-    For user-uploaded items (`source_type='manual_upload'`) or `session` types, the doc
-    lives in Emulsion regardless of media_type.
+    A media item's index depends on both `media_type` and `source_type`
+    (manual uploads + sessions live in Emulsion regardless of type). Callers
+    don't always have `source_type` handy — `batch_delete` in particular only
+    has `media_type`. Rather than make every call site reconstruct routing
+    state, we issue a delete against every plausible index for the given
+    media_type and let Meilisearch no-op on the misses.
+
+    This was the cause of "Delete didn't work" on emulsion items: the call
+    was hitting the wrong index, the DB row got removed but Meili kept
+    returning the doc, and the next search showed the item still there.
     """
-    if media_type == "session" or source_type == "manual_upload":
-        index_name = EMULSION_INDEX
+    candidate_indexes: list[str] = []
+    if source_type == "manual_upload" or media_type == "session":
+        candidate_indexes.append(EMULSION_INDEX)
     else:
-        index_name = INDEX_NAMES.get(media_type)
-    if not index_name:
+        type_index = INDEX_NAMES.get(media_type)
+        if type_index:
+            candidate_indexes.append(type_index)
+        # An item we *think* is e.g. an image might actually be an emulsion
+        # upload — without `source_type` we can't tell from media_type alone.
+        # Belt-and-suspenders: also try the Emulsion index.
+        candidate_indexes.append(EMULSION_INDEX)
+
+    if not candidate_indexes:
         logger.warning("Unknown media_type '%s' for deletion of %s", media_type, media_item_id)
         return
 
     client = get_client()
-    try:
-        client.index(index_name).delete_document(media_item_id)
-    except Exception:
-        logger.exception("Failed to delete media item %s from Meilisearch", media_item_id)
+    for index_name in candidate_indexes:
+        try:
+            client.index(index_name).delete_document(media_item_id)
+        except Exception:
+            logger.exception(
+                "Failed to delete media item %s from Meilisearch index %s",
+                media_item_id,
+                index_name,
+            )
 
 
 ALL_FACETS = [
