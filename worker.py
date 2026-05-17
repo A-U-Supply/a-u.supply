@@ -373,11 +373,16 @@ def _run_repo_job(job: Job, db: Session) -> None:
             except Exception:
                 logger.exception("Failed to decrypt PAT for repo job %s", job.id)
 
-    workdir = JOB_DATA_DIR / f"repo-run-{job.id}"
+    # Put the workdir under the same JOB_DATA_DIR the bot framework uses so
+    # the bind-mount has a stable host-side path. Container path stays at
+    # /app/job-data/{job.id}; the corresponding host path is exposed via the
+    # same /var/lib/dokku/.../au-supply-jobs/{job.id} mapping bot jobs rely on.
+    workdir = JOB_DATA_DIR / job.id
     workdir.mkdir(parents=True, exist_ok=True)
     repo_dir = workdir / "repo"
     out_dir = workdir / "output"
     out_dir.mkdir(exist_ok=True)
+    host_workdir = f"/var/lib/dokku/data/storage/au-supply-jobs/{job.id}"
 
     stderr_tail = ""
     exit_code: int | None = None
@@ -450,8 +455,9 @@ def _run_repo_job(job: Job, db: Session) -> None:
             "docker", "run", "--rm",
             "--name", container_name,
             "--workdir", "/work",
-            "-v", f"{repo_dir}:/work",
-            "-v", f"{out_dir}:/work/output",
+            # Host-side paths so docker-out-of-docker can resolve the bind mounts.
+            "-v", f"{host_workdir}/repo:/work",
+            "-v", f"{host_workdir}/output:/work/output",
             "--cpus", str(cpu_limit),
             "--memory", f"{memory_mb}m",
             "--pids-limit", "512",

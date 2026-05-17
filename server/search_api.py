@@ -1095,7 +1095,7 @@ async def upload_media(
                     project_id=project_id,
                     slot_id=resolved_slot_id,
                     media_item_id=existing.id,
-                    added_by=_auth.id if hasattr(_auth, "id") else None,
+                    added_by=(_auth[0].id if isinstance(_auth, tuple) else _auth.id),
                 ))
         db.commit()
         meili_sync(db, existing)
@@ -1173,7 +1173,7 @@ async def upload_media(
             project_id=project_id,
             slot_id=resolved_slot_id,
             media_item_id=item_id,
-            added_by=_auth.id if hasattr(_auth, "id") else None,
+            added_by=(_auth[0].id if isinstance(_auth, tuple) else _auth.id),
         )
         db.add(attachment)
 
