@@ -384,6 +384,7 @@ def create_thread(
             "latent.thread_created", user,
             anchor_type=body.anchor_type, anchor_id=body.anchor_id,
             title=body.title, thread_id=thread.id,
+            lemmy_url=f"{LEMMY_URL}/post/{post.id}" if LEMMY_URL else None,
         )
     except Exception:
         logger.exception("slack notify_immediate(latent.thread_created) failed")
@@ -477,6 +478,23 @@ def create_thread_comment(
         comment = lemmy_create_comment(token, t.lemmy_post_id, body.body, parent_id=body.parent_comment_id)
     except LemmyUnavailable as e:
         raise _LemmyError("unavailable", str(e))
+
+    try:
+        from server.slack_notifier import notify_immediate
+        snippet = (body.body or "").strip().replace("\n", " ")
+        if len(snippet) > 120:
+            snippet = snippet[:117] + "…"
+        notify_immediate(
+            "latent.thread_reply", user,
+            anchor_type=t.anchor_type, anchor_id=t.anchor_id,
+            thread_id=t.id,
+            thread_title=t.title_cache or "(thread)",
+            snippet=snippet,
+            lemmy_url=f"{LEMMY_URL}/post/{t.lemmy_post_id}" if LEMMY_URL else None,
+        )
+    except Exception:
+        logger.exception("slack notify_immediate(latent.thread_reply) failed")
+
     return _comment_dict(comment)
 
 

@@ -566,23 +566,44 @@ def _format_latent_abandoned(u: str, d: dict) -> dict:
     return {"text": text, "unfurl_links": False}
 
 
+# All fold/Lemmy events share this emoji so they're scannable in #supply-side.
+_FOLD_EMOJI = "🗯"
+
+
 def _format_latent_thread_created(u: str, d: dict) -> dict:
     anchor_type = d.get("anchor_type") or "project"
     anchor_id = d.get("anchor_id") or ""
     title = d.get("title") or "(untitled)"
+    lemmy_url = d.get("lemmy_url")
     if anchor_type == "media_item":
-        link = _search_detail_link(anchor_id)
+        link = lemmy_url or _search_detail_link(anchor_id)
         where = "in *the Stacks*"
     elif anchor_type in ("project", "slot"):
-        # For slot anchors we don't know the parent project here without an extra
-        # join; the thread payload carries enough for a meaningful message.
-        link = _latents_index_link()
+        link = lemmy_url or _latents_index_link()
         where = "in a *Latent*"
     else:
-        link = _latents_index_link()
+        link = lemmy_url or _latents_index_link()
         where = ""
     verb = _pick(title, ["opened", "started", "posted"])
-    text = f"💬 *{u}* {verb} a new thread {where}: *{title}*\n<{link}|view>"
+    text = f"{_FOLD_EMOJI} *{u}* {verb} a new fold thread {where}: *{title}*\n<{link}|view on fold>"
+    return {"text": text, "unfurl_links": False}
+
+
+def _format_latent_thread_reply(u: str, d: dict) -> dict:
+    anchor_type = d.get("anchor_type") or "media_item"
+    anchor_id = d.get("anchor_id") or ""
+    thread_title = d.get("thread_title") or "(untitled)"
+    snippet = d.get("snippet") or ""
+    lemmy_url = d.get("lemmy_url")
+    if anchor_type == "media_item":
+        fallback_link = _search_detail_link(anchor_id)
+        where = "in *the Stacks*"
+    else:
+        fallback_link = _latents_index_link()
+        where = "in a *Latent*"
+    link = lemmy_url or fallback_link
+    snip = f" — _{snippet}_" if snippet else ""
+    text = f"{_FOLD_EMOJI} *{u}* replied on fold {where} to *{thread_title}*{snip}\n<{link}|view on fold>"
     return {"text": text, "unfurl_links": False}
 
 
@@ -602,6 +623,7 @@ _IMMEDIATE_FORMATTERS = {
     "latent.status_changed": _format_latent_status_changed,
     "latent.abandoned": _format_latent_abandoned,
     "latent.thread_created": _format_latent_thread_created,
+    "latent.thread_reply": _format_latent_thread_reply,
 }
 
 
