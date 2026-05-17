@@ -3015,89 +3015,64 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     // Play / stop
-    document
-      .getElementById('ph-play-btn')!
-      .addEventListener('click', async () => {
-        const btn = document.getElementById('ph-play-btn') as HTMLButtonElement;
-        if (playbackSource) {
-          playbackSource.stop();
-          playbackSource = null;
-          btn.textContent = '▶';
-          stopProgress();
-          return;
-        }
-        if (!currentAudioBuffer || !spectrogramData) return;
+    document.getElementById('ph-play-btn')!.addEventListener('click', async () => {
+      const btn = document.getElementById('ph-play-btn') as HTMLButtonElement;
+      if (playbackSource) {
+        playbackSource.stop(); playbackSource = null;
+        btn.textContent = '▶'; stopProgress(); return;
+      }
+      if (!currentAudioBuffer || !spectrogramData) return;
 
-        // Synthesize edited audio if needed
-        let bufToPlay = currentAudioBuffer;
-        if (playMode === 'edited' && editedFrames) {
-          if (editedAudioStale || !editedAudioBuffer) {
-            btn.textContent = '…';
-            btn.disabled = true;
-            try {
-              const { sampleRate, phases, maxMag } = spectrogramData;
-              const fftSize = parseInt(
-                (document.getElementById('ph-fft') as HTMLSelectElement).value,
-              );
-              const hopSamples = fftSize >> 2;
-              const signal = await istftOLA(
-                editedFrames,
-                phases,
-                maxMag,
-                fftSize,
-                hopSamples,
-                (p) => {
-                  btn.textContent = `${Math.round(p * 100)}%`;
-                },
-              );
-              const ab = new AudioBuffer({
-                numberOfChannels: 1,
-                length: signal.length,
-                sampleRate,
-              });
-              ab.copyToChannel(signal, 0);
-              editedAudioBuffer = ab;
-              editedAudioStale = false;
-              updatePlayModeUI();
-            } catch {
-              btn.textContent = '▶';
-              btn.disabled = false;
-              return;
-            }
-            btn.disabled = false;
+      // Create AudioContext immediately while still in user-gesture scope
+      // (creating it after async awaits would leave it suspended in Chrome/Safari)
+      playbackCtx = new AudioContext();
+
+      // Synthesize edited audio if needed
+      let bufToPlay: AudioBuffer = currentAudioBuffer;
+      if (playMode === 'edited' && editedFrames) {
+        if (editedAudioStale || !editedAudioBuffer) {
+          btn.textContent = '…'; btn.disabled = true;
+          try {
+            const { sampleRate, phases, maxMag } = spectrogramData;
+            const fftSize = parseInt((document.getElementById('ph-fft') as HTMLSelectElement).value);
+            const hopSamples = fftSize >> 2;
+            const signal = await istftOLA(editedFrames, phases, maxMag, fftSize, hopSamples,
+              p => { btn.textContent = `${Math.round(p * 100)}%`; });
+            const ab = new AudioBuffer({ numberOfChannels: 1, length: signal.length, sampleRate });
+            ab.copyToChannel(signal, 0);
+            editedAudioBuffer = ab;
+            editedAudioStale = false;
+            updatePlayModeUI();
+          } catch {
+            playbackCtx.close(); playbackCtx = null;
+            btn.textContent = '▶'; btn.disabled = false; return;
           }
-          bufToPlay = editedAudioBuffer!;
+          btn.disabled = false;
         }
-
-        playbackCtx = new AudioContext();
-        playbackSource = playbackCtx.createBufferSource();
-        playbackSource.buffer = bufToPlay;
-        playbackSource.connect(playbackCtx.destination);
-        const [t0, t1] = getTimeRange();
-        const dur = bufToPlay.duration;
-        playbackStartOffset = t0 * dur;
-        playbackEndOffset = t1 * dur;
-        playbackStartTime = playbackCtx.currentTime;
-        if (loopEnabled) {
-          playbackSource.loop = true;
-          playbackSource.loopStart = playbackStartOffset;
-          playbackSource.loopEnd = playbackEndOffset;
-          playbackSource.start(0, playbackStartOffset);
-        } else {
-          playbackSource.start(
-            0,
-            playbackStartOffset,
-            playbackEndOffset - playbackStartOffset,
-          );
-        }
-        btn.textContent = '⏹';
-        progressRaf = requestAnimationFrame(tickProgress);
-        playbackSource.onended = () => {
-          playbackSource = null;
-          btn.textContent = '▶';
-          stopProgress();
-        };
-      });
+        bufToPlay = editedAudioBuffer!;
+      }
+      playbackSource = playbackCtx.createBufferSource();
+      playbackSource.buffer = bufToPlay;
+      playbackSource.connect(playbackCtx.destination);
+      const [t0, t1] = getTimeRange();
+      const dur = bufToPlay.duration;
+      playbackStartOffset = t0 * dur;
+      playbackEndOffset   = t1 * dur;
+      playbackStartTime   = playbackCtx.currentTime;
+      if (loopEnabled) {
+        playbackSource.loop      = true;
+        playbackSource.loopStart = playbackStartOffset;
+        playbackSource.loopEnd   = playbackEndOffset;
+        playbackSource.start(0, playbackStartOffset);
+      } else {
+        playbackSource.start(0, playbackStartOffset, playbackEndOffset - playbackStartOffset);
+      }
+      btn.textContent = '⏹';
+      progressRaf = requestAnimationFrame(tickProgress);
+      playbackSource.onended = () => {
+        playbackSource = null; btn.textContent = '▶'; stopProgress();
+      };
+    });
 
     // Loop toggle
     document.getElementById('ph-loop-btn')!.addEventListener('click', () => {
