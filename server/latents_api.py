@@ -130,7 +130,12 @@ def _project_summary(p: Project) -> dict:
     }
 
 
-def _slot_summary(s: ProjectSlot, pins: dict[str, str] | None = None, thread_count: int = 0) -> dict:
+def _slot_summary(
+    s: ProjectSlot,
+    pins: dict[str, str] | None = None,
+    thread_count: int = 0,
+    item_count: int = 0,
+) -> dict:
     pin_map = pins or {}
     return {
         "id": s.id,
@@ -144,6 +149,7 @@ def _slot_summary(s: ProjectSlot, pins: dict[str, str] | None = None, thread_cou
         "metadata": _parse_metadata(s.metadata_json),
         "pinned": pin_map,
         "thread_count": int(thread_count),
+        "item_count": int(item_count),
         "repo_id": s.repo_id,
         "repo_path": s.repo_path,
         "repo_ref": s.repo_ref,
@@ -374,6 +380,7 @@ def get_project(
         Thread.anchor_type == "project", Thread.anchor_id == project_id,
     ).scalar() or 0
     slot_thread_counts: dict[str, int] = {}
+    slot_item_counts: dict[str, int] = {}
     if slots:
         slot_ids = [s.id for s in slots]
         rows = (
@@ -383,9 +390,24 @@ def get_project(
             .all()
         )
         slot_thread_counts = {aid: int(c) for aid, c in rows}
+        item_rows = (
+            db.query(ProjectItem.slot_id, func.count(ProjectItem.id))
+            .filter(ProjectItem.project_id == project_id, ProjectItem.slot_id.in_(slot_ids))
+            .group_by(ProjectItem.slot_id)
+            .all()
+        )
+        slot_item_counts = {sid: int(c) for sid, c in item_rows}
     return {
         **_project_summary(p),
-        "slots": [_slot_summary(s, slot_pins.get(s.id), slot_thread_counts.get(s.id, 0)) for s in slots],
+        "slots": [
+            _slot_summary(
+                s,
+                slot_pins.get(s.id),
+                slot_thread_counts.get(s.id, 0),
+                slot_item_counts.get(s.id, 0),
+            )
+            for s in slots
+        ],
         "documents": [_document_summary(d) for d in documents],
         "item_count": int(item_count),
         "loose_item_count": int(loose_count),
