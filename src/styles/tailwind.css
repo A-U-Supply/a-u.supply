@@ -14,11 +14,6 @@
   --color-border: #ccc;
   --color-accent: #b8860b;
 
-  /* Subtle surface variants — used for content cards, dialogs, table rows.
-   * Defined here so they auto-flip in dark mode below. */
-  --color-surface: #fafafa;
-  --color-surface-2: #f0f0f0;
-
   --font-mono: 'Courier New', Courier, monospace;
   --font-sans: 'Courier New', Courier, monospace;
 
@@ -37,26 +32,6 @@
   --shadow-md: 2px 2px 0 var(--color-fg);
   --shadow-lg: 3px 3px 0 var(--color-fg);
   --shadow-xl: 4px 4px 0 var(--color-fg);
-}
-
-/*
- * Dark mode: applies when `<html data-theme="dark">` is set. The toggle in
- * Admin.astro writes that attribute pre-paint based on the user's saved
- * preference (or `prefers-color-scheme` when in auto mode). Sidebar chrome
- * stays dark in both modes by design — only the content surfaces flip.
- *
- * Both `--color-fg` (Tailwind 4) and `--color-text` (legacy global.css) are
- * overridden so existing admin.css references work without touching them.
- */
-[data-theme='dark'] {
-  --color-bg: #111;
-  --color-fg: #ececec;
-  --color-text: #ececec;
-  --color-muted: #8c8c8c;
-  --color-border: #333;
-  --color-accent: #d4a01d;
-  --color-surface: #1a1a1a;
-  --color-surface-2: #222;
 }
 
 /*
