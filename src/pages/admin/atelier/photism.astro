@@ -1327,6 +1327,7 @@ import Admin from '../../../layouts/Admin.astro';
     let progressRaf: number | null = null;
     let editedAudioBuffer: AudioBuffer | null = null;
     let editedAudioStale = false;
+    let editedAudioTrimRange: [number, number] | null = null;
     let playMode: 'original' | 'edited' = 'original';
 
     const canvas = document.getElementById('ph-canvas') as HTMLCanvasElement;
@@ -3029,19 +3030,48 @@ import Admin from '../../../layouts/Admin.astro';
 
       // Synthesize edited audio if needed
       let bufToPlay: AudioBuffer = currentAudioBuffer;
+      const [t0, t1] = getTimeRange();
       if (playMode === 'edited' && editedFrames) {
-        if (editedAudioStale || !editedAudioBuffer) {
+        const trimChanged = !editedAudioTrimRange ||
+          editedAudioTrimRange[0] !== t0 || editedAudioTrimRange[1] !== t1;
+        if (editedAudioStale || !editedAudioBuffer || trimChanged) {
           btn.textContent = '…'; btn.disabled = true;
           try {
-            const { sampleRate, phases, maxMag } = spectrogramData;
+            const { sampleRate, phases, maxMag, numFrames } = spectrogramData;
             const fftSize = parseInt((document.getElementById('ph-fft') as HTMLSelectElement).value);
             const hopSamples = fftSize >> 2;
-            const signal = await istftOLA(editedFrames, phases, maxMag, fftSize, hopSamples,
+            // Trim frames to the current view window (same as export does)
+            const fStart = Math.floor(t0 * numFrames);
+            const fEnd = Math.ceil(t1 * numFrames);
+            const trimmedFrames = editedFrames.slice(fStart, fEnd);
+            const trimmedPhases = phases.slice(fStart, fEnd);
+            const signal = await istftOLA(trimmedFrames, trimmedPhases, maxMag, fftSize, hopSamples,
               p => { btn.textContent = `${Math.round(p * 100)}%`; });
+
+            // RMS-match to the original audio so unedited regions remain audible
+            // alongside drawn regions (which would otherwise dominate peak normalization)
+            const origData = currentAudioBuffer.getChannelData(0);
+            const origStart = Math.floor(t0 * origData.length);
+            const origEnd = Math.ceil(t1 * origData.length);
+            let origSumSq = 0;
+            for (let i = origStart; i < origEnd; i++) origSumSq += origData[i] * origData[i];
+            const origRms = origEnd > origStart ? Math.sqrt(origSumSq / (origEnd - origStart)) : 0;
+            let synthSumSq = 0;
+            for (let i = 0; i < signal.length; i++) synthSumSq += signal[i] * signal[i];
+            const synthRms = signal.length > 0 ? Math.sqrt(synthSumSq / signal.length) : 0;
+            if (synthRms > 1e-8 && origRms > 1e-8) {
+              const scale = origRms / synthRms;
+              for (let i = 0; i < signal.length; i++) {
+                const s = signal[i] * scale;
+                signal[i] = s > 1 ? 1 : s < -1 ? -1 : s;
+              }
+            }
+
             const ab = new AudioBuffer({ numberOfChannels: 1, length: signal.length, sampleRate });
             ab.copyToChannel(signal, 0);
             editedAudioBuffer = ab;
             editedAudioStale = false;
+            editedAudioTrimRange = [t0, t1];
             updatePlayModeUI();
           } catch {
             playbackCtx.close(); playbackCtx = null;
@@ -3054,10 +3084,12 @@ import Admin from '../../../layouts/Admin.astro';
       playbackSource = playbackCtx.createBufferSource();
       playbackSource.buffer = bufToPlay;
       playbackSource.connect(playbackCtx.destination);
-      const [t0, t1] = getTimeRange();
       const dur = bufToPlay.duration;
-      playbackStartOffset = t0 * dur;
-      playbackEndOffset   = t1 * dur;
+      // For edited mode, synthesis is already trimmed — play the full buffer
+      // For original mode, seek using trim offsets as usual
+      const isEditedBuf = playMode === 'edited' && editedFrames != null;
+      playbackStartOffset = isEditedBuf ? 0 : t0 * dur;
+      playbackEndOffset   = isEditedBuf ? dur : t1 * dur;
       playbackStartTime   = playbackCtx.currentTime;
       if (loopEnabled) {
         playbackSource.loop      = true;
