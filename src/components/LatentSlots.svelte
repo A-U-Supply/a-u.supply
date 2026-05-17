@@ -48,6 +48,7 @@
     slot_id: string | null;
     media_item_id: string;
     added_at: string;
+    is_primary?: boolean;
     media?: {
       id: string;
       filename: string;
@@ -394,6 +395,31 @@
     }
   }
 
+  async function togglePrimary(slot: Slot, item: Item) {
+    try {
+      const next = !item.is_primary;
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/items/${encodeURIComponent(item.id)}/primary`,
+        {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ is_primary: next }),
+        },
+      );
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      const body = await res.json();
+      itemsBySlot = {
+        ...itemsBySlot,
+        [slot.id]: (itemsBySlot[slot.id] || []).map((i) =>
+          i.id === item.id ? { ...i, is_primary: body.is_primary } : i,
+        ),
+      };
+    } catch (e: any) {
+      error = e?.message || 'Failed to toggle primary';
+    }
+  }
+
   async function detachItem(slot: Slot, item: Item) {
     if (!confirm('Detach this file from the slot?')) return;
     try {
@@ -625,32 +651,31 @@
           </div>
         {/if}
 
-        <div class="slot__pins">
-          {#each ['image', 'audio', 'video', 'session'] as mt}
-            <div class="pin" data-type={mt}>
-              <span class="pin__label">{mt}</span>
-              {#if slot.pinned[mt]}
-                <a
-                  class="pin__thumb"
-                  href={`/admin/search/detail?id=${encodeURIComponent(slot.pinned[mt])}`}
-                >
-                  {#if mt === 'image'}
-                    <img src={thumbUrl(slot.pinned[mt])} alt="" />
-                  {:else}
-                    <span class="icon">{mt}</span>
-                  {/if}
-                </a>
-                <button
-                  class="link"
-                  type="button"
-                  onclick={() => clearPin(slot, mt)}>Unpin</button
-                >
-              {:else}
-                <div class="pin__empty">—</div>
-              {/if}
-            </div>
-          {/each}
-        </div>
+        <!--
+          The rigid image/audio/video/session pin grid was removed in favour of
+          a per-file ★ toggle that lives inline in the Files panel below. Old
+          slot_primary_pins rows are still written by the worker on auto-pin
+          so existing data isn't lost; the API still returns `pinned` for any
+          consumer that wants it.
+        -->
+        {#if Object.values(slot.pinned).length > 0}
+          <div class="slot__pinned-strip">
+            <span class="muted">Primary:</span>
+            {#each Object.entries(slot.pinned) as [mt, mediaId]}
+              <a
+                class="pinned-tile"
+                title={mt}
+                href={`/admin/search/detail?id=${encodeURIComponent(mediaId)}`}
+              >
+                {#if mt === 'image'}
+                  <img src={thumbUrl(mediaId)} alt={mt} />
+                {:else}
+                  <span class="icon">{mt}</span>
+                {/if}
+              </a>
+            {/each}
+          </div>
+        {/if}
 
         {#if openSlot === slot.id && openSection === 'files'}
           <div class="slot__panel">
@@ -695,18 +720,16 @@
                       {it.media?.filename || '?'}
                     </div>
                     <div class="tile__actions">
-                      {#if it.media?.media_type && ['image', 'audio', 'video', 'session'].includes(it.media.media_type)}
-                        <button
-                          class="action-btn"
-                          type="button"
-                          onclick={() =>
-                            setPin(
-                              slot,
-                              it.media!.media_type,
-                              it.media_item_id,
-                            )}>Pin</button
-                        >
-                      {/if}
+                      <button
+                        class="action-btn"
+                        type="button"
+                        title={it.is_primary
+                          ? 'Unstar (no longer primary)'
+                          : 'Star as primary file'}
+                        onclick={() => togglePrimary(slot, it)}
+                        aria-pressed={it.is_primary}
+                        >{it.is_primary ? '★' : '☆'}</button
+                      >
                       <button
                         class="action-btn action-btn--danger"
                         type="button"
@@ -889,6 +912,35 @@
     display: flex;
     gap: 4px;
     flex-wrap: wrap;
+  }
+  .slot__pinned-strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px var(--space-sm);
+    border-top: 1px dashed var(--color-border);
+    flex-wrap: wrap;
+  }
+  .slot__pinned-strip .muted {
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    font-size: 0.65rem;
+  }
+  .pinned-tile {
+    width: 32px;
+    height: 32px;
+    background: #f4f4f4;
+    border: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    color: inherit;
+  }
+  .pinned-tile img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
   .slot__pins {
     display: grid;

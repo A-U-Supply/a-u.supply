@@ -176,7 +176,10 @@ import Admin from '../../../layouts/Admin.astro';
           return;
         }
         const body = await res.json();
-        window.location.href = `/admin/latents/detail?id=${encodeURIComponent(body.id)}`;
+        const target = body.slug
+          ? `/admin/latents/${encodeURIComponent(body.slug)}`
+          : `/admin/latents/detail?id=${encodeURIComponent(body.id)}`;
+        window.location.href = target;
       } catch (e: any) {
         err.textContent = e?.message || 'Network error';
         err.hidden = false;

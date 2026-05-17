@@ -147,17 +147,46 @@ import Admin from '../../../layouts/Admin.astro';
     );
   }
 
+  async function resolveProjectId(
+    headerEl: HTMLElement,
+  ): Promise<string | null> {
+    const params = new URLSearchParams(window.location.search);
+    let id = params.get('id');
+    if (id) return id;
+    // Pretty URL form: /admin/latents/<slug> (or /admin/latents/<slug>/)
+    const m = window.location.pathname.match(/^\/admin\/latents\/([^/]+)\/?$/);
+    if (!m || m[1] === 'detail' || m[1] === 'new') return null;
+    const slug = m[1];
+    try {
+      const r = await fetch(
+        `/api/projects/by-slug/${encodeURIComponent(slug)}`,
+        { credentials: 'include' },
+      );
+      if (!r.ok) {
+        headerEl.innerHTML = `<p style="color:#c00;">No latent with slug <code>${slug}</code>.</p>`;
+        return null;
+      }
+      const j = await r.json();
+      return j.id;
+    } catch {
+      headerEl.innerHTML =
+        '<p style="color:#c00;">Network error resolving slug.</p>';
+      return null;
+    }
+  }
+
   async function init() {
     if (initialized) return;
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get('id');
     const headerEl = document.getElementById('header');
     const islandsEl = document.getElementById('islands');
-    if (!id || !headerEl || !islandsEl) return;
+    if (!headerEl || !islandsEl) return;
 
     const user = await (window as any).__authReady;
     if (!user) return;
     if (initialized) return;
+
+    const id = await resolveProjectId(headerEl);
+    if (!id) return;
     initialized = true;
 
     let res: Response;
@@ -175,6 +204,14 @@ import Admin from '../../../layouts/Admin.astro';
       return;
     }
     const p = await res.json();
+
+    // If we resolved by id (query-string entry) and the project has a slug,
+    // upgrade the URL to the pretty form so bookmarks + share links work.
+    if (p.slug && window.location.pathname !== `/admin/latents/${p.slug}`) {
+      try {
+        history.replaceState(history.state, '', `/admin/latents/${p.slug}`);
+      } catch {}
+    }
 
     headerEl.innerHTML = `
       <div class="header-row">

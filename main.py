@@ -136,6 +136,30 @@ if "repo_run_id" not in _pin_cols:
     with engine.begin() as _conn:
         _conn.execute(_sa_text("ALTER TABLE slot_primary_pins ADD COLUMN repo_run_id TEXT"))
 
+# Migrate existing DB: description + arbitrary metadata + per-item primary flag
+_project_cols = [c["name"] for c in _sa_inspect(engine).get_columns("projects")]
+for _col, _ddl in (
+    ("description",   "ALTER TABLE projects ADD COLUMN description TEXT"),
+    ("metadata_json", "ALTER TABLE projects ADD COLUMN metadata_json TEXT"),
+):
+    if _col not in _project_cols:
+        with engine.begin() as _conn:
+            _conn.execute(_sa_text(_ddl))
+
+_slot_cols_v2 = [c["name"] for c in _sa_inspect(engine).get_columns("project_slots")]
+for _col, _ddl in (
+    ("description",   "ALTER TABLE project_slots ADD COLUMN description TEXT"),
+    ("metadata_json", "ALTER TABLE project_slots ADD COLUMN metadata_json TEXT"),
+):
+    if _col not in _slot_cols_v2:
+        with engine.begin() as _conn:
+            _conn.execute(_sa_text(_ddl))
+
+_item_cols = [c["name"] for c in _sa_inspect(engine).get_columns("project_items")]
+if "is_primary" not in _item_cols:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE project_items ADD COLUMN is_primary BOOLEAN NOT NULL DEFAULT 0"))
+
 # Migrate existing DB: create GitHub tables if missing
 _existing_tables_g = set(_sa_inspect(engine).get_table_names())
 from server.models import (
@@ -928,18 +952,26 @@ def media_detail_with_og(request: Request, id: str | None = None):
 
 @app.middleware("http")
 async def static_files(request: Request, call_next):
-    """Serve static files from dist/ only when the file actually exists."""
+    """Serve static files from dist/ only when the file actually exists.
+
+    Additionally: pretty Latent URLs at /admin/latents/<slug> fall through
+    to the detail.astro page so the URL bar shows the slug while the JS
+    resolves the slug to an id and loads the project.
+    """
     response = await call_next(request)
     if response.status_code == 404 and DIST_DIR.is_dir():
         url_path = request.url.path.lstrip("/")
-        # Try exact file
         candidate = (DIST_DIR / url_path).resolve()
         if candidate.is_file() and candidate.is_relative_to(DIST_DIR.resolve()):
             return FileResponse(candidate)
-        # Try as directory with index.html (html=True behavior)
         index = (DIST_DIR / url_path / "index.html").resolve()
         if index.is_file() and index.is_relative_to(DIST_DIR.resolve()):
             return FileResponse(index)
+        # Pretty Latent URL: /admin/latents/<slug> → serve the detail page.
+        if url_path.startswith("admin/latents/") and "/" not in url_path[len("admin/latents/"):]:
+            detail = (DIST_DIR / "admin/latents/detail/index.html").resolve()
+            if detail.is_file() and detail.is_relative_to(DIST_DIR.resolve()):
+                return FileResponse(detail)
     return response
 
 

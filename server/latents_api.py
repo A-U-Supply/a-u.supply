@@ -7,6 +7,7 @@ All endpoints require admin auth. Slot auto-labels are derived from the parent
 project's `kind` when a label isn't supplied.
 """
 
+import json
 import logging
 import re
 import uuid
@@ -102,6 +103,16 @@ def _document_or_404(db: Session, project_id: str, document_id: str) -> ProjectD
     return d
 
 
+def _parse_metadata(raw: str | None) -> dict:
+    if not raw:
+        return {}
+    try:
+        v = json.loads(raw)
+        return v if isinstance(v, dict) else {}
+    except (ValueError, TypeError):
+        return {}
+
+
 def _project_summary(p: Project) -> dict:
     return {
         "id": p.id,
@@ -109,6 +120,8 @@ def _project_summary(p: Project) -> dict:
         "name": p.name,
         "kind": p.kind,
         "status": p.status,
+        "description": p.description,
+        "metadata": _parse_metadata(p.metadata_json),
         "hero_media_item_id": p.hero_media_item_id,
         "lemmy_community_id": p.lemmy_community_id,
         "created_by": p.created_by,
@@ -127,6 +140,8 @@ def _slot_summary(s: ProjectSlot, pins: dict[str, str] | None = None, thread_cou
         "status": s.status,
         "notes": s.notes,
         "notes_updated_at": s.notes_updated_at.isoformat() if s.notes_updated_at else None,
+        "description": s.description,
+        "metadata": _parse_metadata(s.metadata_json),
         "pinned": pin_map,
         "thread_count": int(thread_count),
         "repo_id": s.repo_id,
@@ -162,6 +177,7 @@ def _item_summary(pi: ProjectItem) -> dict:
         "media_item_id": pi.media_item_id,
         "added_by": pi.added_by,
         "added_at": pi.added_at.isoformat() if pi.added_at else None,
+        "is_primary": bool(pi.is_primary),
         "media": {
             "id": mi.id,
             "filename": mi.filename,
@@ -195,8 +211,11 @@ class CreateProjectBody(BaseModel):
 
 class UpdateProjectBody(BaseModel):
     name: str | None = None
+    slug: str | None = None
     kind: str | None = None
     status: str | None = None
+    description: str | None = None
+    metadata: dict | None = None
     hero_media_item_id: str | None = None
 
 
@@ -209,6 +228,8 @@ class UpdateSlotBody(BaseModel):
     label: str | None = None
     status: str | None = None
     notes: str | None = None
+    description: str | None = None
+    metadata: dict | None = None
     repo_id: str | None = None       # set to "" to clear
     repo_path: str | None = None     # set to "" to clear
     repo_ref: str | None = None      # set to "" to clear (falls back to repo default branch)
@@ -249,6 +270,18 @@ class ReorderDocumentsBody(BaseModel):
 # ---------------------------------------------------------------------------
 # Projects
 # ---------------------------------------------------------------------------
+
+
+@router.get("/by-slug/{slug}", summary="Resolve a project by its slug")
+def project_by_slug(
+    slug: str,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    p = db.query(Project).filter(Project.slug == slug).first()
+    if not p:
+        raise HTTPException(status_code=404, detail=f"No project with slug '{slug}'")
+    return {"id": p.id, "slug": p.slug, "name": p.name}
 
 
 @router.get("", summary="List Latents")
@@ -402,6 +435,13 @@ def update_project(
     prior_status = p.status
     if body.name is not None:
         p.name = body.name
+    if body.slug is not None:
+        desired = _slugify(body.slug)
+        if desired != p.slug:
+            clash = db.query(Project).filter(Project.slug == desired, Project.id != p.id).first()
+            if clash:
+                raise HTTPException(status_code=409, detail=f"Slug '{desired}' is already taken")
+            p.slug = desired
     if body.kind is not None:
         if body.kind not in VALID_KINDS:
             raise HTTPException(status_code=400, detail=f"Invalid kind '{body.kind}'")
@@ -410,6 +450,10 @@ def update_project(
         if body.status not in VALID_PROJECT_STATUSES:
             raise HTTPException(status_code=400, detail=f"Invalid status '{body.status}'")
         p.status = body.status
+    if body.description is not None:
+        p.description = body.description or None
+    if body.metadata is not None:
+        p.metadata_json = json.dumps(body.metadata) if body.metadata else None
     if body.hero_media_item_id is not None:
         if body.hero_media_item_id:
             mi = db.query(MediaItem).filter(MediaItem.id == body.hero_media_item_id).first()
@@ -502,6 +546,10 @@ def update_slot(
     if body.notes is not None:
         s.notes = body.notes
         s.notes_updated_at = _utcnow()
+    if body.description is not None:
+        s.description = body.description or None
+    if body.metadata is not None:
+        s.metadata_json = json.dumps(body.metadata) if body.metadata else None
     # Repo file linkage. Empty string clears the field.
     if body.repo_id is not None:
         if body.repo_id == "":
@@ -712,6 +760,31 @@ def move_item(
         slot = _slot_or_404(db, project_id, body.slot_id)
         new_slot_id = slot.id
     pi.slot_id = new_slot_id
+    db.commit()
+    db.refresh(pi)
+    return _item_summary(pi)
+
+
+class SetPrimaryBody(BaseModel):
+    is_primary: bool
+
+
+@router.put("/{project_id}/items/{item_id}/primary", summary="Star/unstar an item as primary")
+def set_item_primary(
+    project_id: str,
+    item_id: str,
+    body: SetPrimaryBody,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    _project_or_404(db, project_id)
+    pi = db.query(ProjectItem).options(joinedload(ProjectItem.media_item)).filter(
+        ProjectItem.id == item_id,
+        ProjectItem.project_id == project_id,
+    ).first()
+    if not pi:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    pi.is_primary = bool(body.is_primary)
     db.commit()
     db.refresh(pi)
     return _item_summary(pi)
