@@ -570,6 +570,15 @@
           </div>
           <div class="slot__actions">
             <button
+              class="btn-primary slot__upload-btn"
+              type="button"
+              onclick={() => {
+                if (!(openSlot === slot.id && openSection === 'files')) {
+                  toggleSection(slot.id, 'files');
+                }
+              }}>+ Upload</button
+            >
+            <button
               class="action-btn"
               type="button"
               onclick={() => toggleSection(slot.id, 'files')}>Files</button
@@ -953,6 +962,11 @@
     display: flex;
     gap: 4px;
     flex-wrap: wrap;
+    align-items: center;
+  }
+  .slot__upload-btn {
+    padding: 3px 10px;
+    font-size: 0.7rem;
   }
   .slot__pinned-strip {
     display: flex;
