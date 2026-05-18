@@ -53,7 +53,7 @@ The full index lives in [`docs/README.md`](docs/README.md). Quick links:
 - [`docs/operations.md`](docs/operations.md) — `manage.py` subcommands, SSH gotchas
 
 **Section-specific**
-- [`docs/atelier.md`](docs/atelier.md) — the Atelier section (Punctum, Photism, Spectralize)
+- [`docs/atelier.md`](docs/atelier.md) — the Atelier section (Punctum, Photism)
 - [`docs/bots.md`](docs/bots.md) — App Runner / TOML manifests / how to add a bot
 - [`docs/player.md`](docs/player.md) — persistent audio player events
 - [`docs/agents.md`](docs/agents.md) — agent-side config (`.claude/`, hooks, worktrees, skills)

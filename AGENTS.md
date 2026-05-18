@@ -31,7 +31,7 @@ It is **not**: bot/tool code, audio CLIs, search-engine internals, or anything e
 | Stack, directory layout, data flow | [`docs/architecture.md`](docs/architecture.md) |
 | Frontend: UI kit, design tokens, components, naming | [`docs/frontend.md`](docs/frontend.md) |
 | What "Auspices", "Stacks", "Hecatomb", etc. mean | [`docs/glossary.md`](docs/glossary.md) |
-| The Atelier section (Punctum, Photism, Spectralize) | [`docs/atelier.md`](docs/atelier.md) |
+| The Atelier section (Punctum, Photism) | [`docs/atelier.md`](docs/atelier.md) |
 | API auth + endpoint groups | [`docs/api.md`](docs/api.md) |
 | Bots / App Runner / TOML manifests | [`docs/bots.md`](docs/bots.md) |
 | Persistent audio player events | [`docs/player.md`](docs/player.md) |

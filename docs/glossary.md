@@ -24,7 +24,6 @@ The naming system blends ecclesiastical, scientific-warehouse, and photographic-
 | **The Darkroom** | pre-release workspace | Latents | `latents` | Private admin-only workspace for assembling pre-release works of any media type. See [`plans/2026-05-15-latents.md`](plans/2026-05-15-latents.md). |
 | **The Atelier** | generative image tools | Punctum | `punctum` | Multi-bot image atelier (`/admin/atelier/punctum`). See [`atelier.md`](atelier.md). |
 |  |  | Photism | `photism` | Audio → image spectral editor (`/admin/atelier/photism`) |
-|  |  | Spectralize | `spectralize` | Image → audio via spectrogram (`/admin/atelier/spectralize`) |
 | **The Sacristy** | files, keys, settings | Holdings | `files` | File-management surface (`/admin/files`) — placeholder, "coming soon" |
 |  |  | Keys | `api-keys` | API key generation + revocation (`/admin/api-keys`) |
 |  |  | Settings | `settings` | User management, integrations, site settings (`/admin/settings`) |
@@ -42,7 +41,7 @@ The `current=` slug is what `<Admin current="…">` expects in each page's front
 | **Altar of the Day** | A daily-rotating featured media item shown on the Auspices dashboard. Backed by `GET /api/admin/altar`. |
 | **Supply-side** | The Slack channel where deploy and activity notifications go (`#supply-side`, ID `C0AUNJ6BMJT`). See [`plans/2026-04-24-slack-activity-log.md`](plans/2026-04-24-slack-activity-log.md). |
 | **Tribute** | The act of uploading. The Tribute page is where user uploads enter Emulsion. |
-| **Punctum / Photism / Spectralize / Bullet Hole** | Atelier tools. See [`atelier.md`](atelier.md). |
+| **Punctum / Photism / Bullet Hole** | Atelier tools. See [`atelier.md`](atelier.md). Spectralize was folded into Photism (2026-05-18). |
 
 ## Project codes
 

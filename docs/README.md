@@ -18,7 +18,7 @@ The deep documentation for [a-u.supply](https://a-u.supply). The root [`README.m
 
 ### Section-specific
 
-- [`atelier.md`](atelier.md) — the Atelier admin section (Punctum, Photism, Spectralize). What it is, what's in it, conventions.
+- [`atelier.md`](atelier.md) — the Atelier admin section (Punctum, Photism). What it is, what's in it, conventions.
 - [`bots.md`](bots.md) — App Runner: TOML manifests, the bot-per-repo model, the job-queue flow
 
 ### Running it

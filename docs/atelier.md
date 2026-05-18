@@ -26,11 +26,11 @@ The Punctum source lives at `src/pages/admin/atelier/punctum.astro`. Each bot is
 
 ### Photism — `/admin/atelier/photism`
 
-Audio → image translation. Drop an audio file (MP3 / WAV / OGG / FLAC / M4A) or pick from the Media Library, the page renders a spectrogram you can play through, edit (paint mode, trim, dual-trim), and export back out as either an image or as resynthesised audio (ISTFT/OLA — see commit history for the spectral pipeline rewrite). Source: `src/pages/admin/atelier/photism.astro`. No standalone design doc.
+Spectral audio editor. Two entry points: drop an audio file (MP3 / WAV / OGG / FLAC / M4A) to analyse it as a spectrogram, or switch to the **▦ Image** tab to synthesise audio directly from an image (additive synthesis, the former Spectralize workflow). From either starting point the user can paint on the spectrogram, stamp images, apply spectral FX, and export as image, video, or resynthesised audio (ISTFT/OLA). Source: `src/pages/admin/atelier/photism.astro`. Design doc: [`/photism.md`](../photism.md).
 
-### Spectralize — `/admin/atelier/spectralize`
+### Spectralize — deprecated
 
-The inverse direction: image → audio via spectrogram. Drop an image (PNG / JPG / GIF / WEBP), it renders as a spectrogram and synthesizes corresponding audio. Source: `src/pages/admin/atelier/spectralize.astro`. No standalone design doc.
+Folded into Photism (2026-05-18). The page at `/admin/atelier/spectralize` now shows a redirect notice. Source retained as `src/pages/admin/atelier/spectralize.astro` for the redirect.
 
 ## Page-level theming
 
