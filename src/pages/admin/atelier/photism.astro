@@ -11,7 +11,13 @@ import Admin from '../../../layouts/Admin.astro';
   <div class="ph-shell">
     <!-- ── Controls ─────────────────────────────────────────── -->
     <div class="ph-controls">
-      <!-- Upload zone -->
+      <!-- Source tabs -->
+      <div class="ph-source-tabs">
+        <button class="ph-pill ph-pill--on" id="ph-tab-audio">♫ Audio</button>
+        <button class="ph-pill" id="ph-tab-image">▦ Image</button>
+      </div>
+
+      <!-- Audio upload zone -->
       <div class="ph-drop-zone" id="ph-drop-zone">
         <div class="ph-drop-empty" id="ph-drop-empty">
           <div class="ph-drop-icon">♫</div>
@@ -60,6 +66,58 @@ import Admin from '../../../layouts/Admin.astro';
           accept="audio/*"
           style="display:none"
         />
+      </div>
+
+      <!-- Image upload zone (shown in Image tab) -->
+      <div class="ph-img-drop-zone" id="ph-img-drop-zone" style="display:none">
+        <div class="ph-img-drop-empty" id="ph-img-drop-empty">
+          <div class="ph-drop-icon">▦</div>
+          <div class="ph-drop-hint">Drop image here</div>
+          <div class="ph-drop-actions">
+            <button class="ph-drop-btn" id="ph-img-upload-btn">↑ Upload Image</button>
+            <span class="ph-drop-or">or</span>
+            <button class="ph-drop-btn ph-drop-btn--lib" id="ph-img-lib-btn">From Library</button>
+          </div>
+          <div class="ph-drop-sub">PNG · JPG · GIF · WEBP</div>
+        </div>
+        <div id="ph-img-loaded-zone" style="display:none">
+          <canvas id="ph-img-preview" width="240" height="80" style="width:100%;border-radius:3px"></canvas>
+          <div class="ph-loaded-footer">
+            <span id="ph-img-meta" class="ph-audio-meta"></span>
+            <button class="ph-change-btn" id="ph-img-change-btn">Change</button>
+          </div>
+        </div>
+        <input type="file" id="ph-img-file-input" accept="image/*" style="display:none" />
+      </div>
+
+      <!-- Synth parameters (shown in Image tab) -->
+      <div class="ph-synth-params" id="ph-synth-params" style="display:none">
+        <div class="ph-field">
+          <label class="ph-label">
+            Freq Min <span class="ph-val" id="ph-smin-val">200 Hz</span>
+          </label>
+          <input class="ph-range" type="range" id="ph-synth-fmin" min="20" max="4000" step="10" value="200" />
+        </div>
+        <div class="ph-field">
+          <label class="ph-label">
+            Freq Max <span class="ph-val" id="ph-smax-val">8 kHz</span>
+          </label>
+          <input class="ph-range" type="range" id="ph-synth-fmax" min="2000" max="20000" step="100" value="8000" />
+        </div>
+        <div class="ph-field">
+          <label class="ph-label">
+            Duration <span class="ph-val" id="ph-sdur-val">8 s</span>
+          </label>
+          <input class="ph-range" type="range" id="ph-synth-dur" min="1" max="30" step="1" value="8" />
+        </div>
+        <div class="ph-field">
+          <label class="ph-label">
+            Contrast <span class="ph-val" id="ph-scon-val">4</span>
+          </label>
+          <input class="ph-range" type="range" id="ph-synth-contrast" min="1" max="8" step="0.5" value="4" />
+        </div>
+        <button class="btn btn--primary" id="ph-synth-generate-btn" disabled
+          style="margin-top:0.5rem;width:100%">Generate Audio</button>
       </div>
 
       <div class="ph-divider"></div>
@@ -447,6 +505,43 @@ import Admin from '../../../layouts/Admin.astro';
       display: flex;
       flex-direction: column;
       gap: 0.75rem;
+    }
+
+    /* Source tabs */
+    .ph-source-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 0.25rem;
+    }
+
+    /* Image drop zone — mirrors .ph-drop-zone */
+    .ph-img-drop-zone {
+      border: 1px dashed var(--border, #444);
+      border-radius: 6px;
+      padding: 1.25rem 1rem;
+      transition: border-color 0.15s;
+      min-height: 150px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
+    }
+    .ph-img-drop-zone.drag-over {
+      border-color: var(--accent, #888);
+      border-style: solid;
+    }
+    .ph-img-drop-empty {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.15rem;
+    }
+    .ph-synth-params {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
     }
 
     /* Drop zone */
@@ -1329,6 +1424,10 @@ import Admin from '../../../layouts/Admin.astro';
     let editedAudioStale = false;
     let editedAudioTrimRange: [number, number] | null = null;
     let playMode: 'original' | 'edited' = 'original';
+    let sourceTab: 'audio' | 'image' = 'audio';
+    let synthImageData: ImageData | null = null;
+    let synthImageName = 'image';
+    let imgModalPurpose: 'stamp' | 'synth' = 'stamp';
 
     const canvas = document.getElementById('ph-canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d')!;
@@ -1877,6 +1976,106 @@ import Admin from '../../../layouts/Admin.astro';
         wctx.lineTo(cx, H);
         wctx.stroke();
       }
+    }
+
+    // ─── Image → audio synthesis (Spectralize) ────────────────────────────────
+    function imageToMatrix(
+      img: HTMLImageElement,
+      numFrames: number,
+      numBins: number,
+      contrast: number,
+    ): Float32Array[] {
+      const off = document.createElement('canvas');
+      off.width = numFrames;
+      off.height = numBins;
+      const octx = off.getContext('2d')!;
+      octx.drawImage(img, 0, 0, numFrames, numBins);
+      const px = octx.getImageData(0, 0, numFrames, numBins).data;
+      const frames: Float32Array[] = [];
+      for (let f = 0; f < numFrames; f++) {
+        const fr = new Float32Array(numBins);
+        for (let b = 0; b < numBins; b++) {
+          // Flip vertically so low frequencies are at the bottom (row 0 → top freq)
+          const i = ((numBins - 1 - b) * numFrames + f) * 4;
+          const lum =
+            ((0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]) / 255) *
+            (px[i + 3] / 255);
+          fr[b] = Math.pow(lum, contrast);
+        }
+        frames.push(fr);
+      }
+      return frames;
+    }
+
+    async function synthesizeFromImage(): Promise<void> {
+      if (!synthImageData) return;
+      const busyEl = document.getElementById('ph-busy')!;
+      const busyLabel = document.getElementById('ph-busy-label')!;
+      const emptyEl = document.getElementById('ph-empty')!;
+      busyEl.style.display = 'flex';
+      emptyEl.style.display = 'none';
+      busyLabel.textContent = 'Synthesizing…';
+
+      const freqMin = parseInt(
+        (document.getElementById('ph-synth-fmin') as HTMLInputElement).value,
+      );
+      const freqMax = parseInt(
+        (document.getElementById('ph-synth-fmax') as HTMLInputElement).value,
+      );
+      const duration = parseInt(
+        (document.getElementById('ph-synth-dur') as HTMLInputElement).value,
+      );
+      const contrast = parseFloat(
+        (document.getElementById('ph-synth-contrast') as HTMLInputElement).value,
+      );
+      const sampleRate = 44100;
+      const numFrames = 300;
+      const numBins = 150;
+
+      // Re-render stored ImageData to a canvas, then load as HTMLImageElement
+      const off = document.createElement('canvas');
+      off.width = synthImageData.width;
+      off.height = synthImageData.height;
+      off.getContext('2d')!.putImageData(synthImageData, 0, 0);
+      const img = new Image();
+      await new Promise<void>((r) => {
+        img.onload = () => r();
+        img.src = off.toDataURL();
+      });
+
+      const frames = imageToMatrix(img, numFrames, numBins, contrast);
+      const totalSamples = Math.ceil(sampleRate * duration);
+      const signal = new Float32Array(totalSamples);
+      const samplesPerFrame = totalSamples / numFrames;
+      const CHUNK = 10;
+
+      for (let f = 0; f < numFrames; f++) {
+        const frameStart = Math.floor(f * samplesPerFrame);
+        const frameEnd = Math.floor((f + 1) * samplesPerFrame);
+        for (let b = 0; b < numBins; b++) {
+          const amp = frames[f][b];
+          if (amp < 0.001) continue;
+          const freq = freqMin + (b / numBins) * (freqMax - freqMin);
+          const twoPiF = (2 * Math.PI * freq) / sampleRate;
+          for (let s = frameStart; s < frameEnd; s++) {
+            signal[s] += amp * Math.sin(twoPiF * s);
+          }
+        }
+        if (f % CHUNK === CHUNK - 1) {
+          busyLabel.textContent = `Synthesizing… ${Math.round((f / numFrames) * 100)}%`;
+          await yieldToUI();
+        }
+      }
+
+      // Peak-normalize
+      let peak = 0;
+      for (const s of signal) if (Math.abs(s) > peak) peak = Math.abs(s);
+      if (peak > 0) for (let i = 0; i < signal.length; i++) signal[i] /= peak;
+
+      const wav = encodeWAV(signal, sampleRate);
+      const name = synthImageName.replace(/\.[^.]+$/, '') + '-synth.wav';
+      busyEl.style.display = 'none';
+      await loadAudioData(wav, name);
     }
 
     // ─── Audio loading ────────────────────────────────────────────────────────
@@ -3015,6 +3214,138 @@ import Admin from '../../../layouts/Admin.astro';
       });
     }
 
+    // ─── Source tab switching ──────────────────────────────────────────────────
+    function setSourceTab(tab: 'audio' | 'image') {
+      sourceTab = tab;
+      document.getElementById('ph-drop-zone')!.style.display =
+        tab === 'audio' ? '' : 'none';
+      document.getElementById('ph-img-drop-zone')!.style.display =
+        tab === 'image' ? '' : 'none';
+      document.getElementById('ph-synth-params')!.style.display =
+        tab === 'image' ? '' : 'none';
+      document
+        .getElementById('ph-tab-audio')!
+        .classList.toggle('ph-pill--on', tab === 'audio');
+      document
+        .getElementById('ph-tab-image')!
+        .classList.toggle('ph-pill--on', tab === 'image');
+    }
+    document
+      .getElementById('ph-tab-audio')!
+      .addEventListener('click', () => setSourceTab('audio'));
+    document
+      .getElementById('ph-tab-image')!
+      .addEventListener('click', () => setSourceTab('image'));
+
+    // ─── Image source handlers ─────────────────────────────────────────────────
+    async function loadSynthImage(file: File) {
+      synthImageName = file.name;
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      await new Promise<void>((r) => {
+        img.onload = () => r();
+        img.src = url;
+      });
+      const previewCanvas = document.getElementById(
+        'ph-img-preview',
+      ) as HTMLCanvasElement;
+      const pctx = previewCanvas.getContext('2d')!;
+      pctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+      pctx.drawImage(img, 0, 0, previewCanvas.width, previewCanvas.height);
+      synthImageData = pctx.getImageData(
+        0,
+        0,
+        previewCanvas.width,
+        previewCanvas.height,
+      );
+      URL.revokeObjectURL(url);
+      document.getElementById('ph-img-drop-empty')!.style.display = 'none';
+      document.getElementById('ph-img-loaded-zone')!.style.display = 'block';
+      document.getElementById('ph-img-meta')!.textContent = file.name;
+      (
+        document.getElementById('ph-synth-generate-btn') as HTMLButtonElement
+      ).disabled = false;
+    }
+
+    function loadSynthImageFromBuffer(buf: ArrayBuffer, name: string) {
+      loadSynthImage(new File([buf], name, { type: 'image/jpeg' }));
+    }
+
+    document
+      .getElementById('ph-img-upload-btn')!
+      .addEventListener('click', () =>
+        document.getElementById('ph-img-file-input')!.click(),
+      );
+    (
+      document.getElementById('ph-img-file-input') as HTMLInputElement
+    ).addEventListener('change', (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) loadSynthImage(file);
+    });
+    document
+      .getElementById('ph-img-change-btn')!
+      .addEventListener('click', () => {
+        synthImageData = null;
+        document.getElementById('ph-img-drop-empty')!.style.display = '';
+        document.getElementById('ph-img-loaded-zone')!.style.display = 'none';
+        (
+          document.getElementById('ph-synth-generate-btn') as HTMLButtonElement
+        ).disabled = true;
+      });
+    document
+      .getElementById('ph-synth-generate-btn')!
+      .addEventListener('click', synthesizeFromImage);
+
+    // Image drop-and-drop
+    const imgDropZone = document.getElementById('ph-img-drop-zone')!;
+    imgDropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      imgDropZone.classList.add('drag-over');
+    });
+    imgDropZone.addEventListener('dragleave', () =>
+      imgDropZone.classList.remove('drag-over'),
+    );
+    imgDropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      imgDropZone.classList.remove('drag-over');
+      const file = e.dataTransfer?.files[0];
+      if (file && file.type.startsWith('image/')) loadSynthImage(file);
+    });
+
+    // Synth param sliders
+    const synthSliderDefs: [string, string, (v: string) => string][] = [
+      [
+        'ph-synth-fmin',
+        'ph-smin-val',
+        (v) => {
+          const hz = parseInt(v);
+          return hz >= 1000 ? `${(hz / 1000).toFixed(1)} kHz` : `${hz} Hz`;
+        },
+      ],
+      [
+        'ph-synth-fmax',
+        'ph-smax-val',
+        (v) => `${(parseInt(v) / 1000).toFixed(1)} kHz`,
+      ],
+      ['ph-synth-dur', 'ph-sdur-val', (v) => `${v} s`],
+      ['ph-synth-contrast', 'ph-scon-val', (v) => v],
+    ];
+    for (const [id, valId, fmt] of synthSliderDefs) {
+      const el = document.getElementById(id) as HTMLInputElement;
+      const valEl = document.getElementById(valId)!;
+      el.addEventListener('input', () => {
+        valEl.textContent = fmt(el.value);
+      });
+    }
+
+    // ─── Image library for synth — reuse existing image modal ─────────────────
+    document
+      .getElementById('ph-img-lib-btn')!
+      .addEventListener('click', () => {
+        imgModalPurpose = 'synth';
+        openImgLibrary();
+      });
+
     // Play / stop
     document.getElementById('ph-play-btn')!.addEventListener('click', async () => {
       const btn = document.getElementById('ph-play-btn') as HTMLButtonElement;
@@ -3634,7 +3965,11 @@ import Admin from '../../../layouts/Admin.astro';
               });
               if (!r.ok) throw new Error(`HTTP ${r.status}`);
               const buf = await r.arrayBuffer();
-              loadStampImageFromBuffer(buf, name);
+              if (imgModalPurpose === 'synth') {
+                loadSynthImageFromBuffer(buf, name);
+              } else {
+                loadStampImageFromBuffer(buf, name);
+              }
             } catch (err: any) {
               (window as any).toast?.error(`Load failed: ${err.message}`);
             }
@@ -3649,7 +3984,10 @@ import Admin from '../../../layouts/Admin.astro';
 
     document
       .getElementById('ph-stamp-lib-btn')!
-      .addEventListener('click', openImgLibrary);
+      .addEventListener('click', () => {
+        imgModalPurpose = 'stamp';
+        openImgLibrary();
+      });
     document
       .getElementById('ph-img-modal-close')!
       .addEventListener('click', closeImgLibrary);

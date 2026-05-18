@@ -293,3 +293,68 @@ Photism is not:
 - Stereo support (currently downmixes to mono)
 - Editable phase (advanced — enables more accurate resynthesis of heavily modified regions)
 - Real-time processing mode (long-term: live audio in → spectrogram manipulation → live audio out)
+
+---
+
+## 15. Spectralize Integration
+
+Spectralize (`/admin/atelier/spectralize`) — subtitle `image → audio via spectrogram` — has been
+folded into Photism. It was a standalone tool that treated image pixel brightness as spectral energy
+and synthesized audio from it directly. This is conceptually the same workflow as Photism with a
+different starting point: instead of loading audio, the user loads an image.
+
+The `/admin/atelier/spectralize` page now shows a deprecation notice with a link to Photism.
+The Spectralize sidebar link has been removed from The Atelier nav.
+
+### Integration Approach
+
+Photism's drop zone gains an **♫ Audio / ▦ Image** tab switcher. In **Image** mode:
+
+- User uploads or picks an image from the media library (PNG/JPG/GIF/WEBP)
+- Four synthesis parameters appear: Freq Min, Freq Max, Duration, Contrast
+- "Generate Audio" button runs additive synthesis → produces a WAV buffer in memory
+- The WAV buffer is passed to Photism's existing `loadAudioData()` function
+- From this point the session is a normal Photism session: spectrogram computed, all
+  paint/stamp/FX tools available, full export pipeline intact
+
+### Synthesis Pipeline
+
+```
+Image (PNG/JPG/GIF/WEBP)
+    ↓
+Resize to 300×150 on offscreen canvas
+    ↓
+Extract luminance per pixel: 0.299R + 0.587G + 0.114B / 255  (alpha-weighted)
+    ↓
+Apply contrast curve: value^contrast
+    ↓
+300 frames × 150 frequency bins (magnitude matrix)
+    ↓
+Additive synthesis:
+  for each frame column (time slice):
+    for each bin row:
+      freq = freqMin + (b / numBins) × (freqMax − freqMin)  [linear mapping]
+      accumulate sine wave at freq with amplitude = pixel value
+    ↓
+Peak-normalize signal
+    ↓
+Encode as 16-bit mono PCM WAV @ 44100 Hz
+    ↓
+Pass to loadAudioData() → normal Photism session
+```
+
+### Parameters
+
+| Parameter | Range | Default | Description |
+|---|---|---|---|
+| Freq Min | 20–4000 Hz | 200 Hz | Lowest frequency mapped to bottom row of image |
+| Freq Max | 2–20 kHz | 8 kHz | Highest frequency mapped to top row of image |
+| Duration | 1–30 s | 8 s | Total duration of synthesized audio |
+| Contrast | 1–8 | 4 | Power exponent applied to pixel luminance — higher = more contrast between bright and dark regions |
+
+### Notes
+
+- Frequency mapping is linear (not mel-scaled) — different from Photism's mel-scale display
+- Low-luminance pixels (< 0.001 after contrast) are skipped for performance
+- After synthesis, the generated audio is the "original" audio — it can be further edited with
+  Paint, Stamp, and FX tools just like any loaded audio file
