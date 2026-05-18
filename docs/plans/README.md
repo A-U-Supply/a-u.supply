@@ -31,6 +31,17 @@ Keep it tight. A plan that takes an hour to read is a design doc, not a plan.
 
 Lightweight plans (one-line description changes, typo fixes, obvious bug fixes) don't need a doc.
 
+### Status banner
+
+Each plan carries a status line near the top:
+
+```
+**Branch:** `<branch>` → PR #N
+**Status:** plan-only | in progress | shipped — PR #N [follow-ups: …]
+```
+
+When a plan ships, update its status to `shipped — PR #N` and link any follow-up plans. Don't move shipped plans out of this directory — they stay as design archaeology.
+
 ## Why
 
 - **Searchable history.** Six months from now, "why did we pick threshold rollups every 30m" is one `git log docs/plans/` away.

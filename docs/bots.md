@@ -31,7 +31,7 @@ Bots tend to drag in heavy dependencies (Python ML libs, audio tooling, etc.) th
 
 **This repo** — anything that's a page, API endpoint, or UI feature of the web app itself.
 
-If you're unsure, ask in the PR. See the "What Belongs Here vs. a New Repo" section of [`../CLAUDE.md`](../CLAUDE.md).
+If you're unsure, ask in the PR. See the "What this repo is" section of [`../AGENTS.md`](../AGENTS.md).
 
 ## Manifest format
 
@@ -43,3 +43,22 @@ See the existing files in `apps/` for the authoritative format. At minimum a man
 - Which CLI options are exposed in the job submission form
 
 **Expose ALL meaningful CLI options** when integrating a tool — if a flag is useful at the command line, it should be available in the job form.
+
+## After editing a manifest
+
+A new or changed `apps/*.toml` doesn't take effect just because the file is on disk — the server keeps each manifest mirrored in an `AppDefinition` row. After merging a manifest change, sync the row:
+
+```bash
+ssh dokku run au-supply .venv/bin/python manage.py refresh-app <name>
+# or, after multiple changes:
+ssh dokku run au-supply .venv/bin/python manage.py refresh-all-apps
+```
+
+See [`operations.md`](operations.md) for the full `manage.py` reference.
+
+## Related
+
+- [`atelier.md`](atelier.md) — the browser-side counterpart (live canvas tools, not Docker jobs)
+- [`operations.md`](operations.md) — `manage.py refresh-app`, model cache
+- [`architecture.md`](architecture.md) — where `worker.py` and `apps/` fit in the system
+- [`plans/2026-04-24-slack-activity-log.md`](plans/2026-04-24-slack-activity-log.md) — Slack notifications for job events

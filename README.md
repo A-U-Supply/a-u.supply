@@ -4,13 +4,15 @@ Web catalog and admin platform for [A-U.Supply](https://a-u.supply) — Audio Un
 
 ## Stack
 
-| Layer    | Technology |
-|----------|------------|
-| Frontend | Astro 5 (static), Svelte 5 island for the audio player |
-| Backend  | FastAPI (Python 3.12+), SQLAlchemy, SQLite |
-| Search   | Meilisearch |
-| Auth     | JWT cookies + API key Bearer tokens |
-| Deploy   | Docker → Dokku, GitHub Actions |
+| Layer      | Technology |
+|------------|------------|
+| Frontend   | Astro 5 (static), Svelte 5 islands |
+| Styling    | Tailwind 4 + bits-ui, brutalist tokens |
+| Backend    | FastAPI (Python 3.12+), SQLAlchemy, SQLite |
+| Search     | Meilisearch (4 indices: images, audio, video, emulsion) |
+| Discussion | Lemmy (private fold instance, proxied through FastAPI) |
+| Auth       | JWT cookies + API key Bearer tokens |
+| Deploy     | Docker → Dokku, GitHub Actions |
 
 ## Quick start
 
@@ -30,17 +32,33 @@ Browse to <http://localhost:4321>. Full setup in [`docs/development.md`](docs/de
 
 ## Contributing
 
-Everyone contributes through **Claude Code** — describe what you want, Claude does the coding. Never commit directly to `master`; every change goes through a PR. Read [`CLAUDE.md`](CLAUDE.md) first — it's the primary contributor guide.
+Everyone contributes through AI coding agents — describe what you want, the agent does the coding. **Never commit directly to `master`**; every change goes through a PR (a pre-commit hook enforces this).
+
+Read [`AGENTS.md`](AGENTS.md) first — it's the canonical guide for any AI coding agent working in this repo (Claude Code, Cursor, Codex CLI, Aider, etc.).
 
 ## Documentation
 
-- [`CLAUDE.md`](CLAUDE.md) — contributor rules, workflow, everyday gotchas
-- [`docs/development.md`](docs/development.md) — local dev, testing, formatting, user management
+The full index lives in [`docs/README.md`](docs/README.md). Quick links:
+
+**Start here**
+- [`AGENTS.md`](AGENTS.md) — rules, workflow, hard gotchas, doc index for AI agents
+- [`docs/glossary.md`](docs/glossary.md) — admin nomenclature (Auspices, Stacks, Hecatomb, …) decoded
+
+**Build and ship**
+- [`docs/development.md`](docs/development.md) — local dev, testing, formatting, worktree workflow
 - [`docs/architecture.md`](docs/architecture.md) — stack, directory layout, data flow
-- [`docs/deployment.md`](docs/deployment.md) — Dokku auto-deploy, SSH, data persistence
-- [`docs/api.md`](docs/api.md) — API authentication, scopes, endpoint overview
-- [`docs/bots.md`](docs/bots.md) — TOML manifests, how to add a bot
-- [`docs/player.md`](docs/player.md) — audio player events + queue pattern
+- [`docs/frontend.md`](docs/frontend.md) — UI kit (Tailwind 4 + bits-ui + brutalist tokens), Svelte components, event bus
+- [`docs/api.md`](docs/api.md) — REST API authentication, scopes, endpoint groups
+- [`docs/deployment.md`](docs/deployment.md) — Dokku auto-deploy, SSL, legacy routing
+- [`docs/operations.md`](docs/operations.md) — `manage.py` subcommands, SSH gotchas
+
+**Section-specific**
+- [`docs/atelier.md`](docs/atelier.md) — the Atelier section (Punctum, Photism, Spectralize)
+- [`docs/bots.md`](docs/bots.md) — App Runner / TOML manifests / how to add a bot
+- [`docs/player.md`](docs/player.md) — persistent audio player events
+- [`docs/agents.md`](docs/agents.md) — agent-side config (`.claude/`, hooks, worktrees, skills)
+
+**History**
 - [`docs/plans/`](docs/plans/) — per-feature design plans
 - [`docs/history/`](docs/history/) — frozen pre-implementation design docs
 

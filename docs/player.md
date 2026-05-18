@@ -35,3 +35,8 @@ The player appends the tracks to its queue and starts playback at `startIndex`.
 - The player owns its own state (current track, playback time, queue). Pages should *not* read or write player state directly — only dispatch events.
 - URL-encode `release_code` anywhere it appears in a URL (see [`api.md`](api.md#special-characters-in-codes)).
 - The same event works from Astro pages and from the Svelte component — both are just DOM.
+
+## Related
+
+- [`frontend.md`](frontend.md#event-bus-pattern) — the broader event-bus convention this fits into
+- [`architecture.md`](architecture.md) — where the Player sits in the runtime

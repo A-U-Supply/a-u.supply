@@ -1,7 +1,7 @@
 # Slack activity log — `#supply-side`
 
 **Branch:** `feature/slack-activity-log` → PRs #223, #224
-**Status:** shipped (initial) + follow-up URL / framing fixes in flight
+**Status:** shipped — PRs #223 (initial) and #224 (URL / framing fixes). Subsequent fold-watcher work in [`2026-05-17-fold-slack-watcher.md`](2026-05-17-fold-slack-watcher.md).
 
 ## Goal
 

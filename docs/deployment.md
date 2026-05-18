@@ -6,7 +6,7 @@ How code ships to production and how to operate the live instance.
 
 Push to `master` → GitHub Actions pushes to Dokku → Docker image rebuilds → container restarts → live at <https://a-u.supply>.
 
-Never commit directly to `master`. Every change goes through a PR (see [`../CLAUDE.md`](../CLAUDE.md)). A git hook blocks direct commits to master locally.
+Never commit directly to `master`. Every change goes through a PR (see [`../AGENTS.md`](../AGENTS.md)). A git hook blocks direct commits to master locally.
 
 ## Docker build
 
@@ -92,3 +92,9 @@ The legacy site's `index.html` is NOT served at `/` — the Astro homepage owns 
 ### Legacy repo auto-deploy
 
 Push to `ausupply.github.io` → GitHub webhook hits `POST /hooks/legacy` → `git pull` in the legacy site directory. No container restart needed.
+
+## Related
+
+- [`operations.md`](operations.md) — `manage.py` subcommands, fold Let's Encrypt gotcha, model cache
+- [`architecture.md`](architecture.md) — what the runtime looks like
+- [`../AGENTS.md`](../AGENTS.md) — workflow rules (PRs, worktrees, no inline Python)
