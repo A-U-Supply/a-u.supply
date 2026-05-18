@@ -1,5 +1,7 @@
 # Search-page Lemmy preview + thread sanity pass
 
+**Status:** shipped — plan PR #288, implementation PR #293, follow-up fix #297. Lemmy preview chip + inline reply from feed view are live.
+
 ## Goal
 
 Make the Lemmy-backed discussion surface on the search page sensible: one canonical thread per media item, clear "where does this live on Lemmy" affordances everywhere a thread shows, a restrained preview that doesn't crowd the dense grid/list views, and inline reply from feed view so the most common action ("drop a thought on this") doesn't require leaving the page.

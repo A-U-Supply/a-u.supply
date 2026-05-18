@@ -1,5 +1,7 @@
 # Python package reorg — move modules into `server/`
 
+**Status:** shipped — PR #230 (commit 7a8708f). All routers and support modules now live in `server/`; entry points stay at the root. Two further modules have been added since (`latents_api.py`, `threads_api.py`, `lemmy_client.py`).
+
 ## Goal
 
 Clean up the root directory by moving the 11 FastAPI-router and support modules into a `server/` Python package. Entry points stay at the root because `Dockerfile`, `Procfile`, and `.github/workflows/` reference them by name.

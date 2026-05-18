@@ -1,7 +1,7 @@
 # Fold → `#supply-side` Slack notifier
 
-**Branch:** `feat/fold-slack-watcher`
-**Status:** in progress
+**Branch:** `feat/fold-slack-watcher` → PR #304
+**Status:** shipped — PR #304 (commit bcd12e6). fold→#supply-side watcher for native Lemmy activity is live.
 
 ## Goal
 

@@ -39,6 +39,9 @@ Session-cookie scope is derived from role: `admin` → `admin`, `member` → `wr
 | **Extraction** | `GET /api/extraction-failures`, retry, resolve | Manage metadata extraction failures |
 | **Jobs** | `GET/POST /api/jobs`, workspace ops | Submit and track bot jobs (see [`bots.md`](bots.md)) |
 | **Bookmarks** | `GET/POST/DELETE /api/bookmarks` | Per-user bookmarks |
+| **Admin Dashboard** | `GET /api/admin/stats`, `action-queue`, `activity-feed`, `altar` | Auspices dashboard data |
+| **Latents** | `GET/POST/PATCH/DELETE /api/projects[/...]` | Latents, slots, items, documents (see [`plans/2026-05-15-latents.md`](plans/2026-05-15-latents.md)) |
+| **Threads** | `GET/POST/PATCH/DELETE /api/threads[/...]` | Lemmy-backed discussion threads anchored to projects / slots / media items |
 
 For full endpoint documentation, use [`/docs`](https://a-u.supply/docs).
 
@@ -56,3 +59,9 @@ fetch(`/api/releases/${encodeURIComponent(code)}`)
 from urllib.parse import quote
 requests.get(f"/api/releases/{quote(code, safe='')}")
 ```
+
+## Related
+
+- [`architecture.md`](architecture.md#auth-model) — auth model details
+- [`operations.md`](operations.md) — generating API keys via `manage.py make-apikey`
+- [`bots.md`](bots.md) — the jobs surface

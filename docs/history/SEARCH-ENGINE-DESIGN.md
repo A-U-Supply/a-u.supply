@@ -1,6 +1,6 @@
 # Media Search Engine — Architecture & Design
 
-> **Note:** This is the original design document written before implementation. Some details may differ from the final implementation. See CLAUDE.md for current architecture. The code is the source of truth.
+> **Note:** This is the original design document written before implementation. Some details may differ from the final implementation. See [`../architecture.md`](../architecture.md) for current architecture. The code is the source of truth.
 
 ## Overview
 

@@ -115,3 +115,23 @@ requests.get(f"/api/releases/{quote(code, safe='')}")
 ## Planning before code
 
 Non-trivial changes start with a plan doc at `docs/plans/YYYY-MM-DD-<slug>.md`. See [`plans/README.md`](plans/README.md) for the format and lifecycle.
+
+## Branches and worktrees
+
+Never commit to `master` — a pre-commit hook blocks it. Always work in a feature branch, and per the team convention, create that branch as a worktree rather than switching the primary checkout:
+
+```bash
+git fetch origin master
+git worktree add .claude/worktrees/<slug> -b <slug> origin/master
+cd .claude/worktrees/<slug>
+```
+
+Open a PR from there. Worktree mechanics and rationale: [`agents.md`](agents.md#worktree-workflow).
+
+## Related
+
+- [`architecture.md`](architecture.md) — directory layout, what each module does
+- [`frontend.md`](frontend.md) — UI kit and Svelte components
+- [`operations.md`](operations.md) — `manage.py` for server-side ops
+- [`agents.md`](agents.md) — hooks, worktrees, agent setup
+- [`../AGENTS.md`](../AGENTS.md) — the canonical rule sheet
