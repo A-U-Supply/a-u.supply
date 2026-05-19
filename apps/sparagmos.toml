@@ -419,6 +419,48 @@ label = "Figure-Ground Swap"
 input_count = 3
 description = "Segment the foreground from each of 3 images using GrabCut and composite all 6 permutations — every foreground on every other background. Hard binary mask, no feathering. Inspired by Greenberg on collage."
 
+[[params.recipe.option_groups.options]]
+value = "spiral-screen"
+label = "Spiral Screen"
+input_count = 3
+description = "Archimedean spiral screen with arms that warp to follow image contours — line width varies with tone (thick in shadows, thin in highlights). Each of 3 images generates its own spiral stencil; all 6 permutation composites returned."
+
+[[params.recipe.option_groups.options]]
+value = "soapy-spiral"
+label = "Soapy Spiral"
+input_count = 3
+description = "Quadratic (r³) spiral centered on the most salient region — dense at outer edges, sparse at center. Soapy bubble / lens-distortion aesthetic. 3 images → 6 permutation composites."
+
+[[params.recipe.option_groups.options]]
+value = "oil-spiral"
+label = "Oil Spiral"
+input_count = 3
+description = "Voronoi multi-spiral seeded from brightness peaks — adjacent Voronoi cell boundaries form organic closed loops resembling iridescent oil-on-water or soap bubble patterns. 3 images → 6 permutation composites."
+
+[[params.recipe.option_groups.options]]
+value = "oil-spiral-cells"
+label = "Oil Spiral Cells"
+input_count = 3
+description = "Voronoi spiral with topographic iso-brightness blending — lines follow both rotational spiral structure and the image's own tonal geography. 3 images → 6 permutation composites."
+
+[[params.recipe.option_groups.options]]
+value = "oil-spiral-cells-bleed"
+label = "Oil Spiral Cells Bleed"
+input_count = 3
+description = "Voronoi spiral stencil with chrome fill effects: sinusoidal ripple warp, chromatic aberration, contrast stretch, and raised-rivulet bulge warp. 3 images → 6 permutation composites."
+
+[[params.recipe.option_groups.options]]
+value = "monochrome-stencil"
+label = "Monochrome Stencil"
+input_count = 3
+description = "Stencil from each original image via Otsu thresholding; fill images converted to silver gelatin monochrome (CLAHE + unsharp mask). 3 images → 6 permutation composites."
+
+[[params.recipe.option_groups.options]]
+value = "bw-stencil"
+label = "B&W Stencil"
+input_count = 3
+description = "All 3 images thresholded to high-contrast black-and-white via Otsu. Stencil and fills are all B&W. Hard binary edges — the cut line is the aesthetic statement. 3 images → 6 permutation composites."
+
 [[params.recipe.option_groups]]
 label = "4 Images — Ancients"
 [[params.recipe.option_groups.options]]
