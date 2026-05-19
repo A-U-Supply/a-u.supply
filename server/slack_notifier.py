@@ -120,6 +120,18 @@ def notify_deploy(github_payload: dict) -> None:
 # ---------------------------------------------------------------------------
 
 
+def post_raw_text(text: str, *, unfurl_links: bool = True) -> None:
+    """Post a plain text message to Slack. Fire-and-forget convenience wrapper.
+
+    For one-off notifications that don't need the full event/formatter
+    machinery (e.g. GitHub webhook events, ad‑hoc alerts). Never raises.
+    """
+    try:
+        _schedule_post({"text": text, "unfurl_links": unfurl_links})
+    except Exception:
+        logger.exception("post_raw_text failed")
+
+
 def _schedule_post(payload: dict) -> None:
     """Schedule an async Slack post on the running event loop.
 
