@@ -1112,7 +1112,7 @@
     border-bottom: 0;
   }
   .file-row:hover {
-    background: #fafafa;
+    background: var(--color-surface);
   }
   .file-row--primary {
     background: rgba(184, 134, 11, 0.06);
@@ -1278,7 +1278,7 @@
     gap: 8px;
     padding: 6px var(--space-sm);
     border-top: 1px dashed var(--color-border);
-    background: #fafafa;
+    background: var(--color-surface);
     flex-wrap: wrap;
     font-size: var(--text-sm);
   }

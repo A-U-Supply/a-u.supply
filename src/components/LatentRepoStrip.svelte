@@ -346,7 +346,7 @@
     flex-wrap: wrap;
   }
   .webhook {
-    background: #fafafa;
+    background: var(--color-surface);
     border: 1px dashed var(--color-border);
     padding: var(--space-sm);
     font-size: var(--text-sm);

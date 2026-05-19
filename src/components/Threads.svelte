@@ -736,7 +736,7 @@
     background: var(--color-bg);
   }
   .single--empty {
-    background: #fafafa;
+    background: var(--color-surface);
   }
   .single__head {
     display: flex;
@@ -809,7 +809,7 @@
   }
   .thread.expanded .thread__head {
     border-bottom: 1px dashed var(--color-border);
-    background: #fafafa;
+    background: var(--color-surface);
   }
   .thread__title {
     font-weight: bold;
@@ -829,7 +829,7 @@
     display: inline-block;
     padding: 6px 10px;
     border: 1px solid var(--color-border);
-    background: #fafafa;
+    background: var(--color-surface);
     word-break: break-all;
     color: var(--color-accent);
     font-size: var(--text-sm);

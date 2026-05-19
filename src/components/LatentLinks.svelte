@@ -364,7 +364,7 @@
     color: var(--color-text);
   }
   .chip a:hover {
-    background: #fafafa;
+    background: var(--color-surface);
   }
   .chip[data-kind='slack'] {
     border-color: #4a154b;

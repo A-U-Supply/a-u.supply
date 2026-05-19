@@ -169,7 +169,7 @@ import Admin from '../../layouts/Admin.astro';
     font-family: var(--font-mono);
     font-size: var(--text-sm);
     border: 1px solid var(--color-border);
-    background: #fff;
+    background: var(--color-bg);
     color: var(--color-text);
   }
   .invite-form button {
@@ -178,13 +178,13 @@ import Admin from '../../layouts/Admin.astro';
     font-size: var(--text-sm);
     font-weight: bold;
     text-transform: uppercase;
-    background: #1a1a1a;
-    color: #fff;
+    background: var(--color-fg);
+    color: var(--color-bg);
     border: none;
     cursor: pointer;
   }
   .invite-form button:hover {
-    background: #333;
+    background: color-mix(in srgb, var(--color-fg) 80%, var(--color-bg));
   }
   .invite-form__row {
     display: flex;
