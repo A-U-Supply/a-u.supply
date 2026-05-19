@@ -413,6 +413,12 @@ label = "Wobble Halation"
 input_count = 3
 description = "Two images wobble-eyed — off-axis concentric rings drifting from center — then composited through halation edge stencil. The organic grain boundary me"
 
+[[params.recipe.option_groups.options]]
+value = "figure-ground-swap"
+label = "Figure-Ground Swap"
+input_count = 3
+description = "Segment the foreground from each of 3 images using GrabCut and composite all 6 permutations — every foreground on every other background. Hard binary mask, no feathering. Inspired by Greenberg on collage."
+
 [[params.recipe.option_groups]]
 label = "4 Images — Ancients"
 [[params.recipe.option_groups.options]]
