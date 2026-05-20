@@ -1,0 +1,39 @@
+name: Chore / maintenance
+description: Refactoring, infrastructure, cleanup, dependency upgrade, or internal tooling.
+title: "[Chore] "
+labels: ["chore"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What needs doing?
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: Motivation, blocking work, deadline, or risk if we don't do it.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area (best guess)
+      description: Leave on "unknown" if you're not sure.
+      options:
+        - unknown
+        - admin
+        - frontend
+        - player
+        - catalog
+        - backend
+        - deploy
+        - worker
+        - auth
+      default: 0
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes / risks

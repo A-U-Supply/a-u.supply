@@ -1,0 +1,47 @@
+name: AI triage backfill (unlabeled open issues)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  models: read
+  contents: read
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/github-script@v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          script: |
+            const triage = require('./.github/scripts/triage-issue.js');
+            const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+
+            const unlabeled = issues.filter(
+              (i) => !i.pull_request && (!i.labels || i.labels.length === 0)
+            );
+            core.info(`Found ${unlabeled.length} unlabeled open issues`);
+
+            for (const issue of unlabeled) {
+              try {
+                core.info(`Triaging #${issue.number}: ${issue.title}`);
+                await triage({ github, context, core, issue, rewriteBody: true });
+              } catch (e) {
+                core.warning(`#${issue.number} failed: ${e.message}`);
+              }
+              // 7s between calls keeps us under the GitHub Models free-tier 10 req/min cap.
+              await sleep(7000);
+            }

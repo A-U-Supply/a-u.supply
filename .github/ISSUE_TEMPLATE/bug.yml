@@ -1,0 +1,85 @@
+name: Bug report
+description: Something is broken, misbehaving, or returning the wrong result.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing. The more concrete you can be, the faster this gets fixed.
+        Free-form is fine — every issue gets cleaned up automatically.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One or two sentences — what's broken?
+      placeholder: e.g. Player keeps the previous track's waveform when you click a new one.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps. Include URLs, product codes, account role — anything that pins the bug down.
+      placeholder: |
+        1. Go to https://a-u.supply/...
+        2. Click ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Exact error messages, status codes, console output if available.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser + version, OS, account role (admin/member/guest), page URL, prod vs local.
+      placeholder: |
+        Browser: Firefox 128 on macOS 14
+        Role: admin
+        URL: https://a-u.supply/admin/...
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, screenshots, or network responses
+      description: Console errors, screen recordings, response payloads. Drag-and-drop images directly.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area (best guess)
+      description: Leave on "unknown" if you're not sure — triage will sort it.
+      options:
+        - unknown
+        - admin
+        - frontend
+        - player
+        - catalog
+        - backend
+        - deploy
+        - worker
+        - auth
+      default: 0
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: Workarounds, related issues, hypotheses about the cause.

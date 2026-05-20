@@ -1,0 +1,54 @@
+name: Feature request / enhancement
+description: Propose a new feature, improvement, or change in behavior.
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Lead with the **problem**, not the solution. The shape of the right fix often shifts once the problem is clear.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: The user / artist / admin pain or use case this would solve. Describe the situation, not the fix.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What you'd like to see happen. UI sketches, API shape, behavior notes, copy — anything that helps.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you weighed. "We could do X but Y" is useful.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area (best guess)
+      description: Leave on "unknown" if you're not sure.
+      options:
+        - unknown
+        - admin
+        - frontend
+        - player
+        - catalog
+        - backend
+        - deploy
+        - worker
+        - auth
+      default: 0
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: Links to designs, prior threads, references, prior art elsewhere.
