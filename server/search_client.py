@@ -16,6 +16,7 @@ from server.models import (
     MediaSource,
     MediaTag,
     MediaVideoMeta,
+    MediaVote,
     ProjectItem,
     User,
 )
@@ -75,6 +76,12 @@ FILTERABLE_ATTRIBUTES = [
     "has_text",
     "project_ids",
     "tool",
+    # Votes (issue #318) — counts for range filters, parallel ID arrays for "my votes"
+    "up_count",
+    "down_count",
+    "vote_score",
+    "upvoter_user_ids",
+    "downvoter_user_ids",
 ]
 
 SORTABLE_ATTRIBUTES = [
@@ -84,6 +91,9 @@ SORTABLE_ATTRIBUTES = [
     "file_size_bytes",
     "duration_seconds",
     "tag_count",
+    # Votes (issue #318)
+    "vote_score",
+    "up_count",
 ]
 
 
@@ -442,7 +452,62 @@ def _build_document(db: Session, media_item: MediaItem) -> dict:
     project_ids = [pi.project_id for pi in db.query(ProjectItem).filter(ProjectItem.media_item_id == media_item.id).all()]
     doc["project_ids"] = list(set(project_ids))
 
+    # Votes (issue #318) — denormalize aggregates AND voter identities so
+    # hover tooltips render without an extra round-trip.
+    doc.update(_vote_fields_for(db, media_item.id))
+
     return doc
+
+
+def _vote_fields_for(db: Session, media_item_id: str) -> dict:
+    """Return the vote-related fields for a single media item.
+
+    Used both by `_build_document` (full-doc rebuild) and by
+    `update_vote_fields` (partial Meili update on every vote click).
+    """
+    rows = (
+        db.query(MediaVote.value, User.id, User.name)
+        .join(User, User.id == MediaVote.user_id)
+        .filter(MediaVote.media_item_id == media_item_id)
+        .all()
+    )
+    upvoters: list[dict] = []
+    downvoters: list[dict] = []
+    upvoter_ids: list[int] = []
+    downvoter_ids: list[int] = []
+    for value, uid, name in rows:
+        bucket = upvoters if value > 0 else downvoters
+        id_bucket = upvoter_ids if value > 0 else downvoter_ids
+        bucket.append({"user_id": uid, "name": name})
+        id_bucket.append(uid)
+    up = len(upvoters)
+    down = len(downvoters)
+    return {
+        "up_count": up,
+        "down_count": down,
+        "vote_score": up - down,
+        "upvoter_user_ids": upvoter_ids,
+        "downvoter_user_ids": downvoter_ids,
+        "upvoters": upvoters,
+        "downvoters": downvoters,
+    }
+
+
+def update_vote_fields(db: Session, media_item: MediaItem) -> None:
+    """Push just the vote-related fields into Meilisearch as a partial update.
+
+    Avoids the cost of `sync_media_item` (which rebuilds color analysis,
+    source enrichment, and every other heavy field) for the common case of
+    a single click toggling a vote.
+    """
+    index_name = _index_for_media_item(media_item)
+    if not index_name:
+        return
+    payload = {"id": media_item.id, **_vote_fields_for(db, media_item.id)}
+    try:
+        get_client().index(index_name).update_documents([payload])
+    except Exception:
+        logger.exception("Failed to push vote fields for %s to Meilisearch", media_item.id)
 
 
 def sync_media_item(db: Session, media_item: MediaItem) -> None:

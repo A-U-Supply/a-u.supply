@@ -41,6 +41,7 @@ The `current=` slug is what `<Admin current="…">` expects in each page's front
 | **Altar of the Day** | A daily-rotating featured media item shown on the Auspices dashboard. Backed by `GET /api/admin/altar`. |
 | **Supply-side** | The Slack channel where deploy and activity notifications go (`#supply-side`, ID `C0AUNJ6BMJT`). See [`plans/2026-04-24-slack-activity-log.md`](plans/2026-04-24-slack-activity-log.md). |
 | **Tribute** | The act of uploading. The Tribute page is where user uploads enter Emulsion. |
+| **Acclaim / Disavow** | Per-user up/down votes on Stacks items. Internal identifiers stay `vote`, `vote_score`, `up_count`, `down_count`. Sortable, filterable, and surfaced as `▲N▼M` chips with hover voter lists. Independent signal from passive Slack reactions. See [`plans/2026-05-20-search-votes.md`](plans/2026-05-20-search-votes.md). |
 | **Punctum / Photism / Bullet Hole** | Atelier tools. See [`atelier.md`](atelier.md). Spectralize was folded into Photism (2026-05-18). |
 
 ## Project codes

@@ -83,15 +83,10 @@ if "activity_log" not in _sa_inspect(engine).get_table_names():
     from server.models import ActivityLog as _ActivityLog
     _ActivityLog.__table__.create(bind=engine)
 
-# Migrate existing DB: create comments table if missing
-if "comments" not in _sa_inspect(engine).get_table_names():
-    from server.models import Comment as _Comment
-    _Comment.__table__.create(bind=engine)
-
-# Migrate existing DB: create reactions table if missing
-if "reactions" not in _sa_inspect(engine).get_table_names():
-    from server.models import Reaction as _Reaction
-    _Reaction.__table__.create(bind=engine)
+# Migrate existing DB: create media_votes table if missing (issue #318)
+if "media_votes" not in _sa_inspect(engine).get_table_names():
+    from server.models import MediaVote as _MediaVote
+    _MediaVote.__table__.create(bind=engine)
 
 # Migrate existing DB: add Lemmy account linkage columns to users
 _user_cols = [c["name"] for c in _sa_inspect(engine).get_columns("users")]

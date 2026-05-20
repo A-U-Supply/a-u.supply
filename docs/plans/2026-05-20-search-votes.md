@@ -1,7 +1,8 @@
 ### Search-result upvotes / downvotes ("Acclaim" / "Disavow")
 
-**Branch:** `feat/search-votes` → PR TBD
-**Status:** plan-only
+**Plan PR:** #322 (merged)
+**Branch:** `feat/search-votes` → implementation PR
+**Status:** in progress
 **Issue:** [#318](https://github.com/A-U-Supply/a-u.supply/issues/318)
 
 ## Goal
