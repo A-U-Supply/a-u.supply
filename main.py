@@ -181,6 +181,12 @@ if "latent_id" not in _release_cols_v2:
     with engine.begin() as _conn:
         _conn.execute(_sa_text("ALTER TABLE releases ADD COLUMN latent_id TEXT"))
 
+# Migrate existing DB: add web_audio_file_path column to tracks (MP3 web copy for streaming)
+_track_cols = [c["name"] for c in _sa_inspect(engine).get_columns("tracks")]
+if "web_audio_file_path" not in _track_cols:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE tracks ADD COLUMN web_audio_file_path TEXT"))
+
 
 # Re-apply Meilisearch index settings on startup so additions to
 # FILTERABLE_ATTRIBUTES / SORTABLE_ATTRIBUTES (vote_score, upvoter_user_ids,

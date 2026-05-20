@@ -28,6 +28,19 @@
   );
   let isVideo = $derived(currentTrack?.media_type === 'video');
 
+  // Prefetch the next audio track so it's buffered before the user skips to it.
+  // Only applies to audio (not video) and only when not in shuffle mode (shuffle
+  // picks a random next index, so we can't know which track to prefetch).
+  let nextAudioUrl = $derived(
+    !shuffleOn &&
+    !isVideo &&
+    currentIndex >= 0 &&
+    currentIndex + 1 < queue.length &&
+    queue[currentIndex + 1]?.media_type !== 'video'
+      ? queue[currentIndex + 1].stream_url
+      : null,
+  );
+
   function fmt(secs) {
     if (!secs || !isFinite(secs)) return '0:00';
     const m = Math.floor(secs / 60);
@@ -399,7 +412,7 @@
         ondblclick={toggleFullscreen}
         src={currentTrack?.stream_url}
         poster={currentTrack?.cover_url}
-        preload="metadata"
+        preload="auto"
       ></video>
     </div>
   {/if}
@@ -414,8 +427,11 @@
         bind:volume
         onended={onEnded}
         src={currentTrack?.stream_url}
-        preload="metadata"
+        preload="auto"
       ></audio>
+      {#if nextAudioUrl}
+        <audio src={nextAudioUrl} preload="auto" style="display:none"></audio>
+      {/if}
     {/if}
 
     <div class="player__inner">

@@ -35,6 +35,7 @@ THUMB_SIZE = (400, 400)
 
 AUDIO_EXTENSIONS = {".flac", ".wav", ".mp3", ".ogg", ".aac", ".m4a", ".aiff"}
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+LOSSLESS_EXTENSIONS = {".wav", ".flac", ".aiff"}
 
 
 def _slugify(text: str) -> str:
@@ -60,6 +61,35 @@ def _get_duration(path: str) -> float | None:
     except (KeyError, ValueError, FileNotFoundError):
         pass
     return None
+
+
+def _transcode_to_mp3(src_path: str, dest_path: str) -> bool:
+    """Transcode an audio file to MP3 192kbps using ffmpeg. Returns True on success."""
+    result = subprocess.run(
+        ["ffmpeg", "-y", "-i", src_path, "-codec:a", "libmp3lame", "-b:a", "192k", dest_path],
+        capture_output=True,
+    )
+    return result.returncode == 0
+
+
+def _transcode_tracks_async(jobs: list[tuple[int, str, str]]) -> None:
+    """Spawn a daemon thread to transcode (track_id, src_path, dest_path) tuples and update DB."""
+    import threading
+    from server.models import SessionLocal
+
+    def run():
+        for track_id, src, dest in jobs:
+            if _transcode_to_mp3(src, dest):
+                db = SessionLocal()
+                try:
+                    track = db.query(Track).filter(Track.id == track_id).first()
+                    if track:
+                        track.web_audio_file_path = str(Path(dest).relative_to(MEDIA_DIR))
+                        db.commit()
+                finally:
+                    db.close()
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 def _generate_thumbnail(image_path: Path, thumb_path: Path) -> None:
@@ -775,6 +805,7 @@ async def upload_tracks(
     max_num = db.query(func.max(Track.track_number)).filter(Track.release_id == release.id).scalar() or 0
 
     created = []
+    transcode_jobs = []
     for i, file in enumerate(files):
         ext = Path(file.filename or "").suffix.lower()
         if ext not in AUDIO_EXTENSIONS:
@@ -802,7 +833,13 @@ async def upload_tracks(
         db.flush()
         created.append(_track_response(track, code))
 
+        if ext in LOSSLESS_EXTENSIONS:
+            dest = str(filepath.with_suffix(".mp3"))
+            transcode_jobs.append((track.id, str(filepath), dest))
+
     db.commit()
+    if transcode_jobs:
+        _transcode_tracks_async(transcode_jobs)
     return created
 
 
@@ -821,11 +858,15 @@ def delete_track(code: str, track_id: int, admin: User = Depends(require_admin),
     if not track:
         raise HTTPException(status_code=404, detail="Track not found")
 
-    # Remove file
+    # Remove original file and web-optimized copy if present
     if track.audio_file_path:
         fpath = MEDIA_DIR / track.audio_file_path
         if fpath.exists():
             fpath.unlink()
+    if track.web_audio_file_path:
+        web_fpath = MEDIA_DIR / track.web_audio_file_path
+        if web_fpath.exists():
+            web_fpath.unlink()
 
     db.delete(track)
     db.flush()
@@ -914,7 +955,11 @@ def stream_track(code: str, track_id: int, request: Request, db: Session = Depen
     if not track or not track.audio_file_path:
         raise HTTPException(status_code=404, detail="Track not found")
 
-    fpath = MEDIA_DIR / track.audio_file_path
+    # Prefer web-optimized copy (MP3) when available; fall back to original
+    serve_rel = track.web_audio_file_path or track.audio_file_path
+    fpath = MEDIA_DIR / serve_rel
+    if not fpath.exists():
+        fpath = MEDIA_DIR / track.audio_file_path
     if not fpath.exists():
         raise HTTPException(status_code=404, detail="Audio file not found")
 

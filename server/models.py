@@ -133,6 +133,7 @@ class Track(Base):
     title = Column(String, nullable=False)
     track_number = Column(Integer, nullable=False)
     audio_file_path = Column(String, nullable=True)
+    web_audio_file_path = Column(String, nullable=True)
     duration_seconds = Column(Float, nullable=True)
     created_at = Column(DateTime, nullable=False, default=_utcnow)
 
