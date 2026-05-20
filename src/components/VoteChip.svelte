@@ -1,22 +1,22 @@
 <!--
   VoteChip — per-user up/down vote on a media item (issue #318).
 
-  Two visual sizes:
-    - size="sm" (default): ▲ 12 · 3 ▼  inline chip used in tooltips/embedded slots.
-    - size="lg": large Reddit-style vertical stack with arrows + score in the
-      middle. Used on the detail page header.
+  Two variants:
+    - size="lg" (default for this component): two labeled brutalist
+      buttons side-by-side with a voter list below. Used on the detail
+      page in its own "Acclaim / Disavow" section.
+    - size="sm": compact two-button pair for embedded contexts (the
+      grid/list/feed in /admin/search render this style via vanilla
+      HTML rather than mounting an island per tile; this size exists
+      for symmetry / future single-instance embeds).
 
-  Hover anywhere on the chip shows a floating tooltip with the voter
-  identities (denormalized from the search doc / fetched lazily on first
-  hover when not supplied).
+  Optimistic local state: clicking updates `myVote` + counts
+  immediately, then POSTs. A failed POST reverts and surfaces an
+  inline error.
 
-  Optimistic local state: clicking updates `myVote` + counts immediately,
-  then POSTs. A failed POST reverts and surfaces a small inline error.
-
-  The component owns no global state; it emits no events. The parent page
-  (which holds the in-memory results list) reads back the response via
-  `onUpdate(aggregates)` to keep the rest of the row in sync (e.g. to
-  rerank the row if sorted by Acclaim).
+  Styling uses the project's brutalist tokens (2px borders, hard
+  shadow, mono uppercase, hover lift, aria-pressed inversion) — see
+  `src/styles/tailwind.css` `.brutalist-control`.
 -->
 <script lang="ts">
   type Voter = { user_id: number; name: string };
@@ -46,7 +46,7 @@
     upvoters = [],
     downvoters = [],
     currentUserId = null,
-    size = 'sm',
+    size = 'lg',
     onUpdate,
   }: Props = $props();
 
@@ -57,8 +57,6 @@
   let votersDown = $state<Voter[]>(downvoters);
   let busy = $state(false);
   let error = $state<string | null>(null);
-  let tooltipOpen = $state(false);
-  let votersLoaded = $state(upvoters.length > 0 || downvoters.length > 0);
 
   $effect(() => {
     up = upCount;
@@ -71,37 +69,19 @@
   });
   $effect(() => {
     votersUp = upvoters;
-    if (upvoters.length > 0 || downvoters.length > 0) votersLoaded = true;
   });
   $effect(() => {
     votersDown = downvoters;
   });
 
-  async function ensureVotersLoaded() {
-    if (votersLoaded) return;
-    try {
-      const r = await fetch(
-        `/api/search/${encodeURIComponent(mediaId)}/voters`,
-        {
-          credentials: 'include',
-        },
-      );
-      if (!r.ok) return;
-      const body = await r.json();
-      votersUp = body.upvoters || [];
-      votersDown = body.downvoters || [];
-      votersLoaded = true;
-    } catch {
-      /* swallow — tooltip just stays empty */
-    }
-  }
-
   async function cast(target: 1 | -1) {
-    // Reddit-style: clicking the same arrow retracts.
+    // Clicking the same arrow retracts.
     const next: -1 | 0 | 1 = mine === target ? 0 : target;
     const priorUp = up;
     const priorDown = down;
     const priorMine = mine;
+    const priorVotersUp = votersUp;
+    const priorVotersDown = votersDown;
 
     // Optimistic update
     if (mine === 1) up -= 1;
@@ -109,7 +89,6 @@
     if (next === 1) up += 1;
     if (next === -1) down += 1;
     mine = next;
-    // Reflect my own vote in the local voter list so the tooltip stays accurate
     if (currentUserId != null) {
       votersUp = votersUp.filter((v) => v.user_id !== currentUserId);
       votersDown = votersDown.filter((v) => v.user_id !== currentUserId);
@@ -138,161 +117,157 @@
       up = priorUp;
       down = priorDown;
       mine = priorMine;
+      votersUp = priorVotersUp;
+      votersDown = priorVotersDown;
       error = e?.message || 'Vote failed';
     } finally {
       busy = false;
     }
   }
 
-  function namesText(voters: Voter[]) {
+  function joinNames(voters: Voter[]): string {
     if (voters.length === 0) return '—';
-    const names = voters.map((v) => v.name).slice(0, 12);
-    const more = voters.length > 12 ? `, +${voters.length - 12} more` : '';
-    return names.join(', ') + more;
+    return voters.map((v) => v.name).join(', ');
   }
 </script>
 
-<div
-  class="vote-chip vote-chip--{size}"
-  class:is-busy={busy}
-  role="group"
-  aria-label="Acclaim or disavow this item"
-  onmouseenter={() => {
-    tooltipOpen = true;
-    void ensureVotersLoaded();
-  }}
-  onmouseleave={() => (tooltipOpen = false)}
-  onfocusin={() => {
-    tooltipOpen = true;
-    void ensureVotersLoaded();
-  }}
-  onfocusout={() => (tooltipOpen = false)}
->
-  <button
-    type="button"
-    class="vote-chip__arrow vote-chip__arrow--up"
-    class:is-active={mine === 1}
-    aria-pressed={mine === 1}
-    aria-label="Acclaim"
-    disabled={busy}
-    onclick={(e) => {
-      e.stopPropagation();
-      void cast(1);
-    }}>▲</button
-  >
-  <span class="vote-chip__count vote-chip__count--up" class:is-zero={up === 0}
-    >{up}</span
-  >
-  {#if size === 'lg'}
-    <span class="vote-chip__score" aria-label="Net score">{up - down}</span>
-  {/if}
-  <span
-    class="vote-chip__count vote-chip__count--down"
-    class:is-zero={down === 0}>{down}</span
-  >
-  <button
-    type="button"
-    class="vote-chip__arrow vote-chip__arrow--down"
-    class:is-active={mine === -1}
-    aria-pressed={mine === -1}
-    aria-label="Disavow"
-    disabled={busy}
-    onclick={(e) => {
-      e.stopPropagation();
-      void cast(-1);
-    }}>▼</button
-  >
+<div class="vote-block vote-block--{size}" class:is-busy={busy}>
+  <div class="vote-block__row">
+    <button
+      type="button"
+      class="brutalist-control vote-btn vote-btn--up"
+      class:vote-btn--active={mine === 1}
+      aria-pressed={mine === 1}
+      aria-label="Acclaim this item"
+      disabled={busy}
+      onclick={(e) => {
+        e.stopPropagation();
+        void cast(1);
+      }}
+    >
+      <span class="vote-btn__arrow" aria-hidden="true">▲</span>
+      <span class="vote-btn__label">Acclaim</span>
+      <span class="vote-btn__count">{up}</span>
+    </button>
 
-  {#if tooltipOpen}
-    <div class="vote-chip__tooltip" role="tooltip">
-      <div><strong>Acclaimed by:</strong> {namesText(votersUp)} ({up})</div>
-      <div><strong>Disavowed by:</strong> {namesText(votersDown)} ({down})</div>
-      {#if error}
-        <div class="vote-chip__error">{error}</div>
-      {/if}
-    </div>
+    <button
+      type="button"
+      class="brutalist-control vote-btn vote-btn--down"
+      class:vote-btn--active={mine === -1}
+      aria-pressed={mine === -1}
+      aria-label="Disavow this item"
+      disabled={busy}
+      onclick={(e) => {
+        e.stopPropagation();
+        void cast(-1);
+      }}
+    >
+      <span class="vote-btn__arrow" aria-hidden="true">▼</span>
+      <span class="vote-btn__label">Disavow</span>
+      <span class="vote-btn__count">{down}</span>
+    </button>
+  </div>
+
+  {#if size === 'lg'}
+    <dl class="vote-block__voters">
+      <div class="vote-block__voters-row">
+        <dt>Acclaimed by</dt>
+        <dd>{joinNames(votersUp)}</dd>
+      </div>
+      <div class="vote-block__voters-row">
+        <dt>Disavowed by</dt>
+        <dd>{joinNames(votersDown)}</dd>
+      </div>
+    </dl>
+  {/if}
+
+  {#if error}
+    <div class="vote-block__error" role="alert">{error}</div>
   {/if}
 </div>
 
 <style>
-  .vote-chip {
+  .vote-block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+  .vote-block__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+  .vote-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
-    position: relative;
-    font-variant-numeric: tabular-nums;
+    gap: 0.5rem;
+    padding: 0.6rem 1rem;
+    font-size: var(--text-base, 0.95rem);
     line-height: 1;
-  }
-  .vote-chip--sm {
-    font-size: 0.85rem;
-    padding: 0.1rem 0.35rem;
-    border: 1px solid var(--color-border, #ccc);
-    border-radius: 999px;
-    background: var(--color-surface, #fff);
-  }
-  .vote-chip--lg {
-    flex-direction: column;
-    gap: 0.15rem;
-    font-size: 1rem;
-    padding: 0.25rem 0.4rem;
-    border: 2px solid var(--color-border, #222);
-    border-radius: 6px;
-    background: var(--color-surface, #fff);
-    box-shadow: 2px 2px 0 var(--color-border, #222);
-  }
-  .vote-chip--lg .vote-chip__score {
-    font-weight: 700;
-    font-size: 1.15rem;
-  }
-  .vote-chip__arrow {
-    background: none;
-    border: none;
     cursor: pointer;
-    padding: 0 0.15rem;
-    font-size: 1em;
-    color: var(--color-muted, #888);
+    min-width: 9.5rem;
+    justify-content: flex-start;
+    /* brutalist-control already paints: 2px border, hard shadow, mono
+       uppercase, hover lift, aria-pressed inversion. We only add the
+       arrow/label/count layout + size. */
+  }
+  .vote-btn:disabled {
+    cursor: progress;
+    opacity: 0.7;
+  }
+  .vote-btn__arrow {
+    font-size: 1.15em;
     line-height: 1;
   }
-  .vote-chip__arrow:hover:not(:disabled) {
-    color: var(--color-text, #111);
+  .vote-btn__label {
+    flex: 1;
   }
-  .vote-chip__arrow:disabled {
-    cursor: progress;
+  .vote-btn__count {
+    font-variant-numeric: tabular-nums;
+    min-width: 2ch;
+    text-align: right;
   }
-  .vote-chip__arrow--up.is-active {
-    color: var(--color-accent-up, #1f8a3a);
+
+  /* Compact variant for embedded contexts (small surfaces). */
+  .vote-block--sm .vote-btn {
+    padding: 0.25rem 0.55rem;
+    min-width: 0;
+    font-size: 0.75rem;
+    gap: 0.35rem;
   }
-  .vote-chip__arrow--down.is-active {
-    color: var(--color-accent-down, #b03030);
+  .vote-block--sm .vote-btn__label {
+    display: none;
   }
-  .vote-chip__count.is-zero {
-    opacity: 0.4;
+
+  .vote-block__voters {
+    margin: 0;
+    font-size: var(--text-sm, 0.85rem);
+    color: var(--color-muted);
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
   }
-  .vote-chip__tooltip {
-    position: absolute;
-    bottom: calc(100% + 0.4rem);
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 100;
-    background: var(--color-surface, #fff);
-    color: var(--color-text, #111);
-    border: 2px solid var(--color-border, #222);
-    box-shadow: 2px 2px 0 var(--color-border, #222);
-    padding: 0.4rem 0.6rem;
-    border-radius: 4px;
-    font-size: 0.78rem;
-    white-space: nowrap;
-    pointer-events: none;
-    line-height: 1.4;
+  .vote-block__voters-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
   }
-  .vote-chip__tooltip strong {
+  .vote-block__voters dt {
     font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.5pt;
+    color: var(--color-muted);
+    min-width: 9.5rem;
+    flex-shrink: 0;
   }
-  .vote-chip__error {
-    margin-top: 0.2rem;
-    color: var(--color-accent-down, #b03030);
+  .vote-block__voters dd {
+    margin: 0;
+    color: var(--color-text, var(--color-fg));
+    word-break: break-word;
   }
-  .vote-chip.is-busy {
-    opacity: 0.7;
+  .vote-block__error {
+    color: #c00;
+    font-size: var(--text-sm, 0.85rem);
   }
 </style>

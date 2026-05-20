@@ -11,7 +11,6 @@ import Admin from '../../../layouts/Admin.astro';
   <div id="detail-content" style="display:none;">
     <div class="detail-header">
       <h1 id="detail-title">Media Detail</h1>
-      <div id="vote-chip-island" class="vote-chip-island"></div>
       <button
         class="bm-star"
         id="detail-bm-star"
@@ -19,6 +18,12 @@ import Admin from '../../../layouts/Admin.astro';
         title="Bookmark"></button>
       <a href="/admin/search" class="action-btn">Back to Search</a>
     </div>
+
+    <!-- Acclaim / Disavow — per-user votes on this item (issue #318) -->
+    <section class="votes-section">
+      <h2>Acclaim / Disavow</h2>
+      <div id="vote-chip-island" class="vote-chip-island"></div>
+    </section>
 
     <div class="detail-layout">
       <div class="detail-preview" id="detail-preview"></div>
@@ -188,10 +193,16 @@ import Admin from '../../../layouts/Admin.astro';
     border-bottom: none;
     padding-bottom: 0;
   }
+  /* Acclaim / Disavow section sits between header and the preview/meta
+     grid. Mirrors the cadence of .tags-section / .threads-section. */
+  .votes-section {
+    margin-top: var(--space-md);
+  }
+  .votes-section h2 {
+    margin-bottom: var(--space-xs);
+  }
   .vote-chip-island {
-    display: inline-flex;
-    margin-right: auto;
-    margin-left: var(--space-sm);
+    display: block;
   }
 
   .detail-layout {
@@ -867,7 +878,7 @@ import Admin from '../../../layouts/Admin.astro';
             ${s.slack_link ? `<div class="source-card__field"><span class="source-card__label">Slack:</span> <a href="${s.slack_link}" target="_blank" style="color: var(--color-accent);">Open in Slack</a></div>` : ''}
             ${s.slack_message_text ? `<div class="source-card__field"><span class="source-card__label">Message:</span> ${s.slack_message_text}</div>` : ''}
             ${s.source_url ? `<div class="source-card__field"><span class="source-card__label">URL:</span> <a href="${s.source_url}" target="_blank" style="color: var(--color-accent);">${s.source_url}</a></div>` : ''}
-            ${s.reaction_count ? `<div class="source-card__field"><span class="source-card__label">Reactions:</span> ${s.reaction_count}</div>` : ''}
+            ${s.reaction_count ? `<div class="source-card__field"><span class="source-card__label">Slack reactions:</span> ${s.reaction_count}</div>` : ''}
             ${meta?.job_id ? `<div class="source-card__field"><span class="source-card__label">Job:</span> <a href="/admin/jobs/detail?id=${meta.job_id}" style="color: var(--color-accent);">${meta.app_name}${meta.recipe ? ' / ' + meta.recipe : ''}</a></div>` : ''}
             <div class="source-card__field"><span class="source-card__label">Added:</span> ${s.created_at ? new Date(s.created_at).toLocaleString() : '--'}</div>
           </div>
