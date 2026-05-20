@@ -132,6 +132,8 @@ Full endpoint auth details are in [`api.md`](api.md).
 
 SQLite is the source of truth. The Meilisearch indices can be rebuilt at any time via `manage.py reindex` ([`operations.md`](operations.md)).
 
+Each indexed document carries denormalized vote aggregates (`up_count`, `down_count`, `vote_score`) plus parallel voter-id arrays (`upvoter_user_ids`, `downvoter_user_ids`) and inline voter objects (`upvoters`, `downvoters`) so the Acclaim/Disavow chip can render counts, my-vote highlight, and hover tooltips without a second round-trip. Per-vote sync is a debounced (~500ms) partial update via `server/vote_sync.py` — never a full doc rebuild. See [`plans/2026-05-20-search-votes.md`](plans/2026-05-20-search-votes.md).
+
 ## Latents and discussion
 
 [Latents](plans/2026-05-15-latents.md) is an admin-only pre-release workspace. Each Latent has ordered slots, loose files, named markdown documents, and threaded discussion. Discussion runs through the fold Lemmy instance:
