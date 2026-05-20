@@ -21,7 +21,7 @@ ssh dokku enter au-supply web .venv/bin/python manage.py <subcommand>
 
 **Never pass inline Python or multiline strings through `ssh dokku run` / `ssh dokku enter`.** Dokku's argument parser mangles quotes, backslashes, and other special characters — strings arrive at the container malformed. Symptoms include silent truncation, escaped quotes turning into literal `\` characters, and JSON payloads failing to parse.
 
-The fix: add a `manage.py` subcommand (or a small Python helper) and invoke that. The deploy notification is a working example — `notify-deploy` accepts a hex-encoded JSON payload so the workflow can pipe a complex object through `ssh dokku run` safely.
+The fix: add a `manage.py` subcommand (or a small Python helper) and invoke that. If a subcommand needs to receive structured data, hex-encode the JSON on the caller side and decode it inside the subcommand — that's the only reliable way to pipe a complex object through `ssh dokku run`.
 
 ## `manage.py` subcommands
 
@@ -55,7 +55,6 @@ ssh dokku run au-supply .venv/bin/python manage.py <subcommand> [args...]
 | `backfill-transcripts` | — | Generate audio transcripts via faster-whisper. |
 | `backfill-ocr` | — | OCR-extract text from images via tesseract. |
 | `backfill-thumbnails` | — | Generate sm / md / lg thumbnails for image media items missing any of them. |
-| `notify-deploy` | `<hex-encoded-payload>` | Post the deploy notification to Slack. Called by `deploy.yml`. Not for manual use. |
 
 Run `ssh dokku run au-supply .venv/bin/python manage.py` (no subcommand) to print the live usage banner.
 
@@ -101,7 +100,7 @@ See [`deployment.md`](deployment.md) for the full deploy flow. Quick reference:
 
 | Workflow | Trigger | What it does |
 |----------|---------|--------------|
-| `deploy.yml` | Push to `master` | Push to Dokku, restart, post deploy notification |
+| `deploy.yml` | Push to `master` | Push to Dokku, restart the web container |
 | `create-user.yml` | Manual | Run `cli.py create-user` on the server |
 | `seed-catalog.yml` | Manual | One-shot `seed_catalog.py` invocation |
 | `setup-storage.yml` | Manual | (Re-)establish the model-cache volume + env var |

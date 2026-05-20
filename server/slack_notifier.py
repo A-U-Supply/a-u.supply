@@ -18,7 +18,6 @@ import asyncio
 import json
 import logging
 import os
-import re
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from typing import Any
@@ -72,64 +71,9 @@ def queue_batched(event_type: str, user: User | None, **payload: Any) -> None:
         logger.exception("queue_batched failed for %s", event_type)
 
 
-def notify_deploy(github_payload: dict) -> None:
-    """Post a deploy notification when the master branch receives commits.
-
-    Accepts the raw GitHub push-event payload. Only acts on pushes to
-    ``refs/heads/master``. Fire-and-forget like all Slack calls here.
-    """
-    if not SLACK_LOG_ENABLED:
-        return
-    if github_payload.get("ref") != "refs/heads/master":
-        return
-    commits = github_payload.get("commits", [])
-    if not commits:
-        return
-    pusher_name = (github_payload.get("pusher") or {}).get("name", "someone")
-    repo = github_payload.get("repository") or {}
-    repo_name = repo.get("full_name", "a-u.supply")
-    repo_url = repo.get("html_url", SITE_URL)
-
-    head = commits[-1]
-    sha = (head.get("id") or "")[:7]
-    message = (head.get("message") or "").split("\n")[0] or "no message"
-    commit_url = head.get("url", "")
-
-    # Extract PR number from squash-merge commit message: "Title (#123)"
-    pr_number = None
-    m = re.search(r"\(#(\d+)\)\s*$", message)
-    if m:
-        pr_number = m.group(1)
-
-    lines = [f"🚀 *{repo_name}* deployed by {pusher_name}"]
-    lines.append(f"<{commit_url}|`{sha}`> {message}")
-    links = [f"<{repo_url}|repo>"]
-    if pr_number:
-        pr_url = f"https://github.com/{repo_name}/pull/{pr_number}"
-        links.insert(0, f"<{pr_url}|PR #{pr_number}>")
-    compare_url = github_payload.get("compare", "")
-    if compare_url:
-        links.insert(0, f"<{compare_url}|changes>")
-    lines.append(" · ".join(links))
-    text = "\n".join(lines)
-    _schedule_post({"text": text, "unfurl_links": False})
-
-
 # ---------------------------------------------------------------------------
 # Transport
 # ---------------------------------------------------------------------------
-
-
-def post_raw_text(text: str, *, unfurl_links: bool = True) -> None:
-    """Post a plain text message to Slack. Fire-and-forget convenience wrapper.
-
-    For one-off notifications that don't need the full event/formatter
-    machinery (e.g. GitHub webhook events, ad‑hoc alerts). Never raises.
-    """
-    try:
-        _schedule_post({"text": text, "unfurl_links": unfurl_links})
-    except Exception:
-        logger.exception("post_raw_text failed")
 
 
 def _schedule_post(payload: dict) -> None:

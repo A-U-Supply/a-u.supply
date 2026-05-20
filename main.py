@@ -2,7 +2,6 @@ import asyncio
 import hashlib
 import hmac
 import html
-import json
 import logging
 import os
 import subprocess
@@ -38,7 +37,6 @@ from server.jobs_api import router as jobs_router
 from server.latents_api import router as latents_router, links_for_media_router
 from server.lemmy_api import router as lemmy_router
 from server.search_api import router as search_router
-from server.slack_notifier import post_raw_text
 from server.threads_api import router as threads_router
 from server.models import Base, User, engine
 
@@ -889,45 +887,6 @@ async def webhook_deploy(request: Request):
         )
         return {"ok": True, "action": "deploy script triggered"}
     return {"ok": True, "action": "webhook received (no DEPLOY_SCRIPT configured)"}
-
-
-@app.post("/hooks/github", tags=["Webhooks"], summary="GitHub issue/PR/comment webhook")
-async def webhook_github(request: Request):
-    """GitHub webhook receiver for issue events.
-
-    Verifies the request signature via HMAC-SHA256 before acting. Posts to
-    #supply-side via the existing Slack notifier.
-
-    **Do not call manually** — this is triggered by GitHub's webhook system.
-    """
-    body = await request.body()
-    signature = request.headers.get("X-Hub-Signature-256", "")
-    if not _verify_webhook(body, signature):
-        raise HTTPException(status_code=403, detail="Invalid signature")
-
-    event = request.headers.get("X-GitHub-Event", "")
-    payload = json.loads(body)
-
-    if event == "issues":
-        action = payload.get("action")
-        issue = payload.get("issue", {})
-        repo = payload.get("repository", {})
-        repo_name = repo.get("full_name", "unknown")
-        title = issue.get("title", "")
-        url = issue.get("html_url", "")
-        user = issue.get("user", {}).get("login", "someone")
-
-        if action == "opened":
-            labels = [l.get("name", "") for l in issue.get("labels", [])]
-            body_text = (issue.get("body") or "").strip()[:200].replace("\n", " ")
-            parts = [f"🐛 *New issue* in *{repo_name}* — <{url}|{title}> (by {user})"]
-            if labels:
-                parts.append(f"Labels: `{'`, `'.join(labels)}`")
-            if body_text:
-                parts.append(f"> {body_text}")
-            post_raw_text("\n".join(parts))
-
-    return {"ok": True}
 
 
 # --- OG tags for media detail pages ---

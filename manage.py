@@ -767,15 +767,6 @@ if __name__ == "__main__":
     elif cmd == "refresh-all-apps":
         refresh_all_apps()
 
-    elif cmd == "notify-deploy":
-        if len(sys.argv) < 3:
-            print("Usage: manage.py notify-deploy <hex-encoded-payload>")
-            sys.exit(1)
-        from server.slack_notifier import notify_deploy
-        payload = json.loads(bytes.fromhex(sys.argv[2]))
-        notify_deploy(payload)
-        print("Deploy notification sent")
-
     elif cmd == "migrate-index":
         if len(sys.argv) < 4:
             print("Usage: manage.py migrate-index <old-index> <new-index>")
