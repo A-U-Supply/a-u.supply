@@ -1,6 +1,6 @@
 name: Question
 description: Ask about how the site, code, or process works.
-title: "[Question] "
+title: "question: "
 labels: ["question"]
 body:
   - type: textarea

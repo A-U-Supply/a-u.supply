@@ -1,6 +1,6 @@
 name: Chore / maintenance
 description: Refactoring, infrastructure, cleanup, dependency upgrade, or internal tooling.
-title: "[Chore] "
+title: "chore(scope): "
 labels: ["chore"]
 body:
   - type: textarea

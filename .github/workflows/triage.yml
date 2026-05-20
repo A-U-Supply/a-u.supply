@@ -21,12 +21,4 @@ jobs:
         with:
           script: |
             const triage = require('./.github/scripts/triage-issue.js');
-            const issue = context.payload.issue;
-            const hasLabels = Array.isArray(issue.labels) && issue.labels.length > 0;
-            await triage({
-              github,
-              context,
-              core,
-              issue,
-              rewriteBody: !hasLabels,
-            });
+            await triage({ github, context, core, issue: context.payload.issue });
