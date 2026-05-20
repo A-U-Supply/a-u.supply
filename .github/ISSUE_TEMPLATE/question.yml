@@ -1,0 +1,28 @@
+name: Question
+description: Ask about how the site, code, or process works.
+title: "[Question] "
+labels: ["question"]
+body:
+  - type: textarea
+    id: trying
+    attributes:
+      label: What are you trying to do?
+      description: End goal, not the immediate stuck step.
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you tried?
+
+  - type: textarea
+    id: checked
+    attributes:
+      label: What docs / code have you looked at?
+      description: Helps answers avoid pointing you at things you've already read.
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
