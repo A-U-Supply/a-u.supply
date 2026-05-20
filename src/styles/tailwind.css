@@ -44,11 +44,18 @@
  * Admin.astro writes the attribute pre-paint based on the user's saved
  * preference (or `prefers-color-scheme` when in auto mode).
  *
+ * Selector is `html[data-theme='dark']` (not just `[data-theme='dark']`) so
+ * the specificity (0,1,1) beats the legacy `:root` block in global.css
+ * (0,1,0, since `:root` is a pseudo-class). Without the bump, source order
+ * wins on tie — and because global.css is imported AFTER this file, its
+ * `:root` re-declaration of `--color-bg: #fff` would overwrite our dark
+ * value and the page would stay light no matter what data-theme says.
+ *
  * Sidebar stays dark in both modes by design — only content surfaces flip.
  * Both `--color-fg` (Tailwind 4) and `--color-text` (legacy global.css) are
  * overridden so existing admin.css references work without modification.
  */
-[data-theme='dark'] {
+html[data-theme='dark'] {
   --color-bg: #111;
   --color-fg: #ececec;
   --color-text: #ececec;
