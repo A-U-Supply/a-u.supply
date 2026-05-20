@@ -2485,7 +2485,13 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     }
 
     function hasMoreToLoad(): boolean {
-      return allResults.length < totalResults;
+      // Count remaining PAGES, not items. On a resume-from-?page=N load we
+      // hold only page N in allResults — an item-based check would still
+      // say "more to load" even when N is the final page, and the sentinel
+      // observer would loop firing empty fetches that re-paint the feed
+      // (white flash + scroll-to-top).
+      const totalPages = Math.max(1, Math.ceil(totalResults / pageSize));
+      return maxLoadedPage() < totalPages;
     }
 
     async function loadNextPage() {
