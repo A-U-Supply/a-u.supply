@@ -768,6 +768,34 @@ def _format_rollup_lines(rows: list[ActivityLog], users_by_id: dict[int, str]) -
                 link = f" — <{_latent_link(pid)}|open>"
             lines.append(f"• *{user_name}* edited {edited_names or 'a latent document'}{link}")
 
+        elif event_type == "media.voted":
+            # Per-user acclaim/disavow on Stacks items (issue #318). Each
+            # payload carries prior_value / new_value so we can describe
+            # the net effect of a triage session (5 acclaims, 2 disavows,
+            # 3 retractions) in one rollup line.
+            up = sum(1 for p in payloads if int(p.get("new_value") or 0) > 0)
+            down = sum(1 for p in payloads if int(p.get("new_value") or 0) < 0)
+            retracted = sum(
+                1
+                for p in payloads
+                if int(p.get("new_value") or 0) == 0 and int(p.get("prior_value") or 0) != 0
+            )
+            bits = []
+            if up:
+                bits.append(f"acclaimed {up}")
+            if down:
+                bits.append(f"disavowed {down}")
+            if retracted:
+                bits.append(f"retracted {retracted}")
+            summary = ", ".join(bits) or "voted on 0 items"
+            # If just one event in the rollup, link straight to that item.
+            link_suffix = ""
+            if count == 1:
+                mid = payloads[0].get("media_item_id")
+                if mid:
+                    link_suffix = f" — <{_search_detail_link(mid)}|view>"
+            lines.append(f"• *{user_name}* {summary} in the Stacks{link_suffix}")
+
         elif event_type == "output.indexed":
             apps = Counter(p.get("app_name") for p in payloads if p.get("app_name"))
             app_bits = ", ".join(

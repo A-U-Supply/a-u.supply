@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Column,
     Date,
     DateTime,
@@ -277,6 +278,26 @@ class MediaSessionMeta(Base):
     notes = Column(String, nullable=True)
 
     media_item = relationship("MediaItem")
+
+
+class MediaVote(Base):
+    """Per-user up/down vote on a media item.
+
+    value: +1 (acclaim) or -1 (disavow). Re-voting the same direction is
+    treated as a retraction at the API layer (the row is deleted); switching
+    direction updates value in place.
+    """
+
+    __tablename__ = "media_votes"
+    __table_args__ = (CheckConstraint("value IN (-1, 1)", name="ck_media_votes_value"),)
+
+    media_item_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    value = Column(Integer, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+    updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
+
+    user = relationship("User")
 
 
 class MediaTag(Base):

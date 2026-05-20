@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session, joinedload
 
-from server.auth import get_db, require_scope
+from server.auth import get_db, require_admin, require_scope
 from server.models import (
     ApiKey,
     ExtractionFailure,
@@ -28,11 +28,13 @@ from server.models import (
     MediaSlackShare,
     MediaSource,
     MediaTag,
+    MediaVote,
     TagVocabulary,
     User,
 )
 from server.search_client import delete_media_item as meili_delete, sync_media_item as meili_sync
 from server.slack_notifier import queue_batched
+from server import vote_sync
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +80,10 @@ class SearchFilters(BaseModel):
     has_transcript: bool | None = Field(None, description="Filter audio/video items by whether they have a transcript.")
     has_text: bool | None = Field(None, description="Filter images by whether they have OCR-extracted text.")
     job_app: str | None = Field(None, description="Filter outputs by app name (e.g. `rottengenizdat`).")
+    vote_score: dict | None = Field(None, description="Net vote score (up minus down): `{\"min\": 3}` and/or `{\"max\": -1}`.")
+    up_count: dict | None = Field(None, description="Upvote count range: `{\"min\": 1}` and/or `{\"max\": 10}`.")
+    down_count: dict | None = Field(None, description="Downvote count range: `{\"min\": 1}` and/or `{\"max\": 0}`.")
+    my_votes: str | None = Field(None, description="Filter to items the calling user has voted on: `up`, `down`, `any`, or `none`.")
 
     @field_validator("color_group", mode="before")
     @classmethod
@@ -447,8 +453,16 @@ def _escape_filter_value(val: str) -> str:
     return val.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def _build_meili_filter(filters: SearchFilters | None) -> str | None:
-    """Convert SearchFilters into a Meilisearch filter string."""
+def _build_meili_filter(
+    filters: SearchFilters | None,
+    *,
+    user_id: int | None = None,
+) -> str | None:
+    """Convert SearchFilters into a Meilisearch filter string.
+
+    `user_id` is consulted only by the `my_votes` filter — pass the calling
+    user's id when the request might filter by personal vote state.
+    """
     if not filters:
         return None
 
@@ -538,6 +552,37 @@ def _build_meili_filter(filters: SearchFilters | None) -> str | None:
     if filters.job_app:
         parts.append(f'job_app = "{_escape_filter_value(filters.job_app)}"')
 
+    # Votes (issue #318)
+    if filters.vote_score:
+        if filters.vote_score.get("min") is not None:
+            parts.append(f"vote_score >= {int(filters.vote_score['min'])}")
+        if filters.vote_score.get("max") is not None:
+            parts.append(f"vote_score <= {int(filters.vote_score['max'])}")
+    if filters.up_count:
+        if filters.up_count.get("min") is not None:
+            parts.append(f"up_count >= {int(filters.up_count['min'])}")
+        if filters.up_count.get("max") is not None:
+            parts.append(f"up_count <= {int(filters.up_count['max'])}")
+    if filters.down_count:
+        if filters.down_count.get("min") is not None:
+            parts.append(f"down_count >= {int(filters.down_count['min'])}")
+        if filters.down_count.get("max") is not None:
+            parts.append(f"down_count <= {int(filters.down_count['max'])}")
+    if filters.my_votes:
+        if filters.my_votes == "none":
+            parts.append("up_count = 0 AND down_count = 0")
+        elif user_id is not None:
+            uid = int(user_id)
+            if filters.my_votes == "up":
+                parts.append(f"upvoter_user_ids = {uid}")
+            elif filters.my_votes == "down":
+                parts.append(f"downvoter_user_ids = {uid}")
+            elif filters.my_votes == "any":
+                parts.append(f"(upvoter_user_ids = {uid} OR downvoter_user_ids = {uid})")
+        # If `my_votes` is set but `user_id` is unknown (anonymous read scope
+        # via a bearer key without a linked user), silently skip — better than
+        # returning everything or nothing.
+
     return " AND ".join(parts) if parts else None
 
 
@@ -564,7 +609,7 @@ def _update_vocabulary(db: Session, tag: str, delta: int) -> None:
 @router.post("/search", tags=["Media Search"], summary="Search media")
 def search_media(
     body: SearchRequest,
-    _auth=Depends(require_scope("read")),
+    auth: tuple[User, str] = Depends(require_scope("read")),
     db: Session = Depends(get_db),
 ):
     """Multi-index media search with filters, facets, and pagination.
@@ -587,7 +632,8 @@ def search_media(
     """
     from server.search_client import multi_search
 
-    meili_filter = _build_meili_filter(body.filters)
+    user, _scope = auth
+    meili_filter = _build_meili_filter(body.filters, user_id=user.id if user else None)
     sort_list = [body.sort] if body.sort else None
 
     # If filtering by color, only search images (other indexes don't have dominant_colors)
@@ -657,7 +703,7 @@ def _resolve_index_routing(body: SearchRequest) -> tuple[list[str] | None, bool]
 @router.post("/search/ids", tags=["Media Search"], summary="Get all matching IDs")
 def search_media_ids(
     body: SearchRequest,
-    _auth=Depends(require_scope("read")),
+    auth: tuple[User, str] = Depends(require_scope("read")),
     db: Session = Depends(get_db),
 ):
     """Return just the IDs of every item matching the search, up to a cap.
@@ -674,7 +720,8 @@ def search_media_ids(
     """
     from server.search_client import multi_search
 
-    meili_filter = _build_meili_filter(body.filters)
+    user, _scope = auth
+    meili_filter = _build_meili_filter(body.filters, user_id=user.id if user else None)
     sort_list = [body.sort] if body.sort else None
 
     # Must use the exact same routing as /api/search — otherwise a user on the
@@ -704,7 +751,7 @@ def search_media_ids(
 @router.post("/search/stats", tags=["Media Search"], summary="Search aggregation stats")
 def search_stats(
     body: SearchRequest,
-    _auth=Depends(require_scope("read")),
+    auth: tuple[User, str] = Depends(require_scope("read")),
     db: Session = Depends(get_db),
 ):
     """Return aggregation stats for the current search query and filters.
@@ -718,7 +765,8 @@ def search_stats(
     from server.search_client import multi_search
     import json as _json
 
-    meili_filter = _build_meili_filter(body.filters)
+    user, _scope = auth
+    meili_filter = _build_meili_filter(body.filters, user_id=user.id if user else None)
 
     media_types = body.media_types
     if body.filters and (body.filters.color or body.filters.color_group):
@@ -2318,6 +2366,164 @@ def retry_extraction_failure(
     except Exception as e:
         logger.exception("Retry failed for extraction failure %s", failure_id)
         return {"ok": False, "detail": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Votes — per-user up/down on a media item ("Acclaim" / "Disavow"). Issue #318.
+# ---------------------------------------------------------------------------
+
+
+class VoteRequest(BaseModel):
+    """Body for `POST /api/search/{media_id}/vote`.
+
+    `value` is one of:
+    - `+1` — record an upvote (acclaim); switches an existing downvote.
+    - `-1` — record a downvote (disavow); switches an existing upvote.
+    - `0`  — retract whatever the user's existing vote was; no-op if absent.
+
+    Idempotent on `(user, media_id)`.
+    """
+
+    value: int = Field(..., description="-1, 0, or +1.")
+
+    @field_validator("value")
+    @classmethod
+    def _validate_value(cls, v: int) -> int:
+        if v not in (-1, 0, 1):
+            raise ValueError("value must be -1, 0, or 1")
+        return v
+
+
+def _vote_aggregates(db: Session, media_item_id: str, user_id: int) -> dict:
+    """Compute fresh aggregates + the current user's vote in one place."""
+    rows = (
+        db.query(MediaVote.user_id, MediaVote.value)
+        .filter(MediaVote.media_item_id == media_item_id)
+        .all()
+    )
+    up = sum(1 for _uid, v in rows if v > 0)
+    down = sum(1 for _uid, v in rows if v < 0)
+    my_vote = next((v for uid, v in rows if uid == user_id), 0)
+    return {
+        "up_count": up,
+        "down_count": down,
+        "vote_score": up - down,
+        "my_vote": my_vote,
+    }
+
+
+@router.post(
+    "/search/{media_id}/vote",
+    tags=["Media Votes"],
+    summary="Acclaim / disavow a media item",
+)
+def vote_on_media(
+    media_id: str,
+    body: VoteRequest,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Record (or retract) the calling user's vote on a media item.
+
+    Returns the post-state aggregates plus `my_vote` so the client can
+    confirm its optimistic update without a follow-up GET.
+
+    **Admin only.** Voting is admin-side curation (`/admin/search`).
+    """
+    item = db.query(MediaItem).filter(MediaItem.id == media_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Media item not found")
+
+    existing = (
+        db.query(MediaVote)
+        .filter(MediaVote.media_item_id == media_id, MediaVote.user_id == user.id)
+        .first()
+    )
+    prior_value = existing.value if existing else 0
+
+    if body.value == 0:
+        if existing is not None:
+            db.delete(existing)
+    else:
+        if existing is None:
+            db.add(MediaVote(media_item_id=media_id, user_id=user.id, value=body.value))
+        elif existing.value != body.value:
+            existing.value = body.value
+        # Re-voting the same direction is a no-op — keep the existing row to
+        # preserve its created_at.
+
+    db.commit()
+
+    # Schedule the debounced Meili partial-update. Other admins see the new
+    # counts within ~500ms.
+    vote_sync.schedule(media_id)
+
+    # Activity feed + Slack rollup. Only emit on actual state change so
+    # idempotent re-clicks don't pollute the channel.
+    if body.value != prior_value:
+        queue_batched(
+            "media.voted",
+            user,
+            media_item_id=media_id,
+            filename=item.filename,
+            prior_value=prior_value,
+            new_value=body.value,
+        )
+
+    return _vote_aggregates(db, media_id, user.id)
+
+
+@router.get(
+    "/search/{media_id}/voters",
+    tags=["Media Votes"],
+    summary="List voters on a media item",
+)
+def get_voters(
+    media_id: str,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Return the full voter list for one item.
+
+    The denormalized voter arrays in the Meilisearch doc are normally
+    enough for hover tooltips. This endpoint exists as a fallback for
+    callers that don't have the Meili payload handy (e.g. a freshly-voted
+    item before partial-update has propagated).
+    """
+    if not db.query(MediaItem.id).filter(MediaItem.id == media_id).first():
+        raise HTTPException(status_code=404, detail="Media item not found")
+    rows = (
+        db.query(MediaVote.value, User.id, User.name)
+        .join(User, User.id == MediaVote.user_id)
+        .filter(MediaVote.media_item_id == media_id)
+        .all()
+    )
+    upvoters: list[dict] = []
+    downvoters: list[dict] = []
+    for value, uid, name in rows:
+        (upvoters if value > 0 else downvoters).append({"user_id": uid, "name": name})
+    return {"upvoters": upvoters, "downvoters": downvoters}
+
+
+@router.get(
+    "/search/votes/mine",
+    tags=["Media Votes"],
+    summary="List my own votes",
+)
+def list_my_votes(
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Return the calling user's votes as two id lists.
+
+    The client uses this to seed optimistic state after a hard reload so
+    the up/down arrows render highlighted before the first search response
+    comes back.
+    """
+    rows = db.query(MediaVote.media_item_id, MediaVote.value).filter(MediaVote.user_id == user.id).all()
+    up = [mid for mid, v in rows if v > 0]
+    down = [mid for mid, v in rows if v < 0]
+    return {"up": up, "down": down}
 
 
 @router.post("/extraction-failures/{failure_id}/resolve", tags=["Extraction Failures"], summary="Mark failure as resolved")

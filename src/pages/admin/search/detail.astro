@@ -11,6 +11,7 @@ import Admin from '../../../layouts/Admin.astro';
   <div id="detail-content" style="display:none;">
     <div class="detail-header">
       <h1 id="detail-title">Media Detail</h1>
+      <div id="vote-chip-island" class="vote-chip-island"></div>
       <button
         class="bm-star"
         id="detail-bm-star"
@@ -186,6 +187,11 @@ import Admin from '../../../layouts/Admin.astro';
     margin-bottom: 0;
     border-bottom: none;
     padding-bottom: 0;
+  }
+  .vote-chip-island {
+    display: inline-flex;
+    margin-right: auto;
+    margin-left: var(--space-sm);
   }
 
   .detail-layout {
@@ -411,9 +417,11 @@ import Admin from '../../../layouts/Admin.astro';
   import { mount, unmount } from 'svelte';
   import Threads from '../../../components/Threads.svelte';
   import LatentLinks from '../../../components/LatentLinks.svelte';
+  import VoteChip from '../../../components/VoteChip.svelte';
 
   let threadsInstance: any = null;
   let latentLinksInstance: any = null;
+  let voteChipInstance: any = null;
 
   document.addEventListener('astro:before-swap', () => {
     if (threadsInstance) {
@@ -427,6 +435,12 @@ import Admin from '../../../layouts/Admin.astro';
         unmount(latentLinksInstance);
       } catch {}
       latentLinksInstance = null;
+    }
+    if (voteChipInstance) {
+      try {
+        unmount(voteChipInstance);
+      } catch {}
+      voteChipInstance = null;
     }
   });
 
@@ -475,6 +489,47 @@ import Admin from '../../../layouts/Admin.astro';
       });
     }
 
+    async function mountVoteChip(item: any) {
+      const target = document.getElementById('vote-chip-island');
+      if (!target) return;
+      if (voteChipInstance) {
+        try {
+          unmount(voteChipInstance);
+        } catch {}
+        voteChipInstance = null;
+      }
+      target.innerHTML = '';
+      // Detail-page payload doesn't carry vote fields yet (server only puts
+      // them in the search doc); fetch the voters + the caller's own vote
+      // state in parallel before mounting so the chip lands populated.
+      const [votersRes, mineRes] = await Promise.all([
+        fetch(`/api/search/${encodeURIComponent(mediaId)}/voters`, {
+          credentials: 'include',
+        }).then((r) => (r.ok ? r.json() : { upvoters: [], downvoters: [] })),
+        fetch('/api/search/votes/mine', { credentials: 'include' }).then((r) =>
+          r.ok ? r.json() : { up: [], down: [] },
+        ),
+      ]);
+      const myVote: -1 | 0 | 1 = mineRes.up?.includes(mediaId)
+        ? 1
+        : mineRes.down?.includes(mediaId)
+          ? -1
+          : 0;
+      voteChipInstance = mount(VoteChip, {
+        target,
+        props: {
+          mediaId,
+          upCount: (votersRes.upvoters || []).length,
+          downCount: (votersRes.downvoters || []).length,
+          upvoters: votersRes.upvoters || [],
+          downvoters: votersRes.downvoters || [],
+          myVote,
+          currentUserId: user?.id ?? null,
+          size: 'lg',
+        },
+      });
+    }
+
     // Mount the cross-Latent links island for this media item
     const linksTarget = document.getElementById('latent-links-island');
     if (linksTarget) {
@@ -504,6 +559,7 @@ import Admin from '../../../layouts/Admin.astro';
         contentEl.style.display = 'block';
         renderDetail();
         mountThreads(currentItem.filename || 'untitled');
+        mountVoteChip(currentItem);
         // Bookmark star
         const bm = (window as any).__bookmarks;
         const starEl = document.getElementById('detail-bm-star');

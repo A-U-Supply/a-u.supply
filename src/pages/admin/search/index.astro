@@ -188,8 +188,50 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         <option value="oldest">Oldest</option>
         <option value="random">Random</option>
         <option value="most_reactions">Most Reactions</option>
+        <option value="acclaim">Acclaim</option>
         <option value="largest">Largest</option>
         <option value="longest">Longest</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Acclaim min (net)</label>
+      <input
+        type="number"
+        id="filter-vote-score-min"
+        placeholder="any"
+        style="width:6rem;"
+      />
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Upvotes min</label>
+      <input
+        type="number"
+        id="filter-up-min"
+        placeholder="any"
+        style="width:6rem;"
+      />
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Downvotes max</label>
+      <input
+        type="number"
+        id="filter-down-max"
+        placeholder="any"
+        style="width:6rem;"
+      />
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">My votes</label>
+      <select id="filter-my-votes">
+        <option value="">Any</option>
+        <option value="up">I acclaimed</option>
+        <option value="down">I disavowed</option>
+        <option value="any">Either way</option>
+        <option value="none">No votes yet</option>
       </select>
     </div>
 
@@ -267,6 +309,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
             <th>Channel</th>
             <th>Size</th>
             <th>Reactions</th>
+            <th>Acclaim</th>
             <th>Tags</th>
             <th>Created</th>
             <th>Discussion</th>
@@ -1126,6 +1169,44 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     color: var(--color-muted);
     display: flex;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  /* Acclaim/Disavow chip (issue #318). Vanilla — Svelte island only mounts
+     on the detail page. Native `title` attribute backs the voter tooltip
+     in this dense listing context so no extra DOM/JS is needed. */
+  .vote-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 4px;
+    border: 1px solid var(--color-border, #888);
+    border-radius: 999px;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.8em;
+    line-height: 1;
+  }
+  .vote-chip__arrow {
+    background: none;
+    border: none;
+    padding: 0 2px;
+    cursor: pointer;
+    color: var(--color-muted, #888);
+    font-size: 1em;
+    line-height: 1;
+  }
+  .vote-chip__arrow:hover {
+    color: var(--color-text, inherit);
+  }
+  .vote-chip__arrow--up.is-active {
+    color: var(--color-accent-up, #1f8a3a);
+  }
+  .vote-chip__arrow--down.is-active {
+    color: var(--color-accent-down, #b03030);
+  }
+  .vote-chip__count.is-zero {
+    opacity: 0.45;
   }
 
   /* Feed view: tall cards, one item per row, max-width for readability.
@@ -1881,6 +1962,22 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         ) || 0;
       const sortBy = (document.getElementById('sort-by') as HTMLSelectElement)
         .value;
+      const voteScoreMin =
+        parseInt(
+          (document.getElementById('filter-vote-score-min') as HTMLInputElement)
+            .value,
+        ) || null;
+      const upMin =
+        parseInt(
+          (document.getElementById('filter-up-min') as HTMLInputElement).value,
+        ) || null;
+      const downMaxRaw = (
+        document.getElementById('filter-down-max') as HTMLInputElement
+      ).value;
+      const downMax = downMaxRaw === '' ? null : parseInt(downMaxRaw);
+      const myVotes = (
+        document.getElementById('filter-my-votes') as HTMLSelectElement
+      ).value;
       const jobAppEl = document.getElementById(
         'filter-job-app',
       ) as HTMLSelectElement;
@@ -1909,6 +2006,10 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         reactionsMin,
         tagsMin,
         sortBy,
+        voteScoreMin,
+        upMin,
+        downMax,
+        myVotes,
         jobApp,
         hasTranscript,
         hasText,
@@ -1979,6 +2080,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         oldest: 'created_at:asc',
         random: 'random',
         most_reactions: 'total_reaction_count:desc',
+        acclaim: 'vote_score:desc',
         largest: 'file_size_bytes:desc',
         longest: 'duration_seconds:desc',
       };
@@ -2014,6 +2116,13 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       if (filters.hasTranscript)
         body.filters.has_transcript = filters.hasTranscript === 'yes';
       if (filters.hasText) body.filters.has_text = filters.hasText === 'yes';
+      if (filters.voteScoreMin !== null)
+        body.filters.vote_score = { min: filters.voteScoreMin };
+      if (filters.upMin !== null)
+        body.filters.up_count = { min: filters.upMin };
+      if (filters.downMax !== null)
+        body.filters.down_count = { max: filters.downMax };
+      if (filters.myVotes) body.filters.my_votes = filters.myVotes;
       return body;
     }
 
@@ -2189,6 +2298,138 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
       return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     }
+
+    // ---- Acclaim/Disavow chip (issue #318) --------------------------------
+    // Vanilla HTML chip injected into every grid/list/feed row. A single
+    // delegated click handler (wired further down) handles the actual vote
+    // POST and per-row re-render. Voter identities for the tooltip ride
+    // along in the Meilisearch document (denormalized `upvoters` /
+    // `downvoters` arrays).
+    function escapeHtmlAttr(s: string): string {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+    function voterNames(voters: any[] | undefined): string {
+      if (!voters || voters.length === 0) return '—';
+      const names = voters
+        .slice(0, 12)
+        .map((v: any) => v.name)
+        .filter(Boolean);
+      const more = voters.length > 12 ? `, +${voters.length - 12} more` : '';
+      return escapeHtmlAttr(names.join(', ') + more);
+    }
+    function voteChipHtml(item: any, currentUserId: number | null): string {
+      const up = item.up_count ?? 0;
+      const down = item.down_count ?? 0;
+      const upIds: number[] = item.upvoter_user_ids || [];
+      const downIds: number[] = item.downvoter_user_ids || [];
+      const myVote: -1 | 0 | 1 =
+        currentUserId == null
+          ? 0
+          : upIds.includes(currentUserId)
+            ? 1
+            : downIds.includes(currentUserId)
+              ? -1
+              : 0;
+      const upActive = myVote === 1 ? ' is-active' : '';
+      const downActive = myVote === -1 ? ' is-active' : '';
+      const upZero = up === 0 ? ' is-zero' : '';
+      const downZero = down === 0 ? ' is-zero' : '';
+      const tooltip = `Acclaimed: ${voterNames(item.upvoters)} (${up}) — Disavowed: ${voterNames(item.downvoters)} (${down})`;
+      return `<span class="vote-chip vote-chip--sm" data-vote-media-id="${item.id}" data-vote-mine="${myVote}" title="${tooltip}">
+        <button type="button" class="vote-chip__arrow vote-chip__arrow--up${upActive}" data-vote-id="${item.id}" data-vote-dir="1" aria-label="Acclaim">▲</button>
+        <span class="vote-chip__count vote-chip__count--up${upZero}">${up}</span>
+        <span class="vote-chip__count vote-chip__count--down${downZero}">${down}</span>
+        <button type="button" class="vote-chip__arrow vote-chip__arrow--down${downActive}" data-vote-id="${item.id}" data-vote-dir="-1" aria-label="Disavow">▼</button>
+      </span>`;
+    }
+    function updateChipFor(mediaId: string) {
+      const item = allResults.find((r) => r.id === mediaId);
+      if (!item) return;
+      const html = voteChipHtml(item, user?.id ?? null);
+      document
+        .querySelectorAll<HTMLElement>(
+          `.vote-chip[data-vote-media-id="${CSS.escape(mediaId)}"]`,
+        )
+        .forEach((el) => {
+          const wrap = document.createElement('div');
+          wrap.innerHTML = html;
+          const next = wrap.firstElementChild as HTMLElement | null;
+          if (next) el.replaceWith(next);
+        });
+    }
+    async function castVote(mediaId: string, target: 1 | -1) {
+      const item = allResults.find((r) => r.id === mediaId);
+      if (!item) return;
+      const uid: number | null = user?.id ?? null;
+      const myUp: number[] = item.upvoter_user_ids || [];
+      const myDown: number[] = item.downvoter_user_ids || [];
+      const mine: -1 | 0 | 1 =
+        uid == null
+          ? 0
+          : myUp.includes(uid)
+            ? 1
+            : myDown.includes(uid)
+              ? -1
+              : 0;
+      // Click same arrow → retract.
+      const next: -1 | 0 | 1 = mine === target ? 0 : target;
+      try {
+        const r = await fetch(
+          `/api/search/${encodeURIComponent(mediaId)}/vote`,
+          {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value: next }),
+          },
+        );
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const body = await r.json();
+        item.up_count = body.up_count;
+        item.down_count = body.down_count;
+        item.vote_score = body.vote_score;
+        if (uid != null) {
+          item.upvoter_user_ids = (item.upvoter_user_ids || []).filter(
+            (id: number) => id !== uid,
+          );
+          item.downvoter_user_ids = (item.downvoter_user_ids || []).filter(
+            (id: number) => id !== uid,
+          );
+          item.upvoters = (item.upvoters || []).filter(
+            (v: any) => v.user_id !== uid,
+          );
+          item.downvoters = (item.downvoters || []).filter(
+            (v: any) => v.user_id !== uid,
+          );
+          if (body.my_vote === 1) {
+            item.upvoter_user_ids.push(uid);
+            item.upvoters.push({ user_id: uid, name: user?.name || 'you' });
+          } else if (body.my_vote === -1) {
+            item.downvoter_user_ids.push(uid);
+            item.downvoters.push({ user_id: uid, name: user?.name || 'you' });
+          }
+        }
+        updateChipFor(mediaId);
+      } catch {
+        /* leave the chip as-is; the next search refresh will reconcile */
+      }
+    }
+    document.addEventListener('click', (ev) => {
+      const target = ev.target as HTMLElement;
+      const btn = target.closest<HTMLElement>('.vote-chip__arrow');
+      if (!btn) return;
+      const id = btn.dataset.voteId;
+      const dir = parseInt(btn.dataset.voteDir || '0', 10);
+      if (!id || (dir !== 1 && dir !== -1)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      void castVote(id, dir as 1 | -1);
+    });
 
     // Infinite-scroll wiring (feed view only):
     //   - `loadMoreObserver` is an IntersectionObserver on the sentinel
@@ -2455,6 +2696,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
                 ${poster ? `<span>${poster}</span>` : ''}
                 ${rxn > 0 ? `<span>${rxn} rxn</span>` : ''}
                 <span>${item.tag_count ?? 0} tags</span>
+                ${voteChipHtml(item, user?.id ?? null)}
               </div>
             </div>
           </div>`;
@@ -2546,6 +2788,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
                   ${rxn > 0 ? `<span>${rxn} rxn</span>` : ''}
                   <span>${item.tag_count ?? 0} tags</span>
                   ${date ? `<span>${date}</span>` : ''}
+                  ${voteChipHtml(item, user?.id ?? null)}
                 </div>
                 ${commentsToggle}
                 <div class="feed-item__actions">${actions.join('')}</div>
@@ -2581,6 +2824,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
             <td>${channel}</td>
             <td style="white-space:nowrap;">${item.file_size_bytes ? formatSize(item.file_size_bytes) : '--'}</td>
             <td>${rxn}</td>
+            <td>${voteChipHtml(item, user?.id ?? null)}</td>
             <td>${tags}</td>
             <td style="white-space:nowrap;">${date}</td>
             <td class="discuss-cell"></td>

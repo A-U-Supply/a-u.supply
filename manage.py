@@ -11,6 +11,7 @@ Usage (from host):
     ssh dokku run au-supply .venv/bin/python manage.py backfill-slack-uploader-id [--dry-run]
     ssh dokku run au-supply .venv/bin/python manage.py refresh-app <name>
     ssh dokku run au-supply .venv/bin/python manage.py refresh-all-apps
+    ssh dokku run au-supply .venv/bin/python manage.py resync-votes [<media_id>]
 """
 
 import json
@@ -220,6 +221,34 @@ def reindex_search():
             print(f"  {i + 1}/{len(items)}")
     print(f"Done! Re-indexed {len(items)} items.")
     db.close()
+
+
+def resync_votes(media_id: str | None = None):
+    """Repush vote aggregates + voter lists into Meilisearch.
+
+    Recovery for when SQLite holds the truth but Meilisearch is stale
+    (process crash mid-debounce, Meili outage, hand-edited DB rows).
+    """
+    from server.models import MediaItem
+    from server.search_client import update_vote_fields
+
+    db = SessionLocal()
+    try:
+        q = db.query(MediaItem)
+        if media_id:
+            q = q.filter(MediaItem.id == media_id)
+        items = q.all()
+        if not items:
+            print("No items matched.")
+            return
+        print(f"Resyncing vote fields for {len(items)} item(s)...")
+        for i, item in enumerate(items):
+            update_vote_fields(db, item)
+            if (i + 1) % 200 == 0:
+                print(f"  {i + 1}/{len(items)}")
+        print(f"Done! Resynced {len(items)} item(s).")
+    finally:
+        db.close()
 
 
 def color_histogram():
@@ -766,6 +795,10 @@ if __name__ == "__main__":
 
     elif cmd == "refresh-all-apps":
         refresh_all_apps()
+
+    elif cmd == "resync-votes":
+        target = sys.argv[2] if len(sys.argv) >= 3 else None
+        resync_votes(target)
 
     elif cmd == "migrate-index":
         if len(sys.argv) < 4:
