@@ -11,7 +11,6 @@ import Admin from '../../../layouts/Admin.astro';
   <div id="detail-content" style="display:none;">
     <div class="detail-header">
       <h1 id="detail-title">Media Detail</h1>
-      <div id="vote-chip-island" class="vote-chip-island"></div>
       <button
         class="bm-star"
         id="detail-bm-star"
@@ -19,6 +18,12 @@ import Admin from '../../../layouts/Admin.astro';
         title="Bookmark"></button>
       <a href="/admin/search" class="action-btn">Back to Search</a>
     </div>
+
+    <!-- Acclaim / Disavow — per-user votes on this item (issue #318) -->
+    <section class="votes-section">
+      <h2>Acclaim / Disavow</h2>
+      <div id="vote-chip-island" class="vote-chip-island"></div>
+    </section>
 
     <div class="detail-layout">
       <div class="detail-preview" id="detail-preview"></div>
@@ -188,10 +193,14 @@ import Admin from '../../../layouts/Admin.astro';
     border-bottom: none;
     padding-bottom: 0;
   }
+  .votes-section {
+    margin-top: var(--space-md);
+  }
+  .votes-section h2 {
+    margin-bottom: var(--space-xs);
+  }
   .vote-chip-island {
-    display: inline-flex;
-    margin-right: auto;
-    margin-left: var(--space-sm);
+    display: block;
   }
 
   .detail-layout {

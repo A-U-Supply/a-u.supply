@@ -1175,38 +1175,63 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
 
   /* Acclaim/Disavow chip (issue #318). Vanilla — Svelte island only mounts
      on the detail page. Native `title` attribute backs the voter tooltip
-     in this dense listing context so no extra DOM/JS is needed. */
+     in this dense listing context so no extra DOM/JS is needed.
+     Sized to actually look like buttons: brutalist tokens (2px border,
+     hard shadow, hover lift, aria-pressed inversion, mono uppercase). */
   .vote-chip {
     display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    padding: 1px 4px;
-    border: 1px solid var(--color-border, #888);
-    border-radius: 999px;
+    align-items: stretch;
+    gap: 4px;
+    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
-    font-size: 0.8em;
     line-height: 1;
   }
   .vote-chip__arrow {
-    background: none;
-    border: none;
-    padding: 0 2px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: var(--color-bg);
+    color: var(--color-fg, var(--color-text));
+    border: 2px solid var(--color-fg, var(--color-text));
+    box-shadow: 2px 2px 0 var(--color-fg, var(--color-text));
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
     cursor: pointer;
-    color: var(--color-muted, #888);
-    font-size: 1em;
-    line-height: 1;
+    user-select: none;
+    transition:
+      transform 60ms ease,
+      box-shadow 60ms ease,
+      background 80ms,
+      color 80ms;
   }
   .vote-chip__arrow:hover {
-    color: var(--color-text, inherit);
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--color-fg, var(--color-text));
   }
-  .vote-chip__arrow--up.is-active {
-    color: var(--color-accent-up, #1f8a3a);
+  .vote-chip__arrow:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--color-fg, var(--color-text));
   }
-  .vote-chip__arrow--down.is-active {
-    color: var(--color-accent-down, #b03030);
+  .vote-chip__arrow.is-active {
+    background: var(--color-fg, var(--color-text));
+    color: var(--color-bg);
+  }
+  .vote-chip__count {
+    display: inline-block;
+    min-width: 1.5ch;
+    text-align: right;
   }
   .vote-chip__count.is-zero {
-    opacity: 0.45;
+    opacity: 0.5;
+  }
+  /* Slightly tighter inside the dense grid tile. */
+  .results-grid .vote-chip__arrow {
+    padding: 3px 6px;
+    font-size: 0.72rem;
   }
 
   /* Feed view: tall cards, one item per row, max-width for readability.
@@ -2173,6 +2198,13 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       if (filters.hasTranscript)
         stateParams.set('transcript', filters.hasTranscript);
       if (filters.hasText) stateParams.set('ocr', filters.hasText);
+      if (filters.voteScoreMin !== null)
+        stateParams.set('vscore', String(filters.voteScoreMin));
+      if (filters.upMin !== null)
+        stateParams.set('upmin', String(filters.upMin));
+      if (filters.downMax !== null)
+        stateParams.set('downmax', String(filters.downMax));
+      if (filters.myVotes) stateParams.set('myvotes', filters.myVotes);
       if (filters.sortBy !== 'newest') stateParams.set('sort', filters.sortBy);
       if (filters.types.length < 3 && filters.types.length > 0)
         stateParams.set('types', filters.types.join(','));
@@ -2339,12 +2371,13 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       const downActive = myVote === -1 ? ' is-active' : '';
       const upZero = up === 0 ? ' is-zero' : '';
       const downZero = down === 0 ? ' is-zero' : '';
-      const tooltip = `Acclaimed: ${voterNames(item.upvoters)} (${up}) — Disavowed: ${voterNames(item.downvoters)} (${down})`;
-      return `<span class="vote-chip vote-chip--sm" data-vote-media-id="${item.id}" data-vote-mine="${myVote}" title="${tooltip}">
-        <button type="button" class="vote-chip__arrow vote-chip__arrow--up${upActive}" data-vote-id="${item.id}" data-vote-dir="1" aria-label="Acclaim">▲</button>
-        <span class="vote-chip__count vote-chip__count--up${upZero}">${up}</span>
-        <span class="vote-chip__count vote-chip__count--down${downZero}">${down}</span>
-        <button type="button" class="vote-chip__arrow vote-chip__arrow--down${downActive}" data-vote-id="${item.id}" data-vote-dir="-1" aria-label="Disavow">▼</button>
+      const upTitle = escapeHtmlAttr(`Acclaim — ${voterNames(item.upvoters)}`);
+      const downTitle = escapeHtmlAttr(
+        `Disavow — ${voterNames(item.downvoters)}`,
+      );
+      return `<span class="vote-chip" data-vote-media-id="${item.id}" data-vote-mine="${myVote}">
+        <button type="button" class="vote-chip__arrow vote-chip__arrow--up${upActive}" data-vote-id="${item.id}" data-vote-dir="1" aria-label="Acclaim" title="${upTitle}">▲ <span class="vote-chip__count${upZero}">${up}</span></button>
+        <button type="button" class="vote-chip__arrow vote-chip__arrow--down${downActive}" data-vote-id="${item.id}" data-vote-dir="-1" aria-label="Disavow" title="${downTitle}"><span class="vote-chip__count${downZero}">${down}</span> ▼</button>
       </span>`;
     }
     function updateChipFor(mediaId: string) {
@@ -3535,6 +3568,25 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         fm.value = initParams.get('mintags')!;
       const sb = document.getElementById('sort-by') as HTMLSelectElement;
       if (initParams.get('sort') && sb) sb.value = initParams.get('sort')!;
+      const fvs = document.getElementById(
+        'filter-vote-score-min',
+      ) as HTMLInputElement | null;
+      if (initParams.get('vscore') && fvs)
+        fvs.value = initParams.get('vscore')!;
+      const fum = document.getElementById(
+        'filter-up-min',
+      ) as HTMLInputElement | null;
+      if (initParams.get('upmin') && fum) fum.value = initParams.get('upmin')!;
+      const fdm = document.getElementById(
+        'filter-down-max',
+      ) as HTMLInputElement | null;
+      if (initParams.get('downmax') && fdm)
+        fdm.value = initParams.get('downmax')!;
+      const fmv = document.getElementById(
+        'filter-my-votes',
+      ) as HTMLSelectElement | null;
+      if (initParams.get('myvotes') && fmv)
+        fmv.value = initParams.get('myvotes')!;
 
       // Color group dropdown (single-select). Multi values from URL are
       // kept in preservedMultiColors until the user changes the dropdown.

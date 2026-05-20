@@ -57,8 +57,6 @@
   let votersDown = $state<Voter[]>(downvoters);
   let busy = $state(false);
   let error = $state<string | null>(null);
-  let tooltipOpen = $state(false);
-  let votersLoaded = $state(upvoters.length > 0 || downvoters.length > 0);
 
   $effect(() => {
     up = upCount;
@@ -71,30 +69,10 @@
   });
   $effect(() => {
     votersUp = upvoters;
-    if (upvoters.length > 0 || downvoters.length > 0) votersLoaded = true;
   });
   $effect(() => {
     votersDown = downvoters;
   });
-
-  async function ensureVotersLoaded() {
-    if (votersLoaded) return;
-    try {
-      const r = await fetch(
-        `/api/search/${encodeURIComponent(mediaId)}/voters`,
-        {
-          credentials: 'include',
-        },
-      );
-      if (!r.ok) return;
-      const body = await r.json();
-      votersUp = body.upvoters || [];
-      votersDown = body.downvoters || [];
-      votersLoaded = true;
-    } catch {
-      /* swallow — tooltip just stays empty */
-    }
-  }
 
   async function cast(target: 1 | -1) {
     // Reddit-style: clicking the same arrow retracts.
@@ -152,147 +130,155 @@
   }
 </script>
 
-<div
-  class="vote-chip vote-chip--{size}"
-  class:is-busy={busy}
-  role="group"
-  aria-label="Acclaim or disavow this item"
-  onmouseenter={() => {
-    tooltipOpen = true;
-    void ensureVotersLoaded();
-  }}
-  onmouseleave={() => (tooltipOpen = false)}
-  onfocusin={() => {
-    tooltipOpen = true;
-    void ensureVotersLoaded();
-  }}
-  onfocusout={() => (tooltipOpen = false)}
->
-  <button
-    type="button"
-    class="vote-chip__arrow vote-chip__arrow--up"
-    class:is-active={mine === 1}
-    aria-pressed={mine === 1}
-    aria-label="Acclaim"
-    disabled={busy}
-    onclick={(e) => {
-      e.stopPropagation();
-      void cast(1);
-    }}>▲</button
-  >
-  <span class="vote-chip__count vote-chip__count--up" class:is-zero={up === 0}
-    >{up}</span
-  >
-  {#if size === 'lg'}
-    <span class="vote-chip__score" aria-label="Net score">{up - down}</span>
-  {/if}
-  <span
-    class="vote-chip__count vote-chip__count--down"
-    class:is-zero={down === 0}>{down}</span
-  >
-  <button
-    type="button"
-    class="vote-chip__arrow vote-chip__arrow--down"
-    class:is-active={mine === -1}
-    aria-pressed={mine === -1}
-    aria-label="Disavow"
-    disabled={busy}
-    onclick={(e) => {
-      e.stopPropagation();
-      void cast(-1);
-    }}>▼</button
-  >
+<div class="vote-block" class:is-busy={busy}>
+  <div class="vote-block__row">
+    <button
+      type="button"
+      class="vote-block__btn vote-block__btn--up"
+      class:is-active={mine === 1}
+      aria-pressed={mine === 1}
+      aria-label="Acclaim this item"
+      disabled={busy}
+      onclick={(e) => {
+        e.stopPropagation();
+        void cast(1);
+      }}
+    >
+      <span class="vote-block__arrow" aria-hidden="true">▲</span>
+      <span class="vote-block__label">Acclaim</span>
+      <span class="vote-block__count">{up}</span>
+    </button>
 
-  {#if tooltipOpen}
-    <div class="vote-chip__tooltip" role="tooltip">
-      <div><strong>Acclaimed by:</strong> {namesText(votersUp)} ({up})</div>
-      <div><strong>Disavowed by:</strong> {namesText(votersDown)} ({down})</div>
-      {#if error}
-        <div class="vote-chip__error">{error}</div>
-      {/if}
+    <button
+      type="button"
+      class="vote-block__btn vote-block__btn--down"
+      class:is-active={mine === -1}
+      aria-pressed={mine === -1}
+      aria-label="Disavow this item"
+      disabled={busy}
+      onclick={(e) => {
+        e.stopPropagation();
+        void cast(-1);
+      }}
+    >
+      <span class="vote-block__arrow" aria-hidden="true">▼</span>
+      <span class="vote-block__label">Disavow</span>
+      <span class="vote-block__count">{down}</span>
+    </button>
+  </div>
+
+  <dl class="vote-block__voters">
+    <div class="vote-block__voters-row">
+      <dt>Acclaimed by</dt>
+      <dd>{namesText(votersUp)}</dd>
     </div>
+    <div class="vote-block__voters-row">
+      <dt>Disavowed by</dt>
+      <dd>{namesText(votersDown)}</dd>
+    </div>
+  </dl>
+
+  {#if error}
+    <div class="vote-block__error" role="alert">{error}</div>
   {/if}
 </div>
 
 <style>
-  .vote-chip {
+  .vote-block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm, 0.5rem);
+  }
+  .vote-block.is-busy {
+    opacity: 0.7;
+  }
+  .vote-block__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm, 0.5rem);
+  }
+  .vote-block__btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
-    position: relative;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-  }
-  .vote-chip--sm {
-    font-size: 0.85rem;
-    padding: 0.1rem 0.35rem;
-    border: 1px solid var(--color-border, #ccc);
-    border-radius: 999px;
-    background: var(--color-surface, #fff);
-  }
-  .vote-chip--lg {
-    flex-direction: column;
-    gap: 0.15rem;
-    font-size: 1rem;
-    padding: 0.25rem 0.4rem;
-    border: 2px solid var(--color-border, #222);
-    border-radius: 6px;
-    background: var(--color-surface, #fff);
-    box-shadow: 2px 2px 0 var(--color-border, #222);
-  }
-  .vote-chip--lg .vote-chip__score {
+    gap: 0.5rem;
+    padding: 0.6rem 1rem;
+    background: var(--color-bg);
+    color: var(--color-fg, var(--color-text));
+    border: 2px solid var(--color-fg, var(--color-text));
+    box-shadow: 2px 2px 0 var(--color-fg, var(--color-text));
+    font-family: var(--font-mono);
+    font-size: var(--text-base, 0.95rem);
     font-weight: 700;
-    font-size: 1.15rem;
-  }
-  .vote-chip__arrow {
-    background: none;
-    border: none;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    line-height: 1;
     cursor: pointer;
-    padding: 0 0.15rem;
-    font-size: 1em;
-    color: var(--color-muted, #888);
+    user-select: none;
+    min-width: 9.5rem;
+    justify-content: flex-start;
+    transition:
+      transform 60ms ease,
+      box-shadow 60ms ease,
+      background 80ms,
+      color 80ms;
+  }
+  .vote-block__btn:hover:not(:disabled) {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--color-fg, var(--color-text));
+  }
+  .vote-block__btn:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--color-fg, var(--color-text));
+  }
+  .vote-block__btn.is-active {
+    background: var(--color-fg, var(--color-text));
+    color: var(--color-bg);
+  }
+  .vote-block__btn:disabled {
+    cursor: progress;
+    opacity: 0.7;
+  }
+  .vote-block__arrow {
+    font-size: 1.15em;
     line-height: 1;
   }
-  .vote-chip__arrow:hover:not(:disabled) {
-    color: var(--color-text, #111);
+  .vote-block__label {
+    flex: 1;
   }
-  .vote-chip__arrow:disabled {
-    cursor: progress;
+  .vote-block__count {
+    font-variant-numeric: tabular-nums;
+    min-width: 2ch;
+    text-align: right;
   }
-  .vote-chip__arrow--up.is-active {
-    color: var(--color-accent-up, #1f8a3a);
+  .vote-block__voters {
+    margin: 0;
+    font-size: var(--text-sm, 0.85rem);
+    color: var(--color-muted);
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
   }
-  .vote-chip__arrow--down.is-active {
-    color: var(--color-accent-down, #b03030);
+  .vote-block__voters-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
   }
-  .vote-chip__count.is-zero {
-    opacity: 0.4;
-  }
-  .vote-chip__tooltip {
-    position: absolute;
-    bottom: calc(100% + 0.4rem);
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 100;
-    background: var(--color-surface, #fff);
-    color: var(--color-text, #111);
-    border: 2px solid var(--color-border, #222);
-    box-shadow: 2px 2px 0 var(--color-border, #222);
-    padding: 0.4rem 0.6rem;
-    border-radius: 4px;
-    font-size: 0.78rem;
-    white-space: nowrap;
-    pointer-events: none;
-    line-height: 1.4;
-  }
-  .vote-chip__tooltip strong {
+  .vote-block__voters dt {
     font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.5pt;
+    color: var(--color-muted);
+    min-width: 9.5rem;
+    flex-shrink: 0;
   }
-  .vote-chip__error {
-    margin-top: 0.2rem;
-    color: var(--color-accent-down, #b03030);
+  .vote-block__voters dd {
+    margin: 0;
+    color: var(--color-text, var(--color-fg));
+    word-break: break-word;
   }
-  .vote-chip.is-busy {
-    opacity: 0.7;
+  .vote-block__error {
+    color: #c00;
+    font-size: var(--text-sm, 0.85rem);
   }
 </style>

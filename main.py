@@ -182,6 +182,18 @@ if "latent_id" not in _release_cols_v2:
         _conn.execute(_sa_text("ALTER TABLE releases ADD COLUMN latent_id TEXT"))
 
 
+# Re-apply Meilisearch index settings on startup so additions to
+# FILTERABLE_ATTRIBUTES / SORTABLE_ATTRIBUTES (vote_score, upvoter_user_ids,
+# etc. from #318) take effect without a manual `manage.py reindex`.
+# Idempotent + doc-preserving — only writes settings, never deletes data.
+# Swallowed on Meili-unreachable so a local dev box without Meili can boot.
+try:
+    from server.search_client import configure_indexes as _configure_indexes
+    _configure_indexes()
+except Exception:
+    logger.warning("Skipping Meilisearch configure_indexes at startup", exc_info=True)
+
+
 # ---------------------------------------------------------------------------
 # Background auto-sync scheduler
 # ---------------------------------------------------------------------------
