@@ -1,6 +1,6 @@
 name: Bug report
 description: Something is broken, misbehaving, or returning the wrong result.
-title: "[Bug] "
+title: "fix(scope): "
 labels: ["bug"]
 body:
   - type: markdown

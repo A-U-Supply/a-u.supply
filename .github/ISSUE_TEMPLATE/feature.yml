@@ -1,6 +1,6 @@
 name: Feature request / enhancement
 description: Propose a new feature, improvement, or change in behavior.
-title: "[Feature] "
+title: "feat(scope): "
 labels: ["enhancement"]
 body:
   - type: markdown

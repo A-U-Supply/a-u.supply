@@ -1,4 +1,4 @@
-name: AI triage backfill (unlabeled open issues)
+name: AI triage backfill (all open issues)
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ permissions:
 jobs:
   backfill:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -30,12 +30,10 @@ jobs:
               per_page: 100,
             });
 
-            const unlabeled = issues.filter(
-              (i) => !i.pull_request && (!i.labels || i.labels.length === 0)
-            );
-            core.info(`Found ${unlabeled.length} unlabeled open issues`);
+            const targets = issues.filter((i) => !i.pull_request);
+            core.info(`Found ${targets.length} open issues to triage`);
 
-            for (const issue of unlabeled) {
+            for (const issue of targets) {
               try {
                 core.info(`Triaging #${issue.number}: ${issue.title}`);
                 await triage({ github, context, core, issue, rewriteBody: true });

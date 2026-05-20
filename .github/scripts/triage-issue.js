@@ -1,5 +1,6 @@
 // Shared triage logic for the AI issue triage workflows.
 // Used by .github/workflows/triage.yml (on issue open) and triage-backfill.yml (manual sweep).
+// Every triaged issue ends up with: canonical labels, canonical title, structured body.
 
 const AVAILABLE_LABELS = [
   'bug',
@@ -34,26 +35,35 @@ function buildPrompt(title, body) {
     'Body:',
     body || '(no body)',
     '',
-    'Step 1 — Apply every label from this list that genuinely fits. Use one type label (bug / enhancement / documentation / question / chore — pick the best one), every area: label that applies (an issue can touch multiple areas), and a priority: label only if you can clearly justify it. Add good first issue / help wanted only if obviously applicable. Do not pad. Do not invent labels — only use these verbatim:',
+    'Produce three things so every issue reads consistently across the repo.',
+    '',
+    '1) Title — rewrite into: <type>(<scope>): <description>',
+    "   - type: one of feat | fix | docs | chore | question (enhancement → feat, bug → fix, documentation → docs)",
+    '   - scope: short kebab-case noun. Prefer one of admin, frontend, player, catalog, backend, deploy, worker, auth. Use a more specific scope (e.g. search, upload, latents, bots) when it adds clarity. Omit "(scope)" entirely and use "<type>: <description>" only when nothing fits.',
+    '   - description: imperative mood, lowercase first character (unless a proper noun starts it), no trailing period',
+    '   - Total title <= 80 characters',
+    '   - If the existing title is ALREADY in this exact canonical form, return it unchanged',
+    '',
+    '2) Labels — apply every label from this list that genuinely fits. Use exactly one type label (bug / enhancement / documentation / question / chore), every area: label that applies (an issue can touch multiple), and a priority: label only when clearly justified. Add good first issue / help wanted only if obviously applicable. Do not pad. Available labels (use verbatim, no others):',
     AVAILABLE_LABELS.join(', '),
     '',
-    'Step 2 — Rewrite the body in clean GitHub-flavored markdown matching the project\'s issue templates. Choose the shape based on the inferred type:',
+    "3) Body — rewrite in clean GitHub-flavored markdown matching the section structure for the inferred type:",
+    '   - bug → ## Summary, ## Steps to reproduce, ## Expected behavior, ## Actual behavior, ## Environment, ## Logs / screenshots, ## Additional context',
+    '   - enhancement → ## Problem, ## Proposed solution, ## Alternatives considered, ## Additional context',
+    "   - question → ## What I'm trying to do, ## What I've tried, ## What I've looked at, ## Additional context",
+    '   - chore → ## What, ## Why, ## Notes / risks',
+    '   - documentation → use the question shape unless the body clearly fits one of the others',
     '',
-    '- bug → ## Summary, ## Steps to reproduce, ## Expected behavior, ## Actual behavior, ## Environment, ## Logs / screenshots, ## Additional context',
-    '- enhancement → ## Problem, ## Proposed solution, ## Alternatives considered, ## Additional context',
-    '- question → ## What I\'m trying to do, ## What I\'ve tried, ## What I\'ve looked at, ## Additional context',
-    '- chore → ## What, ## Why, ## Notes / risks',
-    '- documentation → use the question shape unless the body clearly fits one of the others',
-    '',
-    'Rules for the rewrite:',
-    '- Preserve every concrete detail (file paths, error messages, versions, URLs, codes, names).',
-    '- Do NOT invent facts. Reorganize and clarify only.',
-    '- If a section has no information, write "_Not provided_" rather than guessing.',
-    '- Keep prose tight. Use bullets / numbered lists where it helps.',
-    '- Do not include the original raw body — it will be appended automatically.',
+    'Rules for the body rewrite:',
+    '- Preserve every concrete detail (file paths, error messages, versions, URLs, codes, names, usernames)',
+    '- Do NOT invent facts. Reorganize and clarify only',
+    '- If a section has no information, write "_Not provided_" rather than guessing',
+    '- Keep prose tight. Use bullets / numbered lists where it helps',
+    '- Do not include the original raw body — it will be appended automatically',
+    '- If the body is empty or near-empty, write a brief placeholder body that lays out the section skeleton with "_Not provided_" so a human can fill it in',
     '',
     'Respond with ONLY a JSON object — no prose, no code fences:',
-    '{"labels": ["..."], "rewritten_body": "..."}',
+    '{"title": "...", "labels": ["..."], "rewritten_body": "..."}',
   ].join('\n');
 }
 
@@ -101,13 +111,26 @@ async function callModel(prompt) {
   throw new Error('callModel: exhausted retry loop without returning');
 }
 
-module.exports = async ({ github, context, core, issue, rewriteBody }) => {
-  const title = issue.title || '';
-  const originalBody = issue.body || '';
+const ORIGINAL_MARKER = '\n\n---\n*Original:*\n\n';
+
+// If we've triaged this issue before, the body looks like:
+//   <rewritten>\n\n---\n*Original:*\n\n<original>
+// Re-runs operate on the true original so triage is idempotent rather than
+// nesting deeper each time.
+function unwrapOriginal(body) {
+  if (!body) return '';
+  const idx = body.indexOf(ORIGINAL_MARKER);
+  return idx === -1 ? body : body.slice(idx + ORIGINAL_MARKER.length);
+}
+
+module.exports = async ({ github, context, core, issue }) => {
+  const currentTitle = issue.title || '';
+  const originalBody = unwrapOriginal(issue.body || '');
   const issueNumber = issue.number;
 
-  const parsed = await callModel(buildPrompt(title, originalBody));
+  const parsed = await callModel(buildPrompt(currentTitle, originalBody));
 
+  // Labels — additive
   const chosen = Array.isArray(parsed.labels)
     ? Array.from(new Set(parsed.labels.filter((l) => AVAILABLE_LABELS.includes(l))))
     : [];
@@ -124,17 +147,30 @@ module.exports = async ({ github, context, core, issue, rewriteBody }) => {
     core.info(`#${issueNumber} no valid labels chosen`);
   }
 
-  if (rewriteBody && parsed.rewritten_body) {
-    const newBody = originalBody.trim()
-      ? `${parsed.rewritten_body}\n\n---\n*Original:*\n\n${originalBody}`
+  // Title + body — always rewrite, both for new issues and for backfill sweeps
+  const update = {};
+  if (typeof parsed.title === 'string' && parsed.title.trim() && parsed.title !== currentTitle) {
+    update.title = parsed.title.trim();
+  }
+  if (typeof parsed.rewritten_body === 'string' && parsed.rewritten_body.trim()) {
+    update.body = originalBody.trim()
+      ? `${parsed.rewritten_body}${ORIGINAL_MARKER}${originalBody}`
       : parsed.rewritten_body;
+  }
+
+  if (Object.keys(update).length > 0) {
     await github.rest.issues.update({
       owner: context.repo.owner,
       repo: context.repo.repo,
       issue_number: issueNumber,
-      body: newBody,
+      ...update,
     });
-    core.info(`#${issueNumber} body rewritten`);
+    const parts = [];
+    if (update.title) parts.push('title');
+    if (update.body) parts.push('body');
+    core.info(`#${issueNumber} updated: ${parts.join(' + ')}`);
+  } else {
+    core.info(`#${issueNumber} already canonical, no update needed`);
   }
 };
 
