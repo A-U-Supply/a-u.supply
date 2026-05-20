@@ -708,7 +708,7 @@
     gap: 6px;
     border: 1px solid var(--color-border);
     padding: var(--space-sm);
-    background: var(--color-bg);
+    background: var(--color-surface);
   }
   .composer input,
   .composer textarea {
@@ -733,10 +733,10 @@
     gap: var(--space-sm);
     border: 1px solid var(--color-border);
     padding: var(--space-sm);
-    background: var(--color-bg);
+    background: var(--color-surface);
   }
   .single--empty {
-    background: var(--color-surface);
+    background: var(--color-surface-2);
   }
   .single__head {
     display: flex;
@@ -791,7 +791,7 @@
   }
   .thread {
     border: 1px solid var(--color-border);
-    background: var(--color-bg);
+    background: var(--color-surface);
   }
   .thread__head {
     width: 100%;
@@ -809,7 +809,7 @@
   }
   .thread.expanded .thread__head {
     border-bottom: 1px dashed var(--color-border);
-    background: var(--color-surface);
+    background: var(--color-surface-2);
   }
   .thread__title {
     font-weight: bold;
@@ -829,7 +829,7 @@
     display: inline-block;
     padding: 6px 10px;
     border: 1px solid var(--color-border);
-    background: var(--color-surface);
+    background: var(--color-surface-2);
     word-break: break-all;
     color: var(--color-accent);
     font-size: var(--text-sm);
