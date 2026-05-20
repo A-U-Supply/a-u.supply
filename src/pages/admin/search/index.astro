@@ -2173,7 +2173,17 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
 
       const filters = getFilters();
       const body = buildSearchBody();
-      body.page = currentPage;
+      // Snapshot the page we're fetching for. `currentPage` is shared state:
+      // the scroll handler also mutates it to track the visible page, and can
+      // race with us during `await fetch(...)`. If we read currentPage after
+      // the await to label the returned items, a scroll-handler tick that
+      // fires mid-fetch will silently mislabel them — items the server
+      // returned for page N+1 end up tagged `_page: N`, their data-page-start
+      // marker never gets emitted, the URL never advances past page N, and
+      // the saved-spot anchor for that section restores to the wrong page on
+      // back-nav (the itemId isn't in page N's actual results).
+      const fetchPage = currentPage;
+      body.page = fetchPage;
       body.per_page = pageSize;
 
       // Update URL to reflect current search state (shareable, back/forward friendly)
@@ -2211,13 +2221,21 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       if (filters.sortBy !== 'newest') stateParams.set('sort', filters.sortBy);
       if (filters.types.length < 3 && filters.types.length > 0)
         stateParams.set('types', filters.types.join(','));
-      if (currentPage > 1) stateParams.set('page', String(currentPage));
+      if (fetchPage > 1) stateParams.set('page', String(fetchPage));
       const qs = stateParams.toString();
       const newUrl = window.location.pathname + (qs ? '?' + qs : '');
       // Preserve history.state (Astro ClientRouter stores scrollX/Y there for
       // back-nav restoration — passing null wipes it and breaks "go back to
       // your spot" on mobile).
-      history.replaceState(history.state, '', newUrl);
+      //
+      // For an *append* fetch (infinite-scroll loadNextPage), don't rewrite
+      // the URL here. The scroll-driven detector is already responsible for
+      // syncing `?page=N` to the visible page, and writing the fetched page
+      // here causes the URL to flash between the visible page and the
+      // about-to-be-appended page during every page-boundary load.
+      if (!append) {
+        history.replaceState(history.state, '', newUrl);
+      }
 
       try {
         const res = await fetch('/api/search', {
@@ -2230,7 +2248,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         const data = await res.json();
         const newItems = (data.results || data.hits || []).map((r: any) => ({
           ...r,
-          _page: currentPage,
+          _page: fetchPage,
         }));
         const prevLen = allResults.length;
         if (append) {
