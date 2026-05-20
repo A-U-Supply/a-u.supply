@@ -2375,9 +2375,17 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       const downTitle = escapeHtmlAttr(
         `Disavow — ${voterNames(item.downvoters)}`,
       );
-      return `<span class="vote-chip" data-vote-media-id="${item.id}" data-vote-mine="${myVote}">
-        <button type="button" class="vote-chip__arrow vote-chip__arrow--up${upActive}" data-vote-id="${item.id}" data-vote-dir="1" aria-label="Acclaim" title="${upTitle}">▲ <span class="vote-chip__count${upZero}">${up}</span></button>
-        <button type="button" class="vote-chip__arrow vote-chip__arrow--down${downActive}" data-vote-id="${item.id}" data-vote-dir="-1" aria-label="Disavow" title="${downTitle}"><span class="vote-chip__count${downZero}">${down}</span> ▼</button>
+      // Inline styles intentionally — bypass any potential CSS-bundling
+      // or scoped-style issue so the chip is unconditionally visible.
+      const btnBase =
+        'display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:var(--color-bg,#fff);color:var(--color-fg,var(--color-text,#111));border:2px solid var(--color-fg,var(--color-text,#111));box-shadow:2px 2px 0 var(--color-fg,var(--color-text,#111));font-family:var(--font-mono,monospace);font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5pt;cursor:pointer;line-height:1';
+      const btnActive =
+        ';background:var(--color-fg,var(--color-text,#111));color:var(--color-bg,#fff)';
+      const upStyle = btnBase + (myVote === 1 ? btnActive : '');
+      const downStyle = btnBase + (myVote === -1 ? btnActive : '');
+      return `<span class="vote-chip" data-vote-media-id="${item.id}" data-vote-mine="${myVote}" style="display:inline-flex;align-items:stretch;gap:4px;font-variant-numeric:tabular-nums;line-height:1;">
+        <button type="button" class="vote-chip__arrow vote-chip__arrow--up${upActive}" data-vote-id="${item.id}" data-vote-dir="1" aria-label="Acclaim" title="${upTitle}" style="${upStyle}">▲ <span class="vote-chip__count${upZero}" style="margin-left:4px;">${up}</span></button>
+        <button type="button" class="vote-chip__arrow vote-chip__arrow--down${downActive}" data-vote-id="${item.id}" data-vote-dir="-1" aria-label="Disavow" title="${downTitle}" style="${downStyle}"><span class="vote-chip__count${downZero}" style="margin-right:4px;">${down}</span> ▼</button>
       </span>`;
     }
     function updateChipFor(mediaId: string) {
