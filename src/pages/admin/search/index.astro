@@ -4066,24 +4066,32 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     }
 
     // Scroll restoration: when the user taps a search result and comes back
-    // (or hits refresh), restore the loaded page range AND scroll position so
-    // they land exactly where they left off.
+    // (or hits refresh), put them back on the exact tile they were looking at.
     //
-    // Why bother with manual restoration when browsers already restore scroll?
-    // 1. We only load `?page=N` results on a fresh visit, so the DOM is
-    //    shorter than it was when they left → browser-restored scrollY lands
-    //    past the bottom and gets clamped to wherever it can.
-    // 2. Astro's ClientRouter has its own restore that runs against the
-    //    not-yet-tall-enough DOM, with the same problem.
-    //
-    // We take over: scrollRestoration='manual' silences the browser, we
-    // save on every nav-away path we know about, and on restore we keep
-    // re-scrolling until the DOM is actually tall enough.
+    // We anchor to a result tile's `data-id` + its viewport offset, NOT to a
+    // pixel scrollY. Two reasons:
+    //   1. Pixel scrollY only makes sense if the DOM is exactly as tall as it
+    //      was on save. On return we deliberately load only the saved page —
+    //      reloading the whole feed buffer to rebuild scroll height is slow
+    //      and wasteful when all we need is to land on one tile.
+    //   2. Feed-view thumbnails are lazy with no intrinsic dimensions, so the
+    //      DOM grows asynchronously as images decode. A scrollY-target gets
+    //      clamped on a short DOM and stops short. An element-target moves
+    //      with the layout, so we can re-anchor each frame until it settles.
     if ('scrollRestoration' in history) {
       history.scrollRestoration = 'manual';
     }
     const SCROLL_KEY = 'au.searchScroll';
-    type SavedScroll = { search: string; scrollY: number; maxPage: number };
+    type SavedScroll = {
+      search: string;
+      // Anchor (preferred): id of the topmost in-viewport tile + the offset
+      // (px) from viewport top to that tile's top at save time.
+      itemId?: string;
+      offset?: number;
+      // Legacy entries written by the old scrollY-based code. Used as a
+      // best-effort fallback; replaced on the next nav-away.
+      scrollY?: number;
+    };
 
     function readSavedScroll(): SavedScroll | null {
       try {
@@ -4096,30 +4104,72 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       }
     }
 
+    // Topmost visible result tile (across all three views). DOM order is
+    // visual order, so we can stop once a tile is fully below the viewport.
+    // Tiles entirely above the viewport are skipped so that abs(rect.top)
+    // can't pick a just-scrolled-past tile over the actually-visible one.
+    function findTopAnchorItem(): {
+      id: string;
+      offset: number;
+      page: number;
+    } | null {
+      const tiles = document.querySelectorAll<HTMLElement>(
+        '.grid-item[data-id], .feed-item[data-id], tr[data-id]',
+      );
+      let best: { id: string; offset: number; page: number } | null = null;
+      for (const el of tiles) {
+        const rect = el.getBoundingClientRect();
+        if (rect.bottom <= 0) continue;
+        if (rect.top > window.innerHeight) break;
+        if (best === null || Math.abs(rect.top) < Math.abs(best.offset)) {
+          const id = el.dataset.id!;
+          const item = allResults.find((r) => r.id === id);
+          best = { id, offset: rect.top, page: item?._page || 1 };
+        }
+      }
+      return best;
+    }
+
     function saveScrollState() {
       try {
-        // Don't overwrite a meaningful state with a fresh-load zero. If we're
-        // mid-restore and haven't scrolled yet, the existing entry is more
-        // accurate than what we'd capture now.
-        const y = window.scrollY;
-        const mx = maxLoadedPage();
-        if (y === 0 && mx <= 1) {
+        const anchor = findTopAnchorItem();
+        // Don't overwrite a meaningful entry with a top-of-page / no-results
+        // snapshot — happens during initial restore before any user scroll,
+        // or when this fires mid-render. Keep whatever's already stored.
+        if (!anchor && window.scrollY === 0) {
           const existing = sessionStorage.getItem(SCROLL_KEY);
           if (existing) {
             try {
               const prev = JSON.parse(existing) as SavedScroll;
-              if (prev.search === window.location.search && prev.scrollY > 0) {
+              if (
+                prev.search === window.location.search &&
+                (prev.itemId || (prev.scrollY ?? 0) > 0)
+              ) {
                 return;
               }
             } catch {}
+          }
+        }
+        // The feed-view scroll-driven `?page=` updater runs in rAF, so the URL
+        // can lag the actual visible page by a frame. Click-capture fires
+        // synchronously, between frames — pin the URL to the anchor's true
+        // page before snapshotting `search`, so restore loads the right page.
+        if (anchor) {
+          const params = new URLSearchParams(window.location.search);
+          if (anchor.page > 1) params.set('page', String(anchor.page));
+          else params.delete('page');
+          const qs = params.toString();
+          const newUrl = window.location.pathname + (qs ? '?' + qs : '');
+          if (newUrl !== window.location.pathname + window.location.search) {
+            history.replaceState(history.state, '', newUrl);
           }
         }
         sessionStorage.setItem(
           SCROLL_KEY,
           JSON.stringify({
             search: window.location.search,
-            scrollY: y,
-            maxPage: mx,
+            itemId: anchor?.id,
+            offset: anchor?.offset,
           }),
         );
       } catch {}
@@ -4159,39 +4209,47 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
 
     const savedScroll = readSavedScroll();
     if (savedScroll) {
-      // Coming back from a detail page (or refreshed in place). For feed
-      // view we accumulate pages, so re-load every page they had to rebuild
-      // DOM height. For grid/list the URL already points at their page
-      // (restoreFromUrl set currentPage), so one fetch is enough.
-      if (currentView === 'feed' && savedScroll.maxPage > 1) {
-        const targetMax = savedScroll.maxPage;
-        currentPage = 1;
-        await doSearch();
-        while (maxLoadedPage() < targetMax && hasMoreToLoad()) {
-          currentPage = maxLoadedPage() + 1;
-          await doSearch({ append: true });
-        }
-      } else {
-        await doSearch();
+      // One fetch is enough: restoreFromUrl set currentPage from `?page=N`,
+      // which is the page that contains the saved anchor. Reloading earlier
+      // pages is unnecessary because we scroll to an element, not a pixel Y.
+      await doSearch();
+      if (savedScroll.itemId) {
+        await scrollToAnchor(savedScroll.itemId, savedScroll.offset ?? 0);
+      } else if (typeof savedScroll.scrollY === 'number') {
+        // Legacy entry — best-effort one-shot. Replaced on next nav-away.
+        window.scrollTo(0, savedScroll.scrollY);
       }
-      // Don't scroll until the DOM is actually tall enough to contain the
-      // saved Y — chip enrichment, image lazy-load, and async layout can all
-      // grow height over the next few frames. Poll until height fits AND
-      // we've actually landed on the right Y, or ~2 seconds elapses.
-      const targetY = savedScroll.scrollY;
+    } else {
+      doSearch();
+    }
+
+    // Re-anchor to the saved tile after results render. We can't just scroll
+    // once: feed thumbnails are lazy with no intrinsic dimensions, so the
+    // element's position drifts over the next few frames as images decode
+    // (and discussion chips arrive). The loop corrects each frame against
+    // the element's live rect, then bails as soon as the position is stable
+    // — or 1.5s passes, whichever comes first.
+    async function scrollToAnchor(itemId: string, offset: number) {
+      // Tile-only — `.feed-item__discuss` carries a matching data-id too.
+      const id = CSS.escape(itemId);
+      const el = document.querySelector(
+        `.grid-item[data-id="${id}"], .feed-item[data-id="${id}"], tr[data-id="${id}"]`,
+      ) as HTMLElement | null;
+      if (!el) return;
+      el.scrollIntoView({ block: 'start' });
+      window.scrollBy(0, -offset);
       await new Promise<void>((resolve) => {
-        const deadline = performance.now() + 2000;
-        let lastHeight = -1;
+        const deadline = performance.now() + 1500;
+        let stable = 0;
         const tick = () => {
-          const h = document.documentElement.scrollHeight;
-          if (h !== lastHeight) {
-            window.scrollTo(0, targetY);
-            lastHeight = h;
+          const drift = el.getBoundingClientRect().top - offset;
+          if (Math.abs(drift) > 0.5) {
+            window.scrollBy(0, drift);
+            stable = 0;
+          } else {
+            stable++;
           }
-          const enough = h >= targetY + window.innerHeight;
-          const landed = Math.abs(window.scrollY - targetY) < 4;
-          if ((enough && landed) || performance.now() > deadline) {
-            window.scrollTo(0, targetY);
+          if (stable >= 5 || performance.now() > deadline) {
             resolve();
             return;
           }
@@ -4199,8 +4257,6 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         };
         requestAnimationFrame(tick);
       });
-    } else {
-      doSearch();
     }
   });
 </script>
