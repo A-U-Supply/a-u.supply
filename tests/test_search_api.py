@@ -361,7 +361,7 @@ class TestScopeEnforcement:
         api_key = ApiKey(
             user_id=test_user.id,
             key_hash=hash_api_key(raw_key),
-            key_prefix=raw_key[:8],
+            key_prefix=raw_key[:11],
             label="read only",
             scope="read",
         )
@@ -383,7 +383,7 @@ class TestScopeEnforcement:
         api_key = ApiKey(
             user_id=test_user.id,
             key_hash=hash_api_key(raw_key),
-            key_prefix=raw_key[:8],
+            key_prefix=raw_key[:11],
             label="write only",
             scope="write",
         )
