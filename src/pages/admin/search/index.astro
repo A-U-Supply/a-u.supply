@@ -1173,12 +1173,12 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     gap: 4px;
   }
 
-  /* Acclaim/Disavow chip (issue #318). Vanilla — Svelte island only
-     mounts on the detail page. Pair of brutalist buttons. Native
-     `title` attribute backs the voter tooltip in this dense listing
-     context so no extra DOM/JS is needed. Mirrors the .brutalist-control
-     surface style from tailwind.css but sized down for tile density. */
-  .vote-pair {
+  /* Acclaim/Disavow chip (issue #318). Vanilla — Svelte island only mounts
+     on the detail page. Native `title` attribute backs the voter tooltip
+     in this dense listing context so no extra DOM/JS is needed.
+     Sized to actually look like buttons: brutalist tokens (2px border,
+     hard shadow, hover lift, aria-pressed inversion, mono uppercase). */
+  .vote-chip {
     display: inline-flex;
     align-items: stretch;
     gap: 4px;
@@ -1186,7 +1186,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     font-variant-numeric: tabular-nums;
     line-height: 1;
   }
-  .vote-pair__btn {
+  .vote-chip__arrow {
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -1208,34 +1208,30 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       background 80ms,
       color 80ms;
   }
-  .vote-pair__btn:hover {
+  .vote-chip__arrow:hover {
     transform: translate(-1px, -1px);
     box-shadow: 3px 3px 0 var(--color-fg, var(--color-text));
   }
-  .vote-pair__btn:active {
+  .vote-chip__arrow:active {
     transform: translate(2px, 2px);
     box-shadow: 0 0 0 var(--color-fg, var(--color-text));
   }
-  .vote-pair__btn[aria-pressed='true'] {
+  .vote-chip__arrow.is-active {
     background: var(--color-fg, var(--color-text));
     color: var(--color-bg);
   }
-  .vote-pair__arrow {
-    font-size: 1rem;
-    line-height: 1;
-  }
-  .vote-pair__count {
+  .vote-chip__count {
+    display: inline-block;
     min-width: 1.5ch;
     text-align: right;
   }
-  /* Slightly tighter inside the dense grid tile. */
-  .results-grid .vote-pair__btn {
-    padding: 3px 6px;
-    font-size: 0.75rem;
+  .vote-chip__count.is-zero {
+    opacity: 0.5;
   }
-  .results-grid .vote-pair__btn,
-  .results-grid .vote-pair__btn:hover {
-    box-shadow: 2px 2px 0 var(--color-fg, var(--color-text));
+  /* Slightly tighter inside the dense grid tile. */
+  .results-grid .vote-chip__arrow {
+    padding: 3px 6px;
+    font-size: 0.72rem;
   }
 
   /* Feed view: tall cards, one item per row, max-width for readability.
@@ -2356,7 +2352,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         .map((v: any) => v.name)
         .filter(Boolean);
       const more = voters.length > 12 ? `, +${voters.length - 12} more` : '';
-      return names.join(', ') + more;
+      return escapeHtmlAttr(names.join(', ') + more);
     }
     function voteChipHtml(item: any, currentUserId: number | null): string {
       const up = item.up_count ?? 0;
@@ -2371,13 +2367,17 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
             : downIds.includes(currentUserId)
               ? -1
               : 0;
+      const upActive = myVote === 1 ? ' is-active' : '';
+      const downActive = myVote === -1 ? ' is-active' : '';
+      const upZero = up === 0 ? ' is-zero' : '';
+      const downZero = down === 0 ? ' is-zero' : '';
       const upTitle = escapeHtmlAttr(`Acclaim — ${voterNames(item.upvoters)}`);
       const downTitle = escapeHtmlAttr(
         `Disavow — ${voterNames(item.downvoters)}`,
       );
-      return `<span class="vote-pair" data-vote-media-id="${item.id}">
-        <button type="button" class="vote-pair__btn vote-pair__btn--up" data-vote-id="${item.id}" data-vote-dir="1" aria-pressed="${myVote === 1}" aria-label="Acclaim this item" title="${upTitle}"><span class="vote-pair__arrow" aria-hidden="true">▲</span><span class="vote-pair__count">${up}</span></button>
-        <button type="button" class="vote-pair__btn vote-pair__btn--down" data-vote-id="${item.id}" data-vote-dir="-1" aria-pressed="${myVote === -1}" aria-label="Disavow this item" title="${downTitle}"><span class="vote-pair__arrow" aria-hidden="true">▼</span><span class="vote-pair__count">${down}</span></button>
+      return `<span class="vote-chip" data-vote-media-id="${item.id}" data-vote-mine="${myVote}">
+        <button type="button" class="vote-chip__arrow vote-chip__arrow--up${upActive}" data-vote-id="${item.id}" data-vote-dir="1" aria-label="Acclaim" title="${upTitle}">▲ <span class="vote-chip__count${upZero}">${up}</span></button>
+        <button type="button" class="vote-chip__arrow vote-chip__arrow--down${downActive}" data-vote-id="${item.id}" data-vote-dir="-1" aria-label="Disavow" title="${downTitle}"><span class="vote-chip__count${downZero}">${down}</span> ▼</button>
       </span>`;
     }
     function updateChipFor(mediaId: string) {
@@ -2386,7 +2386,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       const html = voteChipHtml(item, user?.id ?? null);
       document
         .querySelectorAll<HTMLElement>(
-          `.vote-pair[data-vote-media-id="${CSS.escape(mediaId)}"]`,
+          `.vote-chip[data-vote-media-id="${CSS.escape(mediaId)}"]`,
         )
         .forEach((el) => {
           const wrap = document.createElement('div');
@@ -2454,7 +2454,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
     }
     document.addEventListener('click', (ev) => {
       const target = ev.target as HTMLElement;
-      const btn = target.closest<HTMLElement>('.vote-pair__btn');
+      const btn = target.closest<HTMLElement>('.vote-chip__arrow');
       if (!btn) return;
       const id = btn.dataset.voteId;
       const dir = parseInt(btn.dataset.voteDir || '0', 10);
