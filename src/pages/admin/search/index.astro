@@ -4199,46 +4199,45 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       return best;
     }
 
+    // Astro view-transitions reuse the document across pages, so the
+    // pagehide / astro:before-preparation / visibilitychange / click
+    // listeners we registered here keep firing while the user is on the
+    // detail page (and any other page in the SPA). On those pages there
+    // are no result tiles, so findTopAnchorItem returns null AND
+    // window.location.search is the detail URL — which would corrupt
+    // sessionStorage with a key that never matches `?page=N` on return.
+    // Hard-guard: this function is a no-op anywhere but the search index.
+    function onSearchIndex(): boolean {
+      const p = window.location.pathname;
+      return p === '/admin/search' || p === '/admin/search/';
+    }
+
     function saveScrollState() {
+      if (!onSearchIndex()) return;
       try {
         const anchor = findTopAnchorItem();
-        // Don't overwrite a meaningful entry with a top-of-page / no-results
-        // snapshot — happens during initial restore before any user scroll,
-        // or when this fires mid-render. Keep whatever's already stored.
-        if (!anchor && window.scrollY === 0) {
-          const existing = sessionStorage.getItem(SCROLL_KEY);
-          if (existing) {
-            try {
-              const prev = JSON.parse(existing) as SavedScroll;
-              if (
-                prev.search === window.location.search &&
-                (prev.itemId || (prev.scrollY ?? 0) > 0)
-              ) {
-                return;
-              }
-            } catch {}
-          }
-        }
+        // Nothing meaningful to anchor to (no results, scrolled past the
+        // end, or the listener fired in a transient render state). Don't
+        // clobber a previously-saved good entry with a half-formed one.
+        if (!anchor) return;
         // The feed-view scroll-driven `?page=` updater runs in rAF, so the URL
         // can lag the actual visible page by a frame. Click-capture fires
         // synchronously, between frames — pin the URL to the anchor's true
         // page before snapshotting `search`, so restore loads the right page.
-        if (anchor) {
-          const params = new URLSearchParams(window.location.search);
-          if (anchor.page > 1) params.set('page', String(anchor.page));
-          else params.delete('page');
-          const qs = params.toString();
-          const newUrl = window.location.pathname + (qs ? '?' + qs : '');
-          if (newUrl !== window.location.pathname + window.location.search) {
-            history.replaceState(history.state, '', newUrl);
-          }
+        const params = new URLSearchParams(window.location.search);
+        if (anchor.page > 1) params.set('page', String(anchor.page));
+        else params.delete('page');
+        const qs = params.toString();
+        const newUrl = window.location.pathname + (qs ? '?' + qs : '');
+        if (newUrl !== window.location.pathname + window.location.search) {
+          history.replaceState(history.state, '', newUrl);
         }
         sessionStorage.setItem(
           SCROLL_KEY,
           JSON.stringify({
             search: window.location.search,
-            itemId: anchor?.id,
-            offset: anchor?.offset,
+            itemId: anchor.id,
+            offset: anchor.offset,
           }),
         );
       } catch {}
