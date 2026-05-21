@@ -179,93 +179,95 @@ def _dominant_colors_quantize(img, num_colors: int) -> list[str]:
     return colors
 
 
-_OCR_CONF_THRESHOLD = 60
-_OCR_FAST_PATH_MIN_SCORE = 10
-_OCR_MIN_RESULT_SCORE = 3
-_OCR_TIMEOUT_SECONDS = 90
+_OCR_CONF_THRESHOLD = 0.3
 _OCR_MAX_DIM = 1600
+_OCR_IDLE_TIMEOUT = 300  # match Whisper — unload model after 5 min idle
+
+_easyocr_reader = None
+_easyocr_timer = None
+_easyocr_lock = threading.Lock()
 
 
-def _ocr_psm(img, psm: int) -> tuple[str, int]:
-    """Run Tesseract at one PSM and return (joined high-conf text, char score)."""
-    import pytesseract
-    data = pytesseract.image_to_data(
-        img,
-        config=f"--psm {psm}",
-        output_type=pytesseract.Output.DICT,
-        timeout=_OCR_TIMEOUT_SECONDS,
-    )
-    words = []
-    for text, conf in zip(data.get("text", []), data.get("conf", [])):
-        try:
-            conf_val = int(float(conf))
-        except (TypeError, ValueError):
-            continue
-        token = (text or "").strip()
-        if token and conf_val >= _OCR_CONF_THRESHOLD:
-            words.append(token)
-    return " ".join(words), sum(len(w) for w in words)
+def _get_easyocr_reader():
+    """Lazy-load the EasyOCR reader; mirror the Whisper idle-unload pattern."""
+    global _easyocr_reader, _easyocr_timer
+    with _easyocr_lock:
+        if _easyocr_timer:
+            _easyocr_timer.cancel()
+        if _easyocr_reader is None:
+            import easyocr
+
+            cache_dir = os.environ.get("MODEL_CACHE_DIR", "/app/model-cache")
+            easyocr_dir = os.path.join(cache_dir, "easyocr")
+            os.makedirs(easyocr_dir, exist_ok=True)
+            logger.info("Loading EasyOCR reader (en, cpu)...")
+            _easyocr_reader = easyocr.Reader(
+                ["en"],
+                gpu=False,
+                model_storage_directory=easyocr_dir,
+                user_network_directory=easyocr_dir,
+                download_enabled=True,
+                verbose=False,
+            )
+            logger.info("EasyOCR reader loaded.")
+        _easyocr_timer = threading.Timer(_OCR_IDLE_TIMEOUT, _unload_easyocr)
+        _easyocr_timer.daemon = True
+        _easyocr_timer.start()
+        return _easyocr_reader
+
+
+def _unload_easyocr():
+    global _easyocr_reader, _easyocr_timer
+    with _easyocr_lock:
+        logger.info("Unloading EasyOCR reader after idle timeout.")
+        _easyocr_reader = None
+        _easyocr_timer = None
 
 
 def extract_text_ocr(file_path: str) -> str | None:
-    """Extract text from an image using Tesseract OCR.
+    """Extract text from an image using EasyOCR.
 
     Returns the extracted text or None if no text is found or
-    pytesseract/tesseract is not available.
-
-    Strategy: PSM 3 (auto layout) handles most images cheaply — for
-    documents/screenshots that's the entire pipeline. Only when PSM 3
-    finds essentially no high-confidence text (the banner-on-photo case)
-    do we pay for the slower PSM 6/11 fallback passes. All processing
-    is in-memory; the source file on disk is never modified.
+    easyocr is not available. All processing is in-memory; the source
+    file on disk is never modified. The model loads on first call and
+    unloads after 5 minutes of inactivity (same pattern as Whisper).
     """
     try:
-        import pytesseract
+        import numpy as np
         from PIL import Image
     except ImportError:
-        logger.warning("pytesseract not installed, skipping OCR.")
+        logger.warning("Pillow/numpy not installed, skipping OCR.")
+        return None
+
+    try:
+        reader = _get_easyocr_reader()
+    except ImportError:
+        logger.warning("easyocr not installed, skipping OCR.")
         return None
 
     with Image.open(file_path) as img:
         img = img.convert("RGB")
-        # Upscale tiny images so the segmenter has enough pixels per glyph;
-        # downscale huge images to keep Tesseract latency bounded (PSM 11 on
-        # a 4000px image can take many minutes).
+        # Downscale huge images — EasyOCR works well at moderate sizes and
+        # its detection step is the slow part. 1600px max keeps inference
+        # snappy without losing accuracy on incidental-text photos.
         max_dim = max(img.size)
-        min_dim = min(img.size)
         if max_dim > _OCR_MAX_DIM:
             scale = _OCR_MAX_DIM / max_dim
             img = img.resize(
                 (int(img.width * scale), int(img.height * scale)), Image.LANCZOS
             )
-        elif min_dim < 1000:
-            scale = 1000 / min_dim
-            img = img.resize(
-                (int(img.width * scale), int(img.height * scale)), Image.LANCZOS
-            )
+        arr = np.array(img)
 
-        try:
-            text_3, score_3 = _ocr_psm(img, 3)
-        except RuntimeError as exc:
-            logger.warning("OCR PSM 3 timeout/error: %s", exc)
-            text_3, score_3 = "", 0
-
-        if score_3 >= _OCR_FAST_PATH_MIN_SCORE:
-            return text_3 or None
-
-        best_text, best_score = text_3, score_3
-        for psm in (11, 6):
-            try:
-                text, score = _ocr_psm(img, psm)
-            except RuntimeError as exc:
-                logger.warning("OCR PSM %d timeout/error: %s", psm, exc)
-                continue
-            if score > best_score:
-                best_text, best_score = text, score
-
-    if best_score < _OCR_MIN_RESULT_SCORE:
+    results = reader.readtext(arr, detail=1, paragraph=False)
+    # results is a list of (bbox, text, confidence) tuples.
+    words = [
+        text.strip()
+        for _, text, conf in results
+        if text and text.strip() and conf >= _OCR_CONF_THRESHOLD
+    ]
+    if not words:
         return None
-    return best_text or None
+    return " ".join(words)
 
 
 # ---------------------------------------------------------------------------
