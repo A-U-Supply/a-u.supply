@@ -563,7 +563,7 @@
       </div>
     {:else}
       <div class="single single--empty">
-        <div class="single__empty-head">Start the discussion</div>
+        <div class="single__empty-head">Discussion</div>
         <form
           class="reply"
           onsubmit={(e) => {
