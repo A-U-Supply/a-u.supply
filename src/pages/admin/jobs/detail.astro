@@ -147,10 +147,13 @@ import Admin from '../../../layouts/Admin.astro';
     border-bottom: 1px solid var(--color-border);
     padding-bottom: var(--space-xs);
   }
+  /* Log output: a terminal-style block. Keep dark-on-light contrast for
+     log readability in both modes (token-driven). */
   .log-block {
     background: #0a0a0a;
     color: #e0e0e0;
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-fg);
+    box-shadow: 2px 2px 0 var(--color-fg);
     padding: var(--space-sm);
     font-family: var(--font-mono);
     font-size: 0.7rem;
@@ -161,7 +164,8 @@ import Admin from '../../../layouts/Admin.astro';
     overflow-y: auto;
   }
   .error-block {
-    border-color: #e04040;
+    border-color: var(--color-status-fail);
+    box-shadow: 2px 2px 0 var(--color-status-fail);
   }
   .output-actions {
     display: flex;
@@ -174,7 +178,9 @@ import Admin from '../../../layouts/Admin.astro';
     gap: var(--space-sm);
   }
   .output-card {
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-fg);
+    background: var(--color-surface);
+    box-shadow: 2px 2px 0 var(--color-fg);
     padding: var(--space-sm);
     font-family: var(--font-mono);
     font-size: var(--text-sm);
@@ -186,7 +192,6 @@ import Admin from '../../../layouts/Admin.astro';
     object-fit: contain;
     display: block;
     margin-bottom: var(--space-xs);
-    border-radius: 2px;
   }
   .output-preview-btn {
     all: unset;
@@ -201,7 +206,7 @@ import Admin from '../../../layouts/Admin.astro';
   /* Videos dominate space more than images; cap them tighter */
   video.output-preview {
     max-height: 240px;
-    background: #000;
+    background: var(--color-surface-2);
   }
   @media (max-width: 640px) {
     .output-preview {
@@ -229,7 +234,7 @@ import Admin from '../../../layouts/Admin.astro';
     flex-wrap: wrap;
   }
   .output-indexed {
-    color: #40c040;
+    color: var(--color-status-ok);
     font-size: 0.65rem;
   }
   .idx-info {
