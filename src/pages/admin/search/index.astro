@@ -767,11 +767,17 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
   .feed-item__composer textarea {
     background: var(--color-bg);
     color: var(--color-text);
-    border: 1px solid var(--color-border);
-    padding: 6px 10px;
+    border: 2px solid var(--color-text);
+    box-shadow: 2px 2px 0 var(--color-text);
+    padding: 8px 12px;
     font-family: var(--font-mono);
     font-size: var(--text-sm);
     resize: vertical;
+  }
+  .feed-item__composer textarea:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 2px 2px 0 var(--color-accent);
   }
   @media (max-width: 640px) {
     /* iOS Safari zooms the viewport when a focused input's computed
