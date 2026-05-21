@@ -2,10 +2,22 @@
 import Admin from '../../layouts/Admin.astro';
 ---
 
-<Admin title="Marginalia" current="bookmarks">
+<Admin title="Dog-ears" current="bookmarks">
   <div class="page-header">
-    <h1>Marginalia</h1>
+    <h1>Dog-ears</h1>
     <div class="header-actions">
+      <input
+        type="search"
+        class="filter-input"
+        id="search-input"
+        placeholder="Search name…"
+        autocomplete="off"
+      />
+      <select class="filter-select" id="sort-select">
+        <option value="newest">Newest</option>
+        <option value="oldest">Oldest</option>
+        <option value="name">A–Z</option>
+      </select>
       <select class="filter-select" id="type-filter">
         <option value="">All Types</option>
         <option value="media_item">Media Items</option>
@@ -29,7 +41,9 @@ import Admin from '../../layouts/Admin.astro';
   </div>
   <div id="empty" class="empty-state" style="display:none;">
     <div class="empty-state__icon">&#9734;</div>
-    No bookmarks yet. Star items from Search, Workspace, or Releases.
+    <span id="empty-text"
+      >No dog-ears yet. Star items from Search, Workspace, or Releases.</span
+    >
   </div>
 
   <div id="bookmarks-grid" class="bm-grid" style="display:none;"></div>
@@ -38,6 +52,17 @@ import Admin from '../../layouts/Admin.astro';
     <button class="action-btn" id="prev-page">Prev</button>
     <span id="page-info">Page 1</span>
     <button class="action-btn" id="next-page">Next</button>
+    <label class="page-jump">
+      Page
+      <input
+        type="number"
+        id="page-jump-input"
+        min="1"
+        step="1"
+        inputmode="numeric"
+      />
+    </label>
+    <span class="page-count" id="page-count"></span>
   </div>
 </Admin>
 
@@ -235,6 +260,31 @@ import Admin from '../../layouts/Admin.astro';
     color: var(--color-muted);
     margin-right: auto;
   }
+  .page-jump {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    margin-left: var(--space-sm);
+  }
+  .page-jump input {
+    width: 4em;
+    padding: 2px 4px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    text-align: right;
+  }
+  .page-count {
+    color: var(--color-muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    margin-left: auto;
+  }
 </style>
 
 <script>
@@ -249,53 +299,97 @@ import Admin from '../../layouts/Admin.astro';
 
     const loadingEl = document.getElementById('loading')!;
     const emptyEl = document.getElementById('empty')!;
+    const emptyText = document.getElementById('empty-text')!;
     const paginationEl = document.getElementById('pagination')!;
     const pageInfo = document.getElementById('page-info')!;
+    const pageCount = document.getElementById('page-count')!;
+    const pageJumpInput = document.getElementById(
+      'page-jump-input',
+    ) as HTMLInputElement;
     const batchBar = document.getElementById('batch-bar')!;
     const selectedCount = document.getElementById('selected-count')!;
     const typeFilter = document.getElementById(
       'type-filter',
     ) as HTMLSelectElement;
+    const sortSelect = document.getElementById(
+      'sort-select',
+    ) as HTMLSelectElement;
+    const searchInput = document.getElementById(
+      'search-input',
+    ) as HTMLInputElement;
 
     let currentPage = 1;
     const pageSize = 48;
     let totalItems = 0;
     let allItems: any[] = [];
     let selectedIds = new Set<string>();
+    let requestSeq = 0;
 
     const playSvg = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
     const briefcaseSvg = `<svg viewBox="0 0 24 24"><path d="M20 7h-4V5c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zM10 5h4v2h-4V5z"/></svg>`;
 
     async function loadBookmarks() {
+      const mySeq = ++requestSeq;
       loadingEl.style.display = 'block';
       emptyEl.style.display = 'none';
       gridEl.style.display = 'none';
+      paginationEl.style.display = 'none';
 
-      const typeParam = typeFilter.value
-        ? `&target_type=${typeFilter.value}`
-        : '';
-      const res = await fetch(
-        `/api/bookmarks?page=${currentPage}&per_page=${pageSize}${typeParam}`,
-        { credentials: 'include' },
-      );
-      if (!res.ok) {
-        loadingEl.style.display = 'none';
-        emptyEl.style.display = '';
+      const params = new URLSearchParams({
+        page: String(currentPage),
+        per_page: String(pageSize),
+        sort: sortSelect.value || 'newest',
+      });
+      if (typeFilter.value) params.set('target_type', typeFilter.value);
+      const q = searchInput.value.trim();
+      if (q) params.set('q', q);
+
+      let data: any;
+      try {
+        const res = await fetch(`/api/bookmarks?${params}`, {
+          credentials: 'include',
+        });
+        // A newer request started — discard.
+        if (mySeq !== requestSeq) return;
+        if (!res.ok) {
+          loadingEl.style.display = 'none';
+          emptyText.textContent = 'Failed to load.';
+          emptyEl.style.display = '';
+          return;
+        }
+        data = await res.json();
+      } catch {
+        if (mySeq === requestSeq) {
+          loadingEl.style.display = 'none';
+          emptyText.textContent = 'Failed to load.';
+          emptyEl.style.display = '';
+        }
         return;
       }
 
-      const data = await res.json();
+      if (mySeq !== requestSeq) return;
+
       totalItems = data.total;
       loadingEl.style.display = 'none';
 
-      if (totalItems === 0) {
-        emptyEl.style.display = '';
-        paginationEl.style.display = 'none';
+      // If the user landed past the last page (eg. deleted enough to drop a
+      // page), snap back to 1 and re-fetch.
+      const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+      if (currentPage > totalPages) {
+        currentPage = totalPages;
+        loadBookmarks();
         return;
       }
 
-      // Server inlines display metadata in each item's `meta` field (null when
-      // the target was deleted). One round trip — see server/bookmarks_api.py.
+      if (totalItems === 0) {
+        allItems = [];
+        emptyText.textContent = q
+          ? 'No dog-ears match that search.'
+          : 'No dog-ears yet. Star items from Search, Workspace, or Releases.';
+        emptyEl.style.display = '';
+        return;
+      }
+
       allItems = data.items.map((b: any) => ({
         ...b,
         meta: b.meta
@@ -311,43 +405,55 @@ import Admin from '../../layouts/Admin.astro';
       }));
       renderGrid();
 
-      const totalPages = Math.ceil(totalItems / pageSize);
-      paginationEl.style.display = totalPages > 1 ? 'flex' : 'none';
+      // Always show the pagination bar when there are results, even on a
+      // single page — the total count is useful info on its own.
+      const start = (currentPage - 1) * pageSize + 1;
+      const end = Math.min(currentPage * pageSize, totalItems);
+      paginationEl.style.display = 'flex';
       pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+      pageCount.textContent = `(${start}–${end} of ${totalItems})`;
+      pageJumpInput.max = String(totalPages);
+      pageJumpInput.value = String(currentPage);
+      pageJumpInput.style.display = totalPages > 1 ? '' : 'none';
+      (document.getElementById('prev-page') as HTMLButtonElement).disabled =
+        currentPage <= 1;
+      (document.getElementById('next-page') as HTMLButtonElement).disabled =
+        currentPage >= totalPages;
     }
 
-    function renderGrid() {
-      gridEl.style.display = 'grid';
-      gridEl.innerHTML = allItems
-        .map((item, idx) => {
-          const m = item.meta;
-          const checked = selectedIds.has(item.target_id) ? 'checked' : '';
-          const selectedClass = selectedIds.has(item.target_id)
-            ? ' selected'
+    function renderCard(item: any, idx: number) {
+      const m = item.meta;
+      const checked = selectedIds.has(item.target_id) ? 'checked' : '';
+      const selectedClass = selectedIds.has(item.target_id) ? ' selected' : '';
+      const thumbStyle =
+        m.thumb === '/assets/default-cover.jpg'
+          ? ' style="image-rendering: pixelated;"'
+          : '';
+      // First two rows (~12 cards on desktop) load eagerly so above-the-fold
+      // thumbnails don't wait for the next browser tick.
+      const loadingAttr = idx < 12 ? 'eager' : 'lazy';
+      // Audio gets play + queue buttons (routes to persistent Player).
+      // Video gets play only (routes to the inline viewer).
+      let playBtn = '';
+      if (m.playable) {
+        const play = `<button class="bm-card__play" data-play-id="${item.target_id}" data-play-type="${m.media_type}" data-target-type="${item.target_type}" title="Play">${playSvg}</button>`;
+        const add =
+          m.media_type === 'audio'
+            ? `<button class="bm-card__add" data-play-id="${item.target_id}" data-play-type="${m.media_type}" data-target-type="${item.target_type}" title="Add to queue">+</button>`
             : '';
-          const thumbStyle =
-            m.thumb === '/assets/default-cover.jpg'
-              ? ' style="image-rendering: pixelated;"'
-              : '';
-          // First two rows (~12 cards on desktop, more on mobile) load eagerly
-          // so above-the-fold thumbnails don't wait for the next browser tick.
-          const loading = idx < 12 ? 'eager' : 'lazy';
-          // Audio gets play + queue buttons (routes to persistent Player).
-          // Video gets play only (routes to the inline viewer).
-          let playBtn = '';
-          if (m.playable) {
-            const play = `<button class="bm-card__play" data-play-id="${item.target_id}" data-play-type="${m.media_type}" data-target-type="${item.target_type}" title="Play">${playSvg}</button>`;
-            const add =
-              m.media_type === 'audio'
-                ? `<button class="bm-card__add" data-play-id="${item.target_id}" data-play-type="${m.media_type}" data-target-type="${item.target_type}" title="Add to queue">+</button>`
-                : '';
-            playBtn = `${play}${add}`;
-          }
-          return `<div class="bm-card${selectedClass}" data-target-type="${item.target_type}" data-target-id="${item.target_id}" data-href="${m.href}">
+        playBtn = `${play}${add}`;
+      }
+      // Default to the small thumbnail; let srcset upgrade for wider columns
+      // and high-DPI displays. Cuts bytes/card by ~10x vs. the full-size thumb.
+      const primarySrc = m.thumb_sm || m.thumb;
+      const srcset = m.thumb_sm
+        ? `${m.thumb_sm} 128w, ${m.thumb} 400w`
+        : '';
+      return `<div class="bm-card${selectedClass}" data-target-type="${item.target_type}" data-target-id="${item.target_id}" data-href="${m.href}">
           <input type="checkbox" class="bm-card__check" data-select="${item.target_id}" ${checked} />
           <div class="bm-card__thumb">
             <span class="bm-card__type-badge">${item.target_type.replace('_', ' ')}</span>
-            <img src="${m.thumb}" ${m.thumb_sm ? `srcset="${m.thumb_sm} 128w, ${m.thumb} 400w" sizes="(max-width: 480px) 128px, 220px"` : ''} alt="" loading="${loading}" decoding="async"${thumbStyle} />
+            <img src="${primarySrc}" ${srcset ? `srcset="${srcset}" sizes="(max-width: 480px) 128px, 220px"` : ''} alt="" loading="${loadingAttr}" decoding="async"${thumbStyle} />
             ${playBtn}
             ${item.target_type === 'media_item' ? `<button class="bm-card__ws" data-ws-id="${item.target_id}" title="Add to workspace">${briefcaseSvg}</button>` : ''}
           </div>
@@ -359,8 +465,11 @@ import Admin from '../../layouts/Admin.astro';
             ${m.sub ? `<div class="bm-card__sub">${m.sub}</div>` : ''}
           </div>
         </div>`;
-        })
-        .join('');
+    }
+
+    function renderGrid() {
+      gridEl.style.display = 'grid';
+      gridEl.innerHTML = allItems.map((it, i) => renderCard(it, i)).join('');
     }
 
     function updateSelection() {
@@ -385,7 +494,9 @@ import Admin from '../../layouts/Admin.astro';
           bm.toggle(star.dataset.bmType!, star.dataset.bmId!).then(
             (bookmarked: boolean) => {
               if (!bookmarked) {
-                // Remove from view
+                // Cheap optimistic update: drop from view + decrement total.
+                // If the page becomes empty we re-fetch — loadBookmarks() will
+                // pull the next page's items in if there are any.
                 allItems = allItems.filter(
                   (i) =>
                     !(
@@ -393,14 +504,13 @@ import Admin from '../../layouts/Admin.astro';
                       i.target_id === star.dataset.bmId
                     ),
                 );
-                totalItems--;
-                if (allItems.length === 0 && currentPage > 1) {
-                  currentPage--;
+                totalItems = Math.max(0, totalItems - 1);
+                if (allItems.length === 0) {
+                  if (currentPage > 1) currentPage--;
                   loadBookmarks();
-                } else if (allItems.length === 0) {
-                  gridEl.style.display = 'none';
-                  emptyEl.style.display = '';
-                } else renderGrid();
+                } else {
+                  renderGrid();
+                }
               }
             },
           );
@@ -667,6 +777,19 @@ import Admin from '../../layouts/Admin.astro';
       currentPage = 1;
       loadBookmarks();
     });
+    sortSelect.addEventListener('change', () => {
+      currentPage = 1;
+      loadBookmarks();
+    });
+
+    let searchTimer: ReturnType<typeof setTimeout> | null = null;
+    searchInput.addEventListener('input', () => {
+      if (searchTimer) clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        currentPage = 1;
+        loadBookmarks();
+      }, 250);
+    });
 
     document.getElementById('prev-page')?.addEventListener('click', () => {
       if (currentPage > 1) {
@@ -678,6 +801,26 @@ import Admin from '../../layouts/Admin.astro';
       if (currentPage * pageSize < totalItems) {
         currentPage++;
         loadBookmarks();
+      }
+    });
+
+    const goToJumpPage = () => {
+      const target = parseInt(pageJumpInput.value, 10);
+      if (!Number.isFinite(target) || target < 1) return;
+      const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+      const clamped = Math.min(Math.max(1, target), totalPages);
+      if (clamped !== currentPage) {
+        currentPage = clamped;
+        loadBookmarks();
+      } else {
+        pageJumpInput.value = String(currentPage);
+      }
+    };
+    pageJumpInput.addEventListener('change', goToJumpPage);
+    pageJumpInput.addEventListener('keydown', (e) => {
+      if ((e as KeyboardEvent).key === 'Enter') {
+        e.preventDefault();
+        goToJumpPage();
       }
     });
 

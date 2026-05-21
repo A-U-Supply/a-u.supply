@@ -134,3 +134,141 @@ def test_toggle_then_list_roundtrip(client, auth_headers, db_session):
     assert listed["total"] == 1
     assert listed["items"][0]["target_id"] == item.id
     assert listed["items"][0]["meta"]["name"] == "x.png"
+
+
+# ----- search / sort / cache -----
+
+
+def test_search_matches_media_filename(client, auth_headers, db_session, test_user):
+    apple = make_media_item(db_session, filename="apple.png")
+    banana = make_media_item(db_session, filename="banana.png")
+    _bookmark(db_session, test_user, "media_item", apple.id)
+    _bookmark(db_session, test_user, "media_item", banana.id)
+
+    r = client.get("/api/bookmarks?q=app", headers=auth_headers).json()
+    assert r["total"] == 1
+    assert r["items"][0]["target_id"] == apple.id
+
+
+def test_search_matches_release_title(client, auth_headers, db_session, test_user):
+    rel = _make_release(db_session, test_user, code="A-U M0010.W", title="Whispers")
+    other = _make_release(db_session, test_user, code="A-U M0011.X", title="Noise")
+    _bookmark(db_session, test_user, "release", rel.product_code)
+    _bookmark(db_session, test_user, "release", other.product_code)
+
+    r = client.get("/api/bookmarks?q=whisp", headers=auth_headers).json()
+    assert r["total"] == 1
+    assert r["items"][0]["meta"]["name"] == "Whispers"
+
+
+def test_search_matches_track_title(client, auth_headers, db_session, test_user):
+    rel = _make_release(db_session, test_user, code="A-U M0020.A", title="Album")
+    a = _make_track(db_session, rel, title="Sirens")
+    b = Track(release_id=rel.id, title="Other Song", track_number=2)
+    db_session.add(b)
+    db_session.commit()
+    db_session.refresh(b)
+    _bookmark(db_session, test_user, "track", a.id)
+    _bookmark(db_session, test_user, "track", b.id)
+
+    r = client.get("/api/bookmarks?q=siren", headers=auth_headers).json()
+    assert r["total"] == 1
+    assert r["items"][0]["meta"]["name"] == "Sirens"
+
+
+def test_search_spans_target_types(client, auth_headers, db_session, test_user):
+    """A query that matches across two target types returns both."""
+    item = make_media_item(db_session, filename="harvest.png")
+    rel = _make_release(db_session, test_user, code="A-U M0030.H", title="Harvest Moon")
+    _bookmark(db_session, test_user, "media_item", item.id)
+    _bookmark(db_session, test_user, "release", rel.product_code)
+    # Noise that shouldn't match
+    other = make_media_item(db_session, filename="other.png")
+    _bookmark(db_session, test_user, "media_item", other.id)
+
+    names = sorted(
+        i["meta"]["name"]
+        for i in client.get("/api/bookmarks?q=harvest", headers=auth_headers).json()["items"]
+    )
+    assert names == ["Harvest Moon", "harvest.png"]
+
+
+def test_sort_oldest(client, auth_headers, db_session, test_user):
+    a = make_media_item(db_session, filename="a.png")
+    b = make_media_item(db_session, filename="b.png")
+    _bookmark(db_session, test_user, "media_item", a.id)
+    _bookmark(db_session, test_user, "media_item", b.id)
+
+    items = client.get("/api/bookmarks?sort=oldest", headers=auth_headers).json()["items"]
+    assert items[0]["target_id"] == a.id
+    assert items[1]["target_id"] == b.id
+
+
+def test_sort_name_orders_across_types(client, auth_headers, db_session, test_user):
+    rel = _make_release(db_session, test_user, code="A-U M0040.Z", title="Zebra")
+    item = make_media_item(db_session, filename="apple.png")
+    _bookmark(db_session, test_user, "release", rel.product_code)
+    _bookmark(db_session, test_user, "media_item", item.id)
+
+    items = client.get("/api/bookmarks?sort=name", headers=auth_headers).json()["items"]
+    assert [i["meta"]["name"] for i in items] == ["apple.png", "Zebra"]
+
+
+def test_invalid_sort_falls_back_to_newest(client, auth_headers, db_session, test_user):
+    a = make_media_item(db_session, filename="a.png")
+    b = make_media_item(db_session, filename="b.png")
+    _bookmark(db_session, test_user, "media_item", a.id)
+    _bookmark(db_session, test_user, "media_item", b.id)
+    items = client.get("/api/bookmarks?sort=garbage", headers=auth_headers).json()["items"]
+    assert items[0]["target_id"] == b.id  # newest first
+
+
+def test_response_carries_etag_and_cache_control(client, auth_headers, db_session, test_user):
+    item = make_media_item(db_session, filename="x.png")
+    _bookmark(db_session, test_user, "media_item", item.id)
+
+    r = client.get("/api/bookmarks", headers=auth_headers)
+    assert r.status_code == 200
+    assert r.headers["cache-control"] == "private, max-age=30"
+    assert r.headers.get("etag", "").startswith('W/"')
+
+
+def test_if_none_match_returns_304(client, auth_headers, db_session, test_user):
+    item = make_media_item(db_session, filename="x.png")
+    _bookmark(db_session, test_user, "media_item", item.id)
+
+    first = client.get("/api/bookmarks", headers=auth_headers)
+    etag = first.headers["etag"]
+
+    second = client.get(
+        "/api/bookmarks",
+        headers={**auth_headers, "If-None-Match": etag},
+    )
+    assert second.status_code == 304
+    assert second.content == b""
+    assert second.headers["etag"] == etag
+
+
+def test_etag_changes_when_bookmark_added(client, auth_headers, db_session, test_user):
+    a = make_media_item(db_session, filename="a.png")
+    _bookmark(db_session, test_user, "media_item", a.id)
+    e1 = client.get("/api/bookmarks", headers=auth_headers).headers["etag"]
+
+    b = make_media_item(db_session, filename="b.png")
+    _bookmark(db_session, test_user, "media_item", b.id)
+    e2 = client.get("/api/bookmarks", headers=auth_headers).headers["etag"]
+
+    assert e1 != e2
+
+
+def test_pagination_respects_filter_and_sort(client, auth_headers, db_session, test_user):
+    for i in range(5):
+        item = make_media_item(db_session, filename=f"f{i}.png")
+        _bookmark(db_session, test_user, "media_item", item.id)
+
+    r = client.get("/api/bookmarks?per_page=2&page=2&sort=oldest", headers=auth_headers).json()
+    assert r["total"] == 5
+    assert r["page"] == 2
+    assert r["per_page"] == 2
+    names = [i["meta"]["name"] for i in r["items"]]
+    assert names == ["f2.png", "f3.png"]
