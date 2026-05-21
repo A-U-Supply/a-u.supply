@@ -1,0 +1,82 @@
+name: PR preview environment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+concurrency:
+  group: pr-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DOKKU_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H 204.168.201.89 >> ~/.ssh/known_hosts
+          printf 'Host dokku\n  HostName 204.168.201.89\n  User dokku\n  IdentityFile ~/.ssh/id_ed25519\n' >> ~/.ssh/config
+
+      - name: Provision / update PR app
+        run: |
+          chmod +x scripts/dokku-pr-provision.sh
+          scripts/dokku-pr-provision.sh \
+            "${{ github.event.pull_request.number }}" \
+            "${{ github.event.pull_request.head.sha }}"
+
+      - name: Comment preview URL on PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: pr-preview
+          message: |
+            ### Preview environment
+
+            **URL:** https://pr-${{ github.event.pull_request.number }}.dev.a-u.supply
+
+            - Pointed at prod integrations (fold, etc.)
+            - User DB snapshotted from prod on first deploy of this PR; subsequent pushes preserve it
+            - Worker process disabled in preview
+            - Will be destroyed when this PR is closed
+
+  destroy:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DOKKU_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H 204.168.201.89 >> ~/.ssh/known_hosts
+          printf 'Host dokku\n  HostName 204.168.201.89\n  User dokku\n  IdentityFile ~/.ssh/id_ed25519\n' >> ~/.ssh/config
+
+      - name: Destroy PR app
+        run: |
+          chmod +x scripts/dokku-pr-destroy.sh
+          scripts/dokku-pr-destroy.sh "${{ github.event.pull_request.number }}"
+
+      - name: Update PR comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: pr-preview
+          message: |
+            ### Preview environment
+
+            Torn down (PR was closed).
