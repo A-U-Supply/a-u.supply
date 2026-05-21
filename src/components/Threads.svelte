@@ -471,6 +471,13 @@
       <div class="single">
         <div class="single__head">
           {#if editingTitle}
+            <!-- Edit mode reveals the underlying thread title in an
+                 input so the user can rename it. Default mode just
+                 shows the static section label "Comments" — the
+                 auto-generated thread title isn't surfaced because it's
+                 noise (it always says "Discussion: <filename>" until
+                 someone bothers to rename, and the section already
+                 lives under that filename in the page). -->
             <input
               class="single__title-input"
               type="text"
@@ -488,14 +495,12 @@
               onclick={() => (editingTitle = false)}>Cancel</button
             >
           {:else}
-            <h3 class="single__title">
-              {primaryThread.title || defaultTitle}
-            </h3>
+            <h3 class="single__title">Comments</h3>
             {#if canEditPrimary}
               <button
                 class="icon-btn"
                 type="button"
-                title="Edit title"
+                title="Rename thread"
                 onclick={startTitleEdit}>✏️</button
               >
             {/if}
@@ -563,10 +568,11 @@
       </div>
     {:else}
       <div class="single single--empty">
-        <!-- Preview the auto-title here so the empty card has the same
-             header shape as the populated state ("Discussion: <filename>"),
-             instead of a bare "Discussion" label that reads as removed. -->
-        <div class="single__empty-head">{defaultTitle}</div>
+        <!-- Section label "Comments" matches the populated card head;
+             the auto-generated thread title is not surfaced here for
+             the same reason as the populated state (noise until
+             someone renames). -->
+        <div class="single__empty-head">Comments</div>
         <form
           class="reply"
           onsubmit={(e) => {
