@@ -559,7 +559,14 @@ def backfill_transcripts():
     reindex_search()
 
 
-def backfill_ocr(include_empty: bool = False, force_all: bool = False):
+_OCR_CHECKPOINT_FILE = "/app/data/.ocr-backfill-progress"
+
+
+def backfill_ocr(
+    include_empty: bool = False,
+    force_all: bool = False,
+    restart: bool = False,
+):
     """Find images missing OCR text and run OCR on them.
 
     By default picks up only items with caption=NULL (never tried).
@@ -568,6 +575,11 @@ def backfill_ocr(include_empty: bool = False, force_all: bool = False):
     previously returned no text under the old configuration.
     With force_all=True, re-OCRs every image regardless of current caption
     state — use this after swapping the OCR engine entirely.
+
+    Progress is checkpointed to ``.ocr-backfill-progress`` in the data
+    volume after every processed item, so deploys/SSH drops/server reboots
+    can interrupt a run and a fresh invocation picks up exactly where it
+    left off. Pass ``restart=True`` to wipe the checkpoint and start over.
     """
     import os
     from server.models import MediaItem, MediaImageMeta
@@ -585,24 +597,45 @@ def backfill_ocr(include_empty: bool = False, force_all: bool = False):
         query = query.filter(caption_filter | (MediaImageMeta.media_item_id.is_(None)))
     images_missing = query.all()
 
-    total = len(images_missing)
-    log(f"Found {total} images to OCR (include_empty={include_empty}, force_all={force_all})")
+    if restart and os.path.exists(_OCR_CHECKPOINT_FILE):
+        os.remove(_OCR_CHECKPOINT_FILE)
+        log("Checkpoint cleared (restart=True).")
 
-    if total == 0:
-        log("Nothing to do!")
+    done_ids: set[str] = set()
+    if os.path.exists(_OCR_CHECKPOINT_FILE):
+        with open(_OCR_CHECKPOINT_FILE) as f:
+            done_ids = {line.strip() for line in f if line.strip()}
+        log(f"Resuming from checkpoint: {len(done_ids)} items already processed.")
+
+    pending = [it for it in images_missing if it.id not in done_ids]
+    total = len(images_missing)
+    remaining = len(pending)
+    log(
+        f"Found {total} images to OCR "
+        f"(include_empty={include_empty}, force_all={force_all}); "
+        f"{remaining} remaining after checkpoint."
+    )
+
+    if remaining == 0:
+        log("Nothing to do — clearing checkpoint.")
+        if os.path.exists(_OCR_CHECKPOINT_FILE):
+            os.remove(_OCR_CHECKPOINT_FILE)
         db.close()
         return
 
     done = 0
     errors = 0
-    for i, item in enumerate(images_missing):
+    for i, item in enumerate(pending):
         full_path = os.path.join(SEARCH_MEDIA_DIR, item.file_path)
         if not os.path.exists(full_path):
             log(f"  SKIP {item.id} — file not found: {full_path}")
             errors += 1
+            # Still mark checkpoint so we don't keep retrying a missing file.
+            with open(_OCR_CHECKPOINT_FILE, "a") as f:
+                f.write(item.id + "\n")
             continue
 
-        log(f"  [{i + 1}/{total}] {item.filename}")
+        log(f"  [{i + 1}/{remaining}] {item.filename}")
 
         try:
             text = extract_text_ocr(full_path)
@@ -616,7 +649,14 @@ def backfill_ocr(include_empty: bool = False, force_all: bool = False):
             log(f"    ERROR: {exc}")
             errors += 1
 
+        # Checkpoint after every item — survives container kills.
+        with open(_OCR_CHECKPOINT_FILE, "a") as f:
+            f.write(item.id + "\n")
+
     log(f"Done! OCR processed: {done}, Errors: {errors}")
+    # Clean up checkpoint on full completion so the next backfill starts fresh.
+    if os.path.exists(_OCR_CHECKPOINT_FILE):
+        os.remove(_OCR_CHECKPOINT_FILE)
     db.close()
 
     log("Re-indexing all items to populate has_text filter...")
@@ -794,7 +834,8 @@ if __name__ == "__main__":
     elif cmd == "backfill-ocr":
         include_empty = "--include-empty" in sys.argv[2:]
         force_all = "--all" in sys.argv[2:]
-        backfill_ocr(include_empty=include_empty, force_all=force_all)
+        restart = "--restart" in sys.argv[2:]
+        backfill_ocr(include_empty=include_empty, force_all=force_all, restart=restart)
 
     elif cmd == "test-ocr":
         if len(sys.argv) < 3:
