@@ -17,15 +17,10 @@ fi
 echo "==> Destroying ${APP}"
 ssh_dokku apps:destroy "${APP}" --force
 
-# Reclaim disk immediately:
-#  1. Untag and remove the GHCR image we pulled for this PR (the preview's
-#     pulled image tag, e.g. ghcr.io/.../au-supply-preview:pr-42-<sha>).
-#  2. Sweep dangling layers left behind by the destroy.
-# Both are best-effort: a failure here doesn't fail the workflow.
-echo "==> Removing PR images from the host"
-ssh_dokku -- "docker images --format '{{.Repository}}:{{.Tag}}' | grep -E 'au-supply-preview:pr-${PR_NUMBER}(-|\$)' | xargs -r docker rmi -f" >/dev/null 2>&1 || true
-
-echo "==> Pruning dangling layers"
-ssh_dokku -- docker image prune -f >/dev/null 2>&1 || true
+# Host-side docker image cache for the PR is reclaimed by the daily root cron
+# `docker image prune -af --filter "until=24h"` on the dokku host (max 24h
+# lag). Raw `docker` calls can't be made via the dokku SSH user (forced
+# command), and the registry-side image is already deleted by the GHCR
+# cleanup step in the destroy workflow job.
 
 echo "==> Done"
