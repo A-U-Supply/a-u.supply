@@ -195,13 +195,17 @@ _LEMMY_NAME_BAD = re.compile(r"[^a-z0-9_]+")
 
 
 def _lemmy_safe_name(raw: str) -> str:
-    """Lemmy community names are restricted to lowercase alphanumeric + `_`
-    (no hyphens, no dots). Convert our project slug to that vocabulary.
+    """Lemmy 0.19 community names must match `^[a-zA-Z0-9_]{3,20}$` —
+    lowercase alphanumeric + `_`, 3-20 chars. Anything outside that range
+    comes back as 400 "invalid_name" at create time.
     """
     safe = _LEMMY_NAME_BAD.sub("_", (raw or "").lower()).strip("_")
     if not safe:
         safe = "latent"
-    return safe[:30]
+    safe = safe[:20].rstrip("_")
+    if len(safe) < 3:
+        safe = (safe + "_latent")[:20].rstrip("_")
+    return safe
 
 
 def _community_payload(name: str, title: str, description: str | None = None) -> dict:
