@@ -240,52 +240,57 @@
         <button class="action-btn" type="submit">Search</button>
       </form>
 
-      <div
-        id="pfi-filters"
-        class="filter-panel"
-        class:filter-panel--open={filtersOpen}
-      >
-        <SearchFilterBar bind:filters />
-      </div>
+      <!-- Single scroll area: filter panel (when open) + error + results
+           all live inside .modal__body, which is the only thing that
+           scrolls. Header, search row, and footer stay pinned. -->
+      <div class="modal__body">
+        <div
+          id="pfi-filters"
+          class="filter-panel"
+          class:filter-panel--open={filtersOpen}
+        >
+          <SearchFilterBar bind:filters />
+        </div>
 
-      {#if error}
-        <div class="notice notice--error">{error}</div>
-      {/if}
-
-      <div class="results">
-        {#if loading}
-          <div class="muted">Searching…</div>
-        {:else if results.length === 0}
-          <div class="muted">
-            {lastQuery
-              ? 'No results.'
-              : 'Type a query or apply a filter, then Search.'}
-          </div>
-        {:else}
-          <ul class="grid">
-            {#each results as h (h.id)}
-              <li class="tile" class:selected={selected.has(h.id)}>
-                <button
-                  class="tile__btn"
-                  type="button"
-                  onclick={() => toggleSel(h.id)}
-                  aria-pressed={selected.has(h.id)}
-                >
-                  <div class="tile__thumb">
-                    {#if h.media_type === 'image'}
-                      <img src={thumbUrl(h.id)} alt={h.filename || ''} />
-                    {:else}
-                      <span class="icon">{h.media_type || 'file'}</span>
-                    {/if}
-                  </div>
-                  <div class="tile__name" title={h.filename || ''}>
-                    {h.filename || h.id}
-                  </div>
-                </button>
-              </li>
-            {/each}
-          </ul>
+        {#if error}
+          <div class="notice notice--error">{error}</div>
         {/if}
+
+        <div class="results">
+          {#if loading}
+            <div class="muted">Searching…</div>
+          {:else if results.length === 0}
+            <div class="muted">
+              {lastQuery
+                ? 'No results.'
+                : 'Type a query or apply a filter, then Search.'}
+            </div>
+          {:else}
+            <ul class="grid">
+              {#each results as h (h.id)}
+                <li class="tile" class:selected={selected.has(h.id)}>
+                  <button
+                    class="tile__btn"
+                    type="button"
+                    onclick={() => toggleSel(h.id)}
+                    aria-pressed={selected.has(h.id)}
+                  >
+                    <div class="tile__thumb">
+                      {#if h.media_type === 'image'}
+                        <img src={thumbUrl(h.id)} alt={h.filename || ''} />
+                      {:else}
+                        <span class="icon">{h.media_type || 'file'}</span>
+                      {/if}
+                    </div>
+                    <div class="tile__name" title={h.filename || ''}>
+                      {h.filename || h.id}
+                    </div>
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
       </div>
 
       <footer class="modal__foot">
@@ -358,27 +363,28 @@
   .filter-toggle {
     flex: 0 0 auto;
   }
+  /* Single scroll area for filter + results. Header, search row, and
+     footer stay pinned; everything inside .modal__body scrolls together. */
+  .modal__body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
   .filter-panel {
     display: none;
     border: 1px solid var(--color-border);
     padding: var(--space-sm);
     background: rgba(0, 0, 0, 0.02);
-    /* Cap height so opening the panel can't shove results outside the
-       modal. The bar scrolls internally when its content exceeds this. */
-    max-height: 40vh;
-    overflow-y: auto;
   }
   .filter-panel--open {
     display: block;
   }
   .results {
-    overflow: auto;
-    flex: 1;
-    /* min-height: 0 lets this flex child shrink below its content size so
-       the modal's max-height (90vh) actually constrains the column instead
-       of being violated by intrinsic-sized children. Without this, opening
-       the filter panel pushes the results below the viewport. */
-    min-height: 0;
+    /* No internal scroll — .modal__body owns scrolling. */
+    flex-shrink: 0;
   }
   .grid {
     list-style: none;
