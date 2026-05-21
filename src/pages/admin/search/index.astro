@@ -1,6 +1,6 @@
 ---
 import Admin from '../../../layouts/Admin.astro';
-import IndexFilter from '../../../components/IndexFilter.svelte';
+import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
 ---
 
 <Admin title="The Stacks" current="search">
@@ -58,181 +58,8 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
   </div>
 
   <div class="filter-body" id="filter-body">
-    <div class="filter-group">
-      <label class="filter-label">Index</label>
-      <div id="filter-output-index" data-selected="__inputs__">
-        <IndexFilter client:load />
-      </div>
-    </div>
-
-    <div class="filter-group">
-      <label class="filter-label">Media Type</label>
-      <label class="filter-check"
-        ><input type="checkbox" value="image" checked /> Image</label
-      >
-      <label class="filter-check"
-        ><input type="checkbox" value="audio" checked /> Audio</label
-      >
-      <label class="filter-check"
-        ><input type="checkbox" value="video" checked /> Video</label
-      >
-    </div>
-
-    <div class="filter-group">
-      <label class="filter-label">Source Channel</label>
-      <select id="filter-channel" multiple size="4">
-        <option value="">Loading...</option>
-      </select>
-    </div>
-
-    <div class="filter-group">
-      <label class="filter-label">Date Range</label>
-      <input type="date" id="filter-date-from" placeholder="From" />
-      <input type="date" id="filter-date-to" placeholder="To" />
-    </div>
-
-    <div class="filter-group">
-      <label class="filter-label">Color</label>
-      <select id="filter-color-group">
-        <option value="">Any color</option>
-        <option value="red">Red</option>
-        <option value="orange">Orange</option>
-        <option value="yellow">Yellow</option>
-        <option value="green">Green</option>
-        <option value="teal">Teal</option>
-        <option value="blue">Blue</option>
-        <option value="purple">Purple</option>
-        <option value="pink">Pink</option>
-        <option value="brown">Brown</option>
-        <option value="beige">Beige</option>
-        <option value="gray">Gray</option>
-        <option value="black">Black</option>
-        <option value="white">White</option>
-      </select>
-      <div
-        id="color-multi-hint"
-        style="display:none; font-size:0.6rem; color: var(--color-muted); margin-top:2px;"
-      >
-      </div>
-    </div>
-
-    <div class="filter-group">
-      <label class="filter-label">Posted By</label>
-      <select id="filter-poster">
-        <option value="">All</option>
-      </select>
-    </div>
-
-    <div class="filter-group" id="filter-group-job-app">
-      <label class="filter-label">Job App</label>
-      <select id="filter-job-app">
-        <option value="">All</option>
-      </select>
-      <div
-        id="job-app-hint"
-        style="display:none; font-size:0.6rem; color: var(--color-muted); margin-top:2px;"
-      >
-        Outputs only — switch Index to Outputs.
-      </div>
-    </div>
-
-    <div class="filter-group">
-      <label class="filter-label">Tags</label>
-      <input type="text" id="filter-tags" placeholder="Comma-separated tags" />
-    </div>
-
-    <div class="filter-group">
-      <label class="filter-label">Min Reactions</label>
-      <input type="number" id="filter-reactions-min" min="0" value="0" />
-    </div>
-
-    <div class="filter-group">
-      <label class="filter-label">Min Tags</label>
-      <input type="number" id="filter-tags-min" min="0" value="0" />
-    </div>
-
-    <div class="filter-group" id="filter-group-transcript">
-      <label class="filter-label">Transcript</label>
-      <select id="filter-has-transcript">
-        <option value="">Any</option>
-        <option value="yes">With transcript</option>
-        <option value="no">Without transcript</option>
-      </select>
-      <div
-        id="transcript-hint"
-        style="display:none; font-size:0.6rem; color: var(--color-muted); margin-top:2px;"
-      >
-        Audio/video only.
-      </div>
-    </div>
-
-    <div class="filter-group" id="filter-group-ocr">
-      <label class="filter-label">OCR Text</label>
-      <select id="filter-has-text">
-        <option value="">Any</option>
-        <option value="yes">With OCR text</option>
-        <option value="no">Without OCR text</option>
-      </select>
-      <div
-        id="ocr-hint"
-        style="display:none; font-size:0.6rem; color: var(--color-muted); margin-top:2px;"
-      >
-        Images only.
-      </div>
-    </div>
-
-    <div class="filter-group">
-      <label class="filter-label">Sort By</label>
-      <select id="sort-by">
-        <option value="newest">Newest</option>
-        <option value="oldest">Oldest</option>
-        <option value="random">Random</option>
-        <option value="most_reactions">Most Reactions</option>
-        <option value="acclaim">Acclaim</option>
-        <option value="largest">Largest</option>
-        <option value="longest">Longest</option>
-      </select>
-    </div>
-
-    <div class="filter-group">
-      <label class="filter-label">Acclaim min (net)</label>
-      <input
-        type="number"
-        id="filter-vote-score-min"
-        placeholder="any"
-        style="width:6rem;"
-      />
-    </div>
-
-    <div class="filter-group">
-      <label class="filter-label">Upvotes min</label>
-      <input
-        type="number"
-        id="filter-up-min"
-        placeholder="any"
-        style="width:6rem;"
-      />
-    </div>
-
-    <div class="filter-group">
-      <label class="filter-label">Downvotes max</label>
-      <input
-        type="number"
-        id="filter-down-max"
-        placeholder="any"
-        style="width:6rem;"
-      />
-    </div>
-
-    <div class="filter-group">
-      <label class="filter-label">My votes</label>
-      <select id="filter-my-votes">
-        <option value="">Any</option>
-        <option value="up">I acclaimed</option>
-        <option value="down">I disavowed</option>
-        <option value="any">Either way</option>
-        <option value="none">No votes yet</option>
-      </select>
+    <div id="filter-bar-host">
+      <SearchFilterBar client:load syncUrl={true} />
     </div>
 
     <button
@@ -547,43 +374,6 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
   }
   .filter-body.open .insights-section {
     grid-column: 1 / -1;
-  }
-  .filter-group {
-    margin-bottom: var(--space-sm);
-  }
-  .filter-label {
-    display: block;
-    font-size: 0.65rem;
-    color: var(--color-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    margin-bottom: var(--space-xs);
-  }
-  .filter-check {
-    display: block;
-    font-size: var(--text-sm);
-    margin-bottom: 2px;
-    cursor: pointer;
-  }
-  .filter-check input {
-    margin-right: 4px;
-  }
-  .filter-group input[type='text'],
-  .filter-group input[type='number'],
-  .filter-group input[type='date'],
-  .filter-group select {
-    width: 100%;
-    padding: 4px 6px;
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    border: 1px solid var(--color-border);
-    background: var(--color-bg);
-    color: var(--color-text);
-  }
-  .filter-group input:focus,
-  .filter-group select:focus {
-    outline: 2px solid var(--color-accent);
-    outline-offset: -1px;
   }
 
   .active-filters {
@@ -1617,45 +1407,15 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       applyAndSearch();
     });
 
-    // Index filter (bits-ui Select multi). The Svelte island dispatches
-    // `index-change` events with detail.value when the selection changes.
-    // We mirror the value into `data-selected` on this wrapper so
-    // getFilters() can read it synchronously.
+    // SearchFilterBar island owns every filter control. It writes the
+    // consolidated state to `data-filters` on its wrapper and dispatches
+    // `filters-change` on every change. We re-fire `applyAndSearch()` so
+    // the result set updates without a manual Apply.
     document
-      .getElementById('filter-output-index')
-      ?.addEventListener('index-change', (e) => {
-        const wrapper = document.getElementById('filter-output-index')!;
-        const value: string[] = (e as CustomEvent).detail?.value || [
-          '__inputs__',
-        ];
-        wrapper.dataset.selected = value.join(',');
-        updateCrossFilterState();
+      .getElementById('filter-bar-host')
+      ?.addEventListener('filters-change', () => {
         applyAndSearch();
       });
-
-    // Cross-filter listeners: disable incompatible filters on the fly.
-    document
-      .querySelectorAll('.filter-check input[type="checkbox"]')
-      .forEach((cb) => {
-        const input = cb as HTMLInputElement;
-        if (!input.name) {
-          input.addEventListener('change', updateCrossFilterState);
-        }
-      });
-
-    // Changing the color dropdown overrides any URL-preserved multi selection.
-    document
-      .getElementById('filter-color-group')
-      ?.addEventListener('change', () => {
-        preservedMultiColors = [];
-        updateColorMultiHint();
-      });
-
-    // Emulsion toggle — re-run search the moment it changes so the user sees
-    // their Latent uploads appear/disappear from the result set immediately.
-    document
-      .getElementById('filter-include-emulsion')
-      ?.addEventListener('change', () => applyAndSearch());
 
     // Search form
     searchForm.addEventListener('submit', (e) => {
@@ -1935,167 +1695,92 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
 
     refreshWorkspaceBadge();
 
-    // Multi-color state preserved from URL (?colorgroup=a,b,c).
-    // The dropdown itself is single-select; multi values from the URL stay
-    // active until the user changes the dropdown.
-    let preservedMultiColors: string[] = [];
+    // Filter state is owned by SearchFilterBar (Svelte island). It mirrors
+    // the consolidated state into data-filters JSON on its wrapper and
+    // dispatches filters-change CustomEvents. We read it synchronously here.
+    type BarFilters = {
+      types: string[];
+      outputIndexes: string[];
+      channels: string[];
+      poster: string;
+      jobApp: string;
+      colorGroups: string[];
+      preservedMultiColors: string[];
+      dateFrom: string;
+      dateTo: string;
+      tagsText: string;
+      reactionsMin: number;
+      tagsMin: number;
+      hasTranscript: '' | 'yes' | 'no';
+      hasText: '' | 'yes' | 'no';
+      sortBy: string;
+      includeEmulsion: boolean;
+      voteScoreMin: number | null;
+      upMin: number | null;
+      downMax: number | null;
+      myVotes: '' | 'up' | 'down' | 'any' | 'none';
+    };
 
-    function getFilters() {
-      const types: string[] = [];
-      document
-        .querySelectorAll('.filter-check input[type="checkbox"]:checked')
-        .forEach((cb) => {
-          const input = cb as HTMLInputElement;
-          if (!input.name) types.push(input.value);
-        });
-      const channel = document.getElementById(
-        'filter-channel',
-      ) as HTMLSelectElement;
-      const channels = Array.from(channel.selectedOptions)
-        .map((o) => o.value)
-        .filter(Boolean);
-      const dateFrom = (
-        document.getElementById('filter-date-from') as HTMLInputElement
-      ).value;
-      const dateTo = (
-        document.getElementById('filter-date-to') as HTMLInputElement
-      ).value;
-      const poster = (
-        document.getElementById('filter-poster') as HTMLSelectElement
-      ).value;
-      const colorGroupVal = (
-        document.getElementById('filter-color-group') as HTMLSelectElement
-      ).value;
-      const colorGroups = colorGroupVal
-        ? [colorGroupVal]
-        : preservedMultiColors.slice();
-      // The Svelte IndexFilter island writes the selection to the wrapper
-      // div's `data-selected` attribute (comma-joined). Falls back to the
-      // default if the island hasn't mounted yet.
-      const outputIndexEl = document.getElementById('filter-output-index')!;
-      const outputIndexes = (outputIndexEl.dataset.selected || '__inputs__')
-        .split(',')
-        .filter(Boolean);
-      const tags = (document.getElementById('filter-tags') as HTMLInputElement)
-        .value;
-      const reactionsMin =
-        parseInt(
-          (document.getElementById('filter-reactions-min') as HTMLInputElement)
-            .value,
-        ) || 0;
-      const tagsMin =
-        parseInt(
-          (document.getElementById('filter-tags-min') as HTMLInputElement)
-            .value,
-        ) || 0;
-      const sortBy = (document.getElementById('sort-by') as HTMLSelectElement)
-        .value;
-      const voteScoreMin =
-        parseInt(
-          (document.getElementById('filter-vote-score-min') as HTMLInputElement)
-            .value,
-        ) || null;
-      const upMin =
-        parseInt(
-          (document.getElementById('filter-up-min') as HTMLInputElement).value,
-        ) || null;
-      const downMaxRaw = (
-        document.getElementById('filter-down-max') as HTMLInputElement
-      ).value;
-      const downMax = downMaxRaw === '' ? null : parseInt(downMaxRaw);
-      const myVotes = (
-        document.getElementById('filter-my-votes') as HTMLSelectElement
-      ).value;
-      const jobAppEl = document.getElementById(
-        'filter-job-app',
-      ) as HTMLSelectElement;
-      const jobApp = jobAppEl.disabled ? '' : jobAppEl.value;
-      const transcriptEl = document.getElementById(
-        'filter-has-transcript',
-      ) as HTMLSelectElement;
-      const hasTranscript = transcriptEl.disabled ? '' : transcriptEl.value;
-      const textEl = document.getElementById(
-        'filter-has-text',
-      ) as HTMLSelectElement;
-      const hasText = textEl.disabled ? '' : textEl.value;
-      // Emulsion is now selected via the IndexFilter dropdown (option
-      // value="__emulsion__"). The legacy checkbox is gone; this derives
-      // the include_emulsion flag from the dropdown selection.
-      const includeEmulsion = outputIndexes.includes('__emulsion__');
+    function readBarFilters(): BarFilters {
+      const host = document.getElementById('filter-bar-host');
+      const raw = host?.dataset.filters;
+      if (raw) {
+        try {
+          return JSON.parse(raw) as BarFilters;
+        } catch {
+          // fall through to defaults
+        }
+      }
       return {
-        types,
-        channels,
-        poster,
-        outputIndexes,
-        colorGroups,
-        dateFrom,
-        dateTo,
-        tags,
-        reactionsMin,
-        tagsMin,
-        sortBy,
-        voteScoreMin,
-        upMin,
-        downMax,
-        myVotes,
-        jobApp,
-        hasTranscript,
-        hasText,
-        includeEmulsion,
+        types: ['image', 'audio', 'video'],
+        outputIndexes: ['__inputs__'],
+        channels: [],
+        poster: '',
+        jobApp: '',
+        colorGroups: [],
+        preservedMultiColors: [],
+        dateFrom: '',
+        dateTo: '',
+        tagsText: '',
+        reactionsMin: 0,
+        tagsMin: 0,
+        hasTranscript: '',
+        hasText: '',
+        sortBy: 'newest',
+        includeEmulsion: false,
+        voteScoreMin: null,
+        upMin: null,
+        downMax: null,
+        myVotes: '',
       };
     }
 
-    // Enable/disable filters that only make sense in specific contexts:
-    // - Job App requires Index=Outputs (inputs have no job_app).
-    // - Transcript requires audio or video checked.
-    // - OCR Text requires image checked.
-    function updateCrossFilterState() {
-      const indexWrapper = document.getElementById('filter-output-index')!;
-      const activeIndexes = (indexWrapper.dataset.selected || '__inputs__')
-        .split(',')
-        .filter(Boolean);
-      const jobAppEl = document.getElementById(
-        'filter-job-app',
-      ) as HTMLSelectElement;
-      const jobAppHint = document.getElementById('job-app-hint')!;
-      // Only block Job App when the user has *only* Inputs selected — any
-      // real output index in the mix means at least some rows have a job_app.
-      const onlyInputs =
-        activeIndexes.length === 1 && activeIndexes[0] === '__inputs__';
-      jobAppEl.disabled = onlyInputs;
-      if (onlyInputs) jobAppEl.value = '';
-      jobAppHint.style.display = onlyInputs ? 'block' : 'none';
-
-      const typeChecks = Array.from(
-        document.querySelectorAll('.filter-check input[type="checkbox"]'),
-      ) as HTMLInputElement[];
-      const selectedTypes = typeChecks
-        .filter((cb) => !cb.name && cb.checked)
-        .map((cb) => cb.value);
-      const hasAV =
-        selectedTypes.length === 0 ||
-        selectedTypes.includes('audio') ||
-        selectedTypes.includes('video');
-      const hasImage =
-        selectedTypes.length === 0 || selectedTypes.includes('image');
-
-      const transcriptEl = document.getElementById(
-        'filter-has-transcript',
-      ) as HTMLSelectElement;
-      transcriptEl.disabled = !hasAV;
-      if (!hasAV) transcriptEl.value = '';
-      document.getElementById('transcript-hint')!.style.display = hasAV
-        ? 'none'
-        : 'block';
-
-      const textEl = document.getElementById(
-        'filter-has-text',
-      ) as HTMLSelectElement;
-      textEl.disabled = !hasImage;
-      if (!hasImage) textEl.value = '';
-      document.getElementById('ocr-hint')!.style.display = hasImage
-        ? 'none'
-        : 'block';
+    function getFilters() {
+      const f = readBarFilters();
+      const colorGroups = f.colorGroups.length
+        ? f.colorGroups
+        : f.preservedMultiColors.slice();
+      return {
+        types: f.types,
+        channels: f.channels,
+        poster: f.poster,
+        outputIndexes: f.outputIndexes,
+        colorGroups,
+        dateFrom: f.dateFrom,
+        dateTo: f.dateTo,
+        tags: f.tagsText,
+        reactionsMin: f.reactionsMin,
+        tagsMin: f.tagsMin,
+        sortBy: f.sortBy,
+        jobApp: f.jobApp,
+        hasTranscript: f.hasTranscript,
+        hasText: f.hasText,
+        includeEmulsion: f.includeEmulsion,
+        voteScoreMin: f.voteScoreMin,
+        upMin: f.upMin,
+        downMax: f.downMax,
+        myVotes: f.myVotes,
+      };
     }
 
     // Build the search request body from the current filters. Used by both
@@ -3552,275 +3237,51 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       });
     }
 
-    async function loadFacets() {
-      try {
-        const res = await fetch('/api/search/facets', {
-          credentials: 'include',
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        const channelSelect = document.getElementById(
-          'filter-channel',
-        ) as HTMLSelectElement;
-        channelSelect.innerHTML = (data.channels || [])
-          .map((ch: string) => `<option value="${ch}">${ch}</option>`)
-          .join('');
-        const posterSelect = document.getElementById(
-          'filter-poster',
-        ) as HTMLSelectElement;
-        posterSelect.innerHTML =
-          '<option value="">All</option>' +
-          (data.uploaders || [])
-            .map((u: string) => `<option value="${u}">${u}</option>`)
-            .join('');
-        const jobAppSelect = document.getElementById(
-          'filter-job-app',
-        ) as HTMLSelectElement;
-        jobAppSelect.innerHTML =
-          '<option value="">All</option>' +
-          (data.job_apps || [])
-            .map((a: string) => `<option value="${a}">${a}</option>`)
-            .join('');
-        // Restore other dropdowns from URL after they're populated. Append
-        // unknown values as options so a link like ?app=bullethole actually
-        // filters instead of silently falling back to the default.
-        // (The Index filter is owned by the IndexFilter Svelte island —
-        // it reads the URL itself.)
-        const p = new URLSearchParams(window.location.search);
-        const ensureOption = (sel: HTMLSelectElement, val: string) => {
-          if (!val) return;
-          const exists = Array.from(sel.options).some((o) => o.value === val);
-          if (!exists) {
-            const opt = document.createElement('option');
-            opt.value = val;
-            opt.textContent = val;
-            sel.appendChild(opt);
-          }
-          sel.value = val;
-        };
-        if (p.get('poster')) ensureOption(posterSelect, p.get('poster')!);
-        if (p.get('app')) ensureOption(jobAppSelect, p.get('app')!);
-        if (p.get('channel')) {
-          const chs = p.get('channel')!.split(',');
-          Array.from(channelSelect.options).forEach((o) => {
-            o.selected = chs.includes(o.value);
-          });
-        }
-        updateCrossFilterState();
-      } catch {}
-    }
-
-    // Populate UI from URL params
+    // Facets, cross-filter logic, and the per-control DOM-restore from URL
+    // all live in SearchFilterBar now. The page only handles q + page here.
     const initParams = new URLSearchParams(window.location.search);
     function restoreFromUrl() {
       const si = document.getElementById('search-input') as HTMLInputElement;
       if (initParams.get('q') && si) si.value = initParams.get('q')!;
-
-      // Tags: merge ?tag= and ?tags= into one field
-      const ft = document.getElementById('filter-tags') as HTMLInputElement;
-      const tagVals: string[] = [];
-      if (initParams.get('tag')) tagVals.push(initParams.get('tag')!);
-      if (initParams.get('tags'))
-        tagVals.push(
-          ...initParams
-            .get('tags')!
-            .split(',')
-            .map((t) => t.trim())
-            .filter(Boolean),
-        );
-      if (tagVals.length && ft) ft.value = [...new Set(tagVals)].join(', ');
-
-      const fr = document.getElementById(
-        'filter-reactions-min',
-      ) as HTMLInputElement;
-      if (initParams.get('rxn') && fr) fr.value = initParams.get('rxn')!;
-      const fm = document.getElementById('filter-tags-min') as HTMLInputElement;
-      if (initParams.get('mintags') && fm)
-        fm.value = initParams.get('mintags')!;
-      const sb = document.getElementById('sort-by') as HTMLSelectElement;
-      if (initParams.get('sort') && sb) sb.value = initParams.get('sort')!;
-      const fvs = document.getElementById(
-        'filter-vote-score-min',
-      ) as HTMLInputElement | null;
-      if (initParams.get('vscore') && fvs)
-        fvs.value = initParams.get('vscore')!;
-      const fum = document.getElementById(
-        'filter-up-min',
-      ) as HTMLInputElement | null;
-      if (initParams.get('upmin') && fum) fum.value = initParams.get('upmin')!;
-      const fdm = document.getElementById(
-        'filter-down-max',
-      ) as HTMLInputElement | null;
-      if (initParams.get('downmax') && fdm)
-        fdm.value = initParams.get('downmax')!;
-      const fmv = document.getElementById(
-        'filter-my-votes',
-      ) as HTMLSelectElement | null;
-      if (initParams.get('myvotes') && fmv)
-        fmv.value = initParams.get('myvotes')!;
-
-      // Color group dropdown (single-select). Multi values from URL are
-      // kept in preservedMultiColors until the user changes the dropdown.
-      const cgSel = document.getElementById(
-        'filter-color-group',
-      ) as HTMLSelectElement;
-      if (initParams.get('colorgroup')) {
-        const groups = initParams
-          .get('colorgroup')!
-          .split(',')
-          .map((g) => g.trim())
-          .filter(Boolean);
-        if (groups.length === 1) {
-          cgSel.value = groups[0];
-        } else if (groups.length > 1) {
-          preservedMultiColors = groups;
-          cgSel.value = '';
-        }
-        updateColorMultiHint();
-      }
-      // Date range
-      if (initParams.get('from'))
-        (
-          document.getElementById('filter-date-from') as HTMLInputElement
-        ).value = initParams.get('from')!;
-      if (initParams.get('to'))
-        (document.getElementById('filter-date-to') as HTMLInputElement).value =
-          initParams.get('to')!;
-
-      // Media types
-      if (initParams.get('types')) {
-        const types = initParams.get('types')!.split(',');
-        document
-          .querySelectorAll('.filter-check input[type="checkbox"]')
-          .forEach((cb) => {
-            const input = cb as HTMLInputElement;
-            if (!input.name) input.checked = types.includes(input.value);
-          });
-      }
-
-      // Has transcript / has text
-      if (initParams.get('transcript'))
-        (
-          document.getElementById('filter-has-transcript') as HTMLSelectElement
-        ).value = initParams.get('transcript')!;
-      if (initParams.get('ocr'))
-        (
-          document.getElementById('filter-has-text') as HTMLSelectElement
-        ).value = initParams.get('ocr')!;
-
       if (initParams.get('page'))
         currentPage = parseInt(initParams.get('page')!) || 1;
-
-      // Legacy ?color= param: convert to colorgroup if possible
-      if (initParams.get('color') && !initParams.get('colorgroup')) {
-        // Old hex color URLs no longer supported; redirect to search
-      }
-    }
-
-    function updateColorMultiHint() {
-      const hint = document.getElementById('color-multi-hint')!;
-      if (preservedMultiColors.length > 1) {
-        hint.textContent = `Active: ${preservedMultiColors.join(', ')} (API/URL multi-select)`;
-        hint.style.display = 'block';
-      } else {
-        hint.style.display = 'none';
-      }
     }
 
     function clearFilter(filterName: string) {
-      switch (filterName) {
-        case 'q':
-          searchInput.value = '';
-          break;
-        case 'color':
-          break; // no longer used
-        case 'poster':
-          (
-            document.getElementById('filter-poster') as HTMLSelectElement
-          ).value = '';
-          break;
-        case 'tags':
-          (document.getElementById('filter-tags') as HTMLInputElement).value =
-            '';
-          break;
-        case 'colorgroup':
-          (
-            document.getElementById('filter-color-group') as HTMLSelectElement
-          ).value = '';
-          preservedMultiColors = [];
-          updateColorMultiHint();
-          break;
-        case 'app':
-          (
-            document.getElementById('filter-job-app') as HTMLSelectElement
-          ).value = '';
-          break;
-        case 'transcript':
-          (
-            document.getElementById(
-              'filter-has-transcript',
-            ) as HTMLSelectElement
-          ).value = '';
-          break;
-        case 'ocr':
-          (
-            document.getElementById('filter-has-text') as HTMLSelectElement
-          ).value = '';
-          break;
-        case 'channel':
-          Array.from(
-            (document.getElementById('filter-channel') as HTMLSelectElement)
-              .options,
-          ).forEach((o) => {
-            o.selected = false;
-          });
-          break;
-        case 'dateFrom':
-          (
-            document.getElementById('filter-date-from') as HTMLInputElement
-          ).value = '';
-          break;
-        case 'dateTo':
-          (
-            document.getElementById('filter-date-to') as HTMLInputElement
-          ).value = '';
-          break;
-        case 'rxn':
-          (
-            document.getElementById('filter-reactions-min') as HTMLInputElement
-          ).value = '0';
-          break;
-        case 'mintags':
-          (
-            document.getElementById('filter-tags-min') as HTMLInputElement
-          ).value = '0';
-          break;
-        case 'types':
-          document
-            .querySelectorAll('.filter-check input[type="checkbox"]')
-            .forEach((cb) => {
-              const input = cb as HTMLInputElement;
-              if (!input.name) input.checked = true;
-            });
-          break;
-        case 'output_index': {
-          // Tell the IndexFilter island to reset to default (Inputs only).
-          // The island's `index-set` listener updates its internal state and
-          // re-emits `index-change`, which the wrapper listener picks up.
-          const wrapper = document.getElementById('filter-output-index');
-          if (wrapper) {
-            wrapper.dispatchEvent(
-              new CustomEvent('index-set', {
-                detail: { value: ['__inputs__'] },
-              }),
-            );
-          }
-          // Don't fall through to the generic doSearch() at the bottom —
-          // the island's emitted index-change already triggers a search.
-          return;
-        }
+      // q lives outside the bar; reset it directly.
+      if (filterName === 'q') {
+        searchInput.value = '';
+        applyAndSearch();
+        return;
       }
-      applyAndSearch();
+      // Map active-chip filter names → SearchFilterBar Filters keys.
+      const KEY_MAP: Record<string, string> = {
+        poster: 'poster',
+        tags: 'tagsText',
+        colorgroup: 'colorGroups',
+        app: 'jobApp',
+        transcript: 'hasTranscript',
+        ocr: 'hasText',
+        channel: 'channels',
+        dateFrom: 'dateFrom',
+        dateTo: 'dateTo',
+        rxn: 'reactionsMin',
+        mintags: 'tagsMin',
+        types: 'types',
+        output_index: 'outputIndexes',
+      };
+      const key = KEY_MAP[filterName];
+      const host = document.getElementById('filter-bar-host');
+      if (key && host) {
+        host.dispatchEvent(
+          new CustomEvent('filters-reset', { detail: { key } }),
+        );
+        // The bar emits filters-change after applying the reset, which
+        // triggers applyAndSearch via the wrapper listener. No call here.
+        return;
+      }
+      // Legacy 'color' chip — no-op (hex color filter removed long ago).
+      if (filterName === 'color') return;
     }
     // Expose for inline onclick
     (window as any).__clearFilter = clearFilter;
@@ -3966,19 +3427,22 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       statsBar.innerHTML = parts.join(' ');
       statsBar.style.display = 'flex';
 
-      // Click type counts to filter
+      // Click type counts to filter — push a single-type selection into the bar.
       statsBar.querySelectorAll('.stat-type').forEach((el) => {
         el.addEventListener('click', () => {
           const type = (el as HTMLElement).dataset.typeFilter!;
-          document
-            .querySelectorAll('.filter-check input[type="checkbox"]')
-            .forEach((cb) => {
-              const input = cb as HTMLInputElement;
-              if (!input.name) input.checked = input.value === type;
-            });
-          applyAndSearch();
+          patchFilterBar({ types: [type] });
         });
       });
+    }
+
+    // Helper: dispatch a partial-state patch into SearchFilterBar. The bar
+    // applies it and re-emits filters-change, which triggers applyAndSearch
+    // via the wrapper-level listener — so callers don't call it themselves.
+    function patchFilterBar(patch: Record<string, unknown>) {
+      const host = document.getElementById('filter-bar-host');
+      if (!host) return;
+      host.dispatchEvent(new CustomEvent('filters-set', { detail: { patch } }));
     }
 
     async function fetchStats(searchBody: any) {
@@ -4045,29 +3509,22 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         .join('');
       el.innerHTML = `<div class="insight-title">${title}</div>${rows}`;
 
-      // Click to filter
+      // Click to filter — patch the bar with the new tag list or poster.
       el.querySelectorAll('.insight-clickable').forEach((row) => {
         row.addEventListener('click', () => {
           const type = (row as HTMLElement).dataset.insightType!;
           const value = (row as HTMLElement).dataset.insightValue!;
           if (type === 'tag') {
-            const tagInput = document.getElementById(
-              'filter-tags',
-            ) as HTMLInputElement;
-            const existing = tagInput.value
+            const current = getFilters().tags;
+            const existing = current
               .split(',')
-              .map((t) => t.trim())
+              .map((t: string) => t.trim())
               .filter(Boolean);
-            if (!existing.includes(value)) {
-              existing.push(value);
-              tagInput.value = existing.join(', ');
-            }
+            if (!existing.includes(value)) existing.push(value);
+            patchFilterBar({ tagsText: existing.join(', ') });
           } else if (type === 'uploader') {
-            (
-              document.getElementById('filter-poster') as HTMLSelectElement
-            ).value = value;
+            patchFilterBar({ poster: value });
           }
-          applyAndSearch();
         });
       });
     }
@@ -4096,10 +3553,7 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       el.querySelectorAll('.insight-clickable').forEach((row) => {
         row.addEventListener('click', () => {
           const minVal = (row as HTMLElement).dataset.reactionMin!;
-          (
-            document.getElementById('filter-reactions-min') as HTMLInputElement
-          ).value = minVal;
-          applyAndSearch();
+          patchFilterBar({ reactionsMin: parseInt(minVal, 10) || 0 });
         });
       });
     }
@@ -4130,13 +3584,10 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
           const month = (row as HTMLElement).dataset.month!; // "YYYY-MM"
           const [year, mon] = month.split('-').map(Number);
           const lastDay = new Date(year, mon, 0).getDate();
-          (
-            document.getElementById('filter-date-from') as HTMLInputElement
-          ).value = `${month}-01`;
-          (
-            document.getElementById('filter-date-to') as HTMLInputElement
-          ).value = `${month}-${String(lastDay).padStart(2, '0')}`;
-          applyAndSearch();
+          patchFilterBar({
+            dateFrom: `${month}-01`,
+            dateTo: `${month}-${String(lastDay).padStart(2, '0')}`,
+          });
         });
       });
     }
@@ -4180,16 +3631,15 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
         .join('');
       el.innerHTML = `<div class="insight-title">Colors</div>${rows}`;
 
-      // Click to filter by color
+      // Click to filter by color — single-color selection overrides any
+      // URL-preserved multi-color state inside the bar.
       el.querySelectorAll('[data-color-filter]').forEach((row) => {
         row.addEventListener('click', () => {
           const color = (row as HTMLElement).dataset.colorFilter!;
-          (
-            document.getElementById('filter-color-group') as HTMLSelectElement
-          ).value = color;
-          preservedMultiColors = [];
-          updateColorMultiHint();
-          applyAndSearch();
+          patchFilterBar({
+            colorGroups: [color],
+            preservedMultiColors: [],
+          });
         });
       });
     }
@@ -4330,10 +3780,9 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
       if (document.visibilityState === 'hidden') saveScrollState();
     });
 
-    // Restore form state from URL, load facets, then run first search
+    // Restore the page-owned bits (q, page) from URL. SearchFilterBar
+    // self-restores its own state and loads facets on mount.
     restoreFromUrl();
-    updateCrossFilterState();
-    await loadFacets();
 
     const savedScroll = readSavedScroll();
     if (savedScroll) {
