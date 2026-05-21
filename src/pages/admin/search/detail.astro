@@ -19,142 +19,152 @@ import Admin from '../../../layouts/Admin.astro';
       <a href="/admin/search" class="action-btn">Back to Search</a>
     </div>
 
-    <!-- Acclaim / Disavow — per-user votes on this item (issue #318) -->
-    <section class="votes-section">
-      <h2>Acclaim / Disavow</h2>
-      <div id="vote-chip-island" class="vote-chip-island"></div>
-    </section>
+    <!--
+      Layout order: Preview + Metadata (side-by-side desktop, stacked mobile)
+      → Curation → Discussion → Provenance → Transcript → Actions.
+      Every section is a .brutal-card (chrome lives in admin.css). Card
+      header bars carry section labels — no external <h2> headings, so
+      labels never duplicate.
+    -->
 
-    <div class="detail-layout">
-      <div class="detail-preview" id="detail-preview"></div>
+    <div class="detail-grid">
+      <!-- PREVIEW: chrome only, no header bar (the content IS the label) -->
+      <section class="brutal-card preview-card" aria-label="Preview">
+        <div
+          class="brutal-card__body brutal-card__body--flush"
+          id="detail-preview"
+        ></div>
+      </section>
 
-      <div class="detail-meta">
-        <div class="meta-section">
-          <div class="meta-label">Filename</div>
-          <div class="meta-value" id="meta-filename"></div>
+      <!-- METADATA: visible essentials, then chrome behind disclosure -->
+      <section class="brutal-card metadata-card" aria-labelledby="meta-h">
+        <div class="brutal-card__head">
+          <h2 id="meta-h">Metadata</h2>
         </div>
-        <div class="meta-section">
-          <div class="meta-label">Media Type</div>
-          <div class="meta-value" id="meta-type"></div>
-        </div>
-        <div class="meta-section">
-          <div class="meta-label">MIME Type</div>
-          <div class="meta-value" id="meta-mime"></div>
-        </div>
-        <div class="meta-section">
-          <div class="meta-label">File Size</div>
-          <div class="meta-value" id="meta-size"></div>
-        </div>
-        <div class="meta-section">
-          <div class="meta-label">SHA-256</div>
-          <div class="meta-value meta-hash" id="meta-hash"></div>
-        </div>
-        <div class="meta-section">
-          <div class="meta-label">Description</div>
-          <div class="meta-value" id="meta-description">--</div>
-        </div>
-        <div class="meta-section">
-          <div class="meta-label">Created</div>
-          <div class="meta-value" id="meta-created"></div>
-        </div>
-        <div class="meta-section">
-          <div class="meta-label">Updated</div>
-          <div class="meta-value" id="meta-updated"></div>
-        </div>
-
-        <!-- Type-specific metadata -->
-        <div id="type-meta"></div>
-      </div>
+        <div class="brutal-card__body" id="metadata-body"></div>
+        <details class="disclosure">
+          <summary>File chrome</summary>
+          <div class="disclosure__body" id="metadata-chrome-body"></div>
+        </details>
+      </section>
     </div>
 
-    <!-- Extracted text (OCR captions / whisper transcripts) -->
+    <!-- CURATION: vote chip + tags merged into one card -->
+    <section class="brutal-card curation-card" aria-labelledby="cur-h">
+      <div class="brutal-card__head">
+        <h2 id="cur-h">Curation</h2>
+      </div>
+      <div class="brutal-card__body">
+        <div class="field-row">
+          <div class="field-row__label">Verdict</div>
+          <div class="field-row__value">
+            <div id="vote-chip-island" class="vote-chip-island"></div>
+          </div>
+        </div>
+        <div class="field-row curation-tags">
+          <div class="field-row__label">Tags</div>
+          <div class="field-row__value">
+            <div class="tags-list" id="tags-list"></div>
+            <div class="tag-add">
+              <input
+                type="text"
+                id="tag-input"
+                placeholder="Add tag..."
+                autocomplete="off"
+                aria-label="Add tag"
+              />
+              <div
+                class="tag-suggestions"
+                id="tag-suggestions"
+                style="display:none;"
+              >
+              </div>
+              <button class="action-btn" id="add-tag-btn">Add</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DISCUSSION: Threads `.single` already has brutal-card chrome (PR #355) -->
+    <div id="threads-island"></div>
+
+    <!-- PROVENANCE: sources + lineage (inputs/outputs) + linked latents.
+         #provenance-rows is filled by JS (Origin + Lineage). Linked stays
+         a static row so the LatentLinks Svelte island can mount into a
+         stable target without depending on render order. -->
+    <section class="brutal-card provenance-card" aria-labelledby="prov-h">
+      <div class="brutal-card__head">
+        <h2 id="prov-h">Provenance</h2>
+      </div>
+      <div class="brutal-card__body">
+        <div id="provenance-rows"></div>
+        <div class="field-row">
+          <div class="field-row__label">Linked</div>
+          <div class="field-row__value">
+            <div id="latent-links-island"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- EXTRACTED TEXT (OCR caption or whisper transcript) -->
     <section
-      class="extracted-text-section"
+      class="brutal-card extracted-text-card"
       id="extracted-text-section"
+      aria-labelledby="et-h"
       style="display:none;"
     >
-      <h2 id="extracted-text-heading">Extracted Text</h2>
-      <div id="extracted-text-panel"></div>
+      <div class="brutal-card__head">
+        <h2 id="et-h">
+          <span id="extracted-text-heading">Extracted Text</span>
+        </h2>
+        <span class="brutal-card__head-meta" id="extracted-text-stats"></span>
+        <button
+          class="brutal-card__head-action"
+          id="extracted-text-copy"
+          type="button"
+          style="display:none;"
+        >
+          Copy
+        </button>
+      </div>
+      <div class="brutal-card__body" id="extracted-text-body"></div>
+      <button
+        class="extracted-text-toggle"
+        id="extracted-text-toggle"
+        type="button"
+        style="display:none;"
+      >
+        Show all
+      </button>
     </section>
 
-    <!-- Tags section -->
-    <div class="tags-section">
-      <h2>Tags</h2>
-      <div class="tags-list" id="tags-list"></div>
-      <div class="tag-add">
-        <input
-          type="text"
-          id="tag-input"
-          placeholder="Add tag..."
-          autocomplete="off"
-        />
-        <div class="tag-suggestions" id="tag-suggestions" style="display:none;">
-        </div>
-        <button class="action-btn" id="add-tag-btn">Add</button>
-      </div>
-    </div>
-
-    <!-- Threads section (Lemmy-backed, anchored to this media item) -->
-    <div class="threads-section">
-      <div id="threads-island"></div>
-    </div>
-
-    <!-- Cross-Latent links related to this media item -->
-    <div class="latent-links-section">
-      <h2>Latent links</h2>
-      <div id="latent-links-island"></div>
-    </div>
-
-    <!-- Sources section -->
-    <div class="sources-section">
-      <h2>Sources</h2>
-      <div id="sources-list"></div>
-    </div>
-
-    <!-- Input items (for outputs) -->
-    <div class="inputs-section" id="inputs-section" style="display:none;">
-      <h2>Inputs</h2>
-      <div id="inputs-list" class="inputs-grid"></div>
-    </div>
-
-    <!-- Output items (for inputs) -->
-    <div class="outputs-section" id="outputs-section" style="display:none;">
-      <h2>Outputs</h2>
-      <div id="outputs-list" class="inputs-grid"></div>
-    </div>
-
-    <!-- Extraction status -->
-    <div class="extraction-section">
-      <h2>Extraction Status</h2>
-      <div id="extraction-status"></div>
-    </div>
-
-    <!-- Actions -->
+    <!-- ACTIONS -->
     <div class="detail-actions">
-      <button class="action-btn" id="add-to-workspace-btn"
-        >Add to Workspace</button
+      <button
+        class="action-btn"
+        id="add-to-workspace-btn"
+        type="button">Add to workspace</button
       >
       <a
         class="action-btn"
         id="download-btn"
         href="#"
         download
-        style="display:none;">Download Source</a
+        style="display:none;">Download</a
       >
-      <a
+      <button
         class="action-btn"
-        id="hd-png-btn"
-        href="#"
-        style="display:none;text-decoration:none;">HD PNG</a
-      >
-      <button class="action-btn" id="re-extract-btn">Re-extract Metadata</button
-      >
-      <button class="action-btn" id="slack-share-btn" style="display:none;"
+        id="slack-share-btn"
+        type="button"
+        style="display:none;"
         ><svg
           width="14"
           height="14"
           viewBox="0 0 122.8 122.8"
           xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
           style="vertical-align:-2px;margin-right:5px;flex-shrink:0;"
           ><path
             d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z"
@@ -167,8 +177,23 @@ import Admin from '../../../layouts/Admin.astro';
             fill="#36c5f0"></path></svg
         ><span id="slack-share-label"></span></button
       >
-      <button class="action-btn action-btn--danger" id="delete-btn"
-        >Delete Media</button
+      <a
+        class="action-btn"
+        id="hd-png-btn"
+        href="#"
+        style="display:none;text-decoration:none;"
+        title="Re-render this Atelier image at full resolution and export as PNG"
+        >HD PNG</a
+      >
+      <button
+        class="action-btn"
+        id="re-extract-btn"
+        type="button">Re-extract</button
+      >
+      <button
+        class="action-btn action-btn--danger"
+        id="delete-btn"
+        type="button">Delete</button
       >
     </div>
   </div>
@@ -190,108 +215,88 @@ import Admin from '../../../layouts/Admin.astro';
   </div>
 </Admin>
 
-<style>
+<!--
+  These styles must be global (not Astro-scoped) because many of the elements
+  they target are built at runtime via `innerHTML` (tag chips, source rows,
+  the transcript <pre>, etc.). Scoped Astro CSS adds `data-astro-cid-*`
+  attributes to selectors, and runtime-built nodes can't inherit those, so
+  scoping silently breaks the styling for half this page. Card chrome itself
+  comes from `.brutal-card` in admin.css; this block only owns page-specific
+  arrangement + the look of content rendered into card bodies.
+-->
+<style is:global>
+
   .detail-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
     gap: var(--space-sm);
+    margin-bottom: var(--space-md);
   }
   .detail-header h1 {
     margin-bottom: 0;
     border-bottom: none;
     padding-bottom: 0;
-  }
-  .votes-section {
-    margin-top: var(--space-md);
-  }
-  .votes-section h2 {
-    margin-bottom: var(--space-xs);
-  }
-  .vote-chip-island {
-    display: block;
+    /* Page title can wrap long filenames on mobile without forcing
+       overflow. */
+    word-break: break-word;
+    min-width: 0;
+    flex: 1 1 auto;
   }
 
-  .detail-layout {
+  /* Preview-left / metadata-right grid; collapses on narrow viewports. */
+  .detail-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: var(--space-lg);
-    margin-top: var(--space-md);
+    align-items: start;
+  }
+  @media (max-width: 720px) {
+    .detail-grid {
+      grid-template-columns: 1fr;
+    }
   }
 
-  .detail-preview {
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
+  .preview-card .brutal-card__body {
     display: flex;
     align-items: center;
     justify-content: center;
     min-height: 200px;
     padding: var(--space-sm);
   }
-  .detail-preview img {
+  .preview-card img {
     max-width: 100%;
     max-height: 500px;
     object-fit: contain;
   }
-  .detail-preview audio,
-  .detail-preview video {
+  .preview-card audio,
+  .preview-card video {
     width: 100%;
     max-width: 100%;
   }
 
-  .detail-meta {
-    font-size: var(--text-sm);
+  /* Curation card */
+  .vote-chip-island {
+    display: block;
+    min-height: 32px;
   }
-  .meta-section {
+  .curation-tags .field-row__value {
     display: flex;
-    border-bottom: 1px dotted var(--color-border);
-    padding: 4px 0;
+    flex-direction: column;
+    gap: var(--space-xs);
   }
-  .meta-label {
-    width: 120px;
-    flex-shrink: 0;
-    font-size: 0.65rem;
-    color: var(--color-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-  }
-  .meta-value {
-    flex: 1;
-    word-break: break-all;
-  }
-  .meta-hash {
-    font-size: 0.6rem;
-    color: var(--color-muted);
-  }
-
-  .tags-section,
-  .sources-section,
-  .extraction-section,
-  .threads-section,
-  .latent-links-section,
-  .extracted-text-section {
-    margin-top: var(--space-lg);
-  }
-  .tags-section h2,
-  .sources-section h2,
-  .extraction-section h2,
-  .threads-section h2,
-  .latent-links-section h2,
-  .extracted-text-section h2 {
-    font-size: var(--text-lg);
-    text-transform: uppercase;
-    letter-spacing: 1pt;
-    margin-bottom: var(--space-sm);
-    padding-bottom: var(--space-xs);
-    border-bottom: 2px solid var(--color-text);
-  }
-
   .tags-list {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-    margin-bottom: var(--space-sm);
+    min-height: 1.5em;
+  }
+  .tags-list:empty::before {
+    content: 'No tags';
+    color: var(--color-muted);
+    font-style: italic;
+    font-size: var(--text-sm);
   }
   .tag-chip {
     display: inline-flex;
@@ -303,19 +308,25 @@ import Admin from '../../../layouts/Admin.astro';
     text-transform: uppercase;
     letter-spacing: 0.5pt;
   }
+  .tag-chip a {
+    color: inherit;
+    text-decoration: none;
+  }
   .tag-chip button {
     background: none;
     border: none;
     color: #c00;
     cursor: pointer;
-    font-size: 0.8rem;
-    padding: 0;
+    font-size: 1rem;
+    padding: 0 2px;
     line-height: 1;
+    /* iOS tap target */
+    min-width: 24px;
+    min-height: 24px;
   }
   .tag-chip button:hover {
     color: #a00;
   }
-
   .tag-add {
     display: flex;
     gap: var(--space-xs);
@@ -323,14 +334,19 @@ import Admin from '../../../layouts/Admin.astro';
   }
   .tag-add input {
     flex: 1;
-    padding: 4px 8px;
+    min-width: 0;
+    padding: 6px 10px;
     font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    border: 1px solid var(--color-border);
+    /* iOS Safari zooms in on focus when input font-size < 16px. */
+    font-size: 16px;
+    border: 2px solid var(--color-text);
+    background: var(--color-bg);
+    color: var(--color-text);
+    min-height: 36px;
   }
-  .tag-add input:focus {
+  .tag-add input:focus-visible {
     outline: 2px solid var(--color-accent);
-    outline-offset: -1px;
+    outline-offset: -2px;
   }
   .tag-suggestions {
     position: absolute;
@@ -338,25 +354,36 @@ import Admin from '../../../layouts/Admin.astro';
     left: 0;
     right: 60px;
     background: var(--color-bg);
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-text);
     border-top: none;
     max-height: 150px;
     overflow-y: auto;
     z-index: 10;
   }
   .tag-suggestion {
-    padding: 4px 8px;
+    padding: 6px 10px;
     font-size: var(--text-sm);
     cursor: pointer;
+    min-height: 36px;
   }
-  .tag-suggestion:hover {
+  .tag-suggestion:hover,
+  .tag-suggestion:focus-visible {
     background: var(--color-surface-2);
   }
 
+  /* Provenance card */
+  .provenance-card .field-row__value a {
+    color: var(--color-accent);
+  }
+  .provenance-card .field-row__value a:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
   .inputs-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: var(--space-sm);
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--space-xs);
+    margin-top: 4px;
   }
   .input-card {
     border: 1px solid var(--color-border);
@@ -365,153 +392,41 @@ import Admin from '../../../layouts/Admin.astro';
   }
   .input-thumb {
     width: 100%;
-    max-height: 150px;
+    max-height: 120px;
     object-fit: contain;
     display: block;
-    margin-bottom: var(--space-xs);
+    margin-bottom: 4px;
   }
   .input-info {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    min-width: 0;
   }
   .input-info a {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .source-card {
-    border: 1px solid var(--color-border);
-    padding: var(--space-sm);
-    margin-bottom: var(--space-sm);
-    font-size: var(--text-sm);
-  }
-  .source-card__field {
-    margin-bottom: 6px;
-    font-size: var(--text-sm);
-  }
-  .source-card__label {
-    display: block;
-    color: var(--color-muted);
-    font-size: 0.6rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    margin-bottom: 1px;
-  }
 
-  .extraction-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 4px 0;
-    border-bottom: 1px dotted var(--color-border);
-    font-size: var(--text-sm);
-  }
-  .extraction-item .status-ok {
-    color: #080;
-  }
-  .extraction-item .status-fail {
-    color: #c00;
-  }
-  .extraction-item .status-pending {
-    color: var(--color-muted);
-  }
-
-  .detail-actions {
-    display: flex;
-    gap: var(--space-sm);
-    margin-top: var(--space-lg);
-    padding-top: var(--space-md);
-    border-top: 2px solid var(--color-text);
-  }
-
-  @media (max-width: 640px) {
-    .detail-layout {
-      grid-template-columns: 1fr;
-    }
-  }
-</style>
-
-<!--
-  Global styles for the Extracted Text panel. These selectors must NOT be
-  scoped because the panel's DOM is built at runtime via `innerHTML`, and
-  those nodes don't carry Astro's per-component data-astro-cid attribute —
-  so a scoped `.et-body pre` selector would silently fail to match.
--->
-<style is:global>
-  .et-card {
-    border: 2px solid var(--color-text);
-    background: var(--color-surface);
-    box-shadow: 4px 4px 0 var(--color-text);
-  }
-  .et-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-sm);
-    padding: 6px var(--space-sm);
-    border-bottom: 2px solid var(--color-text);
-    background: var(--color-bg);
-    flex-wrap: wrap;
-  }
-  .et-label {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-sm);
-    flex-wrap: wrap;
-    min-width: 0;
-  }
-  .et-kind {
-    font-size: var(--text-sm);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1pt;
-  }
-  .et-stats {
-    font-size: 0.65rem;
-    color: var(--color-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-  }
-  .et-copy {
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    padding: 4px 10px;
-    border: 2px solid var(--color-text);
-    background: var(--color-bg);
-    color: var(--color-text);
-    cursor: pointer;
-    box-shadow: 2px 2px 0 var(--color-text);
-    flex-shrink: 0;
-  }
-  .et-copy:hover {
-    background: var(--color-surface-2);
-  }
-  .et-copy:active {
-    transform: translate(2px, 2px);
-    box-shadow: none;
-  }
-  .et-body {
+  /* Extracted-text card collapse + Show all toggle */
+  .extracted-text-card .brutal-card__body {
     position: relative;
     max-height: 240px;
     overflow: hidden;
-    padding: var(--space-sm);
   }
-  .et-body[data-expanded='true'] {
+  .extracted-text-card .brutal-card__body[data-expanded='true'] {
     max-height: 600px;
     overflow: auto;
   }
-  .et-body[data-empty='true'] {
+  .extracted-text-card .brutal-card__body[data-empty='true'] {
     color: var(--color-muted);
     font-style: italic;
     text-align: center;
     padding: var(--space-md);
     font-size: var(--text-sm);
   }
-  .et-body pre {
+  .extracted-text-card pre {
     margin: 0;
     font-family: var(--font-mono);
     font-size: var(--text-sm);
@@ -520,7 +435,7 @@ import Admin from '../../../layouts/Admin.astro';
     overflow-wrap: anywhere;
     color: var(--color-text);
   }
-  .et-fade {
+  .extracted-text-fade {
     position: absolute;
     bottom: 0;
     left: 0;
@@ -533,13 +448,15 @@ import Admin from '../../../layouts/Admin.astro';
     );
     pointer-events: none;
   }
-  .et-body[data-expanded='true'] .et-fade {
+  .extracted-text-card
+    .brutal-card__body[data-expanded='true']
+    .extracted-text-fade {
     display: none;
   }
-  .et-toggle {
+  .extracted-text-toggle {
     display: block;
     width: 100%;
-    padding: 6px;
+    padding: 8px;
     border: none;
     border-top: 2px solid var(--color-text);
     background: var(--color-bg);
@@ -549,11 +466,39 @@ import Admin from '../../../layouts/Admin.astro';
     text-transform: uppercase;
     letter-spacing: 0.5pt;
     cursor: pointer;
+    min-height: 36px;
   }
-  .et-toggle:hover {
+  .extracted-text-toggle:hover {
     background: var(--color-surface-2);
   }
+  .extracted-text-toggle:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -2px;
+  }
+
+  /* Action bar — primary commands cluster left, Delete pushes right. */
+  .detail-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    margin-top: var(--space-lg);
+    padding-top: var(--space-md);
+    border-top: 2px solid var(--color-text);
+    align-items: center;
+  }
+  .detail-actions .action-btn--danger {
+    margin-left: auto;
+  }
+  @media (max-width: 720px) {
+    /* On narrow viewports `margin-left: auto` still aligns danger right
+       within the row, which keeps it visually demoted from primary
+       commands while every button stays tap-friendly. */
+    .detail-actions .action-btn {
+      min-height: 40px;
+    }
+  }
 </style>
+
 
 <script>
   import { addItemsToWorkspace } from '../../../lib/workspace';
@@ -747,21 +692,342 @@ import Admin from '../../../layouts/Admin.astro';
       </div>`;
     }
 
+    function escapeHtml(s: string): string {
+      return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function fieldRow(label: string, valueHtml: string): string {
+      return `<div class="field-row"><div class="field-row__label">${label}</div><div class="field-row__value">${valueHtml}</div></div>`;
+    }
+
+    // Color-bucket classifier preserved from the legacy metadata renderer —
+    // groups a hex into one of ~12 named buckets for the color-filter
+    // search links.
+    function hexToColorGroup(c: string): string {
+      const hex = c.replace('#', '');
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      const l = (r + g + b) / (3 * 255);
+      const sat = max > 0 ? (max - min) / max : 0;
+      if (l < 0.1) return 'black';
+      if (l > 0.9) return 'white';
+      if (sat < 0.1) return 'gray';
+      let h = 0;
+      if (max !== min) {
+        if (max === r) h = 60 * (((g - b) / (max - min)) % 6);
+        else if (max === g) h = 60 * ((b - r) / (max - min) + 2);
+        else h = 60 * ((r - g) / (max - min) + 4);
+      }
+      if (h < 0) h += 360;
+      if (sat < 0.3 && h > 10 && h < 50) return l < 0.45 ? 'brown' : 'beige';
+      if (sat < 0.2) return 'gray';
+      if (h < 10 || h >= 350) return 'red';
+      if (h < 35) return 'orange';
+      if (h < 55) return 'yellow';
+      if (h < 160) return 'green';
+      if (h < 195) return 'teal';
+      if (h < 260) return 'blue';
+      if (h < 300) return 'purple';
+      return 'pink';
+    }
+
+    // Build the visible-by-default Metadata field list, plus the chrome
+    // (hash / MIME / description / timestamps) tucked behind a <details>.
+    // Includes an Extraction row that surfaces failures inline.
+    function renderMetadata(item: any, atelierLabel: string | null) {
+      const bodyEl = document.getElementById('metadata-body')!;
+      const chromeBodyEl = document.getElementById('metadata-chrome-body')!;
+
+      const rows: string[] = [];
+
+      rows.push(fieldRow('Type', escapeHtml(item.media_type || '--')));
+
+      // Size + duration combined into one terse row when both are known.
+      const sizeStr = item.file_size_bytes ? formatSize(item.file_size_bytes) : null;
+      const durSec =
+        item.video_meta?.duration_seconds ??
+        item.audio_meta?.duration_seconds ??
+        null;
+      const durStr = durSec != null ? `${durSec.toFixed(1)}s` : null;
+      const sizeRow = [sizeStr, durStr].filter(Boolean).join(' · ');
+      if (sizeRow) rows.push(fieldRow('Size', escapeHtml(sizeRow)));
+
+      // Dimensions for visual media.
+      const w = item.image_meta?.width ?? item.video_meta?.width;
+      const h = item.image_meta?.height ?? item.video_meta?.height;
+      if (w || h) rows.push(fieldRow('Dim', `${w ?? '?'} × ${h ?? '?'}`));
+
+      // Audio specifics — sample rate / channels.
+      if (item.audio_meta) {
+        const a = item.audio_meta;
+        const audioBits = [
+          a.sample_rate ? `${a.sample_rate} Hz` : null,
+          a.channels ? `${a.channels}ch` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        if (audioBits) rows.push(fieldRow('Audio', escapeHtml(audioBits)));
+      }
+      if (item.video_meta?.fps) {
+        rows.push(fieldRow('FPS', String(item.video_meta.fps)));
+      }
+      if (item.image_meta?.format) {
+        rows.push(fieldRow('Format', escapeHtml(item.image_meta.format)));
+      }
+
+      // Palette — swatches + clickable color-group chips. Atelier outputs
+      // often skip color extraction so guard for that.
+      const dc = item.image_meta?.dominant_colors;
+      if (dc) {
+        try {
+          const colors: string[] =
+            typeof dc === 'string' ? JSON.parse(dc) : dc || [];
+          if (colors.length > 0) {
+            const swatches = colors
+              .map(
+                (c) =>
+                  `<span style="display:inline-block;width:24px;height:24px;background:${escapeHtml(c)};border:1px solid var(--color-border);"></span>`,
+              )
+              .join(' ');
+            rows.push(
+              fieldRow(
+                'Palette',
+                `<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">${swatches}</div>`,
+              ),
+            );
+            const groups = [...new Set(colors.map(hexToColorGroup))];
+            const groupLinks = groups
+              .map(
+                (g) =>
+                  `<a href="/admin/search?colorgroup=${encodeURIComponent(g)}" class="tag-chip">${escapeHtml(g)}</a>`,
+              )
+              .join(' ');
+            rows.push(
+              fieldRow(
+                'Colors',
+                `<div style="display:flex;gap:4px;flex-wrap:wrap;">${groupLinks}</div>`,
+              ),
+            );
+          }
+        } catch {}
+      }
+
+      if (item.created_at) {
+        rows.push(
+          fieldRow(
+            'Created',
+            escapeHtml(new Date(item.created_at).toLocaleDateString()),
+          ),
+        );
+      }
+
+      // Extraction row — folded in from the old separate section. 95% of
+      // items have no failures, so most renders just show OK in green.
+      const failures = item.extraction_failures || [];
+      const unresolved = failures.filter((f: any) => !f.resolved);
+      if (failures.length === 0) {
+        rows.push(
+          fieldRow('Extraction', `<span class="status-pill status-pill--ok">OK</span>`),
+        );
+      } else if (unresolved.length === 0) {
+        rows.push(
+          fieldRow(
+            'Extraction',
+            `<span class="status-pill status-pill--ok">OK</span> <span style="color:var(--color-muted);font-size:0.7rem;">(${failures.length} resolved)</span>`,
+          ),
+        );
+      } else {
+        const detail = unresolved
+          .map(
+            (f: any) =>
+              `<div style="font-size:0.7rem;margin-top:2px;"><strong>${escapeHtml(f.extraction_type || '?')}:</strong> ${escapeHtml(f.error_message || `failed after ${f.attempts} attempt${f.attempts === 1 ? '' : 's'}`)}</div>`,
+          )
+          .join('');
+        rows.push(
+          fieldRow(
+            'Extraction',
+            `<span class="status-pill status-pill--fail">${unresolved.length} failed</span>${detail}`,
+          ),
+        );
+      }
+
+      bodyEl.innerHTML = rows.join('');
+
+      // ── File chrome (collapsed disclosure): the boring data you almost
+      // never need but still want one click away.
+      const chromeRows: string[] = [];
+      chromeRows.push(
+        fieldRow('Filename', escapeHtml(item.filename || '--')),
+      );
+      chromeRows.push(fieldRow('MIME', escapeHtml(item.mime_type || '--')));
+      chromeRows.push(
+        fieldRow(
+          'Bytes',
+          item.file_size_bytes
+            ? escapeHtml(String(item.file_size_bytes))
+            : '--',
+        ),
+      );
+      chromeRows.push(
+        fieldRow(
+          'Description',
+          atelierLabel ||
+            (item.description ? escapeHtml(item.description) : '--'),
+        ),
+      );
+      if (item.updated_at && item.updated_at !== item.created_at) {
+        chromeRows.push(
+          fieldRow(
+            'Modified',
+            escapeHtml(new Date(item.updated_at).toLocaleString()),
+          ),
+        );
+      }
+      chromeRows.push(
+        fieldRow(
+          'Created',
+          escapeHtml(
+            item.created_at
+              ? new Date(item.created_at).toLocaleString()
+              : '--',
+          ),
+        ),
+      );
+      chromeRows.push(
+        fieldRow(
+          'SHA-256',
+          `<code style="font-size:0.65rem;color:var(--color-muted);word-break:break-all;">${escapeHtml(item.sha256 || '--')}</code>`,
+        ),
+      );
+      chromeBodyEl.innerHTML = chromeRows.join('');
+    }
+
+    // Build the Provenance card: Origin (sources) + Lineage
+    // (inputs/outputs). Linked latents are mounted as a Svelte island and
+    // stay outside this function.
+    async function renderProvenance(item: any) {
+      const rowsEl = document.getElementById('provenance-rows')!;
+      const rows: string[] = [];
+
+      const sources = item.sources || [];
+      if (sources.length === 0) {
+        rows.push(fieldRow('Origin', '<em style="color:var(--color-muted);">unknown</em>'));
+      } else {
+        rows.push(
+          fieldRow(
+            'Origin',
+            sources
+              .map((s: any) => {
+                const kindLabel =
+                  ({
+                    slack_file: 'Slack',
+                    slack_link: 'Slack',
+                    upload: 'Upload',
+                    job_output: 'Job',
+                  } as Record<string, string>)[s.source_type] ||
+                  s.source_type ||
+                  'Source';
+                let meta: any = null;
+                try {
+                  meta = s.source_metadata
+                    ? JSON.parse(s.source_metadata)
+                    : null;
+                } catch {}
+                const parts: string[] = [];
+                parts.push(escapeHtml(kindLabel));
+                if (s.source_channel)
+                  parts.push(`#${escapeHtml(s.source_channel)}`);
+                if (meta?.poster) parts.push(`@${escapeHtml(meta.poster)}`);
+                if (s.created_at)
+                  parts.push(
+                    escapeHtml(
+                      new Date(s.created_at).toLocaleDateString(),
+                    ),
+                  );
+                let line = parts.join(' · ');
+                if (s.slack_link) {
+                  line += ` · <a href="${escapeHtml(s.slack_link)}" target="_blank" rel="noopener">↗ Slack</a>`;
+                }
+                if (s.source_url) {
+                  line += ` · <a href="${escapeHtml(s.source_url)}" target="_blank" rel="noopener">↗ link</a>`;
+                }
+                if (meta?.job_id) {
+                  const jobLabel = `${meta.app_name || 'job'}${meta.recipe ? ' / ' + meta.recipe : ''}`;
+                  line += ` · <a href="/admin/jobs/detail?id=${encodeURIComponent(meta.job_id)}">${escapeHtml(jobLabel)}</a>`;
+                }
+                if (s.slack_message_text) {
+                  line += `<div style="font-size:0.7rem;color:var(--color-muted);margin-top:2px;">${escapeHtml(s.slack_message_text)}</div>`;
+                }
+                return `<div>${line}</div>`;
+              })
+              .join(''),
+          ),
+        );
+      }
+
+      // Lineage — pulled from /api/media/{id}/related, async. Render a
+      // placeholder first so the row reserves space, then fill in once
+      // the fetch resolves.
+      rows.push(
+        fieldRow(
+          'Lineage',
+          '<span id="provenance-lineage" style="color:var(--color-muted);font-style:italic;">checking…</span>',
+        ),
+      );
+      rowsEl.innerHTML = rows.join('');
+
+      try {
+        const relResp = await fetch(`/api/media/${mediaId}/related`, {
+          credentials: 'include',
+        });
+        if (!relResp.ok) {
+          document.getElementById('provenance-lineage')!.innerHTML =
+            '<em style="color:var(--color-muted);">none</em>';
+          return;
+        }
+        const related = await relResp.json();
+        const ins: any[] = related.inputs || [];
+        const outs: any[] = related.outputs || [];
+        const lineageEl = document.getElementById('provenance-lineage')!;
+        if (ins.length === 0 && outs.length === 0) {
+          lineageEl.innerHTML =
+            '<em style="color:var(--color-muted);">none</em>';
+          return;
+        }
+        const sections: string[] = [];
+        if (ins.length > 0) {
+          sections.push(
+            `<div><strong style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5pt;color:var(--color-muted);">Inputs (${ins.length})</strong><div class="inputs-grid">${ins.map(renderRelatedCard).join('')}</div></div>`,
+          );
+        }
+        if (outs.length > 0) {
+          sections.push(
+            `<div style="margin-top:6px;"><strong style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5pt;color:var(--color-muted);">Outputs (${outs.length})</strong><div class="inputs-grid">${outs.map(renderRelatedCard).join('')}</div></div>`,
+          );
+        }
+        lineageEl.outerHTML = `<div>${sections.join('')}</div>`;
+      } catch {
+        const el = document.getElementById('provenance-lineage');
+        if (el)
+          el.innerHTML = '<em style="color:var(--color-muted);">none</em>';
+      }
+    }
+
     async function renderDetail() {
       const item = currentItem;
       document.getElementById('detail-title')!.textContent =
         item.filename || 'Untitled';
-      document.getElementById('meta-filename')!.textContent =
-        item.filename || '--';
-      document.getElementById('meta-type')!.textContent =
-        item.media_type || '--';
-      document.getElementById('meta-mime')!.textContent =
-        item.mime_type || '--';
-      document.getElementById('meta-size')!.textContent = item.file_size_bytes
-        ? formatSize(item.file_size_bytes)
-        : '--';
-      document.getElementById('meta-hash')!.textContent = item.sha256 || '--';
-      // Parse atelier metadata from description (JSON blob stored on save)
+
+      // Parse atelier metadata from description (JSON blob stored on save).
+      // The pretty label flows into both the file-chrome Description row
+      // and the HD PNG button visibility check.
       let atelierMeta: any = null;
       try {
         if (item.description?.startsWith('{"atelier":')) {
@@ -771,7 +1037,6 @@ import Admin from '../../../layouts/Admin.astro';
           }
         }
       } catch {}
-
       const botLabel = atelierMeta?.bot
         ? (
             {
@@ -785,16 +1050,15 @@ import Admin from '../../../layouts/Admin.astro';
         : atelierMeta?.atelier === 'bullethole'
           ? 'Bullet Hole'
           : null;
-      document.getElementById('meta-description')!.textContent = atelierMeta
+      const atelierLabel = atelierMeta
         ? `${botLabel || 'Punctum'}${atelierMeta.seed ? ' · seed ' + atelierMeta.seed : ''}`
-        : item.description || '--';
+        : null;
 
       // HD PNG button — only for Atelier images with a known source
       const hdPngBtn = document.getElementById(
         'hd-png-btn',
       ) as HTMLAnchorElement;
       if (atelierMeta?.atelier === 'bullethole' && atelierMeta.source_id) {
-        // Legacy bullethole format → redirect to punctum with bot=bullethole
         const p = new URLSearchParams({
           autoexport: 'png',
           bot: 'bullethole',
@@ -827,14 +1091,8 @@ import Admin from '../../../layouts/Admin.astro';
           hdPngBtn.style.display = '';
         }
       }
-      document.getElementById('meta-created')!.textContent = item.created_at
-        ? new Date(item.created_at).toLocaleString()
-        : '--';
-      document.getElementById('meta-updated')!.textContent = item.updated_at
-        ? new Date(item.updated_at).toLocaleString()
-        : '--';
 
-      // Slack share button
+      // Slack share button (image / audio only)
       const slackBtn = document.getElementById(
         'slack-share-btn',
       ) as HTMLButtonElement;
@@ -884,7 +1142,7 @@ import Admin from '../../../layouts/Admin.astro';
       const previewEl = document.getElementById('detail-preview')!;
       const thumbUrl = `/api/media/${mediaId}/thumbnail`;
       if (item.media_type === 'image') {
-        previewEl.innerHTML = `<img src="${fileUrl}" alt="${item.filename || ''}" />`;
+        previewEl.innerHTML = `<img src="${fileUrl}" alt="${escapeHtml(item.filename || '')}" />`;
       } else if (item.media_type === 'audio') {
         previewEl.innerHTML = `<audio controls src="${fileUrl}"></audio>`;
       } else if (item.media_type === 'video') {
@@ -893,210 +1151,49 @@ import Admin from '../../../layouts/Admin.astro';
         previewEl.innerHTML = `<span style="color: var(--color-muted); text-transform: uppercase;">No preview available</span>`;
       }
 
-      // Type-specific metadata
-      const typeMeta = document.getElementById('type-meta')!;
-      if (item.media_type === 'image' && item.image_meta) {
-        const m = item.image_meta;
-        typeMeta.innerHTML = `
-          <div class="meta-section"><div class="meta-label">Dimensions</div><div class="meta-value">${m.width || '?'} x ${m.height || '?'}</div></div>
-          <div class="meta-section"><div class="meta-label">Format</div><div class="meta-value">${m.format || '--'}</div></div>
-          ${
-            m.dominant_colors
-              ? (() => {
-                  const colors =
-                    typeof m.dominant_colors === 'string'
-                      ? JSON.parse(m.dominant_colors)
-                      : m.dominant_colors || [];
-                  function hexToGroup(c: string): string {
-                    const hex = c.replace('#', '');
-                    const r = parseInt(hex.substring(0, 2), 16),
-                      g = parseInt(hex.substring(2, 4), 16),
-                      b = parseInt(hex.substring(4, 6), 16);
-                    const max = Math.max(r, g, b),
-                      min = Math.min(r, g, b);
-                    const l = (r + g + b) / (3 * 255),
-                      sat = max > 0 ? (max - min) / max : 0;
-                    if (l < 0.1) return 'black';
-                    if (l > 0.9) return 'white';
-                    if (sat < 0.1) return 'gray';
-                    let h = 0;
-                    if (max !== min) {
-                      if (max === r) h = 60 * (((g - b) / (max - min)) % 6);
-                      else if (max === g) h = 60 * ((b - r) / (max - min) + 2);
-                      else h = 60 * ((r - g) / (max - min) + 4);
-                    }
-                    if (h < 0) h += 360;
-                    if (sat < 0.3 && h > 10 && h < 50)
-                      return l < 0.45 ? 'brown' : 'beige';
-                    if (sat < 0.2) return 'gray';
-                    if (h < 10 || h >= 350) return 'red';
-                    if (h < 35) return 'orange';
-                    if (h < 55) return 'yellow';
-                    if (h < 160) return 'green';
-                    if (h < 195) return 'teal';
-                    if (h < 260) return 'blue';
-                    if (h < 300) return 'purple';
-                    return 'pink';
-                  }
-                  // Deduplicate groups
-                  const groups = [...new Set(colors.map(hexToGroup))];
-                  const swatches = colors
-                    .map(
-                      (c: string) =>
-                        `<span style="display:inline-block;width:28px;height:28px;background:${c};border:1px solid #ccc;border-radius:3px;vertical-align:middle;"></span>`,
-                    )
-                    .join(' ');
-                  const groupLinks = groups
-                    .map(
-                      (g: string) =>
-                        `<a href="/admin/search?colorgroup=${g}" class="tag-chip" style="text-decoration:none;">${g}</a>`,
-                    )
-                    .join(' ');
-                  return (
-                    `<div class="meta-section"><div class="meta-label">Palette</div><div class="meta-value" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">${swatches}</div></div>` +
-                    `<div class="meta-section"><div class="meta-label">Color Groups</div><div class="meta-value">${groupLinks}</div></div>`
-                  );
-                })()
-              : ''
-          }
-        `;
-      } else if (item.media_type === 'audio' && item.audio_meta) {
-        const m = item.audio_meta;
-        typeMeta.innerHTML = `
-          <div class="meta-section"><div class="meta-label">Duration</div><div class="meta-value">${m.duration_seconds ? m.duration_seconds.toFixed(1) + 's' : '--'}</div></div>
-          <div class="meta-section"><div class="meta-label">Sample Rate</div><div class="meta-value">${m.sample_rate ? m.sample_rate + ' Hz' : '--'}</div></div>
-          <div class="meta-section"><div class="meta-label">Channels</div><div class="meta-value">${m.channels || '--'}</div></div>
-        `;
-      } else if (item.media_type === 'video' && item.video_meta) {
-        const m = item.video_meta;
-        typeMeta.innerHTML = `
-          <div class="meta-section"><div class="meta-label">Duration</div><div class="meta-value">${m.duration_seconds ? m.duration_seconds.toFixed(1) + 's' : '--'}</div></div>
-          <div class="meta-section"><div class="meta-label">Resolution</div><div class="meta-value">${m.width || '?'} x ${m.height || '?'}</div></div>
-          <div class="meta-section"><div class="meta-label">Codec</div><div class="meta-value">${m.codec || '--'}</div></div>
-        `;
-      } else {
-        typeMeta.innerHTML = '';
-      }
-
-      // Extracted text (OCR for images, whisper transcript for audio/video)
-      renderExtractedText(item);
-
-      // Tags
+      renderMetadata(item, atelierLabel);
       renderTags();
-
-      // Sources
-      const sourcesEl = document.getElementById('sources-list')!;
-      const sources = item.sources || [];
-      if (sources.length === 0) {
-        sourcesEl.innerHTML =
-          '<p style="color: var(--color-muted); font-size: var(--text-sm);">No source information.</p>';
-      } else {
-        sourcesEl.innerHTML = sources
-          .map((s: any) => {
-            const sourceLabel =
-              {
-                slack_file: 'Slack File',
-                slack_link: 'Slack Link',
-                upload: 'Upload',
-                job_output: 'Job Output',
-              }[s.source_type] ||
-              s.source_type ||
-              'Unknown';
-            let meta: any = null;
-            try {
-              meta = s.source_metadata ? JSON.parse(s.source_metadata) : null;
-            } catch {}
-            return `
-          <div class="source-card">
-            <div class="source-card__field"><span class="source-card__label">Source:</span> ${sourceLabel}</div>
-            ${s.source_channel ? `<div class="source-card__field"><span class="source-card__label">Channel:</span> ${s.source_channel}</div>` : ''}
-            ${s.slack_link ? `<div class="source-card__field"><span class="source-card__label">Slack:</span> <a href="${s.slack_link}" target="_blank" style="color: var(--color-accent);">Open in Slack</a></div>` : ''}
-            ${s.slack_message_text ? `<div class="source-card__field"><span class="source-card__label">Message:</span> ${s.slack_message_text}</div>` : ''}
-            ${s.source_url ? `<div class="source-card__field"><span class="source-card__label">URL:</span> <a href="${s.source_url}" target="_blank" style="color: var(--color-accent);">${s.source_url}</a></div>` : ''}
-            ${s.reaction_count ? `<div class="source-card__field"><span class="source-card__label">Reactions:</span> ${s.reaction_count}</div>` : ''}
-            ${meta?.job_id ? `<div class="source-card__field"><span class="source-card__label">Job:</span> <a href="/admin/jobs/detail?id=${meta.job_id}" style="color: var(--color-accent);">${meta.app_name}${meta.recipe ? ' / ' + meta.recipe : ''}</a></div>` : ''}
-            <div class="source-card__field"><span class="source-card__label">Added:</span> ${s.created_at ? new Date(s.created_at).toLocaleString() : '--'}</div>
-          </div>
-        `;
-          })
-          .join('');
-      }
-
-      // Related items (inputs/outputs) via job linkage
-      try {
-        const relResp = await fetch(`/api/media/${mediaId}/related`, {
-          credentials: 'include',
-        });
-        if (relResp.ok) {
-          const related = await relResp.json();
-          if (related.inputs?.length > 0) {
-            const inputsSection = document.getElementById('inputs-section')!;
-            const inputsList = document.getElementById('inputs-list')!;
-            inputsSection.style.display = '';
-            inputsList.innerHTML = related.inputs
-              .map((inp: any) => renderRelatedCard(inp))
-              .join('');
-          }
-          if (related.outputs?.length > 0) {
-            const outputsSection = document.getElementById('outputs-section')!;
-            const outputsList = document.getElementById('outputs-list')!;
-            outputsSection.style.display = '';
-            outputsList.innerHTML = related.outputs
-              .map((out: any) => renderRelatedCard(out))
-              .join('');
-          }
-        }
-      } catch {}
-
-      // Extraction failures
-      const extractionEl = document.getElementById('extraction-status')!;
-      const failures = item.extraction_failures || [];
-      if (failures.length === 0) {
-        extractionEl.innerHTML =
-          '<p style="color: var(--color-muted); font-size: var(--text-sm);">No extraction failures.</p>';
-      } else {
-        extractionEl.innerHTML = failures
-          .map((f: any) => {
-            const statusClass = f.resolved ? 'status-ok' : 'status-fail';
-            const statusText = f.resolved
-              ? 'resolved'
-              : `failed (${f.attempts} attempts)`;
-            return `<div class="extraction-item">
-            <span>${f.extraction_type || 'Unknown'}</span>
-            <span class="${statusClass}">${statusText}</span>
-            ${f.error_message ? `<span style="color: #c00; font-size: 0.65rem;">${f.error_message}</span>` : ''}
-          </div>`;
-          })
-          .join('');
-      }
+      renderExtractedText(item);
+      renderProvenance(item);
     }
 
-    // Render OCR text / whisper transcript in a unified collapsible panel.
-    // - null/undefined field → hide section entirely (extraction hasn't run)
-    // - empty string → show "nothing extracted" so it's clear whisper/OCR ran
+    // Render OCR text / whisper transcript into the static extracted-text
+    // card. Behaviour:
+    //  - null/undefined field → hide section entirely (extraction hasn't run)
+    //  - empty string → show "no text/speech detected" so it's clear that
+    //    whisper/OCR ran but found nothing
+    //  - non-empty → show with stats, Copy button, and collapse + Show all
+    //    when over 400 chars
     function renderExtractedText(item: any) {
-      const sectionEl = document.getElementById('extracted-text-section')!;
-      const panelEl = document.getElementById('extracted-text-panel')!;
+      const sectionEl = document.getElementById(
+        'extracted-text-section',
+      )! as HTMLElement;
       const headingEl = document.getElementById('extracted-text-heading')!;
+      const statsEl = document.getElementById('extracted-text-stats')!;
+      const copyBtn = document.getElementById(
+        'extracted-text-copy',
+      ) as HTMLButtonElement;
+      const bodyEl = document.getElementById(
+        'extracted-text-body',
+      ) as HTMLElement;
+      const toggleBtn = document.getElementById(
+        'extracted-text-toggle',
+      ) as HTMLButtonElement;
 
       let raw: string | null | undefined;
-      let kind = 'Extracted Text';
       let emptyLabel = 'nothing extracted';
       let sectionHeading = 'Extracted Text';
 
       if (item.media_type === 'image' && item.image_meta) {
         raw = item.image_meta.caption;
-        kind = 'OCR';
         sectionHeading = 'OCR Text';
         emptyLabel = 'no text detected in image';
       } else if (item.media_type === 'audio' && item.audio_meta) {
         raw = item.audio_meta.transcript;
-        kind = 'Transcript';
         sectionHeading = 'Transcript';
         emptyLabel = 'no speech detected';
       } else if (item.media_type === 'video' && item.video_meta) {
         raw = item.video_meta.audio_transcript;
-        kind = 'Transcript';
         sectionHeading = 'Transcript';
         emptyLabel = 'no speech detected';
       }
@@ -1106,8 +1203,10 @@ import Admin from '../../../layouts/Admin.astro';
         return;
       }
 
-      const text = String(raw);
-      const trimmed = text.trim();
+      sectionEl.style.display = '';
+      headingEl.textContent = sectionHeading;
+
+      const trimmed = String(raw).trim();
       const isEmpty = trimmed.length === 0;
       const wordCount = isEmpty
         ? 0
@@ -1115,91 +1214,59 @@ import Admin from '../../../layouts/Admin.astro';
       const charCount = trimmed.length;
       const isLong = charCount > 400;
 
-      headingEl.textContent = sectionHeading;
-      sectionEl.style.display = '';
-
-      const escape = (s: string) =>
-        s
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;');
-
-      const statsParts = isEmpty
-        ? [emptyLabel]
-        : [
-            `${wordCount} word${wordCount === 1 ? '' : 's'}`,
-            `${charCount} char${charCount === 1 ? '' : 's'}`,
-          ];
-      const stats = statsParts.join(' · ');
-
-      panelEl.innerHTML = `
-        <div class="et-card">
-          <div class="et-header">
-            <div class="et-label">
-              <span class="et-kind">${kind}</span>
-              <span class="et-stats">${stats}</span>
-            </div>
-            ${isEmpty ? '' : '<button class="et-copy" type="button" title="Copy to clipboard">Copy</button>'}
-          </div>
-          ${
-            isEmpty
-              ? `<div class="et-body" data-empty="true">— ${emptyLabel} —</div>`
-              : `<div class="et-body" data-expanded="${isLong ? 'false' : 'true'}">
-                  <pre>${escape(trimmed)}</pre>
-                  ${isLong ? '<div class="et-fade"></div>' : ''}
-                </div>
-                ${isLong ? '<button class="et-toggle" type="button">Show all</button>' : ''}`
-          }
-        </div>
-      `;
-
-      const copyBtn = panelEl.querySelector(
-        '.et-copy',
-      ) as HTMLButtonElement | null;
-      if (copyBtn) {
-        copyBtn.addEventListener('click', async () => {
-          try {
-            await navigator.clipboard.writeText(trimmed);
-            const original = copyBtn.textContent;
-            copyBtn.textContent = 'Copied ✓';
-            setTimeout(() => {
-              copyBtn.textContent = original;
-            }, 1500);
-          } catch {
-            (window as any).toast?.error('Copy failed');
-          }
-        });
+      if (isEmpty) {
+        statsEl.textContent = emptyLabel;
+        bodyEl.setAttribute('data-empty', 'true');
+        bodyEl.removeAttribute('data-expanded');
+        bodyEl.textContent = `— ${emptyLabel} —`;
+        copyBtn.style.display = 'none';
+        toggleBtn.style.display = 'none';
+        return;
       }
 
-      const toggleBtn = panelEl.querySelector(
-        '.et-toggle',
-      ) as HTMLButtonElement | null;
-      const bodyEl = panelEl.querySelector(
-        '.et-body',
-      ) as HTMLElement | null;
-      if (toggleBtn && bodyEl) {
-        toggleBtn.addEventListener('click', () => {
+      statsEl.textContent = `${wordCount} word${wordCount === 1 ? '' : 's'} · ${charCount} char${charCount === 1 ? '' : 's'}`;
+      bodyEl.removeAttribute('data-empty');
+      bodyEl.setAttribute('data-expanded', isLong ? 'false' : 'true');
+      bodyEl.innerHTML = `<pre>${escapeHtml(trimmed)}</pre>${isLong ? '<div class="extracted-text-fade"></div>' : ''}`;
+
+      copyBtn.style.display = '';
+      copyBtn.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(trimmed);
+          const original = copyBtn.textContent;
+          copyBtn.textContent = 'Copied ✓';
+          setTimeout(() => {
+            copyBtn.textContent = original;
+          }, 1500);
+        } catch {
+          (window as any).toast?.error('Copy failed');
+        }
+      };
+
+      if (isLong) {
+        toggleBtn.style.display = '';
+        toggleBtn.textContent = 'Show all';
+        toggleBtn.onclick = () => {
           const expanded = bodyEl.getAttribute('data-expanded') === 'true';
           bodyEl.setAttribute('data-expanded', String(!expanded));
           toggleBtn.textContent = expanded ? 'Show all' : 'Collapse';
-        });
+        };
+      } else {
+        toggleBtn.style.display = 'none';
       }
     }
 
     function renderTags() {
       const tagsEl = document.getElementById('tags-list')!;
-      const tags = currentItem.tags || [];
-      if (tags.length === 0) {
-        tagsEl.innerHTML =
-          '<span style="color: var(--color-muted); font-size: var(--text-sm);">No tags</span>';
-      } else {
-        tagsEl.innerHTML = tags
-          .map(
-            (tag: string) =>
-              `<span class="tag-chip"><a href="/admin/search?tag=${encodeURIComponent(tag)}" style="color:inherit;text-decoration:none;">${tag}</a><button data-remove-tag="${tag}" title="Remove">&times;</button></span>`,
-          )
-          .join('');
-      }
+      const tags: string[] = currentItem.tags || [];
+      // Empty state styled via `.tags-list:empty::before` in CSS, so an
+      // empty innerHTML is sufficient here.
+      tagsEl.innerHTML = tags
+        .map(
+          (tag) =>
+            `<span class="tag-chip"><a href="/admin/search?tag=${encodeURIComponent(tag)}">${escapeHtml(tag)}</a><button data-remove-tag="${escapeHtml(tag)}" aria-label="Remove tag ${escapeHtml(tag)}">&times;</button></span>`,
+        )
+        .join('');
     }
 
     // Tag autocomplete
