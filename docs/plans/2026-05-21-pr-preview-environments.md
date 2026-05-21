@@ -29,7 +29,7 @@ PR opened/sync ──▶ GH Action ──▶ scripts/dokku-pr-provision.sh
                                           ▼
                               https://pr-<N>.dev.a-u.supply
 PR closed/merged ──▶ GH Action ──▶ scripts/dokku-pr-destroy.sh ──▶ apps:destroy --force
-Weekly host cron ──▶ docker image prune -af --filter "until=168h"
+Daily host cron ──▶ docker image prune -af --filter "until=24h"  (safety net)
 ```
 
 ## Files
@@ -65,14 +65,15 @@ dig +short anything.dev.a-u.supply
 
 ### 2. Host crontab (dokku server)
 
+On the dokku host:
+
 ```
-ssh -t dokku
 sudo crontab -e
 # add:
-0 4 * * 0  docker image prune -af --filter "until=168h"
+0 4 * * *  docker image prune -af --filter "until=24h"
 ```
 
-Sweeps dangling images older than a week. Tagged images for running apps stay.
+Runs daily at 04:00. The `until=24h` filter prevents pruning any image less than a day old (safety margin around rebuilds); `-a` lets it remove tagged images that have no running container. The PR destroy script also runs `docker image prune -f` immediately on teardown, so this cron is the safety net rather than the primary mechanism.
 
 ### 3. Let's Encrypt email (one-time, global)
 
@@ -106,8 +107,8 @@ For the realistic case of 1 PR open at a time: ~250 MB extra RAM, ~200 MB extra 
 
 ## Cleanup
 
-- **Per-PR:** `apps:destroy --force` on PR close removes container, config, domain, cert, storage volume.
-- **Image bloat:** weekly `docker image prune` on the host.
+- **Per-PR:** `apps:destroy --force` on PR close removes container, config, domain, cert, storage volume. The destroy script then runs `docker image prune -f` to immediately reclaim the orphan layers (no wait for cron).
+- **Image bloat:** daily host cron mops up anything the per-PR prune missed.
 - **No artifacts leak into the repo** — snapshots happen server-side.
 
 ## Security notes
@@ -129,6 +130,16 @@ After DNS propagates and the workflow is merged:
 6. Make a second commit to the PR → preview updates, session still valid.
 7. Close PR → `ssh dokku apps:list` no longer shows `au-supply-pr-<N>`; URL stops resolving.
 8. `https://a-u.supply` unaffected throughout.
+
+## Triggering a preview on an already-open PR
+
+The workflow listens for `opened` / `synchronize` / `reopened` / `closed` events and does not fire on PRs that were open before it was merged. To get a preview for an existing PR, push an empty commit:
+
+```
+git commit --allow-empty -m "trigger preview" && git push
+```
+
+Or close and reopen the PR.
 
 ## Open items deferred to first real deploy
 
