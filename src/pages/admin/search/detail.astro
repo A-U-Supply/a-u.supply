@@ -67,6 +67,16 @@ import Admin from '../../../layouts/Admin.astro';
       </div>
     </div>
 
+    <!-- Extracted text (OCR captions / whisper transcripts) -->
+    <section
+      class="extracted-text-section"
+      id="extracted-text-section"
+      style="display:none;"
+    >
+      <h2 id="extracted-text-heading">Extracted Text</h2>
+      <div id="extracted-text-panel"></div>
+    </section>
+
     <!-- Tags section -->
     <div class="tags-section">
       <h2>Tags</h2>
@@ -259,20 +269,134 @@ import Admin from '../../../layouts/Admin.astro';
   .sources-section,
   .extraction-section,
   .threads-section,
-  .latent-links-section {
+  .latent-links-section,
+  .extracted-text-section {
     margin-top: var(--space-lg);
   }
   .tags-section h2,
   .sources-section h2,
   .extraction-section h2,
   .threads-section h2,
-  .latent-links-section h2 {
+  .latent-links-section h2,
+  .extracted-text-section h2 {
     font-size: var(--text-lg);
     text-transform: uppercase;
     letter-spacing: 1pt;
     margin-bottom: var(--space-sm);
     padding-bottom: var(--space-xs);
     border-bottom: 2px solid var(--color-text);
+  }
+
+  .et-card {
+    border: 2px solid var(--color-text);
+    background: var(--color-surface);
+    box-shadow: 4px 4px 0 var(--color-text);
+  }
+  .et-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    padding: 6px var(--space-sm);
+    border-bottom: 2px solid var(--color-text);
+    background: var(--color-bg);
+    flex-wrap: wrap;
+  }
+  .et-label {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+  }
+  .et-kind {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+  }
+  .et-stats {
+    font-size: 0.65rem;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+  .et-copy {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    padding: 4px 10px;
+    border: 2px solid var(--color-text);
+    background: var(--color-bg);
+    color: var(--color-text);
+    cursor: pointer;
+    box-shadow: 2px 2px 0 var(--color-text);
+  }
+  .et-copy:hover {
+    background: var(--color-surface-2);
+  }
+  .et-copy:active {
+    transform: translate(2px, 2px);
+    box-shadow: none;
+  }
+  .et-body {
+    position: relative;
+    max-height: 240px;
+    overflow: hidden;
+    padding: var(--space-sm);
+  }
+  .et-body[data-expanded='true'] {
+    max-height: 600px;
+    overflow: auto;
+  }
+  .et-body[data-empty='true'] {
+    color: var(--color-muted);
+    font-style: italic;
+    text-align: center;
+    padding: var(--space-md);
+    font-size: var(--text-sm);
+  }
+  .et-body pre {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--color-text);
+  }
+  .et-fade {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      var(--color-surface)
+    );
+    pointer-events: none;
+  }
+  .et-body[data-expanded='true'] .et-fade {
+    display: none;
+  }
+  .et-toggle {
+    display: block;
+    width: 100%;
+    padding: 6px;
+    border: none;
+    border-top: 2px solid var(--color-text);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    cursor: pointer;
+  }
+  .et-toggle:hover {
+    background: var(--color-surface-2);
   }
 
   .tags-list {
@@ -763,13 +887,9 @@ import Admin from '../../../layouts/Admin.astro';
       const typeMeta = document.getElementById('type-meta')!;
       if (item.media_type === 'image' && item.image_meta) {
         const m = item.image_meta;
-        const captionHTML = m.caption
-          ? `<div class="meta-section"><div class="meta-label">OCR Text</div><div class="meta-value" style="white-space:pre-wrap;font-family:var(--font-mono,monospace);font-size:var(--text-sm);">${m.caption.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div></div>`
-          : '';
         typeMeta.innerHTML = `
           <div class="meta-section"><div class="meta-label">Dimensions</div><div class="meta-value">${m.width || '?'} x ${m.height || '?'}</div></div>
           <div class="meta-section"><div class="meta-label">Format</div><div class="meta-value">${m.format || '--'}</div></div>
-          ${captionHTML}
           ${
             m.dominant_colors
               ? (() => {
@@ -847,6 +967,9 @@ import Admin from '../../../layouts/Admin.astro';
       } else {
         typeMeta.innerHTML = '';
       }
+
+      // Extracted text (OCR for images, whisper transcript for audio/video)
+      renderExtractedText(item);
 
       // Tags
       renderTags();
@@ -935,6 +1058,121 @@ import Admin from '../../../layouts/Admin.astro';
           </div>`;
           })
           .join('');
+      }
+    }
+
+    // Render OCR text / whisper transcript in a unified collapsible panel.
+    // - null/undefined field → hide section entirely (extraction hasn't run)
+    // - empty string → show "nothing extracted" so it's clear whisper/OCR ran
+    function renderExtractedText(item: any) {
+      const sectionEl = document.getElementById('extracted-text-section')!;
+      const panelEl = document.getElementById('extracted-text-panel')!;
+      const headingEl = document.getElementById('extracted-text-heading')!;
+
+      let raw: string | null | undefined;
+      let kind = 'Extracted Text';
+      let emptyLabel = 'nothing extracted';
+      let sectionHeading = 'Extracted Text';
+
+      if (item.media_type === 'image' && item.image_meta) {
+        raw = item.image_meta.caption;
+        kind = 'OCR';
+        sectionHeading = 'OCR Text';
+        emptyLabel = 'no text detected in image';
+      } else if (item.media_type === 'audio' && item.audio_meta) {
+        raw = item.audio_meta.transcript;
+        kind = 'Transcript';
+        sectionHeading = 'Transcript';
+        emptyLabel = 'no speech detected';
+      } else if (item.media_type === 'video' && item.video_meta) {
+        raw = item.video_meta.audio_transcript;
+        kind = 'Transcript';
+        sectionHeading = 'Transcript';
+        emptyLabel = 'no speech detected';
+      }
+
+      if (raw === null || raw === undefined) {
+        sectionEl.style.display = 'none';
+        return;
+      }
+
+      const text = String(raw);
+      const trimmed = text.trim();
+      const isEmpty = trimmed.length === 0;
+      const wordCount = isEmpty
+        ? 0
+        : trimmed.split(/\s+/).filter(Boolean).length;
+      const charCount = trimmed.length;
+      const isLong = charCount > 400;
+
+      headingEl.textContent = sectionHeading;
+      sectionEl.style.display = '';
+
+      const escape = (s: string) =>
+        s
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+
+      const statsParts = isEmpty
+        ? [emptyLabel]
+        : [
+            `${wordCount} word${wordCount === 1 ? '' : 's'}`,
+            `${charCount} char${charCount === 1 ? '' : 's'}`,
+          ];
+      const stats = statsParts.join(' · ');
+
+      panelEl.innerHTML = `
+        <div class="et-card">
+          <div class="et-header">
+            <div class="et-label">
+              <span class="et-kind">${kind}</span>
+              <span class="et-stats">${stats}</span>
+            </div>
+            ${isEmpty ? '' : '<button class="et-copy" type="button" title="Copy to clipboard">Copy</button>'}
+          </div>
+          ${
+            isEmpty
+              ? `<div class="et-body" data-empty="true">— ${emptyLabel} —</div>`
+              : `<div class="et-body" data-expanded="${isLong ? 'false' : 'true'}">
+                  <pre>${escape(trimmed)}</pre>
+                  ${isLong ? '<div class="et-fade"></div>' : ''}
+                </div>
+                ${isLong ? '<button class="et-toggle" type="button">Show all</button>' : ''}`
+          }
+        </div>
+      `;
+
+      const copyBtn = panelEl.querySelector(
+        '.et-copy',
+      ) as HTMLButtonElement | null;
+      if (copyBtn) {
+        copyBtn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(trimmed);
+            const original = copyBtn.textContent;
+            copyBtn.textContent = 'Copied ✓';
+            setTimeout(() => {
+              copyBtn.textContent = original;
+            }, 1500);
+          } catch {
+            (window as any).toast?.error('Copy failed');
+          }
+        });
+      }
+
+      const toggleBtn = panelEl.querySelector(
+        '.et-toggle',
+      ) as HTMLButtonElement | null;
+      const bodyEl = panelEl.querySelector(
+        '.et-body',
+      ) as HTMLElement | null;
+      if (toggleBtn && bodyEl) {
+        toggleBtn.addEventListener('click', () => {
+          const expanded = bodyEl.getAttribute('data-expanded') === 'true';
+          bodyEl.setAttribute('data-expanded', String(!expanded));
+          toggleBtn.textContent = expanded ? 'Show all' : 'Collapse';
+        });
       }
     }
 
