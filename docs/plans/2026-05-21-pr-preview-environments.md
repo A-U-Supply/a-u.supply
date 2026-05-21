@@ -6,32 +6,48 @@ Until now, the only way to test changes against real auth and real integrations 
 
 **Decisions:**
 
-- One ephemeral Dokku app per open PR (`au-supply-pr-<N>` → `pr-<N>.dev.a-u.supply`).
-- User DB snapshotted from prod on first deploy of each PR. Subsequent pushes to the same PR preserve the snapshot, so login sessions survive across pushes.
+- **Opt-in per PR via the `preview` label.** No label = no build, no preview. Eliminates spend on PRs that don't need one.
+- One ephemeral Dokku app per labeled PR (`au-supply-pr-<N>` → `pr-<N>.dev.a-u.supply`).
+- Images built on GitHub runners (not the Dokku host). Dokku just pulls.
 - External integrations (fold, etc.) point at prod. A buggy PR can write into prod fold; accepted, with `STAGING=1` set as a future-proof escape hatch.
 - Wildcard scoped under `*.dev.a-u.supply` so it can't shadow `fold`, `@`, `www`, or future first-level subdomains.
 - Per-host HTTP-01 Let's Encrypt cert per PR app (no DNS-01 / Namecheap API integration needed).
 - Worker process disabled in PR envs (`worker=0`) to keep RAM cost down; web only.
 - Prod model cache mounted **read-only** into PR envs so they don't re-download ML models.
+- **Previews start with an empty user DB.** Register a test account in the preview to exercise login flows. (The prod-DB snapshot mechanism was removed after it raced uvicorn startup and corrupted SQLite locks.)
+
+## How to use it
+
+| Action | Result |
+|---|---|
+| Add `preview` label to a PR | Build the image on GH runners, deploy to `pr-<N>.dev.a-u.supply` |
+| Push to a PR that has `preview` | Rebuild + redeploy |
+| Remove `preview` label | Destroy the Dokku app + delete the GHCR image |
+| Close a PR that has `preview` | Same as removing the label |
+| Open / push without the label | Nothing happens |
+
+The preview URL is posted as a sticky comment on the PR once the deploy completes.
 
 ## Architecture
 
 ```
-PR opened/sync ──▶ GH Action: build job   ──▶ docker build on GH runner
-                                              push to ghcr.io/a-u-supply/au-supply-preview:pr-N-<sha>
-                ──▶ GH Action: deploy job ──▶ scripts/dokku-pr-provision.sh
-                                              ├─ apps:create (idempotent)
-                                              ├─ domains:set pr-<N>.dev.a-u.supply
-                                              ├─ storage:ensure + storage:mount
-                                              ├─ storage:mount au-supply-model-cache:ro
-                                              ├─ config:set SECRET_KEY STAGING=1 PR_NUMBER
-                                              ├─ ps:scale worker=0 web=1
-                                              ├─ git:from-image (Dokku PULLS the prebuilt image)
-                                              ├─ snapshot prod au.db via dokku run (first deploy only)
-                                              └─ letsencrypt:enable
-                                          ▼
+PR labeled `preview`   ──▶ GH Action: build  ──▶ docker build on GH runner
+                                                 push to ghcr.io/a-u-supply/au-supply-preview:pr-N-<sha>
+                       ──▶ GH Action: deploy ──▶ scripts/dokku-pr-provision.sh
+                                                 ├─ apps:create (idempotent)
+                                                 ├─ domains:set pr-<N>.dev.a-u.supply
+                                                 ├─ storage:ensure + storage:mount
+                                                 ├─ storage:mount au-supply-model-cache:ro
+                                                 ├─ config:set SECRET_KEY STAGING=1 PR_NUMBER
+                                                 ├─ ps:scale worker=0 web=1
+                                                 ├─ git:from-image (Dokku pulls the prebuilt image)
+                                                 ├─ wait up to 150s for web to be running
+                                                 └─ letsencrypt:enable
+                                             ▼
                               https://pr-<N>.dev.a-u.supply
-PR closed/merged ──▶ GH Action: destroy ──▶ scripts/dokku-pr-destroy.sh ──▶ apps:destroy --force
+PR label removed / closed ──▶ GH Action: destroy ──▶ apps:destroy --force
+                                                     docker rmi the PR's image
+                                                     delete the GHCR package version
 Daily host cron ──▶ docker image prune -af --filter "until=24h"  (safety net)
 ```
 
