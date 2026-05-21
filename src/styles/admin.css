@@ -176,6 +176,9 @@
   padding-bottom: calc(var(--space-lg) + 96px);
   max-width: 960px;
   min-width: 0;
+  /* `clip` (not `hidden`) so we don't establish a scroll container that
+     would break `position: sticky` descendants. */
+  overflow-x: clip;
 }
 
 .admin-main h1 {
