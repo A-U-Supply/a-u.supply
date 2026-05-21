@@ -27,8 +27,13 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 @event.listens_for(engine, "connect")
 def _set_sqlite_pragma(dbapi_connection, connection_record):
     cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL")
+    # busy_timeout must come *before* journal_mode: if multiple connections race
+    # the WAL bootstrap on a fresh DB, the loser hits "database is locked"
+    # immediately unless busy_timeout is already set. Bit PR preview envs
+    # (empty DBs at first boot, uvicorn + background tasks opening connections
+    # in parallel) and applies any time a brand-new au.db is opened concurrently.
     cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.execute("PRAGMA journal_mode=WAL")
     # Without this, SQLite silently ignores every ON DELETE CASCADE in our
     # schema — deleting a media_items row leaves orphan project_items rows
     # behind, which surface in the UI as "(unknown)" entries.
