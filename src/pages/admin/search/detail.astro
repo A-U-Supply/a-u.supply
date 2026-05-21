@@ -220,12 +220,12 @@ import Admin from '../../../layouts/Admin.astro';
   /* All sections (brutal-cards + the threads-island wrapper + action
      row) are spaced via the page container's flex gap. Section labels
      live INSIDE each card's head bar; there are no external h2s above
-     cards. `--space-xl` (32-64px clamped) — chunky enough for clear
-     section separation now that the flex container actually applies. */
+     cards. `--space-lg` (24-40px clamped) — sections clearly separated
+     without feeling spread out. */
   #detail-content {
     display: flex;
     flex-direction: column;
-    gap: var(--space-xl);
+    gap: var(--space-lg);
   }
   .detail-header {
     display: flex;
