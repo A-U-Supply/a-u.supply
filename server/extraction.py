@@ -184,6 +184,13 @@ def extract_text_ocr(file_path: str) -> str | None:
 
     Returns the extracted text or None if no text is found or
     pytesseract/tesseract is not available.
+
+    Strategy: upscale small images so Tesseract has enough resolution for
+    its segmenter (it targets ~300 DPI), then try PSM 3 (auto layout) first.
+    If that returns nothing, fall back to PSM 11 (sparse text) which is
+    designed for finding text in arbitrary photos rather than document
+    layouts — this catches banner/sign text on photographic backgrounds
+    that PSM 3's auto-segmenter misses entirely.
     """
     try:
         import pytesseract
@@ -194,7 +201,15 @@ def extract_text_ocr(file_path: str) -> str | None:
 
     with Image.open(file_path) as img:
         img = img.convert("RGB")
+        min_dim = min(img.size)
+        if min_dim < 1000:
+            scale = 1000 / min_dim
+            new_size = (int(img.width * scale), int(img.height * scale))
+            img = img.resize(new_size, Image.LANCZOS)
+
         text = pytesseract.image_to_string(img).strip()
+        if not text:
+            text = pytesseract.image_to_string(img, config="--psm 11").strip()
 
     return text if text else None
 
