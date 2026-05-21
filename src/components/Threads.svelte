@@ -765,7 +765,12 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    margin: calc(-1 * var(--space-sm));
+    /* margin-bottom intentionally 0: the .single flex column has
+       `gap: var(--space-sm)` between items. A symmetric `-space-sm`
+       margin-bottom would cancel that gap and the next item (textarea
+       / link / markdown body) would butt straight up against the head
+       bar's border. */
+    margin: calc(-1 * var(--space-sm)) calc(-1 * var(--space-sm)) 0;
     padding: 6px var(--space-sm);
     background: var(--color-bg);
     border-bottom: 2px solid var(--color-text);
@@ -796,7 +801,9 @@
     text-decoration: underline;
   }
   .single__empty-head {
-    margin: calc(-1 * var(--space-sm));
+    /* See `.single__head` comment — bottom margin must not be negative
+       or the textarea below collapses against the head's border. */
+    margin: calc(-1 * var(--space-sm)) calc(-1 * var(--space-sm)) 0;
     padding: 6px var(--space-sm);
     background: var(--color-bg);
     border-bottom: 2px solid var(--color-text);

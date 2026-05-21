@@ -559,6 +559,13 @@ import Admin from '../../../layouts/Admin.astro';
   let threadsInstance: any = null;
   let latentLinksInstance: any = null;
   let voteChipInstance: any = null;
+  // Monotonic counter — every `mountVoteChip` call bumps this and
+  // captures the value; after its async fetch returns, the call
+  // bails if the counter has moved on (another mount started). Without
+  // this, two rapid mounts (page load + re-extract / page transition)
+  // could both reach the `mount(VoteChip, …)` step and end up with two
+  // copies of the buttons stacked in the same target.
+  let voteChipGen = 0;
 
   document.addEventListener('astro:before-swap', () => {
     if (threadsInstance) {
@@ -629,6 +636,10 @@ import Admin from '../../../layouts/Admin.astro';
     async function mountVoteChip(item: any) {
       const target = document.getElementById('vote-chip-island');
       if (!target) return;
+      // Claim this generation. If anyone else starts a mount after us,
+      // they'll bump the counter and our post-await checks below will
+      // bail out, avoiding the double-mount race.
+      const myGen = ++voteChipGen;
       if (voteChipInstance) {
         try {
           unmount(voteChipInstance);
@@ -647,11 +658,18 @@ import Admin from '../../../layouts/Admin.astro';
           r.ok ? r.json() : { up: [], down: [] },
         ),
       ]);
+      // Another mount call started after us — bail out and let the
+      // newer call own the target.
+      if (myGen !== voteChipGen) return;
       const myVote: -1 | 0 | 1 = mineRes.up?.includes(mediaId)
         ? 1
         : mineRes.down?.includes(mediaId)
           ? -1
           : 0;
+      // Final guard in case the navigation handler unmounted us during
+      // the await — clearing again is cheap and ensures the new mount
+      // is the only child.
+      target.innerHTML = '';
       voteChipInstance = mount(VoteChip, {
         target,
         props: {
