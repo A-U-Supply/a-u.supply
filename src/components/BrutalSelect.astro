@@ -1,0 +1,62 @@
+---
+/*
+ * BrutalSelect — drop-in replacement for native <select> with brutalist
+ * chrome (2px border, 2px hard shadow, hover invert, chevron overlay).
+ *
+ * Mirrors the .sort-select pattern from /admin/search/index.astro; for
+ * pages that don't need bits-ui's accessible popover (most filter
+ * dropdowns), this gets you the look without an island.
+ *
+ * Slots:
+ *   - default — <option> children, server-rendered
+ *
+ * Props:
+ *   - id        — element id
+ *   - name      — form field name
+ *   - value     — currently selected value (sets `selected` on matching option via the consumer's <option> markup)
+ *   - ariaLabel — passed through as aria-label
+ *   - class     — extra class names on the <select>
+ *   - wrapClass — extra class names on the wrapper span
+ *   - title     — tooltip
+ *   - disabled  — disable the select
+ */
+interface Props {
+  id?: string;
+  name?: string;
+  value?: string | number;
+  ariaLabel?: string;
+  class?: string;
+  wrapClass?: string;
+  title?: string;
+  disabled?: boolean;
+}
+const {
+  id,
+  name,
+  value,
+  ariaLabel,
+  class: className,
+  wrapClass,
+  title,
+  disabled,
+} = Astro.props;
+const selectClass = ['brutal-select', className].filter(Boolean).join(' ');
+const wrapperClass = ['brutal-select-wrap', wrapClass]
+  .filter(Boolean)
+  .join(' ');
+---
+
+<span class={wrapperClass}>
+  <select
+    id={id}
+    name={name}
+    class={selectClass}
+    aria-label={ariaLabel}
+    title={title}
+    disabled={disabled}
+    value={value}
+  >
+    <slot />
+  </select>
+  <span class="brutal-select-chevron" aria-hidden="true">▾</span>
+</span>

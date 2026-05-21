@@ -1,0 +1,74 @@
+---
+/*
+ * BrutalCard — the canonical card primitive for admin pages.
+ * Wraps a section in `.brutal-card` chrome (2px border, 4px hard shadow)
+ * with an optional header bar (.brutal-card__head) and a body slot.
+ *
+ * Slots:
+ *   - default — body content
+ *   - action  — single button or link rendered on the right of the header
+ *   - meta    — small uppercase muted text in the header (e.g. counts)
+ *
+ * Props:
+ *   - title     — required when the header is shown
+ *   - level     — h-tag level for the title (2 by default; use 3 inside sections)
+ *   - hideHead  — render only the body (when the card carries a different chrome)
+ *   - inverted  — paint the header bar fg-on-bg-inverted (selection states)
+ *   - flush     — body has no padding (the slot owns spacing)
+ *   - id        — passed to the wrapper div
+ *   - class     — extra class names appended to the wrapper
+ */
+interface Props {
+  title?: string;
+  level?: 2 | 3;
+  hideHead?: boolean;
+  inverted?: boolean;
+  flush?: boolean;
+  id?: string;
+  class?: string;
+}
+const {
+  title,
+  level = 2,
+  hideHead = false,
+  inverted = false,
+  flush = false,
+  id,
+  class: className,
+} = Astro.props;
+const HeadingTag = `h${level}` as 'h2' | 'h3';
+const wrapperClass = ['brutal-card', className].filter(Boolean).join(' ');
+const headClass = [
+  'brutal-card__head',
+  inverted ? 'brutal-card__head--inverted' : null,
+]
+  .filter(Boolean)
+  .join(' ');
+const bodyClass = [
+  'brutal-card__body',
+  flush ? 'brutal-card__body--flush' : null,
+]
+  .filter(Boolean)
+  .join(' ');
+const hasMeta = Astro.slots.has('meta');
+const hasAction = Astro.slots.has('action');
+---
+
+<div class={wrapperClass} id={id}>
+  {
+    !hideHead && (title || hasMeta || hasAction) && (
+      <div class={headClass}>
+        {title && <HeadingTag>{title}</HeadingTag>}
+        {hasMeta && (
+          <span class="brutal-card__head-meta">
+            <slot name="meta" />
+          </span>
+        )}
+        {hasAction && <slot name="action" />}
+      </div>
+    )
+  }
+  <div class={bodyClass}>
+    <slot />
+  </div>
+</div>

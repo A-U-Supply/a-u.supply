@@ -1,0 +1,133 @@
+---
+/*
+ * BrutalPagination — the windowed pagination shape pulled out of
+ * /admin/search/index.astro. Renders as native <a href> links so server-
+ * rendered pages get full functionality with no JS; client islands that
+ * want to drive it without a navigation can pass `useEvents` and
+ * intercept clicks via the `pagination:go` CustomEvent.
+ *
+ * Window rules: always render first + last; render `windowSize` pages
+ * around the current page; insert ellipses where there are gaps.
+ *
+ * Props:
+ *   - current     — 1-based current page
+ *   - total       — total pages (omit to render no page list, just prev/next)
+ *   - hrefFor     — function that returns the href for a given page (defaults to `#`)
+ *   - windowSize  — number of pages to show on each side of current (default 1)
+ *   - label       — aria-label for the <nav>
+ *   - useEvents   — when true, every page link gets data-pagination-page so
+ *                   client JS can listen for `pagination:go` { page }
+ *                   CustomEvent and prevent default navigation
+ */
+interface Props {
+  current: number;
+  total?: number;
+  hrefFor?: (page: number) => string;
+  windowSize?: number;
+  label?: string;
+  useEvents?: boolean;
+}
+const {
+  current,
+  total,
+  hrefFor = (p: number) => `#page-${p}`,
+  windowSize = 1,
+  label = 'Pagination',
+  useEvents = false,
+} = Astro.props;
+const hasTotal = typeof total === 'number' && total > 0;
+const prevDisabled = current <= 1;
+const nextDisabled = hasTotal ? current >= total! : false;
+
+function windowed(c: number, t: number, w: number): (number | 'ellipsis')[] {
+  if (t <= 1) return [];
+  const pages = new Set<number>();
+  pages.add(1);
+  pages.add(t);
+  for (let i = c - w; i <= c + w; i++) {
+    if (i >= 1 && i <= t) pages.add(i);
+  }
+  const sorted = [...pages].sort((a, b) => a - b);
+  const out: (number | 'ellipsis')[] = [];
+  let last = 0;
+  for (const p of sorted) {
+    if (last && p - last > 1) out.push('ellipsis');
+    out.push(p);
+    last = p;
+  }
+  return out;
+}
+const items = hasTotal ? windowed(current, total!, windowSize) : [];
+const dataEvents = useEvents ? 'true' : undefined;
+---
+
+<nav class="pagination" aria-label={label} data-pagination-events={dataEvents}>
+  <a
+    class="pagination__page pagination__nav"
+    href={prevDisabled ? '#' : hrefFor(1)}
+    aria-label="First page"
+    title="First page"
+    aria-disabled={prevDisabled ? 'true' : undefined}
+    data-pagination-page={useEvents ? '1' : undefined}
+    tabindex={prevDisabled ? -1 : undefined}>&laquo;</a
+  >
+  <a
+    class="pagination__page pagination__nav"
+    href={prevDisabled ? '#' : hrefFor(current - 1)}
+    aria-label="Previous page"
+    title="Previous page"
+    aria-disabled={prevDisabled ? 'true' : undefined}
+    data-pagination-page={useEvents ? String(current - 1) : undefined}
+    tabindex={prevDisabled ? -1 : undefined}>&lsaquo;</a
+  >
+  {
+    hasTotal && (
+      <ol class="pagination__pages">
+        {items.map((item) =>
+          item === 'ellipsis' ? (
+            <li class="pagination__ellipsis" aria-hidden="true">
+              …
+            </li>
+          ) : (
+            <li>
+              <a
+                class={`pagination__page${item === current ? ' is-current' : ''}`}
+                href={item === current ? '#' : hrefFor(item)}
+                aria-current={item === current ? 'page' : undefined}
+                data-pagination-page={useEvents ? String(item) : undefined}
+              >
+                {item}
+              </a>
+            </li>
+          ),
+        )}
+      </ol>
+    )
+  }
+  <a
+    class="pagination__page pagination__nav"
+    href={nextDisabled ? '#' : hrefFor(current + 1)}
+    aria-label="Next page"
+    title="Next page"
+    aria-disabled={nextDisabled ? 'true' : undefined}
+    data-pagination-page={useEvents && hasTotal
+      ? String(current + 1)
+      : undefined}
+    tabindex={nextDisabled ? -1 : undefined}>&rsaquo;</a
+  >
+  {
+    hasTotal && (
+      <a
+        class="pagination__page pagination__nav"
+        href={nextDisabled ? '#' : hrefFor(total!)}
+        aria-label="Last page"
+        title="Last page"
+        aria-disabled={nextDisabled ? 'true' : undefined}
+        data-pagination-page={useEvents ? String(total) : undefined}
+        tabindex={nextDisabled ? -1 : undefined}
+      >
+        &raquo;
+      </a>
+    )
+  }
+</nav>
