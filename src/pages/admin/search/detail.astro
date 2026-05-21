@@ -220,11 +220,14 @@ import Admin from '../../../layouts/Admin.astro';
   /* All sections (brutal-cards + the threads-island wrapper + action
      row) are spaced via the page container's flex gap. Section labels
      live INSIDE each card's head bar; there are no external h2s above
-     cards. */
+     cards.
+     Chunkier gap than `--space-xl` (which still read as smooshed across
+     four+ identical-chrome cards) — 48-96px between siblings so each
+     card visibly stands alone in the stack. */
   #detail-content {
     display: flex;
     flex-direction: column;
-    gap: var(--space-xl);
+    gap: clamp(3rem, 2.25rem + 4vw, 6rem);
   }
   .detail-header {
     display: flex;
@@ -685,7 +688,13 @@ import Admin from '../../../layouts/Admin.astro';
         if (!res.ok) throw new Error('Failed to load media');
         currentItem = await res.json();
         loadingEl.style.display = 'none';
-        contentEl.style.display = 'block';
+        // `flex`, not `block` — the page container relies on
+        // `display: flex; gap: …` to space every section. An inline
+        // `display: block` here outranks the stylesheet and silently
+        // collapses the gap to 0, which is why the cards have read as
+        // smooshed against each other no matter how many times the gap
+        // value was bumped.
+        contentEl.style.display = 'flex';
         renderDetail();
         mountThreads(currentItem.filename || 'untitled');
         mountVoteChip(currentItem);
