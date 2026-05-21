@@ -841,6 +841,14 @@ if __name__ == "__main__":
 
         text = extract_text_ocr(full_path)
         print(f"new ocr result: {text!r}")
+
+        if "--write" in sys.argv[3:]:
+            from server.extraction import _upsert_meta, _sync_to_search
+            _upsert_meta(db, MediaImageMeta, item.id, {"caption": text or ""})
+            print("wrote caption to DB")
+            db.refresh(item)
+            _sync_to_search(db, item)
+            print("synced to search index")
         db.close()
 
     elif cmd == "backfill-thumbnails":
