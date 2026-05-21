@@ -3,6 +3,9 @@ import Admin from '../../../layouts/Admin.astro';
 ---
 
 <Admin title="Latent" current="latents">
+  <div id="desktop-link-bar" class="desktop-link-bar">
+    <a id="desktop-view-link" class="desktop-view-link" href="#" title="Open as desktop">⊞ Desktop view</a>
+  </div>
   <div id="header" class="latent-header">
     <div class="header-skeleton"></div>
   </div>
@@ -18,6 +21,24 @@ import Admin from '../../../layouts/Admin.astro';
 </Admin>
 
 <style>
+  .desktop-link-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: var(--space-xs);
+  }
+  .desktop-view-link {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    text-decoration: none;
+    padding: 3px 8px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+  }
+  .desktop-view-link:hover {
+    color: var(--color-text);
+    border-color: var(--color-text);
+  }
   .latent-header {
     display: flex;
     flex-direction: column;
@@ -602,4 +623,12 @@ import Admin from '../../../layouts/Admin.astro';
     initialized = false;
   });
   init();
+
+  // Wire the "Desktop view" link once we know the project ID
+  function wireDesktopLink() {
+    const link = document.getElementById('desktop-view-link') as HTMLAnchorElement | null;
+    if (link && id) link.href = `/admin/latents/${id}/desktop`;
+  }
+  document.addEventListener('astro:page-load', wireDesktopLink);
+  wireDesktopLink();
 </script>

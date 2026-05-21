@@ -187,6 +187,16 @@ if "web_audio_file_path" not in _track_cols:
     with engine.begin() as _conn:
         _conn.execute(_sa_text("ALTER TABLE tracks ADD COLUMN web_audio_file_path TEXT"))
 
+# Migrate existing DB: add desktop_x / desktop_y to project_slots (Latents desktop UI)
+_slot_cols_desktop = [c["name"] for c in _sa_inspect(engine).get_columns("project_slots")]
+for _col, _ddl in (
+    ("desktop_x", "ALTER TABLE project_slots ADD COLUMN desktop_x REAL"),
+    ("desktop_y", "ALTER TABLE project_slots ADD COLUMN desktop_y REAL"),
+):
+    if _col not in _slot_cols_desktop:
+        with engine.begin() as _conn:
+            _conn.execute(_sa_text(_ddl))
+
 
 # Re-apply Meilisearch index settings on startup so additions to
 # FILTERABLE_ATTRIBUTES / SORTABLE_ATTRIBUTES (vote_score, upvoter_user_ids,

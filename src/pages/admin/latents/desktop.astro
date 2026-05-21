@@ -1,0 +1,30 @@
+---
+import Admin from '../../../layouts/Admin.astro';
+import LatentDesktop from '../../../components/LatentDesktop.svelte';
+
+const projectId = Astro.url.pathname.split('/')[4]; // /admin/latents/{id}/desktop
+---
+
+<Admin title="Desktop" current="latents">
+  <LatentDesktop client:only="svelte" projectId={projectId} />
+</Admin>
+
+<style is:global>
+  /* Hide the admin shell chrome in desktop mode — the canvas takes the full viewport */
+  body:has(.desktop) .admin-shell {
+    display: contents;
+  }
+  body:has(.desktop) .admin-main {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden;
+  }
+  body:has(.desktop) .sidebar,
+  body:has(.desktop) .sidebar__toggle,
+  body:has(.desktop) .sidebar__backdrop {
+    display: none !important;
+  }
+  body:has(.desktop) .player-slot {
+    display: none;
+  }
+</style>

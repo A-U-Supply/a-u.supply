@@ -155,6 +155,8 @@ def _slot_summary(
         "repo_path": s.repo_path,
         "repo_ref": s.repo_ref,
         "run_command": s.run_command,
+        "desktop_x": s.desktop_x,
+        "desktop_y": s.desktop_y,
         "created_at": s.created_at.isoformat() if s.created_at else None,
         "updated_at": s.updated_at.isoformat() if s.updated_at else None,
     }
@@ -241,6 +243,8 @@ class UpdateSlotBody(BaseModel):
     repo_path: str | None = None     # set to "" to clear
     repo_ref: str | None = None      # set to "" to clear (falls back to repo default branch)
     run_command: str | None = None   # set to "" to clear (falls back to `python <path>`)
+    desktop_x: float | None = None   # desktop canvas position (0–100%)
+    desktop_y: float | None = None
 
 
 class ReorderSlotsBody(BaseModel):
@@ -622,6 +626,10 @@ def update_slot(
         s.repo_ref = body.repo_ref or None
     if body.run_command is not None:
         s.run_command = body.run_command or None
+    if body.desktop_x is not None:
+        s.desktop_x = body.desktop_x
+    if body.desktop_y is not None:
+        s.desktop_y = body.desktop_y
     db.commit()
     db.refresh(s)
     return _slot_summary(s, _pin_map_for_slot(db, s.id))

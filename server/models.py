@@ -515,6 +515,8 @@ class ProjectSlot(Base):
     repo_path = Column(String, nullable=True)
     repo_ref = Column(String, nullable=True)         # commit SHA, branch, or tag
     run_command = Column(String, nullable=True)      # override for sandboxed runs
+    desktop_x = Column(Float, nullable=True)         # desktop canvas position (0–100%)
+    desktop_y = Column(Float, nullable=True)
     created_at = Column(DateTime, nullable=False, default=_utcnow)
     updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
 
