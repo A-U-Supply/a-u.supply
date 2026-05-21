@@ -399,7 +399,12 @@
     </div>
   {/if}
 
-  {#if communityLabel}
+  <!-- Skip the community label when rendering as a single thread: the
+       `↗ fold` link inside `.single__head` already deep-links to the
+       discussion (and from there to its community), and the label was
+       floating outside the brutal-card chrome on the media detail
+       page. -->
+  {#if communityLabel && !singleThread}
     <div class="threads__community">
       in
       {#if communityUrl}

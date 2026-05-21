@@ -27,60 +27,56 @@ import Admin from '../../../layouts/Admin.astro';
       labels never duplicate.
     -->
 
-    <div class="detail-grid">
-      <!-- PREVIEW: chrome only, no header bar (the content IS the label) -->
-      <section class="brutal-card preview-card" aria-label="Preview">
-        <div
-          class="brutal-card__body brutal-card__body--flush"
-          id="detail-preview"
-        ></div>
-      </section>
+    <!-- PREVIEW + METADATA: one unified brutal-card. Two columns on
+         desktop (preview left, metadata right, both align-items:start so
+         the row doesn't stretch); stack on mobile. File-chrome disclosure
+         becomes a full-width footer of the same card. -->
+    <section
+      class="brutal-card preview-meta-card"
+      aria-labelledby="preview-meta-h"
+    >
+      <h2 id="preview-meta-h" class="visually-hidden">
+        Preview and metadata
+      </h2>
+      <div class="preview-meta-grid">
+        <div class="preview-area" id="detail-preview"></div>
+        <div class="metadata-area" id="metadata-body"></div>
+      </div>
+      <details class="disclosure">
+        <summary>File chrome</summary>
+        <div class="disclosure__body" id="metadata-chrome-body"></div>
+      </details>
+    </section>
 
-      <!-- METADATA: visible essentials, then chrome behind disclosure -->
-      <section class="brutal-card metadata-card" aria-labelledby="meta-h">
-        <div class="brutal-card__head">
-          <h2 id="meta-h">Metadata</h2>
-        </div>
-        <div class="brutal-card__body" id="metadata-body"></div>
-        <details class="disclosure">
-          <summary>File chrome</summary>
-          <div class="disclosure__body" id="metadata-chrome-body"></div>
-        </details>
-      </section>
-    </div>
-
-    <!-- CURATION: vote chip + tags merged into one card -->
+    <!-- CURATION: vote chip + tags merged into one card. Body is two
+         stacked blocks (vote, tags) with a thin divider between — the
+         field-row label column added noise without value here, the
+         chips and input are already self-describing. -->
     <section class="brutal-card curation-card" aria-labelledby="cur-h">
       <div class="brutal-card__head">
         <h2 id="cur-h">Curation</h2>
       </div>
-      <div class="brutal-card__body">
-        <div class="field-row">
-          <div class="field-row__label">Verdict</div>
-          <div class="field-row__value">
-            <div id="vote-chip-island" class="vote-chip-island"></div>
-          </div>
+      <div class="brutal-card__body curation-body">
+        <div class="curation-vote">
+          <div id="vote-chip-island" class="vote-chip-island"></div>
         </div>
-        <div class="field-row curation-tags">
-          <div class="field-row__label">Tags</div>
-          <div class="field-row__value">
-            <div class="tags-list" id="tags-list"></div>
-            <div class="tag-add">
-              <input
-                type="text"
-                id="tag-input"
-                placeholder="Add tag..."
-                autocomplete="off"
-                aria-label="Add tag"
-              />
-              <div
-                class="tag-suggestions"
-                id="tag-suggestions"
-                style="display:none;"
-              >
-              </div>
-              <button class="action-btn" id="add-tag-btn">Add</button>
+        <div class="curation-tags">
+          <div class="tags-list" id="tags-list"></div>
+          <div class="tag-add">
+            <input
+              type="text"
+              id="tag-input"
+              placeholder="Add tag..."
+              autocomplete="off"
+              aria-label="Add tag"
+            />
+            <div
+              class="tag-suggestions"
+              id="tag-suggestions"
+              style="display:none;"
+            >
             </div>
+            <button class="action-btn" id="add-tag-btn">Add</button>
           </div>
         </div>
       </div>
@@ -245,58 +241,106 @@ import Admin from '../../../layouts/Admin.astro';
     flex: 1 1 auto;
   }
 
-  /* Preview-left / metadata-right grid; collapses on narrow viewports. */
-  .detail-grid {
+  /* Visually-hidden h2 — keeps the card aria-labelledby a real heading
+     without putting a redundant "Preview and metadata" label on screen
+     (the image IS the label). */
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* Preview + metadata laid out side-by-side inside a single brutal-card.
+     Both columns start-aligned so the row never stretches to match the
+     taller side — a 220px preview no longer leaves a 200px void next to
+     a tall metadata column. */
+  .preview-meta-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-lg);
+    grid-template-columns: minmax(180px, 1fr) 1fr;
+    gap: var(--space-md);
+    padding: var(--space-sm);
     align-items: start;
   }
   @media (max-width: 720px) {
-    .detail-grid {
+    .preview-meta-grid {
       grid-template-columns: 1fr;
     }
   }
-
-  .preview-card .brutal-card__body {
+  .preview-area {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    min-height: 200px;
-    padding: var(--space-sm);
+    min-width: 0;
   }
-  .preview-card img {
+  .preview-area img,
+  .preview-area video {
     max-width: 100%;
-    max-height: 500px;
+    max-height: 320px;
     object-fit: contain;
   }
-  .preview-card audio,
-  .preview-card video {
+  .preview-area audio,
+  .preview-area video {
     width: 100%;
-    max-width: 100%;
+  }
+  .metadata-area {
+    min-width: 0;
+  }
+  .preview-meta-card .field-row__label {
+    /* Tighter label column inside the metadata pane; we're working
+       with less horizontal real estate when sharing a row with the
+       preview. */
+    flex: 0 0 72px;
+  }
+  .preview-meta-card .disclosure {
+    /* The disclosure sits as a full-width footer of the unified card.
+       Override its default top border with the card's chrome 2px so it
+       reads as a section divider, not a hairline. */
+    border-top-width: 2px;
+    border-top-color: var(--color-text);
   }
 
-  /* Curation card */
-  .vote-chip-island {
-    display: block;
+  /* Curation card — vote block above tags, divided by a thin rule. */
+  .curation-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+  .curation-vote {
+    /* Vote chip is loud by default (lg buttons + Acclaimed/Disavowed
+       voter lists). The buttons + counts are what matters at-a-glance;
+       hide the voter rows here so the card stays compact. Voter detail
+       is still visible elsewhere (e.g. the search-result chip island). */
     min-height: 32px;
   }
-  .curation-tags .field-row__value {
+  /* `!important` overrides VoteChip's component-scoped `.svelte-*`
+     selector — equal specificity would otherwise depend on stylesheet
+     order, which is brittle across builds. */
+  .curation-card .vote-block__voters {
+    display: none !important;
+  }
+  .curation-tags {
     display: flex;
     flex-direction: column;
     gap: var(--space-xs);
+    padding-top: var(--space-sm);
+    border-top: 1px dotted var(--color-border);
+  }
+  .vote-chip-island {
+    display: block;
   }
   .tags-list {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-    min-height: 1.5em;
   }
-  .tags-list:empty::before {
-    content: 'No tags';
-    color: var(--color-muted);
-    font-style: italic;
-    font-size: var(--text-sm);
+  .tags-list:empty {
+    display: none;
   }
   .tag-chip {
     display: inline-flex;
