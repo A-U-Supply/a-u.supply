@@ -811,9 +811,12 @@
   box-shadow: 4px 4px 0 var(--color-text);
   min-width: 0;
 }
-.brutal-card + .brutal-card {
-  margin-top: var(--space-lg);
-}
+/* The adjacent-sibling .brutal-card pair selector is intentionally
+   *not* used here: pages like /admin/search/detail interleave brutal
+   cards with Svelte-island wrappers (e.g. `<div id="threads-island">`
+   that hosts a `.single` brutal-card inside), which breaks the
+   `.brutal-card + .brutal-card` adjacency. The page is expected to
+   handle inter-card spacing with a parent container `gap` instead. */
 .brutal-card__head {
   display: flex;
   align-items: center;
@@ -883,7 +886,10 @@
   padding: var(--space-md);
 }
 
-/* Field list — label/value rows used inside Metadata, Provenance, etc. */
+/* Field list — label/value rows used inside Metadata, Provenance, etc.
+   Desktop: label sits in a fixed 96px gutter on the left so values
+   align in a clean column. Mobile (≤ 540px): label stacks above value
+   so short values don't leave a trail of whitespace across the row. */
 .field-row {
   display: flex;
   gap: var(--space-sm);
@@ -908,6 +914,15 @@
   min-width: 0;
   word-break: break-word;
   overflow-wrap: anywhere;
+}
+@media (max-width: 540px) {
+  .field-row {
+    flex-direction: column;
+    gap: 2px;
+  }
+  .field-row__label {
+    flex: none;
+  }
 }
 
 /* Disclosure (<details>/<summary>) — used for file-chrome reveal etc. */

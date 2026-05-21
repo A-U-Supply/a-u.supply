@@ -222,13 +222,22 @@ import Admin from '../../../layouts/Admin.astro';
 -->
 <style is:global>
 
+  /* All sections (cards + island wrappers + action row) are spaced
+     uniformly via the page container's flex gap, not per-section
+     margins. That works around Threads' island wrapper interrupting
+     the `.brutal-card + .brutal-card` adjacency chain. */
+  #detail-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xl);
+  }
   .detail-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
     gap: var(--space-sm);
-    margin-bottom: var(--space-md);
+    /* margin-bottom dropped — parent gap handles spacing. */
   }
   .detail-header h1 {
     margin-bottom: 0;
@@ -463,13 +472,6 @@ import Admin from '../../../layouts/Admin.astro';
     max-height: 600px;
     overflow: auto;
   }
-  .extracted-text-card .brutal-card__body[data-empty='true'] {
-    color: var(--color-muted);
-    font-style: italic;
-    text-align: center;
-    padding: var(--space-md);
-    font-size: var(--text-sm);
-  }
   .extracted-text-card pre {
     margin: 0;
     font-family: var(--font-mono);
@@ -520,12 +522,13 @@ import Admin from '../../../layouts/Admin.astro';
     outline-offset: -2px;
   }
 
-  /* Action bar — primary commands cluster left, Delete pushes right. */
+  /* Action bar — primary commands cluster left, Delete pushes right.
+     No `margin-top` needed; the page container's flex gap handles
+     spacing between every section. */
   .detail-actions {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-sm);
-    margin-top: var(--space-lg);
     padding-top: var(--space-md);
     border-top: 2px solid var(--color-text);
     align-items: center;
@@ -808,12 +811,15 @@ import Admin from '../../../layouts/Admin.astro';
       const h = item.image_meta?.height ?? item.video_meta?.height;
       if (w || h) rows.push(fieldRow('Dim', `${w ?? '?'} × ${h ?? '?'}`));
 
-      // Audio specifics — sample rate / channels.
+      // Audio specifics — sample rate / channels / bit depth combined
+      // into one line; bit_depth is rarely interesting so it tags onto
+      // the same row instead of getting its own.
       if (item.audio_meta) {
         const a = item.audio_meta;
         const audioBits = [
           a.sample_rate ? `${a.sample_rate} Hz` : null,
           a.channels ? `${a.channels}ch` : null,
+          a.bit_depth ? `${a.bit_depth}-bit` : null,
         ]
           .filter(Boolean)
           .join(' · ');
@@ -995,6 +1001,12 @@ import Admin from '../../../layouts/Admin.astro';
                       new Date(s.created_at).toLocaleDateString(),
                     ),
                   );
+                // Slack reactions are sometimes the *reason* an item got
+                // pulled into the archive — surface them inline rather
+                // than hiding the count in a sub-field.
+                if (s.reaction_count) {
+                  parts.push(`${s.reaction_count} reaction${s.reaction_count === 1 ? '' : 's'}`);
+                }
                 let line = parts.join(' · ');
                 if (s.slack_link) {
                   line += ` · <a href="${escapeHtml(s.slack_link)}" target="_blank" rel="noopener">↗ Slack</a>`;
@@ -1225,24 +1237,25 @@ import Admin from '../../../layouts/Admin.astro';
       ) as HTMLButtonElement;
 
       let raw: string | null | undefined;
-      let emptyLabel = 'nothing extracted';
       let sectionHeading = 'Extracted Text';
 
       if (item.media_type === 'image' && item.image_meta) {
         raw = item.image_meta.caption;
         sectionHeading = 'OCR Text';
-        emptyLabel = 'no text detected in image';
       } else if (item.media_type === 'audio' && item.audio_meta) {
         raw = item.audio_meta.transcript;
         sectionHeading = 'Transcript';
-        emptyLabel = 'no speech detected';
       } else if (item.media_type === 'video' && item.video_meta) {
         raw = item.video_meta.audio_transcript;
         sectionHeading = 'Transcript';
-        emptyLabel = 'no speech detected';
       }
 
-      if (raw === null || raw === undefined) {
+      // Hide the card entirely when there's nothing to show — null/undefined
+      // (extraction hasn't run) or empty string (it ran but found nothing).
+      // Either way, no transcript = no card; we don't surface that as UI noise.
+      const trimmed =
+        raw === null || raw === undefined ? '' : String(raw).trim();
+      if (trimmed.length === 0) {
         sectionEl.style.display = 'none';
         return;
       }
@@ -1250,23 +1263,9 @@ import Admin from '../../../layouts/Admin.astro';
       sectionEl.style.display = '';
       headingEl.textContent = sectionHeading;
 
-      const trimmed = String(raw).trim();
-      const isEmpty = trimmed.length === 0;
-      const wordCount = isEmpty
-        ? 0
-        : trimmed.split(/\s+/).filter(Boolean).length;
+      const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
       const charCount = trimmed.length;
       const isLong = charCount > 400;
-
-      if (isEmpty) {
-        statsEl.textContent = emptyLabel;
-        bodyEl.setAttribute('data-empty', 'true');
-        bodyEl.removeAttribute('data-expanded');
-        bodyEl.textContent = `— ${emptyLabel} —`;
-        copyBtn.style.display = 'none';
-        toggleBtn.style.display = 'none';
-        return;
-      }
 
       statsEl.textContent = `${wordCount} word${wordCount === 1 ? '' : 's'} · ${charCount} char${charCount === 1 ? '' : 's'}`;
       bodyEl.removeAttribute('data-empty');
