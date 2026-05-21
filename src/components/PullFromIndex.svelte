@@ -80,22 +80,27 @@
       oldest: 'created_at:asc',
       random: 'random',
       most_reactions: 'total_reaction_count:desc',
+      acclaim: 'vote_score:desc',
       largest: 'file_size_bytes:desc',
       longest: 'duration_seconds:desc',
     };
-    const outputIndexesForApi = filters.outputIndexes.filter(
-      (v) => v !== '__emulsion__',
-    );
+    // "Emulsion-only" mode: when the user picked exactly __emulsion__ and
+    // nothing else, send media_types=[] so the backend skips the public
+    // indexes entirely. Without this, default media_types (image/audio/video)
+    // makes the backend return all public hits in addition to emulsion.
+    const onlyEmulsion =
+      filters.outputIndexes.length === 1 &&
+      filters.outputIndexes[0] === '__emulsion__';
     const body: any = {
       query: q,
       per_page: 60,
-      media_types: filters.types,
+      media_types: onlyEmulsion ? [] : filters.types,
       sort: sortMap[filters.sortBy] || null,
       include_emulsion: filters.includeEmulsion,
       filters: {},
     };
-    if (outputIndexesForApi.length) {
-      body.filters.output_index = outputIndexesForApi;
+    if (filters.outputIndexes.length) {
+      body.filters.output_index = filters.outputIndexes;
     }
     if (filters.jobApp) body.filters.job_app = filters.jobApp;
     if (filters.tagsText.trim()) {
@@ -240,19 +245,7 @@
         class="filter-panel"
         class:filter-panel--open={filtersOpen}
       >
-        <SearchFilterBar
-          bind:filters
-          hide={[
-            'sort',
-            'colors',
-            'reactions',
-            'tags-min',
-            'dates',
-            'channels',
-            'posters',
-            'votes',
-          ]}
-        />
+        <SearchFilterBar bind:filters />
       </div>
 
       {#if error}
@@ -370,6 +363,10 @@
     border: 1px solid var(--color-border);
     padding: var(--space-sm);
     background: rgba(0, 0, 0, 0.02);
+    /* Cap height so opening the panel can't shove results outside the
+       modal. The bar scrolls internally when its content exceeds this. */
+    max-height: 40vh;
+    overflow-y: auto;
   }
   .filter-panel--open {
     display: block;
@@ -377,7 +374,11 @@
   .results {
     overflow: auto;
     flex: 1;
-    min-height: 200px;
+    /* min-height: 0 lets this flex child shrink below its content size so
+       the modal's max-height (90vh) actually constrains the column instead
+       of being violated by intrinsic-sized children. Without this, opening
+       the filter panel pushes the results below the viewport. */
+    min-height: 0;
   }
   .grid {
     list-style: none;
