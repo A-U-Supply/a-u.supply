@@ -55,11 +55,34 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
       />
       <button type="submit" class="search-submit">Search</button>
     </form>
+    <div class="sort-cluster" role="group" aria-label="Result ordering">
+      <div class="sort-select-wrap">
+        <select class="sort-select" id="sort-select" aria-label="Sort results">
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+          <option value="random">Random</option>
+          <option value="most_reactions">Most Reactions</option>
+          <option value="acclaim">Acclaim</option>
+          <option value="largest">Largest</option>
+          <option value="longest">Longest</option>
+        </select>
+        <span class="sort-select-chevron" aria-hidden="true">▾</span>
+      </div>
+      <button
+        class="dice-btn"
+        id="dice-btn"
+        type="button"
+        title="Roll the dice — shuffle results"
+        aria-label="Randomize result order"
+      >
+        <span class="dice-btn__face" id="dice-btn-face">⚂</span>
+      </button>
+    </div>
   </div>
 
   <div class="filter-body" id="filter-body">
     <div id="filter-bar-host">
-      <SearchFilterBar client:load syncUrl={true} />
+      <SearchFilterBar client:load syncUrl={true} hide={['sort']} />
     </div>
 
     <button
@@ -354,6 +377,114 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
     margin: 0;
     min-width: 0;
   }
+
+  /* Sort + dice cluster: brutalist controls sitting at the end of
+     .search-row. The select gets a flat outlined look (matches
+     .filter-toggle); the dice button gets the loud offset shadow so
+     it reads as the playful primary action. */
+  .sort-cluster {
+    display: flex;
+    align-items: stretch;
+    gap: var(--space-xs);
+    flex-shrink: 0;
+  }
+  .sort-select-wrap {
+    position: relative;
+    display: flex;
+  }
+  .sort-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 2px solid var(--color-text);
+    padding: 0 calc(var(--space-md) + 14px) 0 var(--space-md);
+    font-family: var(--font-mono);
+    font-size: var(--text-base);
+    font-weight: 700;
+    letter-spacing: 1pt;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition:
+      background 80ms,
+      color 80ms;
+  }
+  .sort-select:hover {
+    background: var(--color-text);
+    color: var(--color-bg);
+  }
+  .sort-select:focus-visible {
+    outline: none;
+    border-color: var(--color-accent);
+  }
+  .sort-select-chevron {
+    position: absolute;
+    right: var(--space-sm);
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.85rem;
+    pointer-events: none;
+    color: currentColor;
+  }
+  .sort-select-wrap:hover .sort-select-chevron {
+    color: var(--color-bg);
+  }
+  .dice-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 2px solid var(--color-text);
+    box-shadow: 2px 2px 0 var(--color-text);
+    cursor: pointer;
+    padding: 0;
+    transition:
+      transform 80ms ease,
+      box-shadow 80ms ease;
+  }
+  .dice-btn:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--color-text);
+  }
+  .dice-btn:active {
+    transform: translate(1px, 1px);
+    box-shadow: 0 0 0 var(--color-text);
+  }
+  .dice-btn:focus-visible {
+    outline: none;
+    border-color: var(--color-accent);
+  }
+  .dice-btn[data-active='true'] {
+    background: var(--color-text);
+    color: var(--color-bg);
+  }
+  .dice-btn__face {
+    display: inline-block;
+    font-size: 1.5rem;
+    line-height: 1;
+    transform-origin: 50% 50%;
+  }
+  .dice-btn--rolling .dice-btn__face {
+    animation: dice-roll 0.45s cubic-bezier(0.4, 0, 0.6, 1);
+  }
+  @keyframes dice-roll {
+    0% {
+      transform: rotate(0) scale(1);
+    }
+    40% {
+      transform: rotate(180deg) scale(1.2);
+    }
+    100% {
+      transform: rotate(360deg) scale(1);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dice-btn--rolling .dice-btn__face {
+      animation: none;
+    }
+  }
   /* Filter body: hidden by default, expands inline (pushes results down)
      when the toggle is opened. Two-column on wide screens, stacked on
      narrow ones, so the form fields don't get cramped. */
@@ -627,6 +758,24 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
     .filter-toggle {
       padding: var(--space-xs) var(--space-md);
       justify-content: space-between;
+    }
+    .sort-cluster {
+      width: 100%;
+    }
+    .sort-select-wrap {
+      flex: 1;
+      min-width: 0;
+    }
+    .sort-select {
+      width: 100%;
+      /* Match input height to prevent iOS zoom and match search bar feel. */
+      padding-top: var(--space-xs);
+      padding-bottom: var(--space-xs);
+      font-size: 16px;
+    }
+    .dice-btn {
+      flex-shrink: 0;
+      min-height: 44px;
     }
     .stats-bar {
       font-size: 0.6rem;
@@ -1430,6 +1579,53 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
       ?.addEventListener('filters-change', () => {
         applyAndSearch();
       });
+
+    // Sort dropdown + dice button (toolbar). Source of truth is the
+    // SearchFilterBar; the toolbar patches it via filters-set and mirrors
+    // back on filters-change.
+    const sortSelect = document.getElementById(
+      'sort-select',
+    ) as HTMLSelectElement | null;
+    const diceBtn = document.getElementById(
+      'dice-btn',
+    ) as HTMLButtonElement | null;
+    const diceFace = document.getElementById('dice-btn-face');
+    const DICE_FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+
+    function syncSortToolbar() {
+      const sb = readBarFilters().sortBy;
+      if (sortSelect && sortSelect.value !== sb) sortSelect.value = sb;
+      if (diceBtn) diceBtn.dataset.active = sb === 'random' ? 'true' : 'false';
+    }
+
+    sortSelect?.addEventListener('change', () => {
+      patchFilterBar({ sortBy: sortSelect.value });
+    });
+
+    diceBtn?.addEventListener('click', () => {
+      if (diceFace) {
+        diceFace.textContent =
+          DICE_FACES[Math.floor(Math.random() * DICE_FACES.length)];
+      }
+      diceBtn.classList.remove('dice-btn--rolling');
+      // Force reflow so the animation replays on consecutive clicks.
+      void diceBtn.offsetWidth;
+      diceBtn.classList.add('dice-btn--rolling');
+
+      // Setting sortBy to the same value is a no-op in the bar (Svelte
+      // dedupes), so it won't emit filters-change — call applyAndSearch
+      // directly to get a fresh shuffle from the backend.
+      if (readBarFilters().sortBy === 'random') {
+        applyAndSearch();
+      } else {
+        patchFilterBar({ sortBy: 'random' });
+      }
+    });
+
+    document
+      .getElementById('filter-bar-host')
+      ?.addEventListener('filters-change', syncSortToolbar);
+    syncSortToolbar();
 
     // Search form
     searchForm.addEventListener('submit', (e) => {
