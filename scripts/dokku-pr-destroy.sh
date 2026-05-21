@@ -15,12 +15,17 @@ if ! ssh_dokku apps:exists "${APP}" >/dev/null 2>&1; then
 fi
 
 echo "==> Destroying ${APP}"
-ssh_dokku --force apps:destroy "${APP}"
+ssh_dokku apps:destroy "${APP}" --force
 
-# Immediately reclaim the disk for this app's image + layers. apps:destroy
-# removes the tagged image, this sweeps the orphan layers left behind without
-# waiting for the daily cron.
-echo "==> Pruning dangling images"
+# Reclaim disk immediately:
+#  1. Untag and remove the GHCR image we pulled for this PR (the preview's
+#     pulled image tag, e.g. ghcr.io/.../au-supply-preview:pr-42-<sha>).
+#  2. Sweep dangling layers left behind by the destroy.
+# Both are best-effort: a failure here doesn't fail the workflow.
+echo "==> Removing PR images from the host"
+ssh_dokku -- "docker images --format '{{.Repository}}:{{.Tag}}' | grep -E 'au-supply-preview:pr-${PR_NUMBER}(-|\$)' | xargs -r docker rmi -f" >/dev/null 2>&1 || true
+
+echo "==> Pruning dangling layers"
 ssh_dokku -- docker image prune -f >/dev/null 2>&1 || true
 
 echo "==> Done"
