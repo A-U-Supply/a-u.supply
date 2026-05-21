@@ -559,13 +559,15 @@ def backfill_transcripts():
     reindex_search()
 
 
-def backfill_ocr(include_empty: bool = False):
-    """Find images missing OCR text and run tesseract on them.
+def backfill_ocr(include_empty: bool = False, force_all: bool = False):
+    """Find images missing OCR text and run OCR on them.
 
     By default picks up only items with caption=NULL (never tried).
     With include_empty=True, also re-processes items where caption="" —
     use this after improving the OCR pipeline to re-OCR images that
     previously returned no text under the old configuration.
+    With force_all=True, re-OCRs every image regardless of current caption
+    state — use this after swapping the OCR engine entirely.
     """
     import os
     from server.models import MediaItem, MediaImageMeta
@@ -573,22 +575,18 @@ def backfill_ocr(include_empty: bool = False):
 
     db = SessionLocal()
 
-    caption_filter = MediaImageMeta.caption.is_(None)
-    if include_empty:
-        caption_filter = caption_filter | (MediaImageMeta.caption == "")
-
-    images_missing = (
-        db.query(MediaItem)
-        .outerjoin(MediaImageMeta)
-        .filter(
-            MediaItem.media_type == "image",
-            caption_filter | (MediaImageMeta.media_item_id.is_(None)),
-        )
-        .all()
+    query = db.query(MediaItem).outerjoin(MediaImageMeta).filter(
+        MediaItem.media_type == "image",
     )
+    if not force_all:
+        caption_filter = MediaImageMeta.caption.is_(None)
+        if include_empty:
+            caption_filter = caption_filter | (MediaImageMeta.caption == "")
+        query = query.filter(caption_filter | (MediaImageMeta.media_item_id.is_(None)))
+    images_missing = query.all()
 
     total = len(images_missing)
-    log(f"Found {total} images missing OCR text (include_empty={include_empty})")
+    log(f"Found {total} images to OCR (include_empty={include_empty}, force_all={force_all})")
 
     if total == 0:
         log("Nothing to do!")
@@ -795,7 +793,8 @@ if __name__ == "__main__":
 
     elif cmd == "backfill-ocr":
         include_empty = "--include-empty" in sys.argv[2:]
-        backfill_ocr(include_empty=include_empty)
+        force_all = "--all" in sys.argv[2:]
+        backfill_ocr(include_empty=include_empty, force_all=force_all)
 
     elif cmd == "test-ocr":
         if len(sys.argv) < 3:
