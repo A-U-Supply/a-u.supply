@@ -24,8 +24,7 @@ The naming system blends ecclesiastical, scientific-warehouse, and photographic-
 | **The Darkroom** | pre-release workspace | Latents | `latents` | Private admin-only workspace for assembling pre-release works of any media type. See [`plans/2026-05-15-latents.md`](plans/2026-05-15-latents.md). |
 | **The Atelier** | generative image tools | Punctum | `punctum` | Multi-bot image atelier (`/admin/atelier/punctum`). See [`atelier.md`](atelier.md). |
 |  |  | Photism | `photism` | Audio → image spectral editor (`/admin/atelier/photism`) |
-| **The Sacristy** | files, keys, settings | Holdings | `files` | File-management surface (`/admin/files`) — placeholder, "coming soon" |
-|  |  | Keys | `api-keys` | API key generation + revocation (`/admin/api-keys`) |
+| **The Sacristy** | keys, settings | Keys | `api-keys` | API key generation + revocation (`/admin/api-keys`) |
 |  |  | Settings | `settings` | User management, integrations, site settings (`/admin/settings`) |
 
 The `current=` slug is what `<Admin current="…">` expects in each page's frontmatter — it controls which sidebar entry shows `aria-current="page"`.
