@@ -62,7 +62,10 @@ ssh_dokku git:from-image "${APP}" "${IMAGE}" || true
 
 echo "==> Waiting for ${APP} web to be running"
 DEPLOYED=0
-for i in $(seq 1 30); do
+# Up to 5 minutes. The container's restart-on-failure:10 policy needs time to
+# recover from transient startup issues; we don't want to declare failure
+# before Docker has stopped retrying.
+for i in $(seq 1 60); do
   if ssh_dokku ps:report "${APP}" 2>/dev/null | grep -qE 'Status web 1:[[:space:]]+running'; then
     DEPLOYED=1
     echo "    web is running (after ${i} checks)"
@@ -72,7 +75,7 @@ for i in $(seq 1 30); do
 done
 
 if [ "${DEPLOYED}" -ne 1 ]; then
-  echo "ERROR: ${APP} web did not reach running state within 150s"
+  echo "ERROR: ${APP} web did not reach running state within 300s"
   ssh_dokku logs "${APP}" --tail 80 || true
   exit 1
 fi
