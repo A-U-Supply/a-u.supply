@@ -563,7 +563,10 @@
       </div>
     {:else}
       <div class="single single--empty">
-        <div class="single__empty-head">Discussion</div>
+        <!-- Preview the auto-title here so the empty card has the same
+             header shape as the populated state ("Discussion: <filename>"),
+             instead of a bare "Discussion" label that reads as removed. -->
+        <div class="single__empty-head">{defaultTitle}</div>
         <form
           class="reply"
           onsubmit={(e) => {

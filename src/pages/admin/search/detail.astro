@@ -20,120 +20,126 @@ import Admin from '../../../layouts/Admin.astro';
     </div>
 
     <!--
-      Layout order: Preview + Metadata (side-by-side desktop, stacked mobile)
-      → Curation → Discussion → Provenance → Transcript → Actions.
-      Every section is a .brutal-card (chrome lives in admin.css). Card
-      header bars carry section labels — no external <h2> headings, so
-      labels never duplicate.
+      Layout order: Preview + Metadata → Curation → Comments → Provenance
+      → Transcript → Actions. Each major section gets an external <h2>
+      ABOVE its card (the section identifier lives one level up from any
+      in-card title — e.g. the Comments h2 sits above the thread's own
+      editable title that lives inside the .single card head). This is the
+      visual hierarchy the redesign collapsed; restoring it.
     -->
 
-    <!-- PREVIEW + METADATA: one unified brutal-card. Two columns on
-         desktop (preview left, metadata right, both align-items:start so
-         the row doesn't stretch); stack on mobile. File-chrome disclosure
-         becomes a full-width footer of the same card. -->
+    <!-- PREVIEW + METADATA: no external h2 — this IS the file. -->
     <section
-      class="brutal-card preview-meta-card"
+      class="detail-section"
       aria-labelledby="preview-meta-h"
     >
       <h2 id="preview-meta-h" class="visually-hidden">
         Preview and metadata
       </h2>
-      <div class="preview-meta-grid">
-        <div class="preview-area" id="detail-preview"></div>
-        <div class="metadata-area" id="metadata-body"></div>
+      <div class="brutal-card preview-meta-card">
+        <div class="preview-meta-grid">
+          <div class="preview-area" id="detail-preview"></div>
+          <div class="metadata-area" id="metadata-body"></div>
+        </div>
+        <details class="disclosure">
+          <summary>File chrome</summary>
+          <div class="disclosure__body" id="metadata-chrome-body"></div>
+        </details>
       </div>
-      <details class="disclosure">
-        <summary>File chrome</summary>
-        <div class="disclosure__body" id="metadata-chrome-body"></div>
-      </details>
     </section>
 
-    <!-- CURATION: vote chip + tags merged into one card. Body is two
-         stacked blocks (vote, tags) with a thin divider between — the
-         field-row label column added noise without value here, the
-         chips and input are already self-describing. -->
-    <section class="brutal-card curation-card" aria-labelledby="cur-h">
-      <div class="brutal-card__head">
-        <h2 id="cur-h">Curation</h2>
-      </div>
-      <div class="brutal-card__body curation-body">
-        <div class="curation-vote">
-          <div id="vote-chip-island" class="vote-chip-island"></div>
-        </div>
-        <div class="curation-tags">
-          <div class="tags-list" id="tags-list"></div>
-          <div class="tag-add">
-            <input
-              type="text"
-              id="tag-input"
-              placeholder="Add tag..."
-              autocomplete="off"
-              aria-label="Add tag"
-            />
-            <div
-              class="tag-suggestions"
-              id="tag-suggestions"
-              style="display:none;"
-            >
+    <!-- CURATION -->
+    <section class="detail-section">
+      <h2 class="detail-section__h2">Curation</h2>
+      <div class="brutal-card curation-card">
+        <div class="brutal-card__body curation-body">
+          <div class="curation-vote">
+            <div id="vote-chip-island" class="vote-chip-island"></div>
+          </div>
+          <div class="curation-tags">
+            <div class="tags-list" id="tags-list"></div>
+            <div class="tag-add">
+              <input
+                type="text"
+                id="tag-input"
+                placeholder="Add tag..."
+                autocomplete="off"
+                aria-label="Add tag"
+              />
+              <div
+                class="tag-suggestions"
+                id="tag-suggestions"
+                style="display:none;"
+              >
+              </div>
+              <button class="action-btn" id="add-tag-btn">Add</button>
             </div>
-            <button class="action-btn" id="add-tag-btn">Add</button>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- DISCUSSION: Threads `.single` already has brutal-card chrome (PR #355) -->
-    <div id="threads-island"></div>
+    <!-- COMMENTS: Threads `.single` keeps its own brutal-card chrome plus
+         an in-card head bar holding the thread's own editable title.
+         The external <h2> above identifies the SECTION; the in-card head
+         identifies the THREAD. -->
+    <section class="detail-section">
+      <h2 class="detail-section__h2">Comments</h2>
+      <div id="threads-island"></div>
+    </section>
 
-    <!-- PROVENANCE: sources + lineage (inputs/outputs) + linked latents.
-         #provenance-rows is filled by JS (Origin + Lineage). Linked stays
-         a static row so the LatentLinks Svelte island can mount into a
-         stable target without depending on render order. -->
-    <section class="brutal-card provenance-card" aria-labelledby="prov-h">
-      <div class="brutal-card__head">
-        <h2 id="prov-h">Provenance</h2>
-      </div>
-      <div class="brutal-card__body">
-        <div id="provenance-rows"></div>
-        <div class="field-row">
-          <div class="field-row__label">Linked</div>
-          <div class="field-row__value">
-            <div id="latent-links-island"></div>
+    <!-- PROVENANCE -->
+    <section class="detail-section">
+      <h2 class="detail-section__h2">Provenance</h2>
+      <div class="brutal-card provenance-card">
+        <div class="brutal-card__body">
+          <div id="provenance-rows"></div>
+          <div class="field-row">
+            <div class="field-row__label">Linked</div>
+            <div class="field-row__value">
+              <div id="latent-links-island"></div>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- EXTRACTED TEXT (OCR caption or whisper transcript) -->
+    <!-- EXTRACTED TEXT (OCR caption or whisper transcript). The card
+         retains a thin head strip for stats + Copy; the section h2 above
+         carries the OCR Text / Transcript label depending on media_type. -->
     <section
-      class="brutal-card extracted-text-card"
+      class="detail-section"
       id="extracted-text-section"
-      aria-labelledby="et-h"
       style="display:none;"
     >
-      <div class="brutal-card__head">
-        <h2 id="et-h">
-          <span id="extracted-text-heading">Extracted Text</span>
-        </h2>
-        <span class="brutal-card__head-meta" id="extracted-text-stats"></span>
+      <h2 class="detail-section__h2" id="extracted-text-heading">
+        Extracted Text
+      </h2>
+      <div class="brutal-card extracted-text-card">
+        <div class="brutal-card__head extracted-text-head">
+          <span
+            class="brutal-card__head-meta"
+            id="extracted-text-stats"
+          ></span>
+          <button
+            class="brutal-card__head-action"
+            id="extracted-text-copy"
+            type="button"
+            style="display:none;"
+          >
+            Copy
+          </button>
+        </div>
+        <div class="brutal-card__body" id="extracted-text-body"></div>
         <button
-          class="brutal-card__head-action"
-          id="extracted-text-copy"
+          class="extracted-text-toggle"
+          id="extracted-text-toggle"
           type="button"
           style="display:none;"
         >
-          Copy
+          Show all
         </button>
       </div>
-      <div class="brutal-card__body" id="extracted-text-body"></div>
-      <button
-        class="extracted-text-toggle"
-        id="extracted-text-toggle"
-        type="button"
-        style="display:none;"
-      >
-        Show all
-      </button>
     </section>
 
     <!-- ACTIONS -->
@@ -222,10 +228,13 @@ import Admin from '../../../layouts/Admin.astro';
 -->
 <style is:global>
 
-  /* All sections (cards + island wrappers + action row) are spaced
-     uniformly via the page container's flex gap, not per-section
-     margins. That works around Threads' island wrapper interrupting
-     the `.brutal-card + .brutal-card` adjacency chain. */
+  /* Page rhythm: each major section is a <section class="detail-section">
+     containing an external h2 + a brutal-card. Sections are spaced via
+     the page container's flex gap. h2-to-card spacing is tight so the
+     header reads as anchored to its card; section-to-section spacing is
+     wide so each section visually stands on its own (the user's
+     "everything looks like one box" complaint was the absence of this
+     vertical rhythm — same chrome on each card with no anchoring h2). */
   #detail-content {
     display: flex;
     flex-direction: column;
@@ -237,7 +246,19 @@ import Admin from '../../../layouts/Admin.astro';
     justify-content: space-between;
     flex-wrap: wrap;
     gap: var(--space-sm);
-    /* margin-bottom dropped — parent gap handles spacing. */
+  }
+  .detail-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+  .detail-section__h2 {
+    margin: 0;
+    font-size: var(--text-lg);
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    padding-bottom: var(--space-xs);
+    border-bottom: 2px solid var(--color-text);
   }
   .detail-header h1 {
     margin-bottom: 0;
