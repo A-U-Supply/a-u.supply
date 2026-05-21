@@ -31,12 +31,18 @@ if ! app_exists; then
   echo "==> Ensuring storage and snapshotting prod DB"
   ssh_dokku storage:ensure-directory "${APP}"
   # Snapshot prod DB into the new app's storage. WAL is checkpointed first
-  # so the .db file is a complete, self-contained copy.
-  ssh_dokku -- "
-    set -e
-    sqlite3 ${PROD_STORAGE}/au.db 'PRAGMA wal_checkpoint(TRUNCATE);' >/dev/null 2>&1 || true
-    cp ${PROD_STORAGE}/au.db ${APP_STORAGE}/au.db
-  "
+  # so the .db file is a complete, self-contained copy. Best-effort: if the
+  # prod DB isn't at the expected path the preview still comes up with an
+  # empty DB rather than failing the whole workflow.
+  if ssh_dokku -- test -f "${PROD_STORAGE}/au.db"; then
+    ssh_dokku -- "
+      sqlite3 ${PROD_STORAGE}/au.db 'PRAGMA wal_checkpoint(TRUNCATE);' >/dev/null 2>&1 || true
+      cp ${PROD_STORAGE}/au.db ${APP_STORAGE}/au.db
+    "
+    echo "    snapshot copied from ${PROD_STORAGE}/au.db"
+  else
+    echo "    WARN: ${PROD_STORAGE}/au.db not found; preview will start with an empty DB"
+  fi
   ssh_dokku storage:mount "${APP}" "${APP_STORAGE}:/app/data"
 
   # Share the prod model cache read-only so PR envs don't re-download models.
