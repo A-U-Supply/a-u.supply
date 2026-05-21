@@ -1,5 +1,7 @@
 ---
 import Admin from '../../layouts/Admin.astro';
+import BrutalCard from '../../components/BrutalCard.astro';
+import BrutalSelect from '../../components/BrutalSelect.astro';
 ---
 
 <Admin title="Hecatomb" current="hecatomb">
@@ -11,81 +13,121 @@ import Admin from '../../layouts/Admin.astro';
   </div>
 
   <div class="hecatomb-form">
-    <div class="hec-row">
-      <label class="hec-field">
-        <span class="hec-label">App</span>
-        <select id="hec-app"><option value="">Select an app…</option></select>
-      </label>
-    </div>
+    <!-- Recipe card: which app, which recipe, how many. -->
+    <BrutalCard title="Recipe" class="config-card">
+      <div class="config-row-label" for="hec-app">App</div>
+      <BrutalSelect
+        id="hec-app"
+        ariaLabel="App"
+        wrapClass="config-card__select-wrap"
+      >
+        <option value="">Select an app…</option>
+      </BrutalSelect>
 
-    <div class="hec-row" id="hec-recipe-row" style="display:none;">
-      <label class="hec-field">
-        <span class="hec-label">Recipe</span>
-        <select id="hec-recipe"></select>
-      </label>
-      <label class="hec-field hec-inline-check">
-        <input type="checkbox" id="hec-random-recipe" />
-        <span>Random recipe per job</span>
-      </label>
-    </div>
-
-    <div class="hec-row">
-      <label class="hec-field">
-        <span class="hec-label">Count</span>
-        <input type="number" id="hec-count" min="1" max="100" value="10" />
-        <span class="hec-hint" id="hec-count-hint"
-          >1&ndash;100 jobs per offering.</span
-        >
-      </label>
-    </div>
-
-    <details class="hec-filters">
-      <summary>Filters (candidate pool)</summary>
-      <div class="hec-filter-grid">
-        <div class="hec-field">
-          <span class="hec-label">Search</span>
-          <input type="text" id="sf-query" placeholder="Text search…" />
-        </div>
-        <div class="hec-field">
-          <span class="hec-label">Channel</span>
-          <select id="sf-channel"><option value="">All</option></select>
-        </div>
-        <div class="hec-field">
-          <span class="hec-label">Tags</span>
-          <input type="text" id="sf-tags" placeholder="tag1, tag2" />
-        </div>
-        <div class="hec-field">
-          <span class="hec-label">Index</span>
-          <select id="sf-output-index">
-            <option value="__inputs__">Inputs</option>
-            <option value="outputs">Outputs</option>
-          </select>
-        </div>
-        <div class="hec-field">
-          <span class="hec-label">Min Reactions</span>
-          <input type="number" id="sf-reactions-min" min="0" value="0" />
-        </div>
-        <div class="hec-field">
-          <span class="hec-label">Min Tags</span>
-          <input type="number" id="sf-tags-min" min="0" value="0" />
-        </div>
-        <div class="hec-field hec-checks">
-          <label class="hec-inline-check">
-            <input type="checkbox" id="hec-exclude-app" />
-            <span>Exclude items already processed by this app</span>
-          </label>
-          <label class="hec-inline-check">
-            <input type="checkbox" id="hec-exclude-recipe" />
-            <span>Exclude items already processed with this recipe</span>
-          </label>
-        </div>
+      <div id="hec-recipe-label" class="config-row-label" style="display:none;">
+        Recipe
       </div>
-    </details>
+      <div id="hec-recipe-row" class="hec-recipe-row" style="display:none;">
+        <BrutalSelect
+          id="hec-recipe"
+          ariaLabel="Recipe"
+          wrapClass="config-card__select-wrap"
+        />
+        <label class="hec-inline-check">
+          <input type="checkbox" id="hec-random-recipe" />
+          <span>Random recipe per job</span>
+        </label>
+      </div>
+
+      <div class="config-row-label" for="hec-count">Count</div>
+      <div class="hec-count-cell">
+        <input
+          type="number"
+          id="hec-count"
+          class="brutal-input"
+          min="1"
+          max="100"
+          value="10"
+        />
+        <span class="hec-hint">1&ndash;100 jobs per offering.</span>
+      </div>
+    </BrutalCard>
+
+    <!-- Filters card: candidate pool. Always visible (no <details>). -->
+    <BrutalCard title="Filters" class="config-card">
+      <Fragment slot="meta">
+        <span id="hec-candidates" class="hec-candidates">
+          Estimating candidates…
+        </span>
+      </Fragment>
+
+      <div class="config-row-label" for="sf-query">Search</div>
+      <input
+        type="text"
+        id="sf-query"
+        class="brutal-input"
+        placeholder="Text search…"
+      />
+
+      <div class="config-row-label" for="sf-channel">Channel</div>
+      <BrutalSelect
+        id="sf-channel"
+        ariaLabel="Channel"
+        wrapClass="config-card__select-wrap"
+      >
+        <option value="">All</option>
+      </BrutalSelect>
+
+      <div class="config-row-label" for="sf-tags">Tags</div>
+      <input
+        type="text"
+        id="sf-tags"
+        class="brutal-input"
+        placeholder="tag1, tag2"
+      />
+
+      <div class="config-row-label" for="sf-output-index">Index</div>
+      <BrutalSelect
+        id="sf-output-index"
+        ariaLabel="Index"
+        wrapClass="config-card__select-wrap"
+      >
+        <option value="__inputs__">Inputs</option>
+        <option value="outputs">Outputs</option>
+      </BrutalSelect>
+
+      <div class="config-row-label" for="sf-reactions-min">Min reactions</div>
+      <input
+        type="number"
+        id="sf-reactions-min"
+        class="brutal-input hec-input--narrow"
+        min="0"
+        value="0"
+      />
+
+      <div class="config-row-label" for="sf-tags-min">Min tags</div>
+      <input
+        type="number"
+        id="sf-tags-min"
+        class="brutal-input hec-input--narrow"
+        min="0"
+        value="0"
+      />
+
+      <div class="config-row-full hec-exclude-row">
+        <label class="hec-inline-check">
+          <input type="checkbox" id="hec-exclude-app" />
+          <span>Exclude items already processed by this app</span>
+        </label>
+        <label class="hec-inline-check">
+          <input type="checkbox" id="hec-exclude-recipe" />
+          <span>Exclude items already processed with this recipe</span>
+        </label>
+      </div>
+    </BrutalCard>
 
     <div class="hec-actions">
-      <button class="action-btn" id="hec-submit" disabled
-        >Submit offering</button
-      >
+      <button class="btn-save" id="hec-submit" disabled>Submit offering</button>
     </div>
 
     <div class="hec-status" id="hec-status"></div>
@@ -106,43 +148,44 @@ import Admin from '../../layouts/Admin.astro';
     flex-direction: column;
     gap: var(--space-md);
   }
-  .hec-row {
+  .config-card__select-wrap {
     display: flex;
-    align-items: flex-end;
-    gap: var(--space-md);
+    width: 100%;
+  }
+  .config-card__select-wrap select {
+    flex: 1;
+  }
+  .hec-recipe-row {
+    display: flex;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .hec-count-cell {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
     flex-wrap: wrap;
   }
-  .hec-field {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    min-width: 180px;
-  }
-  .hec-label {
-    color: var(--color-muted);
-    font-size: var(--text-xs);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-  .hec-field input[type='text'],
-  .hec-field input[type='number'],
-  .hec-field select {
-    padding: var(--space-xs) var(--space-sm);
-    background: var(--color-bg);
-    color: var(--color-text);
-    border: 1px solid var(--color-border);
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-  }
-  .hec-field input[type='number'] {
+  .hec-count-cell .brutal-input {
     width: 100px;
   }
   .hec-hint {
     color: var(--color-muted);
-    font-size: var(--text-xs);
-    margin-top: 2px;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+  .hec-input--narrow {
+    width: 100px;
+  }
+  .hec-exclude-row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    padding-top: var(--space-xs);
+    border-top: 1px dotted var(--color-border);
+    margin-top: var(--space-xs);
   }
   .hec-inline-check {
     display: flex;
@@ -155,56 +198,37 @@ import Admin from '../../layouts/Admin.astro';
   .hec-inline-check input[type='checkbox'] {
     width: 14px;
     height: 14px;
-    accent-color: var(--color-text);
+    accent-color: var(--color-fg);
   }
-  .hec-filters {
-    border: 1px solid var(--color-border);
-    padding: var(--space-sm) var(--space-md);
+  /* Live candidate count: sits in the Filters card head's `meta` slot, so
+     the user sees the impact of every filter change as they edit. */
+  .hec-candidates {
     font-family: var(--font-mono);
-    font-size: var(--text-sm);
-  }
-  .hec-filters summary {
-    cursor: pointer;
+    font-size: 0.65rem;
     color: var(--color-muted);
     text-transform: uppercase;
-    font-size: var(--text-xs);
-    letter-spacing: 0.05em;
+    letter-spacing: 0.5pt;
   }
-  .hec-filter-grid {
-    margin-top: var(--space-sm);
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: var(--space-md);
+  .hec-candidates.has-many {
+    color: var(--color-status-ok);
   }
-  .hec-checks {
-    grid-column: 1 / -1;
-    flex-direction: column;
-    gap: var(--space-xs);
+  .hec-candidates.has-none {
+    color: var(--color-status-fail);
   }
   .hec-actions {
     margin-top: var(--space-sm);
     display: flex;
     justify-content: flex-end;
   }
-  .hec-actions .action-btn[disabled] {
+  .hec-actions .btn-save:disabled {
     opacity: 0.4;
     cursor: not-allowed;
   }
   @media (max-width: 640px) {
-    .hec-row {
-      gap: var(--space-sm);
-    }
-    .hec-field {
-      min-width: 0;
-      width: 100%;
-    }
-    .hec-field input[type='number'] {
-      width: 100%;
-    }
     .hec-actions {
       justify-content: stretch;
     }
-    .hec-actions .action-btn {
+    .hec-actions .btn-save {
       flex: 1;
       padding: var(--space-sm);
       font-size: var(--text-base);
@@ -217,7 +241,7 @@ import Admin from '../../layouts/Admin.astro';
     min-height: 1.2em;
   }
   .hec-status.hec-err {
-    color: #e04040;
+    color: var(--color-status-fail);
   }
 </style>
 
@@ -227,6 +251,7 @@ import Admin from '../../layouts/Admin.astro';
 
     const appSelect = document.getElementById('hec-app') as HTMLSelectElement;
     const recipeRow = document.getElementById('hec-recipe-row')!;
+    const recipeLabel = document.getElementById('hec-recipe-label')!;
     const recipeSelect = document.getElementById(
       'hec-recipe',
     ) as HTMLSelectElement;
@@ -238,6 +263,7 @@ import Admin from '../../layouts/Admin.astro';
       'hec-submit',
     ) as HTMLButtonElement;
     const statusEl = document.getElementById('hec-status')!;
+    const candidatesEl = document.getElementById('hec-candidates')!;
 
     let apps: any[] = [];
 
@@ -272,9 +298,11 @@ import Admin from '../../layouts/Admin.astro';
       const opts = collectRecipeOptions(manifest);
       if (opts.length === 0) {
         recipeRow.style.display = 'none';
+        recipeLabel.style.display = 'none';
         return;
       }
       recipeRow.style.display = '';
+      recipeLabel.style.display = '';
 
       // Group options if we have group labels
       const groups = new Map<string, typeof opts>();
@@ -372,8 +400,10 @@ import Admin from '../../layouts/Admin.astro';
         renderRecipes(app.manifest || {});
       } else {
         recipeRow.style.display = 'none';
+        recipeLabel.style.display = 'none';
       }
       updateSubmitEnabled();
+      schedulePreview();
     });
 
     randomRecipeCb.addEventListener('change', () => {
@@ -381,7 +411,10 @@ import Admin from '../../layouts/Admin.astro';
       updateSubmitEnabled();
     });
 
-    recipeSelect.addEventListener('change', updateSubmitEnabled);
+    recipeSelect.addEventListener('change', () => {
+      updateSubmitEnabled();
+      schedulePreview();
+    });
 
     countInput.addEventListener('input', () => {
       updateSubmitLabel();
@@ -433,6 +466,84 @@ import Admin from '../../layouts/Admin.astro';
       return payload;
     }
 
+    // Live candidate count via /api/search with per_page=1. We read the
+    // total off the same Meili query the batch endpoint would use under
+    // the hood — debounced so typing in the search box doesn't spam.
+    let previewTimer: number | null = null;
+    let previewSeq = 0;
+    function schedulePreview() {
+      if (previewTimer !== null) window.clearTimeout(previewTimer);
+      previewTimer = window.setTimeout(runPreview, 300);
+    }
+    async function runPreview() {
+      const shuffle = buildShufflePayload();
+      const filters: any = {};
+      if (shuffle.tags?.length) filters.tags = shuffle.tags;
+      if (shuffle.source_channels?.length)
+        filters.source_channels = shuffle.source_channels;
+      if (shuffle.reaction_count_min)
+        filters.reaction_count = { min: shuffle.reaction_count_min };
+      if (shuffle.tag_count_min)
+        filters.tag_count = { min: shuffle.tag_count_min };
+
+      const body = {
+        query: shuffle.query || '',
+        filters,
+        output_index: shuffle.output_index || '__inputs__',
+        page: 1,
+        per_page: 1,
+      };
+
+      const mySeq = ++previewSeq;
+      candidatesEl.classList.remove('has-many', 'has-none');
+      candidatesEl.textContent = 'Counting…';
+
+      try {
+        const res = await fetch('/api/search', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (mySeq !== previewSeq) return;
+        if (!res.ok) {
+          candidatesEl.textContent = 'Count unavailable';
+          return;
+        }
+        const data = await res.json();
+        const total = data.total ?? 0;
+        if (total === 0) {
+          candidatesEl.textContent = '0 candidates — relax filters';
+          candidatesEl.classList.add('has-none');
+        } else {
+          candidatesEl.textContent = `${total} candidate${total === 1 ? '' : 's'}`;
+          if (total >= 10) candidatesEl.classList.add('has-many');
+        }
+      } catch {
+        if (mySeq !== previewSeq) return;
+        candidatesEl.textContent = 'Count unavailable';
+      }
+    }
+
+    // Wire every filter input to the preview.
+    for (const id of [
+      'sf-query',
+      'sf-channel',
+      'sf-tags',
+      'sf-output-index',
+      'sf-reactions-min',
+      'sf-tags-min',
+      'hec-exclude-app',
+      'hec-exclude-recipe',
+    ]) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      el.addEventListener('input', schedulePreview);
+      el.addEventListener('change', schedulePreview);
+    }
+    // Initial preview after a beat (gives facets a chance to populate).
+    setTimeout(runPreview, 100);
+
     // Build params from the app manifest: start with every param's default
     // (so required-with-default params like processing_mode / model are
     // covered), then force processing_mode to "recipe" if the app offers it
@@ -457,8 +568,6 @@ import Admin from '../../layouts/Admin.astro';
         out.processing_mode = 'recipe';
       }
       if (randomRecipe) {
-        // Server picks per-job; drop any default recipe value so the audit
-        // trail reflects what actually ran.
         delete out.recipe;
       } else if (userRecipe) {
         out.recipe = userRecipe;
