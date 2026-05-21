@@ -743,6 +743,17 @@
 .bm-star--sm {
   font-size: 0.75rem;
 }
+/* Large variant for the page-header on detail screens where the star is
+   the primary item-state affordance and sits next to a substantive h1. */
+.bm-star--lg {
+  font-size: 1.5rem;
+  /* Comfortable touch target on phones */
+  min-width: 32px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 
 /* ─── Empty states ─── */
 .empty-state {
