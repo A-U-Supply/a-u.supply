@@ -767,11 +767,25 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
   .feed-item__composer textarea {
     background: var(--color-bg);
     color: var(--color-text);
-    border: 1px solid var(--color-border);
-    padding: 6px 10px;
+    border: 2px solid var(--color-text);
+    box-shadow: 2px 2px 0 var(--color-text);
+    padding: 8px 12px;
     font-family: var(--font-mono);
     font-size: var(--text-sm);
     resize: vertical;
+  }
+  .feed-item__composer textarea:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 2px 2px 0 var(--color-accent);
+  }
+  @media (max-width: 640px) {
+    /* iOS Safari zooms the viewport when a focused input's computed
+       font-size is below 16px. The composer auto-focuses on open, so
+       this prevents the jarring zoom-in on tap. */
+    .feed-item__composer textarea {
+      font-size: 16px;
+    }
   }
   .feed-item__composer-row {
     display: flex;
@@ -2804,8 +2818,16 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
         e.stopPropagation();
         e.preventDefault();
         const itemId = commentsToggle.dataset.commentsId!;
-        const discussRow = commentsToggle.closest(
-          '.feed-item__discuss',
+        // Re-query the discuss row from the live document instead of
+        // walking up from the tapped button. The button can already be
+        // detached if a feed re-render landed between the tap and this
+        // handler (filter-bar mount, scroll-append, applyAndSearch). In
+        // that case `commentsToggle.closest(...)` still resolves — but to
+        // a node in the *old* subtree, and the panel gets inserted into
+        // detached DOM so nothing appears. This was the intermittent
+        // "click does nothing" bug on both mobile and desktop.
+        const discussRow = document.querySelector(
+          `.feed-item__discuss[data-id="${CSS.escape(itemId)}"]`,
         ) as HTMLElement | null;
         if (!discussRow) return;
         let panel = discussRow.nextElementSibling as HTMLElement | null;
