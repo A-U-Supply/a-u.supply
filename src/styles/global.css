@@ -51,6 +51,20 @@ img {
   display: block;
 }
 
+/*
+  Pointer cursor on anything interactive. Native <a href> already gets it
+  from the UA, but <button> and role=button do not — so styled-as-link
+  buttons (pagination, insights toggles, stat chips, etc.) miss the hand
+  unless every author remembers `cursor: pointer`. Apply globally; disabled
+  buttons keep their own `cursor: not-allowed` from per-component rules.
+*/
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']),
+summary,
+label[for] {
+  cursor: pointer;
+}
+
 /* ── Shared page patterns ── */
 
 .page-content {
