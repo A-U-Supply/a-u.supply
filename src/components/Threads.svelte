@@ -732,13 +732,17 @@
     display: flex;
     justify-content: flex-end;
   }
+  /* Brutalist chrome to match the Extracted Text panel on the media detail
+     page (2px border + 4px hard drop shadow). The head bar extends edge-to-
+     edge via negative margins so the markup doesn't need to change. */
   .single {
     display: flex;
     flex-direction: column;
     gap: var(--space-sm);
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-text);
     padding: var(--space-sm);
     background: var(--color-surface);
+    box-shadow: 4px 4px 0 var(--color-text);
   }
   .single--empty {
     background: var(--color-surface-2);
@@ -747,6 +751,10 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    margin: calc(-1 * var(--space-sm));
+    padding: 6px var(--space-sm);
+    background: var(--color-bg);
+    border-bottom: 2px solid var(--color-text);
   }
   .single__title {
     margin: 0;
@@ -774,6 +782,10 @@
     text-decoration: underline;
   }
   .single__empty-head {
+    margin: calc(-1 * var(--space-sm));
+    padding: 6px var(--space-sm);
+    background: var(--color-bg);
+    border-bottom: 2px solid var(--color-text);
     font-size: var(--text-md);
     font-weight: bold;
     text-transform: uppercase;
