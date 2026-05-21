@@ -294,8 +294,21 @@ import Admin from '../../layouts/Admin.astro';
         return;
       }
 
-      // Enrich bookmarks with metadata
-      allItems = await enrichBookmarks(data.items);
+      // Server inlines display metadata in each item's `meta` field (null when
+      // the target was deleted). One round trip — see server/bookmarks_api.py.
+      allItems = data.items.map((b: any) => ({
+        ...b,
+        meta: b.meta
+          ? { ...b.meta, thumb: b.meta.thumb || '/assets/default-cover.jpg' }
+          : {
+              name: b.target_id,
+              sub: b.target_type,
+              media_type: b.target_type,
+              thumb: '/assets/default-cover.jpg',
+              href: '#',
+              playable: false,
+            },
+      }));
       renderGrid();
 
       const totalPages = Math.ceil(totalItems / pageSize);
@@ -303,108 +316,10 @@ import Admin from '../../layouts/Admin.astro';
       pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
     }
 
-    async function enrichBookmarks(bookmarks: any[]) {
-      // Group by type and batch-fetch metadata
-      const mediaIds = bookmarks
-        .filter((b) => b.target_type === 'media_item')
-        .map((b) => b.target_id);
-      const releaseIds = bookmarks
-        .filter((b) => b.target_type === 'release')
-        .map((b) => b.target_id);
-      const trackIds = bookmarks
-        .filter((b) => b.target_type === 'track')
-        .map((b) => b.target_id);
-
-      const metaMap = new Map<string, any>();
-
-      // Fetch media items
-      for (const id of mediaIds) {
-        try {
-          const res = await fetch(`/api/media/${id}`, {
-            credentials: 'include',
-          });
-          if (res.ok) {
-            const item = await res.json();
-            const hasThumb =
-              item.media_type === 'image' || item.media_type === 'video';
-            metaMap.set(`media_item:${id}`, {
-              name: item.filename || 'Untitled',
-              sub: item.media_type,
-              media_type: item.media_type,
-              thumb: hasThumb
-                ? `/api/media/${id}/thumbnail`
-                : '/assets/default-cover.jpg',
-              thumb_sm: hasThumb
-                ? `/api/media/${id}/thumbnail?size=sm`
-                : undefined,
-              href: `/admin/search/detail?id=${id}`,
-              playable:
-                item.media_type === 'audio' || item.media_type === 'video',
-            });
-          }
-        } catch {}
-      }
-
-      // Fetch releases
-      for (const code of releaseIds) {
-        try {
-          const res = await fetch(`/api/releases/${encodeURIComponent(code)}`);
-          if (res.ok) {
-            const rel = await res.json();
-            const encoded = encodeURIComponent(code);
-            metaMap.set(`release:${code}`, {
-              name: rel.title || code,
-              sub: (rel.entities || []).map((e: any) => e.name).join(', '),
-              media_type: 'release',
-              thumb: rel.cover_art_url
-                ? `/api/releases/${encoded}/cover?size=thumb`
-                : '/assets/default-cover.jpg',
-              href: `/catalog/release?code=${encoded}`,
-              playable: false,
-            });
-          }
-        } catch {}
-      }
-
-      // Fetch tracks
-      for (const id of trackIds) {
-        try {
-          const res = await fetch(`/api/tracks/${id}`, {
-            credentials: 'include',
-          });
-          if (res.ok) {
-            const t = await res.json();
-            const encoded = encodeURIComponent(t.release_code || '');
-            metaMap.set(`track:${id}`, {
-              name: t.title || `Track ${id}`,
-              sub: t.release_title || '',
-              media_type: 'audio',
-              thumb: t.cover_url || '/assets/default-cover.jpg',
-              href: `/catalog/release?code=${encoded}`,
-              playable: !!t.stream_url,
-              stream_url: t.stream_url,
-            });
-          }
-        } catch {}
-      }
-
-      return bookmarks.map((b) => ({
-        ...b,
-        meta: metaMap.get(`${b.target_type}:${b.target_id}`) || {
-          name: b.target_id,
-          sub: b.target_type,
-          media_type: b.target_type,
-          thumb: '/assets/default-cover.jpg',
-          href: '#',
-          playable: false,
-        },
-      }));
-    }
-
     function renderGrid() {
       gridEl.style.display = 'grid';
       gridEl.innerHTML = allItems
-        .map((item) => {
+        .map((item, idx) => {
           const m = item.meta;
           const checked = selectedIds.has(item.target_id) ? 'checked' : '';
           const selectedClass = selectedIds.has(item.target_id)
@@ -414,6 +329,9 @@ import Admin from '../../layouts/Admin.astro';
             m.thumb === '/assets/default-cover.jpg'
               ? ' style="image-rendering: pixelated;"'
               : '';
+          // First two rows (~12 cards on desktop, more on mobile) load eagerly
+          // so above-the-fold thumbnails don't wait for the next browser tick.
+          const loading = idx < 12 ? 'eager' : 'lazy';
           // Audio gets play + queue buttons (routes to persistent Player).
           // Video gets play only (routes to the inline viewer).
           let playBtn = '';
@@ -429,7 +347,7 @@ import Admin from '../../layouts/Admin.astro';
           <input type="checkbox" class="bm-card__check" data-select="${item.target_id}" ${checked} />
           <div class="bm-card__thumb">
             <span class="bm-card__type-badge">${item.target_type.replace('_', ' ')}</span>
-            <img src="${m.thumb}" ${m.thumb_sm ? `srcset="${m.thumb_sm} 128w, ${m.thumb} 400w" sizes="(max-width: 480px) 128px, 220px"` : ''} alt="" loading="lazy" decoding="async"${thumbStyle} />
+            <img src="${m.thumb}" ${m.thumb_sm ? `srcset="${m.thumb_sm} 128w, ${m.thumb} 400w" sizes="(max-width: 480px) 128px, 220px"` : ''} alt="" loading="${loading}" decoding="async"${thumbStyle} />
             ${playBtn}
             ${item.target_type === 'media_item' ? `<button class="bm-card__ws" data-ws-id="${item.target_id}" title="Add to workspace">${briefcaseSvg}</button>` : ''}
           </div>
