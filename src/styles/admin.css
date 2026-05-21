@@ -916,12 +916,18 @@
   overflow-wrap: anywhere;
 }
 @media (max-width: 540px) {
+  /* `!important` here because per-page overrides like
+     `.preview-meta-card .field-row__label { flex: 0 0 72px }` carry
+     higher specificity than this single-class rule and would otherwise
+     keep the label at a fixed 72px basis even in column flex — which
+     turns the label into a 72px-tall box instead of letting it collapse
+     to content height. */
   .field-row {
-    flex-direction: column;
-    gap: 2px;
+    flex-direction: column !important;
+    gap: 2px !important;
   }
   .field-row__label {
-    flex: none;
+    flex: none !important;
   }
 }
 
