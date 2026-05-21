@@ -287,118 +287,6 @@ import Admin from '../../../layouts/Admin.astro';
     border-bottom: 2px solid var(--color-text);
   }
 
-  .et-card {
-    border: 2px solid var(--color-text);
-    background: var(--color-surface);
-    box-shadow: 4px 4px 0 var(--color-text);
-  }
-  .et-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-sm);
-    padding: 6px var(--space-sm);
-    border-bottom: 2px solid var(--color-text);
-    background: var(--color-bg);
-    flex-wrap: wrap;
-  }
-  .et-label {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-sm);
-    flex-wrap: wrap;
-  }
-  .et-kind {
-    font-size: var(--text-sm);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1pt;
-  }
-  .et-stats {
-    font-size: 0.65rem;
-    color: var(--color-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-  }
-  .et-copy {
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    padding: 4px 10px;
-    border: 2px solid var(--color-text);
-    background: var(--color-bg);
-    color: var(--color-text);
-    cursor: pointer;
-    box-shadow: 2px 2px 0 var(--color-text);
-  }
-  .et-copy:hover {
-    background: var(--color-surface-2);
-  }
-  .et-copy:active {
-    transform: translate(2px, 2px);
-    box-shadow: none;
-  }
-  .et-body {
-    position: relative;
-    max-height: 240px;
-    overflow: hidden;
-    padding: var(--space-sm);
-  }
-  .et-body[data-expanded='true'] {
-    max-height: 600px;
-    overflow: auto;
-  }
-  .et-body[data-empty='true'] {
-    color: var(--color-muted);
-    font-style: italic;
-    text-align: center;
-    padding: var(--space-md);
-    font-size: var(--text-sm);
-  }
-  .et-body pre {
-    margin: 0;
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    line-height: 1.5;
-    white-space: pre-wrap;
-    word-break: break-word;
-    color: var(--color-text);
-  }
-  .et-fade {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 60px;
-    background: linear-gradient(
-      to bottom,
-      transparent,
-      var(--color-surface)
-    );
-    pointer-events: none;
-  }
-  .et-body[data-expanded='true'] .et-fade {
-    display: none;
-  }
-  .et-toggle {
-    display: block;
-    width: 100%;
-    padding: 6px;
-    border: none;
-    border-top: 2px solid var(--color-text);
-    background: var(--color-bg);
-    color: var(--color-text);
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    cursor: pointer;
-  }
-  .et-toggle:hover {
-    background: var(--color-surface-2);
-  }
-
   .tags-list {
     display: flex;
     flex-wrap: wrap;
@@ -542,6 +430,128 @@ import Admin from '../../../layouts/Admin.astro';
     .detail-layout {
       grid-template-columns: 1fr;
     }
+  }
+</style>
+
+<!--
+  Global styles for the Extracted Text panel. These selectors must NOT be
+  scoped because the panel's DOM is built at runtime via `innerHTML`, and
+  those nodes don't carry Astro's per-component data-astro-cid attribute —
+  so a scoped `.et-body pre` selector would silently fail to match.
+-->
+<style is:global>
+  .et-card {
+    border: 2px solid var(--color-text);
+    background: var(--color-surface);
+    box-shadow: 4px 4px 0 var(--color-text);
+  }
+  .et-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    padding: 6px var(--space-sm);
+    border-bottom: 2px solid var(--color-text);
+    background: var(--color-bg);
+    flex-wrap: wrap;
+  }
+  .et-label {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .et-kind {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+  }
+  .et-stats {
+    font-size: 0.65rem;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+  .et-copy {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    padding: 4px 10px;
+    border: 2px solid var(--color-text);
+    background: var(--color-bg);
+    color: var(--color-text);
+    cursor: pointer;
+    box-shadow: 2px 2px 0 var(--color-text);
+    flex-shrink: 0;
+  }
+  .et-copy:hover {
+    background: var(--color-surface-2);
+  }
+  .et-copy:active {
+    transform: translate(2px, 2px);
+    box-shadow: none;
+  }
+  .et-body {
+    position: relative;
+    max-height: 240px;
+    overflow: hidden;
+    padding: var(--space-sm);
+  }
+  .et-body[data-expanded='true'] {
+    max-height: 600px;
+    overflow: auto;
+  }
+  .et-body[data-empty='true'] {
+    color: var(--color-muted);
+    font-style: italic;
+    text-align: center;
+    padding: var(--space-md);
+    font-size: var(--text-sm);
+  }
+  .et-body pre {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--color-text);
+  }
+  .et-fade {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      var(--color-surface)
+    );
+    pointer-events: none;
+  }
+  .et-body[data-expanded='true'] .et-fade {
+    display: none;
+  }
+  .et-toggle {
+    display: block;
+    width: 100%;
+    padding: 6px;
+    border: none;
+    border-top: 2px solid var(--color-text);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    cursor: pointer;
+  }
+  .et-toggle:hover {
+    background: var(--color-surface-2);
   }
 </style>
 
