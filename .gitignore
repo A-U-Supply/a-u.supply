@@ -20,3 +20,7 @@ data/*.db
 data/*.db-wal
 data/*.db-shm
 .env
+
+# scripts/slack_to_lemmy.py per-run artifacts (SQL emitted to cwd)
+slack-to-lemmy-reassign-*.sql
+diagnose-post-*.sql
