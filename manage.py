@@ -814,6 +814,31 @@ if __name__ == "__main__":
         print(f"exists: {_os.path.exists(full_path)}")
         meta = db.query(MediaImageMeta).filter(MediaImageMeta.media_item_id == item.id).first()
         print(f"current caption: {meta.caption!r}" if meta else "no image_meta row")
+
+        # Per-PSM breakdown (informational; not what extract_text_ocr does)
+        import pytesseract as _pyt
+        from PIL import Image as _Image
+        with _Image.open(full_path) as _img:
+            _img = _img.convert("RGB")
+            print(f"orig size: {_img.size}")
+            _min = min(_img.size)
+            if _min < 1000:
+                _scale = 1000 / _min
+                _img = _img.resize((int(_img.width * _scale), int(_img.height * _scale)), _Image.LANCZOS)
+                print(f"upscaled to: {_img.size}")
+            for _psm in (3, 6, 11):
+                _data = _pyt.image_to_data(_img, config=f"--psm {_psm}", output_type=_pyt.Output.DICT)
+                _kept = []
+                for _t, _c in zip(_data.get("text", []), _data.get("conf", [])):
+                    try:
+                        _cv = int(float(_c))
+                    except (TypeError, ValueError):
+                        continue
+                    _tok = (_t or "").strip()
+                    if _tok and _cv >= 60:
+                        _kept.append(f"{_tok}({_cv})")
+                print(f"  PSM {_psm}: {' '.join(_kept) or '(no conf>=60 words)'}")
+
         text = extract_text_ocr(full_path)
         print(f"new ocr result: {text!r}")
         db.close()
