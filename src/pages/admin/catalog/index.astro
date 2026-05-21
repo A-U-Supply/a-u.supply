@@ -1,5 +1,6 @@
 ---
 import Admin from '../../../layouts/Admin.astro';
+import BrutalCard from '../../../components/BrutalCard.astro';
 ---
 
 <Admin title="Releases" current="catalog">
@@ -8,42 +9,54 @@ import Admin from '../../../layouts/Admin.astro';
     <a href="/admin/catalog/new" class="btn-primary">+ New Release</a>
   </div>
 
-  <div
-    class="status-tabs"
-    id="status-tabs"
-    style="margin-top: var(--space-md);"
-  >
-    <button class="tab active" data-status="all">All</button>
-    <button class="tab" data-status="draft">Draft</button>
-    <button class="tab" data-status="published">Published</button>
-  </div>
+  <BrutalCard title="Catalog" class="catalog-card" flush>
+    <Fragment slot="action">
+      <div class="catalog-status-tabs" id="status-tabs">
+        <button class="catalog-tab is-active" data-status="all">All</button>
+        <button class="catalog-tab" data-status="draft">Draft</button>
+        <button class="catalog-tab" data-status="published">Published</button>
+      </div>
+    </Fragment>
 
-  <div id="loading" style="color: var(--color-muted);">
-    <span class="loading-dots">Loading releases</span>
-  </div>
-  <div id="error" class="login-error" style="display:none;"></div>
-  <div id="empty" class="empty-state" style="display:none;">
-    <div class="empty-state__icon">&#9744;</div>
-    No releases found.
-  </div>
+    <div
+      id="loading"
+      style="color: var(--color-muted); padding: var(--space-md);"
+    >
+      <span class="loading-dots">Loading releases</span>
+    </div>
+    <div
+      id="error"
+      class="login-error"
+      style="display:none; padding: var(--space-md);"
+    >
+    </div>
+    <div
+      id="empty"
+      class="empty-state"
+      style="display:none; border: none; margin: 0;"
+    >
+      <div class="empty-state__icon">&#9744;</div>
+      No releases found.
+    </div>
 
-  <div class="table-wrap" id="table-wrap" style="display:none;">
-    <table class="release-table">
-      <thead>
-        <tr>
-          <th>Code</th>
-          <th>Title</th>
-          <th>Entity</th>
-          <th>Status</th>
-          <th>Release Date</th>
-          <th>Tracks</th>
-          <th>Created By</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="release-tbody"></tbody>
-    </table>
-  </div>
+    <div class="table-wrap" id="table-wrap" style="display:none;">
+      <table class="release-table">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Title</th>
+            <th>Entity</th>
+            <th>Status</th>
+            <th>Release Date</th>
+            <th>Tracks</th>
+            <th>Created By</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="release-tbody"></tbody>
+      </table>
+    </div>
+  </BrutalCard>
 
   <!-- Delete confirmation dialog -->
   <div class="dialog-overlay" id="delete-dialog" style="display:none;">
@@ -63,6 +76,45 @@ import Admin from '../../../layouts/Admin.astro';
 </Admin>
 
 <style>
+  /* Status tabs sit in the brutal-card head. Each tab gets the standard
+     brutalist invert-on-active treatment so the active filter is loud. */
+  .catalog-status-tabs {
+    display: inline-flex;
+    gap: 0;
+  }
+  .catalog-tab {
+    padding: 4px 10px;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    border: 2px solid var(--color-fg);
+    border-right-width: 0;
+    cursor: pointer;
+    min-height: 32px;
+  }
+  .catalog-tab:last-child {
+    border-right-width: 2px;
+  }
+  .catalog-tab:hover:not(.is-active) {
+    background: var(--color-surface-2);
+  }
+  .catalog-tab.is-active {
+    background: var(--color-fg);
+    color: var(--color-bg);
+  }
+
+  /* Catalog brutal-card body holds the table directly. Sticky header so
+     the column labels stay anchored as you scroll long catalogs. */
+  .catalog-card .release-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--color-bg);
+    z-index: 1;
+  }
+
   @media (max-width: 900px) {
     /* Entity, Tracks, Created By are secondary — drop them before the table scrolls */
     .release-table th:nth-child(3),
@@ -72,6 +124,10 @@ import Admin from '../../../layouts/Admin.astro';
     .release-table th:nth-child(7),
     .release-table td:nth-child(7) {
       display: none;
+    }
+    .catalog-status-tabs {
+      width: 100%;
+      justify-content: flex-start;
     }
   }
   @media (max-width: 540px) {
@@ -96,14 +152,14 @@ import Admin from '../../../layouts/Admin.astro';
     // Tab switching
     document.getElementById('status-tabs')?.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest(
-        '.tab',
+        '.catalog-tab',
       ) as HTMLButtonElement | null;
       if (!btn) return;
       currentFilter = btn.dataset.status || 'all';
       document
-        .querySelectorAll('.tab')
-        .forEach((t) => t.classList.remove('active'));
-      btn.classList.add('active');
+        .querySelectorAll('.catalog-tab')
+        .forEach((t) => t.classList.remove('is-active'));
+      btn.classList.add('is-active');
       renderTable();
     });
 

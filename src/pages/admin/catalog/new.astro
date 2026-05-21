@@ -206,7 +206,7 @@ import Admin from '../../../layouts/Admin.astro';
       <div id="save-error" class="login-error" style="display:none;"></div>
       <div
         id="save-success"
-        style="display:none; color: green; font-size: var(--text-sm); margin-top: var(--space-sm);"
+        style="display:none; color: var(--color-status-ok); font-size: var(--text-sm); margin-top: var(--space-sm);"
       >
       </div>
       <div class="save-actions">
@@ -245,23 +245,31 @@ import Admin from '../../../layouts/Admin.astro';
     color: var(--color-text);
   }
 
-  /* Collapsible sections */
+  /* Collapsible sections — brutalist card chrome. Heading bar inverts on
+     hover so the affordance reads as a tap target in both modes. */
   .collapsible {
     margin-top: var(--space-md);
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-fg);
+    background: var(--color-surface);
+    box-shadow: 4px 4px 0 var(--color-fg);
   }
   .collapsible__heading {
     font-size: var(--text-base);
     text-transform: uppercase;
     letter-spacing: 1pt;
-    padding: var(--space-sm) var(--space-md);
+    padding: 10px var(--space-md);
     cursor: pointer;
     user-select: none;
-    background: #f8f8f8;
-    border-bottom: 1px solid var(--color-border);
+    background: var(--color-bg);
+    color: var(--color-fg);
+    border-bottom: 2px solid var(--color-fg);
     display: flex;
     justify-content: space-between;
     align-items: center;
+    min-height: 40px;
+  }
+  .collapsible__heading:hover {
+    background: var(--color-surface-2);
   }
   .collapsible__heading::after {
     content: '+';
@@ -313,7 +321,8 @@ import Admin from '../../../layouts/Admin.astro';
   /* Entity multi-select */
   .entity-select {
     position: relative;
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-fg);
+    box-shadow: 2px 2px 0 var(--color-fg);
     padding: var(--space-xs);
     display: flex;
     flex-wrap: wrap;
@@ -323,8 +332,8 @@ import Admin from '../../../layouts/Admin.astro';
     cursor: text;
   }
   .entity-select:focus-within {
-    outline: 2px solid var(--color-accent);
-    outline-offset: -1px;
+    outline: none;
+    border-color: var(--color-accent);
   }
   .entity-tags {
     display: contents;
@@ -336,7 +345,8 @@ import Admin from '../../../layouts/Admin.astro';
     padding: 2px 6px;
     font-size: 0.7rem;
     background: var(--color-surface-2);
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-fg);
+    color: var(--color-fg);
     text-transform: uppercase;
     letter-spacing: 0.5pt;
   }
@@ -350,7 +360,7 @@ import Admin from '../../../layouts/Admin.astro';
     line-height: 1;
   }
   .entity-tag button:hover {
-    color: #c00;
+    color: var(--color-status-fail);
   }
   #entity-search {
     border: none;
@@ -360,15 +370,18 @@ import Admin from '../../../layouts/Admin.astro';
     padding: 2px 4px;
     font-family: var(--font-mono);
     font-size: var(--text-sm);
+    background: transparent;
+    color: var(--color-fg);
   }
   .entity-dropdown {
     position: absolute;
     top: 100%;
-    left: -1px;
-    right: -1px;
+    left: -2px;
+    right: -2px;
     background: var(--color-bg);
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-fg);
     border-top: none;
+    box-shadow: 2px 2px 0 var(--color-fg);
     max-height: 200px;
     overflow-y: auto;
     z-index: 50;
@@ -386,37 +399,51 @@ import Admin from '../../../layouts/Admin.astro';
     font-style: italic;
   }
 
-  /* Buttons */
+  /* Inline buttons — brutalist with 2px border + hard offset shadow. */
   .btn-sm {
     padding: var(--space-xs) var(--space-sm);
     font-family: var(--font-mono);
     font-size: var(--text-sm);
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5pt;
     background: var(--color-fg);
     color: var(--color-bg);
-    border: none;
+    border: 2px solid var(--color-fg);
+    box-shadow: 2px 2px 0 var(--color-fg);
     cursor: pointer;
+    transition:
+      transform 60ms ease,
+      box-shadow 60ms ease;
   }
   .btn-sm:hover {
-    background: color-mix(in srgb, var(--color-fg) 80%, var(--color-bg));
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--color-fg);
+  }
+  .btn-sm:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--color-fg);
   }
   .btn-sm--danger {
-    background: #c00;
+    background: var(--color-status-fail);
+    border-color: var(--color-status-fail);
+    color: var(--color-bg);
+    box-shadow: 2px 2px 0 var(--color-status-fail);
   }
   .btn-sm--danger:hover {
-    background: #a00;
+    box-shadow: 3px 3px 0 var(--color-status-fail);
   }
 
   /* Drop zones */
   .drop-zone {
-    border: 2px dashed var(--color-border);
+    border: 2px dashed var(--color-fg);
+    background: var(--color-surface);
     transition:
       background 0.15s,
       border-color 0.15s;
   }
   .drop-zone.dragover {
-    background: #f8f6f0;
+    background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg));
     border-color: var(--color-accent);
   }
   .drop-zone__inner {
@@ -472,9 +499,9 @@ import Admin from '../../../layouts/Admin.astro';
     text-align: right;
   }
   .track-item__remove {
-    background: none;
-    border: 1px solid #c00;
-    color: #c00;
+    background: var(--color-bg);
+    border: 1px solid var(--color-status-fail);
+    color: var(--color-status-fail);
     font-family: var(--font-mono);
     font-size: 0.65rem;
     padding: 2px 6px;
@@ -482,13 +509,13 @@ import Admin from '../../../layouts/Admin.astro';
     text-transform: uppercase;
   }
   .track-item__remove:hover {
-    background: #c00;
-    color: #fff;
+    background: var(--color-status-fail);
+    color: var(--color-bg);
   }
 
   .track-item--uploading {
     opacity: 0.7;
-    border-left: 3px solid var(--color-accent, #888);
+    border-left: 3px solid var(--color-accent);
     animation: pulse-bg 1.2s ease-in-out infinite;
   }
   @keyframes pulse-bg {
@@ -497,18 +524,18 @@ import Admin from '../../../layouts/Admin.astro';
       background: transparent;
     }
     50% {
-      background: rgba(128, 128, 128, 0.08);
+      background: color-mix(in srgb, var(--color-muted) 10%, transparent);
     }
   }
   .track-item--done {
-    border-left: 3px solid #2a2;
+    border-left: 3px solid var(--color-status-ok);
   }
   .track-item--failed {
-    border-left: 3px solid #c00;
-    background: rgba(200, 0, 0, 0.05);
+    border-left: 3px solid var(--color-status-fail);
+    background: color-mix(in srgb, var(--color-status-fail) 5%, transparent);
   }
 
-  /* Link rows */
+  /* Link rows — brutalist inputs with 2px borders + offset shadow. */
   .link-row {
     display: flex;
     gap: var(--space-xs);
@@ -521,8 +548,10 @@ import Admin from '../../../layouts/Admin.astro';
     padding: var(--space-xs) var(--space-sm);
     font-family: var(--font-mono);
     font-size: var(--text-sm);
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-fg);
+    box-shadow: 2px 2px 0 var(--color-fg);
     background: var(--color-bg);
+    color: var(--color-fg);
   }
   .link-row select {
     min-width: 130px;
@@ -546,8 +575,10 @@ import Admin from '../../../layouts/Admin.astro';
     padding: var(--space-xs) var(--space-sm);
     font-family: var(--font-mono);
     font-size: var(--text-sm);
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-fg);
+    box-shadow: 2px 2px 0 var(--color-fg);
     background: var(--color-bg);
+    color: var(--color-fg);
   }
   .freeform-row input:first-child {
     width: 160px;
@@ -568,17 +599,25 @@ import Admin from '../../../layouts/Admin.astro';
     font-size: 0.65rem;
     text-transform: uppercase;
     letter-spacing: 0.5pt;
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-fg);
+    box-shadow: 1px 1px 0 var(--color-fg);
     cursor: pointer;
     background: var(--color-bg);
+    color: var(--color-fg);
     font-family: var(--font-mono);
+    transition:
+      transform 60ms ease,
+      box-shadow 60ms ease;
   }
   .chip:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 2px 2px 0 var(--color-accent);
     border-color: var(--color-accent);
     color: var(--color-accent);
   }
 
-  /* Save section */
+  /* Save section — primary submit buttons get the loudest brutalist
+     chrome (4px shadow) so they read as the page's terminal actions. */
   .save-actions {
     display: flex;
     gap: var(--space-sm);
@@ -593,21 +632,40 @@ import Admin from '../../../layouts/Admin.astro';
     letter-spacing: 1pt;
     background: var(--color-fg);
     color: var(--color-bg);
-    border: none;
+    border: 2px solid var(--color-fg);
+    box-shadow: 4px 4px 0 var(--color-fg);
     cursor: pointer;
+    transition:
+      transform 60ms ease,
+      box-shadow 60ms ease;
   }
   .btn-save:hover {
-    background: color-mix(in srgb, var(--color-fg) 80%, var(--color-bg));
+    transform: translate(-1px, -1px);
+    box-shadow: 5px 5px 0 var(--color-fg);
+  }
+  .btn-save:active {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0 var(--color-fg);
   }
   .btn-save:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
+  .btn-save:disabled:hover {
+    transform: none;
+    box-shadow: 4px 4px 0 var(--color-fg);
+  }
   .btn-save--publish {
     background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-bg);
+    box-shadow: 4px 4px 0 var(--color-accent);
   }
   .btn-save--publish:hover {
-    background: #9a7209;
+    box-shadow: 5px 5px 0 var(--color-accent);
+  }
+  .btn-save--publish:active {
+    box-shadow: 2px 2px 0 var(--color-accent);
   }
 
   .progress-bar {
