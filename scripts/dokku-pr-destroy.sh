@@ -15,7 +15,7 @@ if ! ssh_dokku apps:exists "${APP}" >/dev/null 2>&1; then
 fi
 
 echo "==> Destroying ${APP}"
-ssh_dokku --force apps:destroy "${APP}"
+ssh_dokku apps:destroy "${APP}" --force
 
 # Immediately reclaim the disk for this app's image + layers. apps:destroy
 # removes the tagged image, this sweeps the orphan layers left behind without

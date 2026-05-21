@@ -17,20 +17,29 @@ Until now, the only way to test changes against real auth and real integrations 
 ## Architecture
 
 ```
-PR opened/sync ──▶ GH Action ──▶ scripts/dokku-pr-provision.sh
-                                  ├─ apps:create (idempotent)
-                                  ├─ domains:set pr-<N>.dev.a-u.supply
-                                  ├─ storage:ensure-directory + cp prod au.db (first run only)
-                                  ├─ storage:mount au-supply-model-cache:ro
-                                  ├─ config:set SECRET_KEY=<random> STAGING=1 PR_NUMBER=<N>
-                                  ├─ ps:scale worker=0 web=1
-                                  ├─ git push → master
-                                  └─ letsencrypt:enable
+PR opened/sync ──▶ GH Action: build job   ──▶ docker build on GH runner
+                                              push to ghcr.io/a-u-supply/au-supply-preview:pr-N-<sha>
+                ──▶ GH Action: deploy job ──▶ scripts/dokku-pr-provision.sh
+                                              ├─ apps:create (idempotent)
+                                              ├─ domains:set pr-<N>.dev.a-u.supply
+                                              ├─ storage:ensure + storage:mount
+                                              ├─ storage:mount au-supply-model-cache:ro
+                                              ├─ config:set SECRET_KEY STAGING=1 PR_NUMBER
+                                              ├─ ps:scale worker=0 web=1
+                                              ├─ git:from-image (Dokku PULLS the prebuilt image)
+                                              ├─ snapshot prod au.db via dokku run (first deploy only)
+                                              └─ letsencrypt:enable
                                           ▼
                               https://pr-<N>.dev.a-u.supply
-PR closed/merged ──▶ GH Action ──▶ scripts/dokku-pr-destroy.sh ──▶ apps:destroy --force
+PR closed/merged ──▶ GH Action: destroy ──▶ scripts/dokku-pr-destroy.sh ──▶ apps:destroy --force
 Daily host cron ──▶ docker image prune -af --filter "until=24h"  (safety net)
 ```
+
+## Why the build happens on GitHub runners, not the Dokku host
+
+The host has 7.6 GB RAM, already loaded with prod + the fold stack (~4 GB steady). A `git push dokku` triggers a full image build (Astro + Python + ffmpeg + deno + ML deps, ~2 GB peak), which on the first attempt blew through swap and OOM-ed prod into a 502.
+
+The new flow builds the image on GitHub's runners (16 GB+, ephemeral) and only pulls it on Dokku. Pull and start use ~250 MB peak — far below what prod needs. Builds and prod runtime no longer compete for the same RAM.
 
 ## Files
 
@@ -83,13 +92,19 @@ If not already set:
 ssh dokku letsencrypt:set --global email <ops@email>
 ```
 
-### 4. Verify ownership of prod storage
+### 4. GHCR pull credentials on Dokku (one-time)
 
-```
-ssh dokku -- ls -la /var/lib/dokku/data/storage/au-supply/au.db
-```
+The build job pushes to `ghcr.io/a-u-supply/au-supply-preview` as a private package. Dokku needs credentials to pull it:
 
-Expect `dokku:dokku`. If it's `root:root`, the provisioner's `cp` step needs to switch to `dokku run au-supply -- cat ... > ...` piping.
+1. Create a Personal Access Token (classic) with `read:packages` scope at https://github.com/settings/tokens
+2. On the Dokku host:
+   ```
+   ssh dokku registry:login ghcr.io <github-username> <token>
+   ```
+
+This persists in the host's docker config; future PR previews pull without further setup.
+
+(Alternative: make the `au-supply-preview` package public via the GitHub package settings page, in which case no credentials are needed. Choose based on whether the built image is considered sensitive.)
 
 ## Resource sizing
 
