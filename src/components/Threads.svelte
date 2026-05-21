@@ -57,11 +57,16 @@
     id: number;
     content: string;
     creator_id: number;
+    creator_name?: string | null;
+    creator_display_name?: string | null;
     parent_id: number | null;
     path: string;
     published: string | null;
     deleted: boolean;
   };
+
+  const commentAuthor = (c: CommentRow): string =>
+    c.creator_display_name || c.creator_name || `user #${c.creator_id}`;
 
   let threads = $state<ThreadRow[]>([]);
   let lemmyConfigured = $state(true);
@@ -518,7 +523,7 @@
               style="margin-left: {Math.min(depth, 6) * 16}px"
             >
               <div class="comment__meta">
-                <span>user #{c.creator_id}</span>
+                <span>{commentAuthor(c)}</span>
                 <span>{fmtTime(c.published)}</span>
               </div>
               <div class="comment__body">
@@ -617,7 +622,7 @@
                     style="margin-left: {Math.min(depth, 6) * 16}px"
                   >
                     <div class="comment__meta">
-                      <span>user #{c.creator_id}</span>
+                      <span>{commentAuthor(c)}</span>
                       <span>{fmtTime(c.published)}</span>
                       <button
                         class="link"

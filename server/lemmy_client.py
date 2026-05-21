@@ -329,6 +329,10 @@ class LemmyComment:
     path: str
     published: str | None
     deleted: bool
+    # Pulled from `comment_view.creator` so the UI can show the actual fold
+    # username instead of a numeric id placeholder.
+    creator_name: str | None = None
+    creator_display_name: str | None = None
 
 
 def list_posts(token: str, community_id: int, limit: int = 50) -> list[LemmyPost]:
@@ -412,6 +416,7 @@ def get_post(token: str, post_id: int) -> tuple[LemmyPost | None, list[LemmyComm
     if isinstance(cresp, dict):
         for cv in cresp.get("comments", []):
             c = cv.get("comment") or {}
+            creator = cv.get("creator") or {}
             path = c.get("path") or ""
             parts = path.split(".")
             parent = int(parts[-2]) if len(parts) >= 2 and parts[-2] != "0" else None
@@ -423,6 +428,8 @@ def get_post(token: str, post_id: int) -> tuple[LemmyPost | None, list[LemmyComm
                 path=path,
                 published=c.get("published"),
                 deleted=bool(c.get("deleted")),
+                creator_name=creator.get("name"),
+                creator_display_name=creator.get("display_name"),
             ))
     return post, comments
 
@@ -471,6 +478,7 @@ def create_comment(token: str, post_id: int, content: str, parent_id: int | None
     resp = _request("POST", "/api/v3/comment", token=token, json_body=payload)
     cv = resp.get("comment_view", {}) if isinstance(resp, dict) else {}
     c = cv.get("comment") or {}
+    creator = cv.get("creator") or {}
     return LemmyComment(
         id=c.get("id"),
         content=c.get("content") or "",
@@ -479,6 +487,8 @@ def create_comment(token: str, post_id: int, content: str, parent_id: int | None
         path=c.get("path") or "",
         published=c.get("published"),
         deleted=False,
+        creator_name=creator.get("name"),
+        creator_display_name=creator.get("display_name"),
     )
 
 

@@ -184,6 +184,8 @@ def _comment_dict(c: Any) -> dict:
         "id": c.id,
         "content": c.content,
         "creator_id": c.creator_id,
+        "creator_name": getattr(c, "creator_name", None),
+        "creator_display_name": getattr(c, "creator_display_name", None),
         "parent_id": c.parent_id,
         "path": c.path,
         "published": c.published,
