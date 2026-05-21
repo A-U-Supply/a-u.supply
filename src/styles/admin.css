@@ -176,6 +176,12 @@
   padding-bottom: calc(var(--space-lg) + 96px);
   max-width: 960px;
   min-width: 0;
+  /* Brutalist card chrome uses `box-shadow: 4px 4px 0` which extends
+     past each card's box. At viewport width that shadow pushes the
+     page 4px wider than the screen and triggers horizontal scroll.
+     `clip` (not `hidden`) so we don't establish a scroll container
+     that would silently break `position: sticky` descendants. */
+  overflow-x: clip;
 }
 
 .admin-main h1 {
