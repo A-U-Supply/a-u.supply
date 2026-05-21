@@ -1,40 +1,38 @@
 ---
 import Admin from '../../../layouts/Admin.astro';
+import BrutalSelect from '../../../components/BrutalSelect.astro';
 ---
 
 <Admin title="Nomenclator" current="nomenclator">
   <div class="triage-header">
     <h1>Nomenclator</h1>
     <div class="triage-controls">
-      <select id="triage-type">
+      <BrutalSelect id="triage-type" ariaLabel="Filter by media type">
         <option value="">All Types</option>
         <option value="image">Image</option>
         <option value="audio">Audio</option>
         <option value="video">Video</option>
-      </select>
-      <select id="triage-channel">
+      </BrutalSelect>
+      <BrutalSelect id="triage-channel" ariaLabel="Filter by channel">
         <option value="">All Channels</option>
-      </select>
-      <label
-        class="filter-label"
-        style="display:inline; margin-left: var(--space-sm);"
-      >
-        Max Tags:
+      </BrutalSelect>
+      <label class="filter-label">
+        <span>Max Tags</span>
         <input
           type="number"
           id="triage-max-tags"
+          class="brutal-input"
           value="0"
           min="0"
           max="10"
-          style="width: 50px;"
         />
       </label>
-      <select id="triage-ingested">
+      <BrutalSelect id="triage-ingested" ariaLabel="Filter by ingestion age">
         <option value="">Any Age</option>
         <option value="24h">Last 24h</option>
         <option value="7d">Last 7 days</option>
         <option value="30d">Last 30 days</option>
-      </select>
+      </BrutalSelect>
       <button class="action-btn" id="triage-refresh">Refresh</button>
     </div>
   </div>
@@ -139,14 +137,14 @@ import Admin from '../../../layouts/Admin.astro';
     gap: var(--space-xs);
     flex-wrap: wrap;
   }
-  .triage-controls select,
-  .triage-controls input {
-    padding: 4px 6px;
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    border: 1px solid var(--color-border);
-    background: var(--color-bg);
-    color: var(--color-text);
+  .triage-controls input[type='number'] {
+    width: 60px;
+    text-align: right;
+  }
+  .filter-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
 
   .progress-bar {
@@ -167,7 +165,9 @@ import Admin from '../../../layouts/Admin.astro';
   }
 
   .triage-card {
-    border: 2px solid var(--color-text);
+    border: 2px solid var(--color-fg);
+    box-shadow: 4px 4px 0 var(--color-fg);
+    background: var(--color-bg);
     padding: var(--space-md);
     margin-bottom: var(--space-md);
   }
@@ -222,22 +222,26 @@ import Admin from '../../../layouts/Admin.astro';
     align-items: center;
     gap: 4px;
     padding: 2px 8px;
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-fg);
+    background: var(--color-bg);
+    color: var(--color-fg);
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.5pt;
   }
   .tag-chip--existing {
     color: var(--color-muted);
+    border-color: var(--color-border);
   }
   .tag-chip--pending {
     border-color: var(--color-accent);
     color: var(--color-accent);
+    box-shadow: 1px 1px 0 var(--color-accent);
   }
   .tag-chip button {
     background: none;
     border: none;
-    color: #c00;
+    color: var(--color-status-fail);
     cursor: pointer;
     font-size: 0.8rem;
     padding: 0;
@@ -247,23 +251,33 @@ import Admin from '../../../layouts/Admin.astro';
   .triage-quick-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 6px;
     margin-bottom: var(--space-sm);
   }
   .quick-tag {
     padding: 4px 10px;
-    border: 1px solid var(--color-border);
-    background: none;
+    border: 2px solid var(--color-fg);
+    background: var(--color-bg);
+    box-shadow: 2px 2px 0 var(--color-fg);
     font-family: var(--font-mono);
     font-size: 0.7rem;
     text-transform: uppercase;
     cursor: pointer;
-    color: var(--color-text);
+    color: var(--color-fg);
     position: relative;
+    transition:
+      transform 60ms ease,
+      box-shadow 60ms ease;
   }
   .quick-tag:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--color-accent);
     border-color: var(--color-accent);
     color: var(--color-accent);
+  }
+  .quick-tag:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--color-fg);
   }
   .quick-tag .key-hint {
     font-size: 0.55rem;
@@ -273,7 +287,7 @@ import Admin from '../../../layouts/Admin.astro';
     right: -4px;
     background: var(--color-bg);
     padding: 0 2px;
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-fg);
     line-height: 1;
   }
 
@@ -285,11 +299,14 @@ import Admin from '../../../layouts/Admin.astro';
     padding: var(--space-xs) var(--space-sm);
     font-family: var(--font-mono);
     font-size: var(--text-sm);
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-fg);
+    box-shadow: 2px 2px 0 var(--color-fg);
+    background: var(--color-bg);
+    color: var(--color-fg);
   }
   .tag-input-row input:focus {
-    outline: 2px solid var(--color-accent);
-    outline-offset: -1px;
+    outline: none;
+    border-color: var(--color-accent);
   }
   .tag-suggestions {
     position: absolute;
@@ -297,8 +314,9 @@ import Admin from '../../../layouts/Admin.astro';
     left: 0;
     right: 0;
     background: var(--color-bg);
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-fg);
     border-top: none;
+    box-shadow: 2px 2px 0 var(--color-fg);
     max-height: 150px;
     overflow-y: auto;
     z-index: 10;
@@ -332,25 +350,29 @@ import Admin from '../../../layouts/Admin.astro';
     text-transform: uppercase;
     letter-spacing: 1pt;
     border: 2px solid;
+    box-shadow: 4px 4px 0 var(--color-fg);
     cursor: pointer;
+    transition:
+      transform 60ms ease,
+      box-shadow 60ms ease;
+  }
+  .triage-btn:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 5px 5px 0 var(--color-fg);
+  }
+  .triage-btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0 var(--color-fg);
   }
   .triage-btn--skip {
-    background: none;
-    border-color: var(--color-border);
-    color: var(--color-muted);
-  }
-  .triage-btn--skip:hover {
-    border-color: var(--color-text);
-    color: var(--color-text);
+    background: var(--color-bg);
+    border-color: var(--color-fg);
+    color: var(--color-fg);
   }
   .triage-btn--submit {
     background: var(--color-fg);
     border-color: var(--color-fg);
     color: var(--color-bg);
-  }
-  .triage-btn--submit:hover {
-    background: color-mix(in srgb, var(--color-fg) 80%, var(--color-bg));
-    border-color: color-mix(in srgb, var(--color-fg) 80%, var(--color-bg));
   }
 
   .triage-nav {
