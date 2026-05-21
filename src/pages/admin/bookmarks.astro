@@ -1,5 +1,6 @@
 ---
 import Admin from '../../layouts/Admin.astro';
+import BrutalSelect from '../../components/BrutalSelect.astro';
 ---
 
 <Admin title="Dog-ears" current="bookmarks">
@@ -8,22 +9,22 @@ import Admin from '../../layouts/Admin.astro';
     <div class="header-actions">
       <input
         type="search"
-        class="filter-input"
+        class="brutal-input"
         id="search-input"
         placeholder="Search name…"
         autocomplete="off"
       />
-      <select class="filter-select" id="sort-select">
+      <BrutalSelect id="sort-select" ariaLabel="Sort dog-ears">
         <option value="newest">Newest</option>
         <option value="oldest">Oldest</option>
         <option value="name">A–Z</option>
-      </select>
-      <select class="filter-select" id="type-filter">
+      </BrutalSelect>
+      <BrutalSelect id="type-filter" ariaLabel="Filter by type">
         <option value="">All Types</option>
         <option value="media_item">Media Items</option>
         <option value="release">Releases</option>
         <option value="track">Tracks</option>
-      </select>
+      </BrutalSelect>
     </div>
   </div>
 
@@ -48,22 +49,26 @@ import Admin from '../../layouts/Admin.astro';
 
   <div id="bookmarks-grid" class="bm-grid" style="display:none;"></div>
 
-  <div class="pagination" id="pagination" style="display:none;">
-    <button class="action-btn" id="prev-page">Prev</button>
-    <span id="page-info">Page 1</span>
-    <button class="action-btn" id="next-page">Next</button>
+  <nav
+    class="bm-pagination-row"
+    id="bm-pagination-row"
+    style="display:none;"
+    aria-label="Dog-ears pagination"
+  >
+    <div class="pagination" id="pagination"></div>
     <label class="page-jump">
       Page
       <input
         type="number"
         id="page-jump-input"
+        class="brutal-input"
         min="1"
         step="1"
         inputmode="numeric"
       />
     </label>
     <span class="page-count" id="page-count"></span>
-  </div>
+  </nav>
 </Admin>
 
 <!-- Global styles for dynamically rendered grid items -->
@@ -98,7 +103,7 @@ import Admin from '../../layouts/Admin.astro';
   .bm-card__thumb {
     width: 100%;
     aspect-ratio: 1;
-    background: #111;
+    background: var(--color-surface-2);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -115,8 +120,8 @@ import Admin from '../../layouts/Admin.astro';
     top: 3px;
     right: 4px;
     font-size: 0.55rem;
-    background: rgba(0, 0, 0, 0.6);
-    color: #fff;
+    background: var(--color-overlay);
+    color: var(--color-on-overlay);
     padding: 1px 4px;
     text-transform: uppercase;
     font-family: var(--font-mono);
@@ -127,7 +132,7 @@ import Admin from '../../layouts/Admin.astro';
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.35);
+    background: var(--color-overlay-soft);
     opacity: 0;
     transition: opacity 0.15s;
     cursor: pointer;
@@ -140,16 +145,17 @@ import Admin from '../../layouts/Admin.astro';
   .bm-card__play svg {
     width: 32px;
     height: 32px;
-    fill: #fff;
-    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+    fill: var(--color-on-overlay);
+    filter: drop-shadow(0 1px 3px var(--color-overlay));
   }
   .bm-card__add {
     position: absolute;
     bottom: 4px;
     right: 4px;
-    background: rgba(0, 0, 0, 0.6);
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: var(--color-overlay);
+    color: var(--color-on-overlay);
+    border: 1px solid
+      color-mix(in srgb, var(--color-on-overlay) 30%, transparent);
     font-family: var(--font-mono);
     font-size: 0.85rem;
     font-weight: bold;
@@ -168,16 +174,17 @@ import Admin from '../../layouts/Admin.astro';
     opacity: 1;
   }
   .bm-card__add:hover {
-    background: rgba(184, 134, 11, 0.8);
-    border-color: #b8860b;
+    background: color-mix(in srgb, var(--color-accent) 80%, transparent);
+    border-color: var(--color-accent);
   }
   .bm-card__ws {
     position: absolute;
     top: 4px;
     right: 4px;
-    background: rgba(0, 0, 0, 0.6);
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: var(--color-overlay);
+    color: var(--color-on-overlay);
+    border: 1px solid
+      color-mix(in srgb, var(--color-on-overlay) 30%, transparent);
     font-size: 0.65rem;
     width: 24px;
     height: 24px;
@@ -194,13 +201,13 @@ import Admin from '../../layouts/Admin.astro';
     opacity: 1;
   }
   .bm-card__ws:hover {
-    background: rgba(184, 134, 11, 0.8);
-    border-color: #b8860b;
+    background: color-mix(in srgb, var(--color-accent) 80%, transparent);
+    border-color: var(--color-accent);
   }
   .bm-card__ws svg {
     width: 14px;
     height: 14px;
-    fill: #fff;
+    fill: var(--color-on-overlay);
   }
   .bm-card__info {
     padding: 4px 6px;
@@ -232,7 +239,7 @@ import Admin from '../../layouts/Admin.astro';
       opacity: 1;
     }
     .bm-card__play {
-      background: rgba(0, 0, 0, 0.15);
+      background: color-mix(in srgb, var(--color-overlay) 30%, transparent);
     }
   }
   @media (max-width: 640px) {
@@ -250,7 +257,8 @@ import Admin from '../../layouts/Admin.astro';
     gap: var(--space-sm);
     padding: var(--space-xs) var(--space-sm);
     background: var(--color-surface);
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-fg);
+    box-shadow: 2px 2px 0 var(--color-fg);
     margin-bottom: var(--space-sm);
     flex-wrap: wrap;
     font-family: var(--font-mono);
@@ -260,23 +268,27 @@ import Admin from '../../layouts/Admin.astro';
     color: var(--color-muted);
     margin-right: auto;
   }
+  .bm-pagination-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+    flex-wrap: wrap;
+  }
   .page-jump {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     font-family: var(--font-mono);
-    font-size: var(--text-sm);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
     color: var(--color-muted);
     margin-left: var(--space-sm);
   }
   .page-jump input {
     width: 4em;
-    padding: 2px 4px;
-    border: 1px solid var(--color-border);
-    background: var(--color-bg);
-    color: var(--color-text);
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
+    padding: 4px 8px;
     text-align: right;
   }
   .page-count {
@@ -290,6 +302,7 @@ import Admin from '../../layouts/Admin.astro';
 <script>
   import { addItemsToWorkspace } from '../../lib/workspace';
   import { openImageViewer, type ViewerItem } from '../../lib/image-viewer';
+  import { renderPagination, wirePagination } from '../../lib/pagination';
 
   document.addEventListener('astro:page-load', async () => {
     const gridEl = document.getElementById('bookmarks-grid');
@@ -300,8 +313,8 @@ import Admin from '../../layouts/Admin.astro';
     const loadingEl = document.getElementById('loading')!;
     const emptyEl = document.getElementById('empty')!;
     const emptyText = document.getElementById('empty-text')!;
+    const paginationRowEl = document.getElementById('bm-pagination-row')!;
     const paginationEl = document.getElementById('pagination')!;
-    const pageInfo = document.getElementById('page-info')!;
     const pageCount = document.getElementById('page-count')!;
     const pageJumpInput = document.getElementById(
       'page-jump-input',
@@ -333,7 +346,7 @@ import Admin from '../../layouts/Admin.astro';
       loadingEl.style.display = 'block';
       emptyEl.style.display = 'none';
       gridEl.style.display = 'none';
-      paginationEl.style.display = 'none';
+      paginationRowEl.style.display = 'none';
 
       const params = new URLSearchParams({
         page: String(currentPage),
@@ -409,16 +422,23 @@ import Admin from '../../layouts/Admin.astro';
       // single page — the total count is useful info on its own.
       const start = (currentPage - 1) * pageSize + 1;
       const end = Math.min(currentPage * pageSize, totalItems);
-      paginationEl.style.display = 'flex';
-      pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+      paginationRowEl.style.display = 'flex';
+      if (totalPages > 1) {
+        paginationEl.style.display = 'flex';
+        paginationEl.innerHTML = renderPagination({
+          current: currentPage,
+          total: totalPages,
+          windowSize: 2,
+          hrefFor: () => '#',
+        });
+      } else {
+        paginationEl.style.display = 'none';
+        paginationEl.innerHTML = '';
+      }
       pageCount.textContent = `(${start}–${end} of ${totalItems})`;
       pageJumpInput.max = String(totalPages);
       pageJumpInput.value = String(currentPage);
       pageJumpInput.style.display = totalPages > 1 ? '' : 'none';
-      (document.getElementById('prev-page') as HTMLButtonElement).disabled =
-        currentPage <= 1;
-      (document.getElementById('next-page') as HTMLButtonElement).disabled =
-        currentPage >= totalPages;
     }
 
     function renderCard(item: any, idx: number) {
@@ -446,9 +466,7 @@ import Admin from '../../layouts/Admin.astro';
       // Default to the small thumbnail; let srcset upgrade for wider columns
       // and high-DPI displays. Cuts bytes/card by ~10x vs. the full-size thumb.
       const primarySrc = m.thumb_sm || m.thumb;
-      const srcset = m.thumb_sm
-        ? `${m.thumb_sm} 128w, ${m.thumb} 400w`
-        : '';
+      const srcset = m.thumb_sm ? `${m.thumb_sm} 128w, ${m.thumb} 400w` : '';
       return `<div class="bm-card${selectedClass}" data-target-type="${item.target_type}" data-target-id="${item.target_id}" data-href="${m.href}">
           <input type="checkbox" class="bm-card__check" data-select="${item.target_id}" ${checked} />
           <div class="bm-card__thumb">
@@ -791,17 +809,10 @@ import Admin from '../../layouts/Admin.astro';
       }, 250);
     });
 
-    document.getElementById('prev-page')?.addEventListener('click', () => {
-      if (currentPage > 1) {
-        currentPage--;
-        loadBookmarks();
-      }
-    });
-    document.getElementById('next-page')?.addEventListener('click', () => {
-      if (currentPage * pageSize < totalItems) {
-        currentPage++;
-        loadBookmarks();
-      }
+    wirePagination(paginationEl, (page) => {
+      currentPage = page;
+      loadBookmarks();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     });
 
     const goToJumpPage = () => {
