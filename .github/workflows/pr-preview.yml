@@ -1,8 +1,13 @@
 name: PR preview environment
 
+# Opt-in via the `preview` label. Adding the label provisions a preview; pushing
+# to a labeled PR updates it; removing the label or closing the PR tears it
+# down. Without the label, this workflow does nothing -- no build minutes, no
+# host load.
+
 on:
   pull_request:
-    types: [opened, synchronize, reopened, closed]
+    types: [labeled, unlabeled, synchronize, closed]
 
 concurrency:
   group: pr-preview-${{ github.event.pull_request.number }}
@@ -10,10 +15,15 @@ concurrency:
 
 env:
   IMAGE: ghcr.io/a-u-supply/au-supply-preview
+  PREVIEW_LABEL: preview
 
 jobs:
   build:
-    if: github.event.action != 'closed'
+    if: |
+      github.event.pull_request.state == 'open' && (
+        (github.event.action == 'labeled' && github.event.label.name == 'preview') ||
+        (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'preview'))
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -49,7 +59,11 @@ jobs:
 
   deploy:
     needs: build
-    if: github.event.action != 'closed'
+    if: |
+      github.event.pull_request.state == 'open' && (
+        (github.event.action == 'labeled' && github.event.label.name == 'preview') ||
+        (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'preview'))
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -85,10 +99,12 @@ jobs:
             - User DB snapshotted from prod on first deploy of this PR; subsequent pushes preserve it
             - Worker process disabled in preview
             - Image built on GitHub runners and pulled by Dokku — no build load on the prod host
-            - Will be destroyed when this PR is closed
+            - Remove the `preview` label or close the PR to tear it down
 
   destroy:
-    if: github.event.action == 'closed'
+    if: |
+      (github.event.action == 'unlabeled' && github.event.label.name == 'preview') ||
+      (github.event.action == 'closed' && contains(github.event.pull_request.labels.*.name, 'preview'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -110,6 +126,21 @@ jobs:
           chmod +x scripts/dokku-pr-destroy.sh
           scripts/dokku-pr-destroy.sh "${{ github.event.pull_request.number }}"
 
+      - name: Delete GHCR package versions for this PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR=${{ github.event.pull_request.number }}
+          # List versions of the preview package, filter to those tagged for this PR,
+          # delete each. Best-effort: failures don't fail the workflow.
+          gh api --paginate "/orgs/A-U-Supply/packages/container/au-supply-preview/versions" 2>/dev/null \
+            | jq -r ".[] | select(.metadata.container.tags // [] | any(startswith(\"pr-${PR}-\"))) | .id" \
+            | while read -r vid; do
+                echo "deleting GHCR version ${vid}"
+                gh api -X DELETE "/orgs/A-U-Supply/packages/container/au-supply-preview/versions/${vid}" || true
+              done
+          echo "GHCR cleanup complete"
+
       - name: Update PR comment
         uses: marocchino/sticky-pull-request-comment@v2
         with:
@@ -117,4 +148,4 @@ jobs:
           message: |
             ### Preview environment
 
-            Torn down (PR was closed).
+            Torn down.
