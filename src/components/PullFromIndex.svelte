@@ -1,7 +1,7 @@
 <!--
-  PullFromIndex — modal that searches across all four indices (images, audio,
-  video, emulsion) and multi-selects media items to attach to a Latent
-  (and optionally a slot).
+  PullFromIndex — modal that searches across every index admins can read
+  and multi-selects media items to attach to a Latent (and optionally a
+  slot). Filters are owned by SearchFilterBar, collapsed by default.
 
   Props:
     - open: bind:open from the parent
@@ -10,6 +10,8 @@
     - onAttached: callback fired after a successful attach (parent reloads its list)
 -->
 <script lang="ts">
+  import SearchFilterBar, { type Filters } from './SearchFilterBar.svelte';
+
   type Props = {
     open: boolean;
     projectId: string;
@@ -35,19 +37,31 @@
   };
 
   let q = $state('');
-  let mediaTypes = $state<string[]>(['image', 'audio', 'video', 'emulsion']);
+  let filters = $state<Filters>({
+    types: ['image', 'audio', 'video'],
+    outputIndexes: ['__inputs__'],
+    channels: [],
+    poster: '',
+    jobApp: '',
+    colorGroups: [],
+    preservedMultiColors: [],
+    dateFrom: '',
+    dateTo: '',
+    tagsText: '',
+    reactionsMin: 0,
+    tagsMin: 0,
+    hasTranscript: '',
+    hasText: '',
+    sortBy: 'newest',
+    includeEmulsion: false,
+  });
+  let filtersOpen = $state(false);
   let results = $state<Hit[]>([]);
   let selected = $state<Set<string>>(new Set());
   let loading = $state(false);
   let attaching = $state(false);
   let error = $state<string | null>(null);
   let lastQuery = $state('');
-
-  function toggleType(t: string) {
-    if (mediaTypes.includes(t)) mediaTypes = mediaTypes.filter((x) => x !== t);
-    else mediaTypes = [...mediaTypes, t];
-    runSearch();
-  }
 
   function toggleSel(id: string) {
     const next = new Set(selected);
@@ -56,27 +70,52 @@
     selected = next;
   }
 
+  function buildBody() {
+    const sortMap: Record<string, string> = {
+      newest: 'created_at:desc',
+      oldest: 'created_at:asc',
+      random: 'random',
+      most_reactions: 'total_reaction_count:desc',
+      largest: 'file_size_bytes:desc',
+      longest: 'duration_seconds:desc',
+    };
+    const outputIndexesForApi = filters.outputIndexes.filter(
+      (v) => v !== '__emulsion__',
+    );
+    const body: any = {
+      query: q,
+      per_page: 60,
+      media_types: filters.types,
+      sort: sortMap[filters.sortBy] || null,
+      include_emulsion: filters.includeEmulsion,
+      filters: {},
+    };
+    if (outputIndexesForApi.length) {
+      body.filters.output_index = outputIndexesForApi;
+    }
+    if (filters.jobApp) body.filters.job_app = filters.jobApp;
+    if (filters.tagsText.trim()) {
+      body.filters.tags = filters.tagsText
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+    }
+    if (filters.hasTranscript)
+      body.filters.has_transcript = filters.hasTranscript === 'yes';
+    if (filters.hasText) body.filters.has_text = filters.hasText === 'yes';
+    return body;
+  }
+
   async function runSearch() {
     loading = true;
     error = null;
     lastQuery = q;
     try {
-      // The real /api/search wants `media_types` as ['image', 'audio', 'video'];
-      // Emulsion is opted into separately via include_emulsion.
-      const realTypes = mediaTypes.filter((t) => t !== 'emulsion');
-      const body: any = {
-        query: q,
-        per_page: 40,
-        // Always send the explicit selection (including []) so backend
-        // respects "emulsion only" instead of defaulting to all public indices.
-        media_types: realTypes,
-        include_emulsion: mediaTypes.includes('emulsion'),
-      };
       const res = await fetch('/api/search', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(buildBody()),
       });
       if (!res.ok) throw new Error(`Search failed (${res.status})`);
       const data = await res.json();
@@ -134,8 +173,16 @@
     return `/api/media/${encodeURIComponent(id)}/thumbnail?size=sm`;
   }
 
+  // Re-search when the modal opens (first time) or when filters change
+  // (after open). Skip when closed so we don't fire stale requests.
+  let lastFilterSig = $state('');
   $effect(() => {
-    if (open && results.length === 0) runSearch();
+    if (!open) return;
+    const sig = JSON.stringify(filters);
+    if (sig !== lastFilterSig) {
+      lastFilterSig = sig;
+      runSearch();
+    }
   });
 </script>
 
@@ -167,6 +214,15 @@
           runSearch();
         }}
       >
+        <button
+          class="action-btn filter-toggle"
+          type="button"
+          aria-expanded={filtersOpen}
+          aria-controls="pfi-filters"
+          onclick={() => (filtersOpen = !filtersOpen)}
+        >
+          Filters {filtersOpen ? '▴' : '▾'}
+        </button>
         <input
           type="text"
           placeholder="Search across all indices…"
@@ -175,15 +231,23 @@
         <button class="action-btn" type="submit">Search</button>
       </form>
 
-      <div class="type-row">
-        {#each ['image', 'audio', 'video', 'emulsion'] as t}
-          <button
-            class="type-pill"
-            class:active={mediaTypes.includes(t)}
-            onclick={() => toggleType(t)}
-            type="button">{t}</button
-          >
-        {/each}
+      <div
+        id="pfi-filters"
+        class="filter-panel"
+        class:filter-panel--open={filtersOpen}
+      >
+        <SearchFilterBar
+          bind:filters
+          hide={[
+            'sort',
+            'colors',
+            'reactions',
+            'tags-min',
+            'dates',
+            'channels',
+            'posters',
+          ]}
+        />
       </div>
 
       {#if error}
@@ -293,26 +357,17 @@
     font-family: var(--font-mono);
     font-size: var(--text-sm);
   }
-  .type-row {
-    display: flex;
-    gap: 4px;
-    flex-wrap: wrap;
+  .filter-toggle {
+    flex: 0 0 auto;
   }
-  .type-pill {
-    background: var(--color-bg);
-    color: var(--color-text);
+  .filter-panel {
+    display: none;
     border: 1px solid var(--color-border);
-    padding: 4px 10px;
-    font: inherit;
-    font-size: var(--text-sm);
-    text-transform: uppercase;
-    letter-spacing: 1pt;
-    cursor: pointer;
+    padding: var(--space-sm);
+    background: rgba(0, 0, 0, 0.02);
   }
-  .type-pill.active {
-    background: var(--color-text);
-    color: var(--color-bg);
-    border-color: var(--color-text);
+  .filter-panel--open {
+    display: block;
   }
   .results {
     overflow: auto;
