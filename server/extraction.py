@@ -19,6 +19,16 @@ logger = logging.getLogger(__name__)
 
 SEARCH_MEDIA_DIR = os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data")
 
+# Teach Pillow how to open .heic files (iPhone format). Safe no-op if the
+# plugin isn't installed; OCR will just log an "cannot identify" error for
+# those items as before.
+try:
+    from pillow_heif import register_heif_opener as _register_heif_opener
+
+    _register_heif_opener()
+except ImportError:
+    pass
+
 # ---------------------------------------------------------------------------
 # Whisper model lifecycle — load on demand, unload after 5 min idle
 # ---------------------------------------------------------------------------
