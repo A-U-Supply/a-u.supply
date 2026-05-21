@@ -171,11 +171,47 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
 
     <div id="load-more-sentinel" class="load-more-sentinel" aria-hidden="true">
     </div>
-    <div class="pagination" id="pagination" style="display:none;">
-      <button class="action-btn" id="prev-page" type="button">Prev</button>
-      <span id="page-info">Page 1</span>
-      <button class="action-btn" id="next-page" type="button">Next</button>
-    </div>
+    <nav
+      class="pagination"
+      id="pagination"
+      style="display:none;"
+      aria-label="Pagination"
+    >
+      <button
+        class="action-btn pagination__nav"
+        id="first-page"
+        type="button"
+        aria-label="First page"
+        title="First page">&laquo;</button
+      >
+      <button
+        class="action-btn pagination__nav"
+        id="prev-page"
+        type="button"
+        aria-label="Previous page"
+        title="Previous page">&lsaquo;</button
+      >
+      <ol
+        class="pagination__pages"
+        id="pagination-pages"
+        aria-label="Page numbers"
+      >
+      </ol>
+      <button
+        class="action-btn pagination__nav"
+        id="next-page"
+        type="button"
+        aria-label="Next page"
+        title="Next page">&rsaquo;</button
+      >
+      <button
+        class="action-btn pagination__nav"
+        id="last-page"
+        type="button"
+        aria-label="Last page"
+        title="Last page">&raquo;</button
+      >
+    </nav>
     <div class="results-footer" id="results-footer" style="display:none;">
       <span id="results-progress">0 of 0</span>
       <span id="results-loading-more" hidden>Loading more…</span>
@@ -711,17 +747,63 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--space-md);
+    gap: var(--space-xs, 4px);
     padding: var(--space-md) 0;
     font-family: var(--font-mono);
     font-size: 0.7rem;
     color: var(--color-muted);
     text-transform: uppercase;
     letter-spacing: 0.5pt;
+    flex-wrap: wrap;
   }
   .pagination .action-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+  }
+  .pagination__pages {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs, 4px);
+  }
+  .pagination__page {
+    min-width: 2.2rem;
+    padding: 4px 8px;
+    background: var(--color-bg);
+    color: var(--color-fg, var(--color-text));
+    border: 2px solid var(--color-fg, var(--color-text));
+    box-shadow: 2px 2px 0 var(--color-fg, var(--color-text));
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: center;
+    cursor: pointer;
+    line-height: 1;
+    transition:
+      transform 60ms ease,
+      box-shadow 60ms ease,
+      background 80ms,
+      color 80ms;
+  }
+  .pagination__page:hover:not(.is-current) {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--color-fg, var(--color-text));
+  }
+  .pagination__page:active:not(.is-current) {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--color-fg, var(--color-text));
+  }
+  .pagination__page.is-current {
+    background: var(--color-fg, var(--color-text));
+    color: var(--color-bg);
+    cursor: default;
+  }
+  .pagination__ellipsis {
+    padding: 0 4px;
+    color: var(--color-muted);
+    user-select: none;
   }
   .results-footer {
     display: flex;
@@ -954,7 +1036,7 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
 <style is:global>
   .results-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: var(--space-sm);
   }
   .results-grid .grid-item {
@@ -1108,10 +1190,13 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
     fill: #fff;
   }
   .results-grid .grid-item__info {
-    padding: 4px 6px;
-    font-size: 0.65rem;
+    padding: 6px 8px 8px;
+    font-size: 0.7rem;
     border-top: 1px solid var(--color-border);
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
   }
   .results-grid .grid-item__name {
     white-space: nowrap;
@@ -1124,9 +1209,19 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
   .results-grid .grid-item__meta {
     color: var(--color-muted);
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 8px;
+    font-size: 0.65rem;
+  }
+  /* Vote chip lives on its own row at the bottom of the info area so
+     the two arrow buttons get to look like buttons instead of fighting
+     the meta text for the last few pixels. Right-aligned so the chip
+     hugs the edge — feels intentional next to the tile boundary. */
+  .results-grid .grid-item__votes {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 2px;
   }
 
   /* Acclaim/Disavow chip (issue #318). Vanilla — Svelte island only mounts
@@ -1184,10 +1279,11 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
   .vote-chip__count.is-zero {
     opacity: 0.5;
   }
-  /* Slightly tighter inside the dense grid tile. */
+  /* Slightly tighter inside the dense grid tile — but on its own row
+     so the buttons can still look like buttons. */
   .results-grid .vote-chip__arrow {
-    padding: 3px 6px;
-    font-size: 0.72rem;
+    padding: 4px 8px;
+    font-size: 0.75rem;
   }
 
   /* Feed view: tall cards, one item per row, max-width for readability.
@@ -1633,23 +1729,90 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
       applyAndSearch();
     });
 
-    // Prev/next pagination — only used by grid + list views (feed has
-    // its own scroll-driven loader). Replaces results with the new page
-    // and scrolls to the top so the user sees what they navigated to.
-    document.getElementById('prev-page')?.addEventListener('click', () => {
-      if (currentPage > 1) {
-        currentPage--;
-        doSearch();
-        window.scrollTo({ top: 0, behavior: 'auto' });
-      }
+    // Pagination — only used by grid + list views (feed has its own
+    // scroll-driven loader). First/Prev/Next/Last + numbered jumps
+    // replace results with the new page and scroll to top so the user
+    // sees what they navigated to. `renderPagination` (below) repaints
+    // the windowed page-number list on each fetch.
+    function goToPage(target: number) {
+      const totalPages = Math.max(1, Math.ceil(totalResults / pageSize));
+      const clamped = Math.min(Math.max(1, target), totalPages);
+      if (clamped === currentPage) return;
+      currentPage = clamped;
+      doSearch();
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }
+    document
+      .getElementById('first-page')
+      ?.addEventListener('click', () => goToPage(1));
+    document
+      .getElementById('prev-page')
+      ?.addEventListener('click', () => goToPage(currentPage - 1));
+    document
+      .getElementById('next-page')
+      ?.addEventListener('click', () => goToPage(currentPage + 1));
+    document.getElementById('last-page')?.addEventListener('click', () => {
+      const totalPages = Math.max(1, Math.ceil(totalResults / pageSize));
+      goToPage(totalPages);
     });
-    document.getElementById('next-page')?.addEventListener('click', () => {
-      if (currentPage * pageSize < totalResults) {
-        currentPage++;
-        doSearch();
-        window.scrollTo({ top: 0, behavior: 'auto' });
+    document
+      .getElementById('pagination-pages')
+      ?.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest<HTMLElement>(
+          '[data-page]',
+        );
+        if (!btn) return;
+        const page = parseInt(btn.dataset.page!, 10);
+        if (Number.isFinite(page)) goToPage(page);
+      });
+
+    // Build the windowed page list: first + last always shown, two
+    // neighbors either side of current, ellipsis bridges any gap.
+    // Standard industry pattern — `« ‹ 1 … 11 12 [13] 14 15 … 50 › »`.
+    function renderPagination(current: number, totalPages: number) {
+      const SIBLINGS = 2;
+      const pages = new Set<number>([1, totalPages]);
+      for (let p = current - SIBLINGS; p <= current + SIBLINGS; p++) {
+        if (p >= 1 && p <= totalPages) pages.add(p);
       }
-    });
+      const sorted = [...pages].sort((a, b) => a - b);
+      const parts: string[] = [];
+      let prev = 0;
+      for (const p of sorted) {
+        if (p - prev > 1) {
+          parts.push(
+            '<li class="pagination__ellipsis" aria-hidden="true">…</li>',
+          );
+        }
+        const isCurrent = p === current;
+        parts.push(
+          `<li><button type="button" class="pagination__page${
+            isCurrent ? ' is-current' : ''
+          }" data-page="${p}"${
+            isCurrent ? ' aria-current="page"' : ''
+          }>${p}</button></li>`,
+        );
+        prev = p;
+      }
+      const listEl = document.getElementById('pagination-pages');
+      if (listEl) listEl.innerHTML = parts.join('');
+      const firstBtn = document.getElementById(
+        'first-page',
+      ) as HTMLButtonElement | null;
+      const prevBtn = document.getElementById(
+        'prev-page',
+      ) as HTMLButtonElement | null;
+      const nextBtn = document.getElementById(
+        'next-page',
+      ) as HTMLButtonElement | null;
+      const lastBtn = document.getElementById(
+        'last-page',
+      ) as HTMLButtonElement | null;
+      if (firstBtn) firstBtn.disabled = current <= 1;
+      if (prevBtn) prevBtn.disabled = current <= 1;
+      if (nextBtn) nextBtn.disabled = current >= totalPages;
+      if (lastBtn) lastBtn.disabled = current >= totalPages;
+    }
 
     // Tri-state "Select" toggle in the selection bar. Cycles:
     //   unchecked → adds every loaded item to the selection
@@ -2650,6 +2813,8 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
                 ${poster ? `<span>${poster}</span>` : ''}
                 ${rxn > 0 ? `<span>${rxn} rxn</span>` : ''}
                 <span>${item.tag_count ?? 0} tags</span>
+              </div>
+              <div class="grid-item__votes">
                 ${voteChipHtml(item, user?.id ?? null)}
               </div>
             </div>
@@ -2867,22 +3032,12 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
             ? `${totalResults.toLocaleString()} of ${totalResults.toLocaleString()}`
             : `1–${loadedLast.toLocaleString()} of ${totalResults.toLocaleString()}`;
       } else {
-        // Paginated view: hide the infinite-scroll footer, show prev/next.
+        // Paginated view: hide the infinite-scroll footer, show pagination.
         footerEl.style.display = 'none';
         if (paginationEl) {
           if (totalPages > 1) {
             paginationEl.style.display = 'flex';
-            const pageInfo = document.getElementById('page-info');
-            if (pageInfo)
-              pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
-            const prev = document.getElementById(
-              'prev-page',
-            ) as HTMLButtonElement | null;
-            const next = document.getElementById(
-              'next-page',
-            ) as HTMLButtonElement | null;
-            if (prev) prev.disabled = currentPage <= 1;
-            if (next) next.disabled = currentPage >= totalPages;
+            renderPagination(currentPage, totalPages);
           } else {
             paginationEl.style.display = 'none';
           }
@@ -3158,17 +3313,12 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
 
       // Grid item click — image or video tiles open the viewer; audio still
       // navigates to detail (audio is better consumed in the persistent
-      // Player via its play button).
+      // Player via its play button). Any interactive child (vote arrows,
+      // play / queue / download / workspace / bookmark) handles its own
+      // click — the tile only activates on inert surface (thumb backdrop,
+      // meta text).
       const gridItem = target.closest('.grid-item') as HTMLElement | null;
-      if (
-        gridItem &&
-        !target.closest('.grid-item__check') &&
-        !target.closest('.grid-item__play') &&
-        !target.closest('.grid-item__add') &&
-        !target.closest('.grid-item__dl') &&
-        !target.closest('.grid-item__ws') &&
-        !target.closest('.bm-star')
-      ) {
+      if (gridItem && !target.closest('button, a, input')) {
         const id = gridItem.dataset.id;
         if (!id) return;
         const clicked = allResults.find((r: any) => r.id === id);
