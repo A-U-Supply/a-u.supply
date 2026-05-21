@@ -57,15 +57,57 @@ import Admin from '../../layouts/Admin.astro';
     </div>
 
     <div class="auspices-panel">
-      <h2 class="section-heading">The Ledger</h2>
-      <p class="section-hint">Recent happenings across the site.</p>
-      <ol class="feed" id="feed">
-        <li class="feed__loading">
-          <span class="loading-dots">Fetching the chronicle</span>
-        </li>
-      </ol>
+      <h2 class="section-heading">Quick Links</h2>
+      <p class="section-hint">
+        Shortcuts into the deeper apparatus. Pin your own with <kbd>+</kbd>.
+      </p>
+      <div class="quick-links" id="quick-links">
+        <div class="quick-links__row" id="quick-links-builtin"></div>
+        <div class="quick-links__row" id="quick-links-pinned"></div>
+        <button class="quick-links__add" id="quick-links-add" type="button">
+          + Pin a link
+        </button>
+      </div>
     </div>
   </section>
+
+  <dialog class="quick-link-dialog" id="quick-link-dialog">
+    <form method="dialog">
+      <h3>Pin a link</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="quick-link-label">Label</label>
+          <input
+            type="text"
+            id="quick-link-label"
+            class="brutal-input"
+            placeholder="My favourite filter"
+            required
+          />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="quick-link-href">URL</label>
+          <input
+            type="text"
+            id="quick-link-href"
+            class="brutal-input"
+            placeholder="/admin/search?sort=random"
+            required
+          />
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn-cancel" id="quick-link-cancel"
+          >Cancel</button
+        >
+        <button type="submit" class="btn-primary" id="quick-link-save"
+          >Pin</button
+        >
+      </div>
+    </form>
+  </dialog>
 </Admin>
 
 <style>
@@ -91,17 +133,18 @@ import Admin from '../../layouts/Admin.astro';
     margin-bottom: var(--space-sm);
   }
 
-  /* ── Stat cards ── */
+  /* ── Stat cards (brutalist chrome, 2px + 4px shadow) ── */
   .stat-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: var(--space-sm);
+    gap: var(--space-md);
     margin-top: var(--space-md);
   }
   .stat-card {
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-fg);
+    box-shadow: 4px 4px 0 var(--color-fg);
     padding: var(--space-sm) var(--space-md);
-    background: var(--color-bg);
+    background: var(--color-surface);
     position: relative;
   }
   .stat-card__num {
@@ -135,16 +178,24 @@ import Admin from '../../layouts/Admin.astro';
   }
   .action-card {
     display: block;
-    border: 1px solid var(--color-border);
-    border-left: 3px solid var(--color-accent);
+    border: 2px solid var(--color-fg);
+    border-left-width: 6px;
+    box-shadow: 4px 4px 0 var(--color-fg);
     padding: var(--space-sm) var(--space-md);
     text-decoration: none;
-    color: var(--color-text);
-    background: var(--color-bg);
-    transition: border-color 0.15s;
+    color: var(--color-fg);
+    background: var(--color-surface);
+    transition:
+      transform 60ms ease,
+      box-shadow 60ms ease;
   }
   .action-card:hover {
-    border-left-color: var(--color-text);
+    transform: translate(-1px, -1px);
+    box-shadow: 5px 5px 0 var(--color-fg);
+  }
+  .action-card:active {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0 var(--color-fg);
   }
   .action-card__num {
     font-size: var(--text-xl);
@@ -163,10 +214,17 @@ import Admin from '../../layouts/Admin.astro';
     font-variant-numeric: tabular-nums;
   }
   .action-card--urgent {
-    border-left-color: #c4453a;
+    border-color: var(--color-status-fail);
+    box-shadow: 4px 4px 0 var(--color-status-fail);
+  }
+  .action-card--urgent:hover {
+    box-shadow: 5px 5px 0 var(--color-status-fail);
+  }
+  .action-card--urgent:active {
+    box-shadow: 2px 2px 0 var(--color-status-fail);
   }
   .action-card--urgent .action-card__meta {
-    color: #c4453a;
+    color: var(--color-status-fail);
   }
 
   /* ── Two-column lower grid ── */
@@ -185,9 +243,11 @@ import Admin from '../../layouts/Admin.astro';
     min-width: 0;
   }
 
-  /* ── Altar ── */
+  /* ── Altar — brutalist card chrome ── */
   .altar {
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-fg);
+    box-shadow: 4px 4px 0 var(--color-fg);
+    background: var(--color-surface);
     padding: var(--space-md);
     display: flex;
     flex-direction: column;
@@ -210,7 +270,7 @@ import Admin from '../../layouts/Admin.astro';
     margin: 0;
     display: flex;
     justify-content: center;
-    background: #00000006;
+    background: var(--color-surface-2);
     border: 1px solid var(--color-border);
     padding: var(--space-xs);
   }
@@ -236,7 +296,7 @@ import Admin from '../../layouts/Admin.astro';
   }
   .altar__video {
     max-height: 360px;
-    background: #000;
+    background: var(--color-surface-2);
   }
   .altar__image {
     max-height: 360px;
@@ -268,78 +328,144 @@ import Admin from '../../layouts/Admin.astro';
     font-family: var(--font-mono);
     font-size: var(--text-sm);
     padding: var(--space-xs) var(--space-sm);
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-fg);
+    box-shadow: 2px 2px 0 var(--color-fg);
     background: var(--color-bg);
-    color: var(--color-text);
+    color: var(--color-fg);
     cursor: pointer;
     text-decoration: none;
     display: inline-block;
+    transition:
+      transform 60ms ease,
+      box-shadow 60ms ease;
   }
   .altar__btn:hover {
-    border-color: var(--color-text);
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--color-fg);
+  }
+  .altar__btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--color-fg);
   }
   .altar__btn--primary {
-    border-color: var(--color-text);
-    background: var(--color-text);
+    background: var(--color-fg);
     color: var(--color-bg);
   }
-  .altar__btn--primary:hover {
-    background: var(--color-bg);
-    color: var(--color-text);
-  }
 
-  /* ── Feed ── */
-  .feed {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    border: 1px solid var(--color-border);
-    max-height: 480px;
-    overflow-y: auto;
-  }
-  .feed__item {
-    display: grid;
-    grid-template-columns: 20px 1fr auto;
-    gap: var(--space-xs);
-    padding: var(--space-xs) var(--space-sm);
-    border-bottom: 1px dotted var(--color-border);
-    font-size: var(--text-sm);
-    align-items: baseline;
-  }
-  .feed__item:last-child {
-    border-bottom: none;
-  }
-  .feed__icon {
-    font-family: var(--font-mono);
-    color: var(--color-accent);
-    text-align: center;
-    font-weight: 700;
-  }
-  .feed__text {
-    color: var(--color-text);
-    word-break: break-word;
-  }
-  .feed__text a {
-    color: inherit;
-    text-decoration: none;
-    border-bottom: 1px dotted currentColor;
-  }
-  .feed__time {
-    color: var(--color-muted);
-    font-size: calc(var(--text-sm) * 0.9);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-  .feed__loading,
-  .feed__empty {
+  /* ── Quick links ── */
+  .quick-links {
+    border: 2px solid var(--color-fg);
+    box-shadow: 4px 4px 0 var(--color-fg);
+    background: var(--color-surface);
     padding: var(--space-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    min-height: 160px;
+  }
+  .quick-links__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+  }
+  .quick-links__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border: 2px solid var(--color-fg);
+    box-shadow: 2px 2px 0 var(--color-fg);
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+      transform 60ms ease,
+      box-shadow 60ms ease;
+  }
+  .quick-links__btn:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--color-fg);
+  }
+  .quick-links__btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--color-fg);
+  }
+  .quick-links__btn--user {
+    border-color: var(--color-accent);
+    box-shadow: 2px 2px 0 var(--color-accent);
+    color: var(--color-fg);
+  }
+  .quick-links__btn--user:hover {
+    box-shadow: 3px 3px 0 var(--color-accent);
+  }
+  .quick-links__btn-remove {
+    display: inline-block;
+    background: none;
+    border: none;
     color: var(--color-muted);
-    text-align: center;
-    font-style: italic;
+    cursor: pointer;
+    padding: 0 0 0 4px;
+    font-size: 0.9rem;
+    line-height: 1;
+  }
+  .quick-links__btn-remove:hover {
+    color: var(--color-status-fail);
+  }
+  .quick-links__add {
+    align-self: flex-start;
+    margin-top: auto;
+    padding: 4px 8px;
+    border: 1px dashed var(--color-border);
+    background: transparent;
+    color: var(--color-muted);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    cursor: pointer;
+  }
+  .quick-links__add:hover {
+    color: var(--color-fg);
+    border-color: var(--color-fg);
   }
 
-  .feed__icon--fail {
-    color: #c4453a;
+  /* Quick-link dialog (HTML <dialog>) */
+  .quick-link-dialog {
+    border: 2px solid var(--color-fg);
+    box-shadow: 4px 4px 0 var(--color-fg);
+    background: var(--color-bg);
+    color: var(--color-fg);
+    padding: var(--space-md);
+    width: min(420px, 90vw);
+    font-family: var(--font-mono);
+  }
+  .quick-link-dialog::backdrop {
+    background: var(--color-overlay-soft);
+  }
+  .quick-link-dialog h3 {
+    margin: 0 0 var(--space-sm) 0;
+    font-size: var(--text-base);
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+  }
+  .quick-link-dialog .form-row {
+    margin-bottom: var(--space-sm);
+  }
+  .quick-link-dialog .form-group label {
+    display: block;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    color: var(--color-muted);
+    margin-bottom: 4px;
+  }
+  .quick-link-dialog .brutal-input {
+    width: 100%;
   }
 </style>
 
@@ -355,13 +481,6 @@ import Admin from '../../layouts/Admin.astro';
     fallen: number;
     midden_rotting: number;
     next_purge_at: string | null;
-  };
-  type FeedEvent = {
-    type: string;
-    timestamp: string;
-    actor_name: string | null;
-    description: string;
-    link: string | null;
   };
   type AltarItem = {
     id: string;
@@ -388,16 +507,15 @@ import Admin from '../../layouts/Admin.astro';
     fetchStats();
     fetchActionQueue();
     fetchAltar();
-    fetchFeed();
+    renderQuickLinks();
+    wireQuickLinks();
 
     const countdownTimer = window.setInterval(updateMiddenCountdown, 30000);
-    const feedTimer = window.setInterval(refreshFeedTimestamps, 60000);
 
     document.addEventListener(
       'astro:before-swap',
       () => {
         window.clearInterval(countdownTimer);
-        window.clearInterval(feedTimer);
       },
       { once: true },
     );
@@ -618,62 +736,128 @@ import Admin from '../../layouts/Admin.astro';
     );
   }
 
-  // ───────── Feed ─────────
-  async function fetchFeed() {
-    const el = document.getElementById('feed');
-    if (!el) return;
-    const data = await apiGet<{ events: FeedEvent[] }>(
-      '/api/admin/activity-feed?limit=20',
-    );
-    if (!data) {
-      el.innerHTML = `<li class="feed__empty">Could not read the chronicle.</li>`;
-      return;
-    }
-    if (data.events.length === 0) {
-      el.innerHTML = `<li class="feed__empty">Nothing has happened yet.</li>`;
-      return;
-    }
-    el.innerHTML = data.events.map(renderFeedItem).join('');
-  }
+  // ───────── Quick Links ─────────
+  // localStorage-only by design (the user explicitly didn't want a new
+  // API surface). User-pinned set lives under `au.dashboardLinks`.
+  const BUILTIN_LINKS: Array<{ label: string; href: string }> = [
+    { label: 'Random search', href: '/admin/search?sort=random' },
+    { label: 'Latest tributes', href: '/admin/search?sort=newest' },
+    { label: 'Triage failures', href: '/admin/search/failures' },
+    { label: 'Tag triage', href: '/admin/search/nomenclator' },
+    { label: 'The Queue', href: '/admin/jobs' },
+    { label: 'Hecatomb', href: '/admin/hecatomb' },
+    { label: 'Latents in progress', href: '/admin/latents' },
+  ];
+  const LS_KEY = 'au.dashboardLinks';
 
-  function renderFeedItem(ev: FeedEvent): string {
-    const { icon, iconClass } = iconFor(ev.type);
-    const body = ev.link
-      ? `<a href="${escapeAttr(ev.link)}">${escapeHtml(ev.description)}</a>`
-      : escapeHtml(ev.description);
-    return `
-      <li class="feed__item">
-        <span class="feed__icon ${iconClass}" aria-hidden="true">${icon}</span>
-        <span class="feed__text">${body}</span>
-        <span class="feed__time" data-ts="${escapeAttr(ev.timestamp)}">${relTime(ev.timestamp)}</span>
-      </li>
-    `;
-  }
+  type UserLink = { label: string; href: string };
 
-  function iconFor(type: string): { icon: string; iconClass: string } {
-    switch (type) {
-      case 'upload':
-        return { icon: '↑', iconClass: '' };
-      case 'job_completed':
-        return { icon: '✓', iconClass: '' };
-      case 'job_failed':
-        return { icon: '✗', iconClass: 'feed__icon--fail' };
-      case 'release_published':
-        return { icon: '§', iconClass: '' };
-      case 'extraction_failed':
-        return { icon: '!', iconClass: 'feed__icon--fail' };
-      default:
-        return { icon: '·', iconClass: '' };
+  function readUserLinks(): UserLink[] {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(
+        (l): l is UserLink =>
+          l &&
+          typeof l === 'object' &&
+          typeof l.label === 'string' &&
+          typeof l.href === 'string' &&
+          // Only allow same-origin or path-relative — keeps a stray
+          // localStorage value from rendering as a click-through to
+          // anywhere weird.
+          (l.href.startsWith('/') || l.href.startsWith(window.location.origin)),
+      );
+    } catch {
+      return [];
     }
   }
+  function writeUserLinks(links: UserLink[]) {
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify(links));
+    } catch {}
+  }
 
-  function refreshFeedTimestamps() {
-    document
-      .querySelectorAll<HTMLElement>('.feed__time[data-ts]')
-      .forEach((el) => {
-        const ts = el.getAttribute('data-ts');
-        if (ts) el.textContent = relTime(ts);
+  function renderQuickLinks() {
+    const builtin = document.getElementById('quick-links-builtin');
+    const pinned = document.getElementById('quick-links-pinned');
+    if (!builtin || !pinned) return;
+    builtin.innerHTML = BUILTIN_LINKS.map(
+      (l) =>
+        `<a class="quick-links__btn" href="${escapeAttr(l.href)}">${escapeHtml(l.label)}</a>`,
+    ).join('');
+    const user = readUserLinks();
+    pinned.innerHTML = user
+      .map(
+        (l, idx) => `
+        <span class="quick-links__btn quick-links__btn--user">
+          <a
+            href="${escapeAttr(l.href)}"
+            style="color:inherit; text-decoration:none;"
+          >${escapeHtml(l.label)}</a>
+          <button
+            class="quick-links__btn-remove"
+            type="button"
+            data-remove-idx="${idx}"
+            aria-label="Remove pinned link"
+          >×</button>
+        </span>`,
+      )
+      .join('');
+    pinned
+      .querySelectorAll<HTMLButtonElement>('[data-remove-idx]')
+      .forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.dataset.removeIdx!, 10);
+          if (!Number.isFinite(idx)) return;
+          const current = readUserLinks();
+          current.splice(idx, 1);
+          writeUserLinks(current);
+          renderQuickLinks();
+        });
       });
+  }
+
+  function wireQuickLinks() {
+    const addBtn = document.getElementById(
+      'quick-links-add',
+    ) as HTMLButtonElement | null;
+    const dialog = document.getElementById(
+      'quick-link-dialog',
+    ) as HTMLDialogElement | null;
+    if (!addBtn || !dialog) return;
+    const labelInput = document.getElementById(
+      'quick-link-label',
+    ) as HTMLInputElement;
+    const hrefInput = document.getElementById(
+      'quick-link-href',
+    ) as HTMLInputElement;
+    const cancelBtn = document.getElementById(
+      'quick-link-cancel',
+    ) as HTMLButtonElement;
+
+    addBtn.addEventListener('click', () => {
+      labelInput.value = '';
+      hrefInput.value = '';
+      dialog.showModal();
+    });
+    cancelBtn.addEventListener('click', () => {
+      dialog.close('cancel');
+    });
+    dialog.addEventListener('close', () => {
+      if (dialog.returnValue === 'cancel') return;
+      const label = labelInput.value.trim();
+      const href = hrefInput.value.trim();
+      if (!label || !href) return;
+      if (!(href.startsWith('/') || href.startsWith(window.location.origin))) {
+        return;
+      }
+      const current = readUserLinks();
+      current.push({ label, href });
+      writeUserLinks(current);
+      renderQuickLinks();
+    });
   }
 
   // ───────── Helpers ─────────
