@@ -55,30 +55,29 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
       />
       <button type="submit" class="search-submit">Search</button>
     </form>
-  </div>
-
-  <div class="sort-cluster" role="group" aria-label="Result ordering">
-    <div class="sort-select-wrap">
-      <select class="sort-select" id="sort-select" aria-label="Sort results">
-        <option value="newest">Newest</option>
-        <option value="oldest">Oldest</option>
-        <option value="random">Random</option>
-        <option value="most_reactions">Most Reactions</option>
-        <option value="acclaim">Acclaim</option>
-        <option value="largest">Largest</option>
-        <option value="longest">Longest</option>
-      </select>
-      <span class="sort-select-chevron" aria-hidden="true">▾</span>
+    <div class="sort-cluster" role="group" aria-label="Result ordering">
+      <div class="sort-select-wrap">
+        <select class="sort-select" id="sort-select" aria-label="Sort results">
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+          <option value="random">Random</option>
+          <option value="most_reactions">Most Reactions</option>
+          <option value="acclaim">Acclaim</option>
+          <option value="largest">Largest</option>
+          <option value="longest">Longest</option>
+        </select>
+        <span class="sort-select-chevron" aria-hidden="true">▾</span>
+      </div>
+      <button
+        class="dice-btn"
+        id="dice-btn"
+        type="button"
+        title="Roll the dice — shuffle results"
+        aria-label="Randomize result order"
+      >
+        <span class="dice-btn__face" id="dice-btn-face">⚂</span>
+      </button>
     </div>
-    <button
-      class="dice-btn"
-      id="dice-btn"
-      type="button"
-      title="Roll the dice — shuffle results"
-      aria-label="Randomize result order"
-    >
-      <span class="dice-btn__face" id="dice-btn-face">⚂</span>
-    </button>
   </div>
 
   <div class="filter-body" id="filter-body">
@@ -322,14 +321,28 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
     border-color: color-mix(in srgb, var(--color-fg) 80%, var(--color-bg));
   }
 
-  /* Search row: filter toggle button + search bar, side by side.
-     The sort cluster sits on its own row below; the filter body
-     collapses inline below the sort row when toggled. */
+  /* Search toolbar: a two-row grid. Row 1 is the search bar spanning
+     full width; row 2 mirrors that span with FILTERS anchored left and
+     the sort cluster anchored right, so the toolbar reads as a
+     balanced rectangle instead of three controls crammed into one
+     line. Mobile collapses to a single column (see @media below) and
+     stacks in the natural FILTERS → search → sort order. */
   .search-row {
-    display: flex;
-    gap: var(--space-sm);
-    margin: var(--space-md) 0 var(--space-sm);
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      'search search search'
+      'filter .      sort';
+    column-gap: var(--space-sm);
+    row-gap: var(--space-sm);
+    margin: var(--space-md) 0;
     align-items: stretch;
+  }
+  .search-row .filter-toggle {
+    grid-area: filter;
+  }
+  .search-row .sort-cluster {
+    grid-area: sort;
   }
   .filter-toggle {
     display: flex;
@@ -372,25 +385,24 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
   .filter-toggle .filter-toggle__count[hidden] {
     display: none;
   }
-  /* The search-bar inside .search-row: remove its old top margin since
-     .search-row owns spacing now. */
+  /* The search-bar inside .search-row owns the top row of the grid
+     (grid-area: search), so it spans full width without any flex
+     sizing. Reset its standalone margin since the grid owns spacing. */
   .search-row .search-bar {
-    flex: 1;
+    grid-area: search;
     margin: 0;
     min-width: 0;
   }
 
-  /* Sort + dice cluster: brutalist controls on their own row beneath
-     .search-row. Keeping the cluster out of the search row avoids the
-     three-control crowding that pinched SEARCH against NEWEST on
-     mid-width desktop windows. The select gets a flat outlined look
-     (matches .filter-toggle); the dice button gets the loud offset
-     shadow so it reads as the playful primary action. */
+  /* Sort + dice cluster: brutalist controls anchored to the right
+     of the toolbar's second row, mirroring the FILTERS button on the
+     left. The select gets a flat outlined look (matches
+     .filter-toggle); the dice button gets the loud offset shadow so
+     it reads as the playful primary action. */
   .sort-cluster {
     display: flex;
     align-items: stretch;
     gap: var(--space-xs);
-    margin: 0 0 var(--space-md);
   }
   .sort-select-wrap {
     position: relative;
@@ -757,7 +769,11 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
       font-size: 16px;
     } /* prevent iOS zoom */
     .search-row {
-      flex-direction: column;
+      grid-template-columns: 1fr;
+      grid-template-areas:
+        'filter'
+        'search'
+        'sort';
     }
     .filter-toggle {
       padding: var(--space-xs) var(--space-md);
