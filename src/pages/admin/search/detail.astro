@@ -420,6 +420,7 @@ import Admin from '../../../layouts/Admin.astro';
 
   .detail-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--space-sm);
     margin-top: var(--space-lg);
     padding-top: var(--space-md);
@@ -454,19 +455,6 @@ import Admin from '../../../layouts/Admin.astro';
     border-bottom: 2px solid var(--color-text);
     background: var(--color-bg);
     flex-wrap: wrap;
-  }
-  .et-label {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-sm);
-    flex-wrap: wrap;
-    min-width: 0;
-  }
-  .et-kind {
-    font-size: var(--text-sm);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1pt;
   }
   .et-stats {
     font-size: 0.65rem;
@@ -1080,23 +1068,19 @@ import Admin from '../../../layouts/Admin.astro';
       const headingEl = document.getElementById('extracted-text-heading')!;
 
       let raw: string | null | undefined;
-      let kind = 'Extracted Text';
       let emptyLabel = 'nothing extracted';
       let sectionHeading = 'Extracted Text';
 
       if (item.media_type === 'image' && item.image_meta) {
         raw = item.image_meta.caption;
-        kind = 'OCR';
         sectionHeading = 'OCR Text';
         emptyLabel = 'no text detected in image';
       } else if (item.media_type === 'audio' && item.audio_meta) {
         raw = item.audio_meta.transcript;
-        kind = 'Transcript';
         sectionHeading = 'Transcript';
         emptyLabel = 'no speech detected';
       } else if (item.media_type === 'video' && item.video_meta) {
         raw = item.video_meta.audio_transcript;
-        kind = 'Transcript';
         sectionHeading = 'Transcript';
         emptyLabel = 'no speech detected';
       }
@@ -1135,10 +1119,7 @@ import Admin from '../../../layouts/Admin.astro';
       panelEl.innerHTML = `
         <div class="et-card">
           <div class="et-header">
-            <div class="et-label">
-              <span class="et-kind">${kind}</span>
-              <span class="et-stats">${stats}</span>
-            </div>
+            <span class="et-stats">${stats}</span>
             ${isEmpty ? '' : '<button class="et-copy" type="button" title="Copy to clipboard">Copy</button>'}
           </div>
           ${
