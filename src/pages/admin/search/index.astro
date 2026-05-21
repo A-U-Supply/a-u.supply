@@ -1721,9 +1721,20 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
       myVotes: '' | 'up' | 'down' | 'any' | 'none';
     };
 
+    // The SearchFilterBar Svelte island renders its own `<div class="filter-bar"
+    // data-filters>` *inside* #filter-bar-host's <astro-island>. data-filters
+    // and the filters-set/filters-reset listeners live on that inner element,
+    // not on the wrapper — so reads + dispatches have to target it directly.
+    // (filters-change still bubbles up to the wrapper, which is where
+    // applyAndSearch is attached.)
+    function filterBarEl(): HTMLElement | null {
+      return document.querySelector(
+        '#filter-bar-host [data-filters]',
+      ) as HTMLElement | null;
+    }
+
     function readBarFilters(): BarFilters {
-      const host = document.getElementById('filter-bar-host');
-      const raw = host?.dataset.filters;
+      const raw = filterBarEl()?.dataset.filters;
       if (raw) {
         try {
           return JSON.parse(raw) as BarFilters;
@@ -2414,9 +2425,8 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
         playBtn = `${playTag}${addTag}${dlBtn}`;
       }
       const poster =
-        (item.sources || [])
-          .map((s: any) => s.uploader)
-          .filter(Boolean)[0] || '';
+        (item.sources || []).map((s: any) => s.uploader).filter(Boolean)[0] ||
+        '';
       const rxn = item.total_reaction_count ?? 0;
       return `<div class="grid-item${selectedClass}" data-id="${item.id}"${pageStartAttr}>
             <input type="checkbox" class="grid-item__check" data-select="${item.id}" ${checked} />
@@ -2463,9 +2473,8 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
       const canPlay =
         item.media_type === 'audio' || item.media_type === 'video';
       const poster =
-        (item.sources || [])
-          .map((s: any) => s.uploader)
-          .filter(Boolean)[0] || '';
+        (item.sources || []).map((s: any) => s.uploader).filter(Boolean)[0] ||
+        '';
       const rxn = item.total_reaction_count ?? 0;
       const date = item.created_at
         ? new Date(item.created_at * 1000).toLocaleDateString()
@@ -2537,9 +2546,8 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
         ? new Date(item.created_at * 1000).toLocaleDateString()
         : '--';
       const poster =
-        (item.sources || [])
-          .map((s: any) => s.uploader)
-          .filter(Boolean)[0] || '--';
+        (item.sources || []).map((s: any) => s.uploader).filter(Boolean)[0] ||
+        '--';
       const channel = (item.source_channels || [])[0] || '--';
       const rxn = item.total_reaction_count ?? 0;
       return `<tr${pageStartAttr} data-id="${item.id}">
@@ -2577,9 +2585,7 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
       return html;
     }
 
-    function renderResults(
-      opts: { append?: boolean; prevLen?: number } = {},
-    ) {
+    function renderResults(opts: { append?: boolean; prevLen?: number } = {}) {
       const { append = false, prevLen = 0 } = opts;
 
       if (allResults.length === 0) {
@@ -3274,9 +3280,9 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
         output_index: 'outputIndexes',
       };
       const key = KEY_MAP[filterName];
-      const host = document.getElementById('filter-bar-host');
-      if (key && host) {
-        host.dispatchEvent(
+      const bar = filterBarEl();
+      if (key && bar) {
+        bar.dispatchEvent(
           new CustomEvent('filters-reset', { detail: { key } }),
         );
         // The bar emits filters-change after applying the reset, which
@@ -3443,9 +3449,9 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
     // applies it and re-emits filters-change, which triggers applyAndSearch
     // via the wrapper-level listener — so callers don't call it themselves.
     function patchFilterBar(patch: Record<string, unknown>) {
-      const host = document.getElementById('filter-bar-host');
-      if (!host) return;
-      host.dispatchEvent(new CustomEvent('filters-set', { detail: { patch } }));
+      const bar = filterBarEl();
+      if (!bar) return;
+      bar.dispatchEvent(new CustomEvent('filters-set', { detail: { patch } }));
     }
 
     async function fetchStats(searchBody: any) {
