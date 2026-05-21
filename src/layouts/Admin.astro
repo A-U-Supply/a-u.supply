@@ -278,10 +278,18 @@ const { title, current } = Astro.props;
     <div class="toast-container" id="toast-container"></div>
 
     <script is:inline>
-      // Theme toggle — pure JS, no TS, runs uncompiled so it's robust to any
-      // Astro bundling quirks. Pre-paint resolver in <head> handles initial
-      // data-theme; this wires the buttons and re-applies on every navigation.
+      // Theme toggle — pure JS in <script is:inline> so it can't be broken by
+      // any Astro/TS transform quirk. Pre-paint resolver in <head> handles
+      // initial data-theme; this wires the buttons and re-applies on every
+      // navigation. Persists state on window.__themeWired so the inline script
+      // re-running on each ViewTransition doesn't stack listeners.
       (function () {
+        if (window.__themeWired) {
+          // Already wired in a previous page parse. Re-run wire() so the
+          // buttons in the freshly-swapped body get their click handlers.
+          window.__themeWired.wire();
+          return;
+        }
         function readPref() {
           var v = localStorage.getItem('adminTheme');
           return v === 'light' || v === 'dark' || v === 'auto' ? v : 'auto';
@@ -304,31 +312,34 @@ const { title, current } = Astro.props;
         }
         function wire() {
           applyTheme(readPref());
+          // ViewTransitions swap the body, so the buttons we see now are
+          // fresh DOM nodes with no listeners — attach directly. (The old
+          // body's listeners go with the old body.)
           var btns = document.querySelectorAll('.theme-toggle__btn');
           for (var i = 0; i < btns.length; i++) {
-            // Replace node to drop stale listeners across ViewTransitions —
-            // cheap and idempotent.
-            var fresh = btns[i].cloneNode(true);
-            btns[i].parentNode.replaceChild(fresh, btns[i]);
-          }
-          var liveBtns = document.querySelectorAll('.theme-toggle__btn');
-          for (var j = 0; j < liveBtns.length; j++) {
             (function (el) {
+              if (el.__themeClickWired) return;
+              el.__themeClickWired = true;
               el.addEventListener('click', function () {
                 var next = el.getAttribute('data-pref') || 'auto';
                 localStorage.setItem('adminTheme', next);
                 applyTheme(next);
               });
-            })(liveBtns[j]);
+            })(btns[i]);
           }
         }
-        // Initial wire on first parse.
+        window.__themeWired = { wire: wire, applyTheme: applyTheme };
         if (document.readyState === 'loading') {
           document.addEventListener('DOMContentLoaded', wire);
         } else {
           wire();
         }
-        // Re-wire on every Astro navigation (ViewTransitions replace the body).
+        // After every Astro view transition: re-apply theme (defensive —
+        // <html> attrs *should* persist, but if anything overwrites them we
+        // restore them here) and re-wire the new body's buttons.
+        document.addEventListener('astro:after-swap', function () {
+          applyTheme(readPref());
+        });
         document.addEventListener('astro:page-load', wire);
         // React to OS preference change in auto mode.
         window

@@ -54,6 +54,10 @@
     hasText: '',
     sortBy: 'newest',
     includeEmulsion: false,
+    voteScoreMin: null,
+    upMin: null,
+    downMax: null,
+    myVotes: '',
   });
   let filtersOpen = $state(false);
   let results = $state<Hit[]>([]);
@@ -246,6 +250,7 @@
             'dates',
             'channels',
             'posters',
+            'votes',
           ]}
         />
       </div>

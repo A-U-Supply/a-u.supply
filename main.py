@@ -83,15 +83,10 @@ if "activity_log" not in _sa_inspect(engine).get_table_names():
     from server.models import ActivityLog as _ActivityLog
     _ActivityLog.__table__.create(bind=engine)
 
-# Migrate existing DB: create comments table if missing
-if "comments" not in _sa_inspect(engine).get_table_names():
-    from server.models import Comment as _Comment
-    _Comment.__table__.create(bind=engine)
-
-# Migrate existing DB: create reactions table if missing
-if "reactions" not in _sa_inspect(engine).get_table_names():
-    from server.models import Reaction as _Reaction
-    _Reaction.__table__.create(bind=engine)
+# Migrate existing DB: create media_votes table if missing (issue #318)
+if "media_votes" not in _sa_inspect(engine).get_table_names():
+    from server.models import MediaVote as _MediaVote
+    _MediaVote.__table__.create(bind=engine)
 
 # Migrate existing DB: add Lemmy account linkage columns to users
 _user_cols = [c["name"] for c in _sa_inspect(engine).get_columns("users")]
@@ -185,6 +180,24 @@ _release_cols_v2 = [c["name"] for c in _sa_inspect(engine).get_columns("releases
 if "latent_id" not in _release_cols_v2:
     with engine.begin() as _conn:
         _conn.execute(_sa_text("ALTER TABLE releases ADD COLUMN latent_id TEXT"))
+
+# Migrate existing DB: add web_audio_file_path column to tracks (MP3 web copy for streaming)
+_track_cols = [c["name"] for c in _sa_inspect(engine).get_columns("tracks")]
+if "web_audio_file_path" not in _track_cols:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE tracks ADD COLUMN web_audio_file_path TEXT"))
+
+
+# Re-apply Meilisearch index settings on startup so additions to
+# FILTERABLE_ATTRIBUTES / SORTABLE_ATTRIBUTES (vote_score, upvoter_user_ids,
+# etc. from #318) take effect without a manual `manage.py reindex`.
+# Idempotent + doc-preserving — only writes settings, never deletes data.
+# Swallowed on Meili-unreachable so a local dev box without Meili can boot.
+try:
+    from server.search_client import configure_indexes as _configure_indexes
+    _configure_indexes()
+except Exception:
+    logger.warning("Skipping Meilisearch configure_indexes at startup", exc_info=True)
 
 
 # ---------------------------------------------------------------------------

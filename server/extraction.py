@@ -179,11 +179,24 @@ def _dominant_colors_quantize(img, num_colors: int) -> list[str]:
     return colors
 
 
+_OCR_PSM_MODES = (3, 6, 11)
+_OCR_CONF_THRESHOLD = 60
+
+
 def extract_text_ocr(file_path: str) -> str | None:
     """Extract text from an image using Tesseract OCR.
 
     Returns the extracted text or None if no text is found or
     pytesseract/tesseract is not available.
+
+    Strategy: upscale small images in memory (the original file is never
+    touched), then run Tesseract under three PSM modes and pick the one
+    that finds the most high-confidence text:
+      - PSM 3  = auto page layout (documents, screenshots)
+      - PSM 6  = single uniform block (banners, signs)
+      - PSM 11 = sparse text (photos with incidental text)
+    Per-word confidence ≥60 filters out the dollar-bill / wood-chips
+    style noise that the auto layout would otherwise hallucinate.
     """
     try:
         import pytesseract
@@ -194,9 +207,39 @@ def extract_text_ocr(file_path: str) -> str | None:
 
     with Image.open(file_path) as img:
         img = img.convert("RGB")
-        text = pytesseract.image_to_string(img).strip()
+        min_dim = min(img.size)
+        if min_dim < 1000:
+            scale = 1000 / min_dim
+            new_size = (int(img.width * scale), int(img.height * scale))
+            img = img.resize(new_size, Image.LANCZOS)
 
-    return text if text else None
+        best_text = ""
+        best_score = 0
+        for psm in _OCR_PSM_MODES:
+            try:
+                data = pytesseract.image_to_data(
+                    img,
+                    config=f"--psm {psm}",
+                    output_type=pytesseract.Output.DICT,
+                )
+            except Exception as exc:
+                logger.warning("OCR PSM %d failed: %s", psm, exc)
+                continue
+            words = []
+            for text, conf in zip(data.get("text", []), data.get("conf", [])):
+                try:
+                    conf_val = int(float(conf))
+                except (TypeError, ValueError):
+                    continue
+                token = (text or "").strip()
+                if token and conf_val >= _OCR_CONF_THRESHOLD:
+                    words.append(token)
+            score = sum(len(w) for w in words)
+            if score > best_score:
+                best_score = score
+                best_text = " ".join(words)
+
+    return best_text if best_text else None
 
 
 # ---------------------------------------------------------------------------

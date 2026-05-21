@@ -31,6 +31,7 @@ Session-cookie scope is derived from role: `admin` → `admin`, `member` → `wr
 | **Tracks** | `POST/DELETE /api/releases/{code}/tracks`, reorder, stream | Audio upload, management, and streaming |
 | **Cover Art** | `POST/GET /api/releases/{code}/cover` | Cover art upload and serving (auto-thumbnails) |
 | **Media Search** | `POST /api/search`, `GET /api/search/facets` | Full-text search with filters and facets |
+| **Media Votes** | `POST /api/search/{id}/vote`, `GET /api/search/{id}/voters`, `GET /api/search/votes/mine` | Per-user acclaim/disavow on search items ([#318](https://github.com/A-U-Supply/a-u.supply/issues/318)) |
 | **Media Items** | `GET/POST/PUT/DELETE /api/media` | Media CRUD, upload, file download, thumbnails |
 | **Tagging** | `POST/DELETE /api/media/{id}/tags`, `GET /api/tags` | Tag management and autocomplete |
 | **Batch Ops** | `POST /api/media/batch/*` | Bulk tag, delete, re-extract, ZIP export |

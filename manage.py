@@ -11,6 +11,9 @@ Usage (from host):
     ssh dokku run au-supply .venv/bin/python manage.py backfill-slack-uploader-id [--dry-run]
     ssh dokku run au-supply .venv/bin/python manage.py refresh-app <name>
     ssh dokku run au-supply .venv/bin/python manage.py refresh-all-apps
+    ssh dokku run au-supply .venv/bin/python manage.py resync-votes [<media_id>]
+    ssh dokku run au-supply .venv/bin/python manage.py backfill-ocr [--include-empty]
+    ssh dokku run au-supply .venv/bin/python manage.py test-ocr <media_id>
 """
 
 import json
@@ -220,6 +223,34 @@ def reindex_search():
             print(f"  {i + 1}/{len(items)}")
     print(f"Done! Re-indexed {len(items)} items.")
     db.close()
+
+
+def resync_votes(media_id: str | None = None):
+    """Repush vote aggregates + voter lists into Meilisearch.
+
+    Recovery for when SQLite holds the truth but Meilisearch is stale
+    (process crash mid-debounce, Meili outage, hand-edited DB rows).
+    """
+    from server.models import MediaItem
+    from server.search_client import update_vote_fields
+
+    db = SessionLocal()
+    try:
+        q = db.query(MediaItem)
+        if media_id:
+            q = q.filter(MediaItem.id == media_id)
+        items = q.all()
+        if not items:
+            print("No items matched.")
+            return
+        print(f"Resyncing vote fields for {len(items)} item(s)...")
+        for i, item in enumerate(items):
+            update_vote_fields(db, item)
+            if (i + 1) % 200 == 0:
+                print(f"  {i + 1}/{len(items)}")
+        print(f"Done! Resynced {len(items)} item(s).")
+    finally:
+        db.close()
 
 
 def color_histogram():
@@ -528,26 +559,36 @@ def backfill_transcripts():
     reindex_search()
 
 
-def backfill_ocr():
-    """Find images missing OCR text and run tesseract on them."""
+def backfill_ocr(include_empty: bool = False):
+    """Find images missing OCR text and run tesseract on them.
+
+    By default picks up only items with caption=NULL (never tried).
+    With include_empty=True, also re-processes items where caption="" —
+    use this after improving the OCR pipeline to re-OCR images that
+    previously returned no text under the old configuration.
+    """
     import os
     from server.models import MediaItem, MediaImageMeta
     from server.extraction import extract_text_ocr, _upsert_meta, SEARCH_MEDIA_DIR
 
     db = SessionLocal()
 
+    caption_filter = MediaImageMeta.caption.is_(None)
+    if include_empty:
+        caption_filter = caption_filter | (MediaImageMeta.caption == "")
+
     images_missing = (
         db.query(MediaItem)
         .outerjoin(MediaImageMeta)
         .filter(
             MediaItem.media_type == "image",
-            (MediaImageMeta.caption.is_(None)) | (MediaImageMeta.media_item_id.is_(None)),
+            caption_filter | (MediaImageMeta.media_item_id.is_(None)),
         )
         .all()
     )
 
     total = len(images_missing)
-    log(f"Found {total} images missing OCR text")
+    log(f"Found {total} images missing OCR text (include_empty={include_empty})")
 
     if total == 0:
         log("Nothing to do!")
@@ -753,7 +794,62 @@ if __name__ == "__main__":
         backfill_transcripts()
 
     elif cmd == "backfill-ocr":
-        backfill_ocr()
+        include_empty = "--include-empty" in sys.argv[2:]
+        backfill_ocr(include_empty=include_empty)
+
+    elif cmd == "test-ocr":
+        if len(sys.argv) < 3:
+            print("Usage: manage.py test-ocr <media_id>")
+            sys.exit(1)
+        import os as _os
+        from server.models import MediaItem, MediaImageMeta
+        from server.extraction import extract_text_ocr, SEARCH_MEDIA_DIR
+        db = SessionLocal()
+        item = db.query(MediaItem).filter(MediaItem.id == sys.argv[2]).first()
+        if not item:
+            print(f"no MediaItem with id={sys.argv[2]}")
+            sys.exit(1)
+        full_path = _os.path.join(SEARCH_MEDIA_DIR, item.file_path)
+        print(f"file: {full_path}")
+        print(f"exists: {_os.path.exists(full_path)}")
+        meta = db.query(MediaImageMeta).filter(MediaImageMeta.media_item_id == item.id).first()
+        print(f"current caption: {meta.caption!r}" if meta else "no image_meta row")
+
+        # Per-PSM breakdown (informational; not what extract_text_ocr does)
+        import pytesseract as _pyt
+        from PIL import Image as _Image
+        with _Image.open(full_path) as _img:
+            _img = _img.convert("RGB")
+            print(f"orig size: {_img.size}")
+            _min = min(_img.size)
+            if _min < 1000:
+                _scale = 1000 / _min
+                _img = _img.resize((int(_img.width * _scale), int(_img.height * _scale)), _Image.LANCZOS)
+                print(f"upscaled to: {_img.size}")
+            for _psm in (3, 6, 11):
+                _data = _pyt.image_to_data(_img, config=f"--psm {_psm}", output_type=_pyt.Output.DICT)
+                _kept = []
+                for _t, _c in zip(_data.get("text", []), _data.get("conf", [])):
+                    try:
+                        _cv = int(float(_c))
+                    except (TypeError, ValueError):
+                        continue
+                    _tok = (_t or "").strip()
+                    if _tok and _cv >= 60:
+                        _kept.append(f"{_tok}({_cv})")
+                print(f"  PSM {_psm}: {' '.join(_kept) or '(no conf>=60 words)'}")
+
+        text = extract_text_ocr(full_path)
+        print(f"new ocr result: {text!r}")
+
+        if "--write" in sys.argv[3:]:
+            from server.extraction import _upsert_meta, _sync_to_search
+            _upsert_meta(db, MediaImageMeta, item.id, {"caption": text or ""})
+            print("wrote caption to DB")
+            db.refresh(item)
+            _sync_to_search(db, item)
+            print("synced to search index")
+        db.close()
 
     elif cmd == "backfill-thumbnails":
         backfill_image_thumbnails()
@@ -766,6 +862,10 @@ if __name__ == "__main__":
 
     elif cmd == "refresh-all-apps":
         refresh_all_apps()
+
+    elif cmd == "resync-votes":
+        target = sys.argv[2] if len(sys.argv) >= 3 else None
+        resync_votes(target)
 
     elif cmd == "migrate-index":
         if len(sys.argv) < 4:

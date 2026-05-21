@@ -41,6 +41,7 @@ ssh dokku run au-supply .venv/bin/python manage.py <subcommand> [args...]
 | `revoke-apikey` | `<key-prefix>` | Revoke a key by its prefix. |
 | `reindex` | — | Wipe + rebuild the Meilisearch indices from SQLite. Safe; SQLite is the source of truth. |
 | `migrate-index` | `<old-index> <new-index>` | Move `MediaItem` rows from one `output_index` to another and reindex. |
+| `resync-votes` | `[<media_id>]` | Recompute Acclaim/Disavow aggregates + voter lists from `media_votes` and push partial updates into Meilisearch. Recovery for sync drift after a crash or Meili outage. Targets a single item when an id is given, otherwise every item. |
 | `refresh-app` | `<name>` | Re-sync a single `AppDefinition` row from its TOML manifest. Run after editing an `apps/*.toml` file. |
 | `refresh-all-apps` | — | Same for every manifest. |
 | `check-meta` | — | Audit metadata extraction coverage. |

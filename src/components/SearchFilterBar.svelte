@@ -42,6 +42,10 @@
     hasText: '' | 'yes' | 'no';
     sortBy: string;
     includeEmulsion: boolean;
+    voteScoreMin: number | null;
+    upMin: number | null;
+    downMax: number | null;
+    myVotes: '' | 'up' | 'down' | 'any' | 'none';
   };
 
   type HideKey =
@@ -52,7 +56,8 @@
     | 'dates'
     | 'channels'
     | 'posters'
-    | 'tags-text';
+    | 'tags-text'
+    | 'votes';
 
   type Props = {
     filters?: Filters;
@@ -88,6 +93,10 @@
       hasText: '',
       sortBy: 'newest',
       includeEmulsion: false,
+      voteScoreMin: null,
+      upMin: null,
+      downMax: null,
+      myVotes: '',
     };
   }
 
@@ -96,6 +105,7 @@
     { value: 'oldest', label: 'Oldest' },
     { value: 'random', label: 'Random' },
     { value: 'most_reactions', label: 'Most Reactions' },
+    { value: 'acclaim', label: 'Acclaim' },
     { value: 'largest', label: 'Largest' },
     { value: 'longest', label: 'Longest' },
   ];
@@ -209,6 +219,23 @@
     if (t === 'yes' || t === 'no') out.hasTranscript = t;
     const o = p.get('ocr');
     if (o === 'yes' || o === 'no') out.hasText = o;
+
+    if (p.get('vscore')) {
+      const n = parseInt(p.get('vscore')!, 10);
+      if (!Number.isNaN(n)) out.voteScoreMin = n;
+    }
+    if (p.get('upmin')) {
+      const n = parseInt(p.get('upmin')!, 10);
+      if (!Number.isNaN(n)) out.upMin = n;
+    }
+    if (p.get('downmax')) {
+      const n = parseInt(p.get('downmax')!, 10);
+      if (!Number.isNaN(n)) out.downMax = n;
+    }
+    const mv = p.get('myvotes');
+    if (mv === 'up' || mv === 'down' || mv === 'any' || mv === 'none') {
+      out.myVotes = mv;
+    }
 
     return out;
   }
@@ -376,6 +403,10 @@
       hasText: filters.hasText,
       sortBy: filters.sortBy,
       includeEmulsion: filters.includeEmulsion,
+      voteScoreMin: filters.voteScoreMin,
+      upMin: filters.upMin,
+      downMax: filters.downMax,
+      myVotes: filters.myVotes,
     };
     if (!mounted) return;
     const wrapper = host;
@@ -455,6 +486,7 @@
     channels: !hide.includes('channels'),
     posters: !hide.includes('posters'),
     tagsText: !hide.includes('tags-text'),
+    votes: !hide.includes('votes'),
   });
 </script>
 
@@ -663,6 +695,55 @@
       <div class="fg__hint">Images only.</div>
     {/if}
   </div>
+
+  {#if show.votes}
+    <div class="fg">
+      <label class="fg__label">Acclaim min (net)</label>
+      <input
+        type="number"
+        placeholder="any"
+        value={filters.voteScoreMin ?? ''}
+        oninput={(e) => {
+          const v = (e.target as HTMLInputElement).value;
+          filters.voteScoreMin = v === '' ? null : (parseInt(v, 10) ?? null);
+        }}
+      />
+    </div>
+    <div class="fg">
+      <label class="fg__label">Upvotes min</label>
+      <input
+        type="number"
+        placeholder="any"
+        value={filters.upMin ?? ''}
+        oninput={(e) => {
+          const v = (e.target as HTMLInputElement).value;
+          filters.upMin = v === '' ? null : (parseInt(v, 10) ?? null);
+        }}
+      />
+    </div>
+    <div class="fg">
+      <label class="fg__label">Downvotes max</label>
+      <input
+        type="number"
+        placeholder="any"
+        value={filters.downMax ?? ''}
+        oninput={(e) => {
+          const v = (e.target as HTMLInputElement).value;
+          filters.downMax = v === '' ? null : (parseInt(v, 10) ?? null);
+        }}
+      />
+    </div>
+    <div class="fg">
+      <label class="fg__label">My votes</label>
+      <select bind:value={filters.myVotes}>
+        <option value="">Any</option>
+        <option value="up">I acclaimed</option>
+        <option value="down">I disavowed</option>
+        <option value="any">Either way</option>
+        <option value="none">No votes yet</option>
+      </select>
+    </div>
+  {/if}
 
   {#if show.sort}
     <div class="fg">

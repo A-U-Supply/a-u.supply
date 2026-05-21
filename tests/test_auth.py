@@ -104,7 +104,7 @@ class TestApiKeyAuth:
         api_key = ApiKey(
             user_id=test_user.id,
             key_hash=hash_api_key(raw_key),
-            key_prefix=raw_key[:8],
+            key_prefix=raw_key[:11],
             label="test",
             scope="read",
         )
@@ -129,7 +129,7 @@ class TestApiKeyAuth:
         api_key = ApiKey(
             user_id=test_user.id,
             key_hash=hash_api_key(raw_key),
-            key_prefix=raw_key[:8],
+            key_prefix=raw_key[:11],
             label="revoked",
             scope="write",
             revoked_at=datetime.now(timezone.utc),
@@ -194,7 +194,7 @@ class TestApiKeyAuth:
             api_key = ApiKey(
                 user_id=test_user.id,
                 key_hash=hash_api_key(raw_key),
-                key_prefix=raw_key[:8],
+                key_prefix=raw_key[:11],
                 label=f"{scope} key",
                 scope=scope,
             )

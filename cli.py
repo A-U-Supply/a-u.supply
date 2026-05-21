@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""CLI for managing users. No public signup — use this to create/invite users.
+"""CLI for managing users and catalog maintenance. No public signup — use this to create/invite users.
 
 Usage:
     python cli.py create-user --email admin@example.com --name "Admin" --password secret --role admin
     python cli.py list-users
     python cli.py delete-user --email user@example.com
+    python cli.py transcode-catalog  # convert existing WAV/FLAC tracks to MP3 for web streaming
 """
 import argparse
 import sys
 from pathlib import Path
 
 from server.auth import hash_password
-from server.models import Base, SessionLocal, User, engine
+from server.models import Base, SessionLocal, Track, User, engine
 
 Path("data").mkdir(exist_ok=True)
 Base.metadata.create_all(bind=engine)
@@ -60,8 +61,42 @@ def delete_user(args):
     db.close()
 
 
+def transcode_catalog(args):
+    """Transcode all WAV/FLAC/AIFF catalog tracks to MP3 192kbps for web streaming."""
+    from server.catalog import LOSSLESS_EXTENSIONS, MEDIA_DIR, _transcode_to_mp3
+
+    db = SessionLocal()
+    try:
+        tracks = db.query(Track).filter(Track.web_audio_file_path.is_(None), Track.audio_file_path.isnot(None)).all()
+        lossless = [t for t in tracks if Path(t.audio_file_path).suffix.lower() in LOSSLESS_EXTENSIONS]
+        if not lossless:
+            print("No lossless tracks to transcode.")
+            return
+
+        print(f"Transcoding {len(lossless)} track(s) to MP3 192kbps...")
+        ok = 0
+        for track in lossless:
+            src = MEDIA_DIR / track.audio_file_path
+            dest = src.with_suffix(".mp3")
+            print(f"  [{track.id}] {track.audio_file_path} → {dest.name}", end=" ", flush=True)
+            if not src.exists():
+                print("SKIP (source missing)")
+                continue
+            if _transcode_to_mp3(str(src), str(dest)):
+                track.web_audio_file_path = str(dest.relative_to(MEDIA_DIR))
+                db.commit()
+                print("OK")
+                ok += 1
+            else:
+                print("FAIL")
+
+        print(f"Done: {ok}/{len(lossless)} transcoded.")
+    finally:
+        db.close()
+
+
 def main():
-    parser = argparse.ArgumentParser(description="a-u.supply user management")
+    parser = argparse.ArgumentParser(description="a-u.supply management CLI")
     sub = parser.add_subparsers(dest="command")
 
     create = sub.add_parser("create-user")
@@ -75,6 +110,8 @@ def main():
     delete = sub.add_parser("delete-user")
     delete.add_argument("--email", required=True)
 
+    sub.add_parser("transcode-catalog")
+
     args = parser.parse_args()
     if args.command == "create-user":
         create_user(args)
@@ -82,6 +119,8 @@ def main():
         list_users(args)
     elif args.command == "delete-user":
         delete_user(args)
+    elif args.command == "transcode-catalog":
+        transcode_catalog(args)
     else:
         parser.print_help()
 
