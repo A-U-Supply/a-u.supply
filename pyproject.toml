@@ -11,8 +11,10 @@ dependencies = [
     "faster-whisper>=1.1.0",
     "meilisearch>=0.31.0",
     "passlib[bcrypt]>=1.7.4",
+    "easyocr>=1.7.2",
+    "torch>=2.4.0",
+    "torchvision>=0.19.0",
     "Pillow>=11.0.0",
-    "pytesseract>=0.3.10",
     "python-jose[cryptography]>=3.5.0",
     "python-multipart>=0.0.26",
     "scikit-learn>=1.5.0",
@@ -33,3 +35,14 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+
+# Force CPU-only PyTorch wheels — EasyOCR depends on torch/torchvision and the
+# default PyPI wheels pull in ~2GB of CUDA libraries we'd never use on dokku.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+torchvision = [{ index = "pytorch-cpu" }]
