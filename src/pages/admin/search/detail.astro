@@ -12,10 +12,11 @@ import Admin from '../../../layouts/Admin.astro';
     <div class="detail-header">
       <h1 id="detail-title">Media Detail</h1>
       <button
-        class="bm-star"
+        class="bm-star bm-star--lg"
         id="detail-bm-star"
         style="display:none;"
-        title="Bookmark"></button>
+        title="Bookmark"
+        aria-label="Bookmark"></button>
       <a href="/admin/search" class="action-btn">Back to Search</a>
     </div>
 
@@ -28,14 +29,20 @@ import Admin from '../../../layouts/Admin.astro';
       so empty and populated states have the same title shape.
     -->
 
-    <!-- PREVIEW + METADATA: no head bar — the file is the section. -->
+    <!-- PREVIEW + METADATA: gets a head bar like the other cards so the
+         page's chrome rhythm is consistent. Label says "Preview"; the
+         right-side meta strip carries dynamic media-type info populated
+         by JS (e.g. "VIDEO · 720×1280"). Filename + bookmark + back
+         live above the cards as page-level h1 chrome — they're not in
+         this head bar. -->
     <section
       class="brutal-card preview-meta-card"
       aria-labelledby="preview-meta-h"
     >
-      <h2 id="preview-meta-h" class="visually-hidden">
-        Preview and metadata
-      </h2>
+      <div class="brutal-card__head">
+        <h2 id="preview-meta-h">Preview</h2>
+        <span class="brutal-card__head-meta" id="preview-meta-stats"></span>
+      </div>
       <div class="preview-meta-grid">
         <div class="preview-area" id="detail-preview"></div>
         <div class="metadata-area" id="metadata-body"></div>
@@ -1206,6 +1213,23 @@ import Admin from '../../../layouts/Admin.astro';
         previewEl.innerHTML = `<video controls src="${fileUrl}" poster="${thumbUrl}" style="max-height:400px;"></video>`;
       } else {
         previewEl.innerHTML = `<span style="color: var(--color-muted); text-transform: uppercase;">No preview available</span>`;
+      }
+
+      // Preview card head meta strip — media type · key dimension/duration.
+      // Right side of the head bar so it mirrors Transcript card's "stats"
+      // layout. Kept short so it stays on one line on mobile.
+      const statsEl = document.getElementById('preview-meta-stats');
+      if (statsEl) {
+        const bits: string[] = [];
+        if (item.media_type) bits.push(String(item.media_type).toUpperCase());
+        const w = item.image_meta?.width ?? item.video_meta?.width;
+        const h = item.image_meta?.height ?? item.video_meta?.height;
+        if (w && h) bits.push(`${w}×${h}`);
+        const dur =
+          item.video_meta?.duration_seconds ??
+          item.audio_meta?.duration_seconds;
+        if (dur != null && !w) bits.push(`${dur.toFixed(1)}s`);
+        statsEl.textContent = bits.join(' · ');
       }
 
       renderMetadata(item, atelierLabel);
