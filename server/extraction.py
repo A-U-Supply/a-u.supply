@@ -179,8 +179,31 @@ def _dominant_colors_quantize(img, num_colors: int) -> list[str]:
     return colors
 
 
-_OCR_PSM_MODES = (3, 6, 11)
 _OCR_CONF_THRESHOLD = 60
+_OCR_FAST_PATH_MIN_SCORE = 10
+_OCR_TIMEOUT_SECONDS = 30
+_OCR_MAX_DIM = 1600
+
+
+def _ocr_psm(img, psm: int) -> tuple[str, int]:
+    """Run Tesseract at one PSM and return (joined high-conf text, char score)."""
+    import pytesseract
+    data = pytesseract.image_to_data(
+        img,
+        config=f"--psm {psm}",
+        output_type=pytesseract.Output.DICT,
+        timeout=_OCR_TIMEOUT_SECONDS,
+    )
+    words = []
+    for text, conf in zip(data.get("text", []), data.get("conf", [])):
+        try:
+            conf_val = int(float(conf))
+        except (TypeError, ValueError):
+            continue
+        token = (text or "").strip()
+        if token and conf_val >= _OCR_CONF_THRESHOLD:
+            words.append(token)
+    return " ".join(words), sum(len(w) for w in words)
 
 
 def extract_text_ocr(file_path: str) -> str | None:
@@ -189,14 +212,11 @@ def extract_text_ocr(file_path: str) -> str | None:
     Returns the extracted text or None if no text is found or
     pytesseract/tesseract is not available.
 
-    Strategy: upscale small images in memory (the original file is never
-    touched), then run Tesseract under three PSM modes and pick the one
-    that finds the most high-confidence text:
-      - PSM 3  = auto page layout (documents, screenshots)
-      - PSM 6  = single uniform block (banners, signs)
-      - PSM 11 = sparse text (photos with incidental text)
-    Per-word confidence ≥60 filters out the dollar-bill / wood-chips
-    style noise that the auto layout would otherwise hallucinate.
+    Strategy: PSM 3 (auto layout) handles most images cheaply — for
+    documents/screenshots that's the entire pipeline. Only when PSM 3
+    finds essentially no high-confidence text (the banner-on-photo case)
+    do we pay for the slower PSM 6/11 fallback passes. All processing
+    is in-memory; the source file on disk is never modified.
     """
     try:
         import pytesseract
@@ -207,37 +227,40 @@ def extract_text_ocr(file_path: str) -> str | None:
 
     with Image.open(file_path) as img:
         img = img.convert("RGB")
+        # Upscale tiny images so the segmenter has enough pixels per glyph;
+        # downscale huge images to keep Tesseract latency bounded (PSM 11 on
+        # a 4000px image can take many minutes).
+        max_dim = max(img.size)
         min_dim = min(img.size)
-        if min_dim < 1000:
+        if max_dim > _OCR_MAX_DIM:
+            scale = _OCR_MAX_DIM / max_dim
+            img = img.resize(
+                (int(img.width * scale), int(img.height * scale)), Image.LANCZOS
+            )
+        elif min_dim < 1000:
             scale = 1000 / min_dim
-            new_size = (int(img.width * scale), int(img.height * scale))
-            img = img.resize(new_size, Image.LANCZOS)
+            img = img.resize(
+                (int(img.width * scale), int(img.height * scale)), Image.LANCZOS
+            )
 
-        best_text = ""
-        best_score = 0
-        for psm in _OCR_PSM_MODES:
+        try:
+            text_3, score_3 = _ocr_psm(img, 3)
+        except RuntimeError as exc:
+            logger.warning("OCR PSM 3 timeout/error: %s", exc)
+            text_3, score_3 = "", 0
+
+        if score_3 >= _OCR_FAST_PATH_MIN_SCORE:
+            return text_3 or None
+
+        best_text, best_score = text_3, score_3
+        for psm in (11, 6):
             try:
-                data = pytesseract.image_to_data(
-                    img,
-                    config=f"--psm {psm}",
-                    output_type=pytesseract.Output.DICT,
-                )
-            except Exception as exc:
-                logger.warning("OCR PSM %d failed: %s", psm, exc)
+                text, score = _ocr_psm(img, psm)
+            except RuntimeError as exc:
+                logger.warning("OCR PSM %d timeout/error: %s", psm, exc)
                 continue
-            words = []
-            for text, conf in zip(data.get("text", []), data.get("conf", [])):
-                try:
-                    conf_val = int(float(conf))
-                except (TypeError, ValueError):
-                    continue
-                token = (text or "").strip()
-                if token and conf_val >= _OCR_CONF_THRESHOLD:
-                    words.append(token)
-            score = sum(len(w) for w in words)
             if score > best_score:
-                best_score = score
-                best_text = " ".join(words)
+                best_text, best_score = text, score
 
     return best_text if best_text else None
 
