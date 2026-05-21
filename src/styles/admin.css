@@ -822,11 +822,13 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-sm);
-  padding: 6px var(--space-sm);
+  /* Roomier head padding so the section label has breathing room from
+     the chrome edges (the "smooshed" complaint). */
+  padding: 10px var(--space-md);
   background: var(--color-bg);
   border-bottom: 2px solid var(--color-text);
   flex-wrap: wrap;
-  min-height: 36px;
+  min-height: 40px;
 }
 .brutal-card__head h2,
 .brutal-card__head h3 {
@@ -873,7 +875,11 @@
   outline-offset: 2px;
 }
 .brutal-card__body {
-  padding: var(--space-sm);
+  /* `--space-md` (16-24px clamped) instead of `--space-sm` (8-12px) —
+     gives the content real breathing room from the 2px chrome border.
+     Pre-bump, fields/chips/buttons were jammed up against the edge and
+     read as "smooshed". */
+  padding: var(--space-md);
 }
 .brutal-card__body--flush {
   padding: 0;
