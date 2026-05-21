@@ -29,7 +29,7 @@ import Admin from '../../../layouts/Admin.astro';
     background: linear-gradient(
       90deg,
       var(--color-bg) 0%,
-      rgba(0, 0, 0, 0.04) 50%,
+      color-mix(in srgb, var(--color-fg) 6%, transparent) 50%,
       var(--color-bg) 100%
     );
     background-size: 200% 100%;
@@ -219,12 +219,12 @@ import Admin from '../../../layouts/Admin.astro';
     return (
       (
         {
-          forming: '#9ca3af',
-          developing: '#b8860b',
-          fixing: '#080',
-          abandoned: '#6b7280',
+          forming: 'var(--color-muted)',
+          developing: 'var(--color-accent)',
+          fixing: 'var(--color-status-ok)',
+          abandoned: 'var(--color-muted)',
         } as Record<string, string>
-      )[s] || '#888'
+      )[s] || 'var(--color-muted)'
     );
   }
 
@@ -260,14 +260,14 @@ import Admin from '../../../layouts/Admin.astro';
         { credentials: 'include' },
       );
       if (!r.ok) {
-        headerEl.innerHTML = `<p style="color:#c00;">No latent with slug <code>${slug}</code>.</p>`;
+        headerEl.innerHTML = `<p style="color: var(--color-status-fail);">No latent with slug <code>${slug}</code>.</p>`;
         return null;
       }
       const j = await r.json();
       return j.id;
     } catch {
       headerEl.innerHTML =
-        '<p style="color:#c00;">Network error resolving slug.</p>';
+        '<p style="color: var(--color-status-fail);">Network error resolving slug.</p>';
       return null;
     }
   }
@@ -293,11 +293,11 @@ import Admin from '../../../layouts/Admin.astro';
       });
     } catch (e) {
       headerEl.innerHTML =
-        '<p style="color:#c00;">Network error loading Latent.</p>';
+        '<p style="color: var(--color-status-fail);">Network error loading Latent.</p>';
       return;
     }
     if (!res.ok) {
-      headerEl.innerHTML = `<p style="color:#c00;">Not found (HTTP ${res.status}).</p>`;
+      headerEl.innerHTML = `<p style="color: var(--color-status-fail);">Not found (HTTP ${res.status}).</p>`;
       return;
     }
     const p = await res.json();

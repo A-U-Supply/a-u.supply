@@ -110,7 +110,7 @@ import Admin from '../../../layouts/Admin.astro';
     background: linear-gradient(
       90deg,
       var(--color-bg) 0%,
-      rgba(0, 0, 0, 0.04) 50%,
+      color-mix(in srgb, var(--color-fg) 6%, transparent) 50%,
       var(--color-bg) 100%
     );
     background-size: 200% 100%;
@@ -221,16 +221,19 @@ import Admin from '../../../layouts/Admin.astro';
     );
   }
 
+  // Status colors map to CSS vars so they flip in dark mode. The
+  // `forming`/`abandoned` shades stay as the muted token; developing
+  // uses the accent (gold); fixing maps to the status-ok green.
   function statusColor(s: string): string {
     return (
       (
         {
-          forming: '#9ca3af',
-          developing: '#b8860b',
-          fixing: '#080',
-          abandoned: '#6b7280',
+          forming: 'var(--color-muted)',
+          developing: 'var(--color-accent)',
+          fixing: 'var(--color-status-ok)',
+          abandoned: 'var(--color-muted)',
         } as Record<string, string>
-      )[s] || '#888'
+      )[s] || 'var(--color-muted)'
     );
   }
 

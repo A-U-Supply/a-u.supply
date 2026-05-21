@@ -15,16 +15,16 @@ How the Astro / Svelte side is wired. For the big picture, see [`architecture.md
 
 Defined in `src/styles/tailwind.css` under `@theme`. These override Tailwind defaults so utilities and bits-ui components inherit the look without ad-hoc styling.
 
-| Token | Value | Notes |
-|-------|-------|-------|
-| `--color-bg` | `#fff` | Page background |
-| `--color-fg` | `#1a1a1a` | Text, borders, hard shadows |
-| `--color-muted` | `#666` | Secondary text |
-| `--color-border` | `#ccc` | Subtle dividers |
-| `--color-accent` | `#b8860b` | Dark amber — used sparingly |
-| `--font-mono` / `--font-sans` | Courier New | Mono everywhere |
-| `--radius-*` | `0` | **No rounded corners by default.** `--radius-full` (`9999px`) only if you explicitly opt in. |
-| `--shadow-sm` … `--shadow-xl` | `Npx Npx 0 var(--color-fg)` | Hard offset shadows. No blur. |
+| Token                         | Value                       | Notes                                                                                        |
+| ----------------------------- | --------------------------- | -------------------------------------------------------------------------------------------- |
+| `--color-bg`                  | `#fff`                      | Page background                                                                              |
+| `--color-fg`                  | `#1a1a1a`                   | Text, borders, hard shadows                                                                  |
+| `--color-muted`               | `#666`                      | Secondary text                                                                               |
+| `--color-border`              | `#ccc`                      | Subtle dividers                                                                              |
+| `--color-accent`              | `#b8860b`                   | Dark amber — used sparingly                                                                  |
+| `--font-mono` / `--font-sans` | Courier New                 | Mono everywhere                                                                              |
+| `--radius-*`                  | `0`                         | **No rounded corners by default.** `--radius-full` (`9999px`) only if you explicitly opt in. |
+| `--shadow-sm` … `--shadow-xl` | `Npx Npx 0 var(--color-fg)` | Hard offset shadows. No blur.                                                                |
 
 There's an additional fluid type and spacing scale in `src/styles/global.css` (`--text-sm` through `--text-2xl`, `--space-xs` through `--space-xl`, all `clamp()`-based). Use those rather than hard-coded `rem`/`px` for page-level spacing and typography.
 
@@ -50,9 +50,9 @@ When integrating a new bits-ui primitive, slap `class="brutalist-control"` on th
 
 ## Layouts
 
-| File | Used by | What it provides |
-|------|---------|------------------|
-| `src/layouts/Base.astro` | All public pages | HTML shell + ViewTransitions + persistent Player |
+| File                      | Used by              | What it provides                                                                        |
+| ------------------------- | -------------------- | --------------------------------------------------------------------------------------- |
+| `src/layouts/Base.astro`  | All public pages     | HTML shell + ViewTransitions + persistent Player                                        |
 | `src/layouts/Admin.astro` | All `/admin/*` pages | Sidebar + auth gate + page-loading indicator + Player + the page-background-painting JS |
 
 ### `<Admin current="…">`
@@ -64,9 +64,7 @@ Every admin page passes a `current=` prop that names the active sidebar entry. T
 import Admin from '../../layouts/Admin.astro';
 ---
 
-<Admin title="Auspices" current="dashboard">
-  …page content…
-</Admin>
+<Admin title="Auspices" current="dashboard"> …page content… </Admin>
 ```
 
 If you add a new sidebar entry, also update both the `Admin.astro` `<aside>` list and the glossary.
@@ -79,27 +77,27 @@ Some Atelier pages override the body background (Punctum: `#221c00`, Photism: `#
 
 All under `src/components/`. Each is mounted directly from `.astro` pages as an island.
 
-| Component | Purpose | Mount |
-|-----------|---------|-------|
-| `Player.svelte` | Persistent audio player | `client:only="svelte"` in both layouts; `transition:persist="audio-player"` keeps it alive across ViewTransitions |
-| `Threads.svelte` | Generic threaded discussion (Latents, slots, media items). Props: `anchorType` (`project` / `slot` / `media_item`), `anchorId`, `communityId?`. Proxies all writes through the FastAPI `/api/threads` endpoints. | `client:visible` |
-| `Uploader.svelte` | Drop / pick / upload UI for files into Emulsion. Props: `destination`, `projectId?`, `slotId?`, `defaultTags?` | `client:visible` |
-| `LatentSlots.svelte` | Ordered slot cards with drag-to-reorder, per-slot files, pinned-primary thumbnails, notes, thread badge | `client:visible` |
-| `LatentDocuments.svelte` | Tabbed markdown documents per Latent, autosave + revision history | `client:visible` |
-| `LatentLooseFiles.svelte` | Loose files attached at the Latent level (slot_id IS NULL) | `client:visible` |
-| `LatentRepoStrip.svelte` | Strip view of Latent contents — emits `latent:slots-changed` | `client:visible` |
-| `PullFromIndex.svelte` | Modal that searches all four Meilisearch indices for files to attach to a Latent | `client:visible` |
-| `IndexFilter.svelte` | bits-ui Select (multi) for filtering by media-type index. Emits a bubbling `index-change` CustomEvent | `client:visible` |
+| Component                 | Purpose                                                                                                                                                                                                          | Mount                                                                                                             |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `Player.svelte`           | Persistent audio player                                                                                                                                                                                          | `client:only="svelte"` in both layouts; `transition:persist="audio-player"` keeps it alive across ViewTransitions |
+| `Threads.svelte`          | Generic threaded discussion (Latents, slots, media items). Props: `anchorType` (`project` / `slot` / `media_item`), `anchorId`, `communityId?`. Proxies all writes through the FastAPI `/api/threads` endpoints. | `client:visible`                                                                                                  |
+| `Uploader.svelte`         | Drop / pick / upload UI for files into Emulsion. Props: `destination`, `projectId?`, `slotId?`, `defaultTags?`                                                                                                   | `client:visible`                                                                                                  |
+| `LatentSlots.svelte`      | Ordered slot cards with drag-to-reorder, per-slot files, pinned-primary thumbnails, notes, thread badge                                                                                                          | `client:visible`                                                                                                  |
+| `LatentDocuments.svelte`  | Tabbed markdown documents per Latent, autosave + revision history                                                                                                                                                | `client:visible`                                                                                                  |
+| `LatentLooseFiles.svelte` | Loose files attached at the Latent level (slot_id IS NULL)                                                                                                                                                       | `client:visible`                                                                                                  |
+| `LatentRepoStrip.svelte`  | Strip view of Latent contents — emits `latent:slots-changed`                                                                                                                                                     | `client:visible`                                                                                                  |
+| `PullFromIndex.svelte`    | Modal that searches all four Meilisearch indices for files to attach to a Latent                                                                                                                                 | `client:visible`                                                                                                  |
+| `IndexFilter.svelte`      | bits-ui Select (multi) for filtering by media-type index. Emits a bubbling `index-change` CustomEvent                                                                                                            | `client:visible`                                                                                                  |
 
 ### Event-bus pattern
 
 Pages and components talk to each other through DOM custom events on `document`. This is how the Player gets queued from anywhere and how Latents components signal back to host pages.
 
-| Event | Detail | Who fires | Who listens |
-|-------|--------|-----------|-------------|
-| `player:queue` | `{ tracks: Track[], startIndex }` | Any page or component | `Player.svelte` |
-| `latent:slots-changed` | `{}` | `LatentRepoStrip.svelte` after a slot mutation | Host page reloads its slot data |
-| `index-change` | `{ value }` | `IndexFilter.svelte` | Whatever page hosts the filter |
+| Event                  | Detail                            | Who fires                                      | Who listens                     |
+| ---------------------- | --------------------------------- | ---------------------------------------------- | ------------------------------- |
+| `player:queue`         | `{ tracks: Track[], startIndex }` | Any page or component                          | `Player.svelte`                 |
+| `latent:slots-changed` | `{}`                              | `LatentRepoStrip.svelte` after a slot mutation | Host page reloads its slot data |
+| `index-change`         | `{ value }`                       | `IndexFilter.svelte`                           | Whatever page hosts the filter  |
 
 See [`player.md`](player.md) for the full `player:queue` payload shape.
 
@@ -114,10 +112,10 @@ See [`player.md`](player.md) for the full `player:queue` payload shape.
 
 For chrome that doesn't need reactivity (cards, dropdowns, pagination), prefer an Astro `.astro` partial under `src/components/` over a Svelte island. These render server-side, ship no JS, and inherit the brutalist tokens automatically.
 
-| Partial | When to use |
-|---------|-------------|
-| `BrutalCard.astro` | Any section that needs the 2px-border + 4px-shadow chrome. Pass `title`, optional `action` slot (single header button) and `meta` slot. `inverted` for selection/batch bars. |
-| `BrutalSelect.astro` | Filter / sort / option `<select>`. Drop-in replacement for `<select class="filter-select">` — applies the chevron overlay + hover-invert pattern from the Stacks toolbar. |
+| Partial                  | When to use                                                                                                                                                                                                     |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BrutalCard.astro`       | Any section that needs the 2px-border + 4px-shadow chrome. Pass `title`, optional `action` slot (single header button) and `meta` slot. `inverted` for selection/batch bars.                                    |
+| `BrutalSelect.astro`     | Filter / sort / option `<select>`. Drop-in replacement for `<select class="filter-select">` — applies the chevron overlay + hover-invert pattern from the Stacks toolbar.                                       |
 | `BrutalPagination.astro` | Windowed prev/next + page-buttons pagination. Pass `current`, `total`, and a `hrefFor(page)` function. For client-driven pages, pass `useEvents` and wire with `wirePagination()` from `src/lib/pagination.ts`. |
 
 `src/lib/view-mode.ts` exposes `initViewMode()` for any page with a grid/feed/list toggle. URL `?view=` wins over `localStorage`; both are kept in sync.
@@ -127,9 +125,9 @@ For chrome that doesn't need reactivity (cards, dropdowns, pagination), prefer a
 Don't hardcode `#080`, `#c00`, or `#b8860b` for status text. Use the tokens — they have explicit dark-mode counterparts in `tailwind.css`:
 
 ```css
-color: var(--color-status-ok);      /* green checkmark, success */
-color: var(--color-status-fail);    /* red error, danger */
-color: var(--color-status-warn);    /* amber warning, accent */
+color: var(--color-status-ok); /* green checkmark, success */
+color: var(--color-status-fail); /* red error, danger */
+color: var(--color-status-warn); /* amber warning, accent */
 color: var(--color-status-pending); /* muted gray, neutral */
 ```
 
@@ -153,14 +151,19 @@ Before opening a PR for a new admin page (or before merging a redesign):
 
 A lot of admin pages are plain Astro markup + `<script>` blocks with vanilla TypeScript. That's the default — only reach for Svelte when you need component reuse, reactivity, or bits-ui integration. The two together is normal: an Astro page can host both a `<script>` block and an `<Svelte client:visible>` island, and they cross-talk via the event bus above.
 
-## Formatting
+## Formatting + lint
 
 ```bash
 npm run format        # Prettier with prettier-plugin-astro + prettier-plugin-svelte
 npm run format:check  # CI check
+npm run lint:design   # Flags hardcoded colors in admin page <style> blocks
 ```
 
-Always format before committing.
+Always format before committing. The design lint runs in CI via
+`tests/test_design_lint.py` — if it fails, swap the offending hex /
+`rgba()` / named color for a `var(--color-*)` / `var(--color-status-*)` /
+`var(--color-overlay*)` token. The Atelier and the Stacks blueprint are
+intentionally skipped; the rest of `src/pages/admin/` is in scope.
 
 ## Related
 
