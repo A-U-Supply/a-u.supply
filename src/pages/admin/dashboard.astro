@@ -403,18 +403,41 @@ import Admin from '../../layouts/Admin.astro';
   .quick-links__btn--user:hover {
     box-shadow: 3px 3px 0 var(--color-accent);
   }
+  /* Pinned entry = a brutalist anchor (the full clickable pill) + a
+     small remove button next to it. The two are visually one cluster
+     so the remove button is in a tight inline-flex wrapper, not a
+     separate row. */
+  .quick-links__pinned-item {
+    display: inline-flex;
+    align-items: stretch;
+    gap: 4px;
+  }
   .quick-links__btn-remove {
-    display: inline-block;
-    background: none;
-    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg);
+    border: 2px solid var(--color-accent);
+    box-shadow: 2px 2px 0 var(--color-accent);
     color: var(--color-muted);
     cursor: pointer;
-    padding: 0 0 0 4px;
+    padding: 0 6px;
     font-size: 0.9rem;
     line-height: 1;
+    transition:
+      transform 60ms ease,
+      box-shadow 60ms ease,
+      color 80ms;
   }
   .quick-links__btn-remove:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--color-status-fail);
+    border-color: var(--color-status-fail);
     color: var(--color-status-fail);
+  }
+  .quick-links__btn-remove:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--color-status-fail);
   }
   .quick-links__add {
     align-self: flex-start;
@@ -788,19 +811,25 @@ import Admin from '../../layouts/Admin.astro';
         `<a class="quick-links__btn" href="${escapeAttr(l.href)}">${escapeHtml(l.label)}</a>`,
     ).join('');
     const user = readUserLinks();
+    // Each pinned entry is a brutalist <a> wearing the full button
+    // chrome (so the entire visible pill is clickable for navigation),
+    // followed by a separate remove <button>. Wrapping them in a span
+    // means only the inner text was a navigation target — clicking the
+    // pill's chrome did nothing, which is the bug.
     pinned.innerHTML = user
       .map(
         (l, idx) => `
-        <span class="quick-links__btn quick-links__btn--user">
+        <span class="quick-links__pinned-item">
           <a
+            class="quick-links__btn quick-links__btn--user"
             href="${escapeAttr(l.href)}"
-            style="color:inherit; text-decoration:none;"
           >${escapeHtml(l.label)}</a>
           <button
             class="quick-links__btn-remove"
             type="button"
             data-remove-idx="${idx}"
             aria-label="Remove pinned link"
+            title="Remove pinned link"
           >×</button>
         </span>`,
       )
@@ -808,7 +837,9 @@ import Admin from '../../layouts/Admin.astro';
     pinned
       .querySelectorAll<HTMLButtonElement>('[data-remove-idx]')
       .forEach((btn) => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
           const idx = parseInt(btn.dataset.removeIdx!, 10);
           if (!Number.isFinite(idx)) return;
           const current = readUserLinks();
@@ -836,27 +867,49 @@ import Admin from '../../layouts/Admin.astro';
     const cancelBtn = document.getElementById(
       'quick-link-cancel',
     ) as HTMLButtonElement;
+    const form = dialog.querySelector('form') as HTMLFormElement | null;
+    if (!form) return;
 
     addBtn.addEventListener('click', () => {
       labelInput.value = '';
       hrefInput.value = '';
+      // showModal() throws if called on an already-open dialog (eg. a
+      // double-click), which would otherwise surface as "dialog stays
+      // shut" because the exception aborts the rest of this handler.
+      if (dialog.open) return;
       dialog.showModal();
+      labelInput.focus();
     });
-    cancelBtn.addEventListener('click', () => {
-      dialog.close('cancel');
+    cancelBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      dialog.close();
     });
-    dialog.addEventListener('close', () => {
-      if (dialog.returnValue === 'cancel') return;
+
+    // The form has method="dialog", which closes the dialog on submit.
+    // Doing the save in the `close` handler (and inferring "user cancelled
+    // vs. submitted" from dialog.returnValue) was too fragile — Escape
+    // and the form-validation path both fired close without us asking,
+    // and the submit-button had no `value` attribute so returnValue
+    // collisions with the cancel path were easy. Listening to submit
+    // directly is unambiguous: only the Pin button gets us here.
+    form.addEventListener('submit', (e) => {
       const label = labelInput.value.trim();
       const href = hrefInput.value.trim();
-      if (!label || !href) return;
+      if (!label || !href) return; // browser will surface the required-field UI
+      // Restrict to same-origin / path-relative so a stray pin from
+      // localStorage can't render as a phishy click-through.
       if (!(href.startsWith('/') || href.startsWith(window.location.origin))) {
+        e.preventDefault();
+        (window as any).toast?.error?.(
+          'Pinned URLs must be paths (e.g. /admin/search) or same-origin.',
+        );
         return;
       }
       const current = readUserLinks();
       current.push({ label, href });
       writeUserLinks(current);
       renderQuickLinks();
+      // method="dialog" closes the dialog after this returns.
     });
   }
 
