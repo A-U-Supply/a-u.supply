@@ -1,25 +1,26 @@
 ---
 import Admin from '../../../layouts/Admin.astro';
+import BrutalSelect from '../../../components/BrutalSelect.astro';
 ---
 
 <Admin title="The Queue" current="jobs">
   <div class="page-header">
     <h1>The Queue</h1>
     <div class="header-actions">
-      <select id="filter-status" class="filter-select">
+      <BrutalSelect id="filter-status" ariaLabel="Filter by status">
         <option value="">All statuses</option>
         <option value="pending">Pending</option>
         <option value="running">Running</option>
         <option value="completed">Completed</option>
         <option value="failed">Failed</option>
         <option value="cancelled">Cancelled</option>
-      </select>
-      <select id="filter-app" class="filter-select">
+      </BrutalSelect>
+      <BrutalSelect id="filter-app" ariaLabel="Filter by app">
         <option value="">All apps</option>
-      </select>
-      <select id="filter-submitter" class="filter-select">
+      </BrutalSelect>
+      <BrutalSelect id="filter-submitter" ariaLabel="Filter by submitter">
         <option value="">All submitters</option>
-      </select>
+      </BrutalSelect>
     </div>
   </div>
 
@@ -89,10 +90,12 @@ import Admin from '../../../layouts/Admin.astro';
     </table>
   </div>
 
-  <div class="pagination" id="pagination" style="display:none;">
-    <button class="action-btn" id="prev-page">Prev</button>
-    <span id="page-info">Page 1</span>
-    <button class="action-btn" id="next-page">Next</button>
+  <div
+    class="pagination"
+    id="pagination"
+    style="display:none;"
+    aria-label="Queue pagination"
+  >
   </div>
 </Admin>
 
@@ -105,23 +108,25 @@ import Admin from '../../../layouts/Admin.astro';
     gap: var(--space-md);
     margin-bottom: var(--space-md);
     padding: var(--space-sm) var(--space-md);
-    border: 1px solid var(--color-border);
-    border-left: 3px solid var(--color-text);
-    background: rgba(255, 255, 255, 0.02);
+    border: 2px solid var(--color-fg);
+    border-left-width: 6px;
+    background: var(--color-surface);
+    box-shadow: 2px 2px 0 var(--color-fg);
     font-family: var(--font-mono);
     font-size: var(--text-sm);
   }
   .batch-banner code {
     font-family: var(--font-mono);
     padding: 1px 6px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
   }
   .batch-banner-actions {
     display: flex;
     gap: var(--space-xs);
   }
   .job-row--highlight {
-    background: rgba(184, 134, 11, 0.08);
+    background: color-mix(in srgb, var(--color-accent) 8%, transparent);
   }
   .job-app {
     font-family: var(--font-mono);
@@ -142,7 +147,7 @@ import Admin from '../../../layouts/Admin.astro';
     width: 28px;
   }
   .col-thumb {
-    width: 48px;
+    width: 72px;
   }
   .queue-toolbar {
     display: flex;
@@ -150,15 +155,20 @@ import Admin from '../../../layouts/Admin.astro';
     gap: var(--space-sm);
     padding: var(--space-xs) var(--space-sm);
     margin-bottom: var(--space-sm);
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-fg);
     background: var(--color-surface);
+    box-shadow: 2px 2px 0 var(--color-fg);
     font-family: var(--font-mono);
     font-size: var(--text-sm);
     flex-wrap: wrap;
   }
   .queue-toolbar.has-selection {
     border-color: var(--color-accent);
-    background: rgba(184, 134, 11, 0.06);
+    background: color-mix(
+      in srgb,
+      var(--color-accent) 6%,
+      var(--color-surface)
+    );
   }
   .queue-select-all {
     display: inline-flex;
@@ -170,22 +180,23 @@ import Admin from '../../../layouts/Admin.astro';
   .queue-select-all input[type='checkbox'] {
     width: 16px;
     height: 16px;
-    accent-color: var(--color-text);
+    accent-color: var(--color-fg);
   }
   .queue-selected {
     margin-left: auto;
-    color: var(--color-text);
+    color: var(--color-fg);
     font-weight: bold;
   }
   .queue-selected:empty {
     display: none;
   }
+  /* Bumped thumbnail size: cramped 40px previews didn't read at all. */
   .job-thumb {
-    width: 40px;
-    height: 40px;
+    width: 64px;
+    height: 64px;
     object-fit: cover;
     display: block;
-    background: #111;
+    background: var(--color-surface-2);
     border: 1px solid var(--color-border);
   }
   .job-thumb--placeholder {
@@ -238,8 +249,8 @@ import Admin from '../../../layouts/Admin.astro';
       margin-right: var(--space-xs);
     }
     #jobs-table .release-table td.col-thumb .job-thumb {
-      width: 32px;
-      height: 32px;
+      width: 48px;
+      height: 48px;
     }
     #jobs-table .release-table td.job-app {
       font-weight: bold;
@@ -293,6 +304,8 @@ import Admin from '../../../layouts/Admin.astro';
 </style>
 
 <script>
+  import { renderPagination, wirePagination } from '../../../lib/pagination';
+
   document.addEventListener('astro:page-load', async () => {
     await (window as any).__authReady;
 
@@ -301,7 +314,6 @@ import Admin from '../../../layouts/Admin.astro';
     const tableEl = document.getElementById('jobs-table')!;
     const tbodyEl = document.getElementById('jobs-tbody')!;
     const paginationEl = document.getElementById('pagination')!;
-    const pageInfo = document.getElementById('page-info')!;
     const filterStatus = document.getElementById(
       'filter-status',
     ) as HTMLSelectElement;
@@ -570,9 +582,7 @@ import Admin from '../../../layouts/Admin.astro';
         tableEl.style.display = 'none';
         toolbarEl.style.display = 'none';
         updateToolbar();
-        const totalPages = Math.ceil(totalJobs / pageSize);
-        paginationEl.style.display = totalPages > 1 ? 'flex' : 'none';
-        pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+        renderJobsPagination();
         return;
       }
 
@@ -644,12 +654,32 @@ import Admin from '../../../layouts/Admin.astro';
       });
 
       // Pagination
-      const totalPages = Math.ceil(totalJobs / pageSize);
-      paginationEl.style.display = totalPages > 1 ? 'flex' : 'none';
-      pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+      renderJobsPagination();
 
       updateToolbar();
     }
+
+    function renderJobsPagination() {
+      const totalPages = Math.ceil(totalJobs / pageSize);
+      if (totalPages <= 1) {
+        paginationEl.style.display = 'none';
+        return;
+      }
+      paginationEl.style.display = 'flex';
+      paginationEl.innerHTML = renderPagination({
+        current: currentPage,
+        total: totalPages,
+        windowSize: 2,
+        hrefFor: () => '#',
+      });
+    }
+
+    wirePagination(paginationEl, (page) => {
+      currentPage = page;
+      writeParams({ page: currentPage });
+      loadJobs();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
 
     selectAllEl.addEventListener('change', () => {
       const checked = selectAllEl.checked;
@@ -900,20 +930,8 @@ import Admin from '../../../layouts/Admin.astro';
       writeParams({ submitter: currentSubmitter, page: currentPage });
       loadJobs();
     });
-    document.getElementById('prev-page')?.addEventListener('click', () => {
-      if (currentPage > 1) {
-        currentPage--;
-        writeParams({ page: currentPage });
-        loadJobs();
-      }
-    });
-    document.getElementById('next-page')?.addEventListener('click', () => {
-      if (currentPage * pageSize < totalJobs) {
-        currentPage++;
-        writeParams({ page: currentPage });
-        loadJobs();
-      }
-    });
+    // Pagination wired via wirePagination() above — clicks fire
+    // `pagination:go` and call loadJobs() with the new page.
 
     // Browser back/forward: re-read params and reload
     const onPopState = () => {

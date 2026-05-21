@@ -1,12 +1,14 @@
 ---
 import Admin from '../../../layouts/Admin.astro';
+import BrutalCard from '../../../components/BrutalCard.astro';
+import BrutalSelect from '../../../components/BrutalSelect.astro';
 ---
 
 <Admin title="The Fallen" current="failures">
   <div class="page-header">
     <h1>The Fallen</h1>
     <div class="failures-controls">
-      <select id="filter-type">
+      <BrutalSelect id="filter-type" ariaLabel="Filter by extraction type">
         <option value="">All Types</option>
         <option value="image_metadata">Image Metadata</option>
         <option value="dominant_colors">Dominant Colors</option>
@@ -14,10 +16,28 @@ import Admin from '../../../layouts/Admin.astro';
         <option value="whisper">Whisper</option>
         <option value="thumbnail">Thumbnail</option>
         <option value="yt-dlp">yt-dlp</option>
-      </select>
-      <button class="action-btn" id="batch-retry-btn" style="display:none;"
-        >Retry Selected</button
+      </BrutalSelect>
+    </div>
+  </div>
+
+  <div
+    class="selection-bar"
+    id="selection-bar"
+    role="region"
+    aria-label="Selection actions"
+  >
+    <label class="selection-toggle" title="Select all loaded failures">
+      <input type="checkbox" id="select-toggle" />
+      <span class="selection-toggle__label" id="select-toggle-label"
+        >Select</span
       >
+    </label>
+    <span class="selection-count" id="selection-count" hidden>0 selected</span>
+    <div class="selection-actions" id="selection-actions" hidden>
+      <button class="action-btn" id="batch-retry-btn">Retry Selected</button>
+      <button class="action-btn" id="batch-resolve-btn">Resolve Selected</button
+      >
+      <button class="action-btn" id="clear-selection">Clear</button>
     </div>
   </div>
 
@@ -30,56 +50,155 @@ import Admin from '../../../layouts/Admin.astro';
     No extraction failures found.
   </div>
 
-  <div class="table-wrap" id="table-wrap" style="display:none;">
-    <table class="release-table">
-      <thead>
-        <tr>
-          <th><input type="checkbox" id="select-all" /></th>
-          <th>Filename</th>
-          <th>Extraction Type</th>
-          <th>Error</th>
-          <th>Attempts</th>
-          <th>Last Attempt</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="failures-tbody"></tbody>
-    </table>
-  </div>
+  <ol class="failure-list" id="failure-list" style="display:none;"></ol>
 </Admin>
 
 <style>
-  .failures-controls select {
-    padding: 4px 6px;
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    border: 1px solid var(--color-border);
-    background: var(--color-bg);
-    color: var(--color-text);
+  .failures-controls {
+    display: flex;
+    gap: var(--space-xs);
+    align-items: center;
   }
-  .release-table td.error-cell {
-    max-width: 250px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: #c00;
+
+  /* Selection bar — mirrors The Stacks pattern. Sits inverted-fg above
+     the list so the active batch action reads as the loudest element. */
+  .selection-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    padding: var(--space-xs) var(--space-sm);
+    margin: var(--space-md) 0;
+    border: 2px solid var(--color-fg);
+    background: var(--color-surface);
+    box-shadow: 2px 2px 0 var(--color-fg);
+    font-family: var(--font-mono);
+  }
+  .selection-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
     font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    color: var(--color-muted);
+  }
+  .selection-toggle input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--color-fg);
+    cursor: pointer;
+  }
+  .selection-count {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+  .selection-actions {
+    display: flex;
+    gap: var(--space-xs);
+    margin-left: auto;
+    flex-wrap: wrap;
+  }
+
+  /* Vertical fat rows. No table = no horizontal scroll on narrow
+     screens. Each row stacks filename + error on the left and actions on
+     the right; on mobile actions wrap below the body. */
+  .failure-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+  .failure-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    border: 2px solid var(--color-fg);
+    background: var(--color-bg);
+    box-shadow: 2px 2px 0 var(--color-fg);
+  }
+  .failure-row input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--color-fg);
+    cursor: pointer;
+  }
+  .failure-row__body {
+    min-width: 0;
+  }
+  .failure-row__head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+  }
+  .failure-row__filename {
+    font-weight: 700;
+    font-size: var(--text-sm);
+    color: var(--color-fg);
+    text-decoration: none;
+    word-break: break-all;
+  }
+  .failure-row__filename:hover {
+    color: var(--color-accent);
+  }
+  .failure-row__type {
+    display: inline-block;
+    padding: 1px 6px;
+    border: 1px solid var(--color-fg);
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+  .failure-row__error {
+    color: var(--color-status-fail);
+    font-size: 0.7rem;
+    line-height: 1.4;
+    word-break: break-word;
+  }
+  .failure-row__meta {
+    margin-top: 4px;
+    font-size: 0.6rem;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+  .failure-row__actions {
+    display: flex;
+    gap: var(--space-xs);
+    align-self: start;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   @media (max-width: 640px) {
-    .release-table th:nth-child(4),
-    .release-table td:nth-child(4),
-    .release-table th:nth-child(5),
-    .release-table td:nth-child(5) {
-      display: none;
+    .failure-row {
+      grid-template-columns: auto 1fr;
+      grid-template-areas:
+        'check body'
+        'check actions';
+    }
+    .failure-row__actions {
+      grid-area: actions;
+      justify-content: flex-start;
     }
   }
 </style>
 
 <script>
   document.addEventListener('astro:page-load', async () => {
-    const tbody = document.getElementById('failures-tbody');
-    if (!tbody) return;
+    const listEl = document.getElementById(
+      'failure-list',
+    ) as HTMLOListElement | null;
+    if (!listEl) return;
 
     const user = await (window as any).__authReady;
     if (!user) return;
@@ -87,9 +206,25 @@ import Admin from '../../../layouts/Admin.astro';
     const loadingEl = document.getElementById('loading')!;
     const errorEl = document.getElementById('error')!;
     const emptyEl = document.getElementById('empty')!;
-    const tableWrap = document.getElementById('table-wrap')!;
+    const selectionBar = document.getElementById('selection-bar')!;
+    const selectionActions = document.getElementById(
+      'selection-actions',
+    ) as HTMLDivElement;
+    const selectionCount = document.getElementById(
+      'selection-count',
+    ) as HTMLSpanElement;
+    const selectToggle = document.getElementById(
+      'select-toggle',
+    ) as HTMLInputElement;
+    const selectToggleLabel = document.getElementById('select-toggle-label')!;
     const batchRetryBtn = document.getElementById(
       'batch-retry-btn',
+    ) as HTMLButtonElement;
+    const batchResolveBtn = document.getElementById(
+      'batch-resolve-btn',
+    ) as HTMLButtonElement;
+    const clearBtn = document.getElementById(
+      'clear-selection',
     ) as HTMLButtonElement;
     const filterType = document.getElementById(
       'filter-type',
@@ -98,17 +233,21 @@ import Admin from '../../../layouts/Admin.astro';
     let allFailures: any[] = [];
     let selectedIds = new Set<string>();
 
-    filterType.addEventListener('change', () => renderTable());
+    filterType.addEventListener('change', () => renderList());
 
-    // Select all
-    document.getElementById('select-all')?.addEventListener('change', (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
-      getFilteredFailures().forEach((f) => {
-        if (checked) selectedIds.add(f.id);
-        else selectedIds.delete(f.id);
-      });
-      updateBatchBtn();
-      renderTable();
+    selectToggle.addEventListener('change', () => {
+      const filtered = getFilteredFailures();
+      if (selectToggle.checked) {
+        filtered.forEach((f) => selectedIds.add(f.id));
+      } else {
+        filtered.forEach((f) => selectedIds.delete(f.id));
+      }
+      renderList();
+    });
+
+    clearBtn.addEventListener('click', () => {
+      selectedIds.clear();
+      renderList();
     });
 
     batchRetryBtn.addEventListener('click', async () => {
@@ -131,22 +270,74 @@ import Admin from '../../../layouts/Admin.astro';
       batchRetryBtn.textContent = 'Retry Selected';
     });
 
+    batchResolveBtn.addEventListener('click', async () => {
+      if (selectedIds.size === 0) return;
+      batchResolveBtn.disabled = true;
+      batchResolveBtn.textContent = 'Resolving...';
+      try {
+        for (const id of selectedIds) {
+          await fetch(`/api/extraction-failures/${id}/resolve`, {
+            method: 'POST',
+            credentials: 'include',
+          });
+        }
+        selectedIds.clear();
+        await loadFailures();
+      } catch {
+        (window as any).toast.error('Batch resolve failed');
+      }
+      batchResolveBtn.disabled = false;
+      batchResolveBtn.textContent = 'Resolve Selected';
+    });
+
     function getFilteredFailures() {
       const typeFilter = filterType.value;
       if (!typeFilter) return allFailures;
       return allFailures.filter((f) => f.extraction_type === typeFilter);
     }
 
-    function updateBatchBtn() {
-      batchRetryBtn.style.display =
-        selectedIds.size > 0 ? 'inline-block' : 'none';
+    function escape(s: string) {
+      return s.replace(
+        /[&<>"']/g,
+        (c) =>
+          (
+            ({
+              '&': '&amp;',
+              '<': '&lt;',
+              '>': '&gt;',
+              '"': '&quot;',
+              "'": '&#39;',
+            }) as Record<string, string>
+          )[c] || c,
+      );
+    }
+
+    function syncSelectToggle(filteredCount: number) {
+      const selectedInFiltered = getFilteredFailures().filter((f) =>
+        selectedIds.has(f.id),
+      ).length;
+      if (selectedInFiltered === 0) {
+        selectToggle.checked = false;
+        selectToggle.indeterminate = false;
+      } else if (selectedInFiltered === filteredCount) {
+        selectToggle.checked = true;
+        selectToggle.indeterminate = false;
+      } else {
+        selectToggle.checked = false;
+        selectToggle.indeterminate = true;
+      }
+      const total = selectedIds.size;
+      selectionCount.hidden = total === 0;
+      selectionCount.textContent = `${total} selected`;
+      selectionActions.hidden = total === 0;
+      selectToggleLabel.textContent = total > 0 ? 'Selected' : 'Select';
     }
 
     async function loadFailures() {
       loadingEl.style.display = 'block';
       errorEl.style.display = 'none';
       emptyEl.style.display = 'none';
-      tableWrap.style.display = 'none';
+      listEl!.style.display = 'none';
 
       try {
         const res = await fetch('/api/extraction-failures', {
@@ -156,7 +347,7 @@ import Admin from '../../../layouts/Admin.astro';
         const data = await res.json();
         allFailures = data.failures || data;
         loadingEl.style.display = 'none';
-        renderTable();
+        renderList();
       } catch (err: any) {
         loadingEl.style.display = 'none';
         errorEl.textContent = err.message;
@@ -164,48 +355,53 @@ import Admin from '../../../layouts/Admin.astro';
       }
     }
 
-    function renderTable() {
+    function renderList() {
       const filtered = getFilteredFailures();
 
       if (filtered.length === 0) {
-        tableWrap.style.display = 'none';
+        listEl!.style.display = 'none';
         emptyEl.style.display = 'block';
+        syncSelectToggle(0);
         return;
       }
 
       emptyEl.style.display = 'none';
-      tableWrap.style.display = 'block';
+      listEl!.style.display = 'flex';
 
-      tbody.innerHTML = filtered
+      listEl!.innerHTML = filtered
         .map((f) => {
           const checked = selectedIds.has(f.id) ? 'checked' : '';
           const lastAttempt = f.last_attempt_at
             ? new Date(f.last_attempt_at).toLocaleString()
             : '--';
-          return `<tr>
-          <td><input type="checkbox" data-select="${f.id}" ${checked} /></td>
-          <td>
-            <a href="/admin/search/detail?id=${f.media_item_id}" style="color: var(--color-text); text-decoration: underline;">
-              ${f.media_filename || f.media_item_id || 'Unknown'}
-            </a>
-          </td>
-          <td><span class="badge">${f.extraction_type || '--'}</span></td>
-          <td class="error-cell" title="${(f.error_message || '').replace(/"/g, '&quot;')}">${f.error_message || '--'}</td>
-          <td>${f.attempts ?? '--'}</td>
-          <td style="white-space:nowrap;">${lastAttempt}</td>
-          <td style="white-space:nowrap;">
-            <button class="action-btn" data-retry="${f.id}">Retry</button>
-            <button class="action-btn action-btn--success" data-resolve="${f.id}">Resolve</button>
-          </td>
-        </tr>`;
+          const detailHref = `/admin/search/detail?id=${encodeURIComponent(f.media_item_id || '')}`;
+          return `<li class="failure-row" data-id="${escape(f.id)}">
+          <input type="checkbox" data-select="${escape(f.id)}" ${checked} aria-label="Select" />
+          <div class="failure-row__body">
+            <div class="failure-row__head">
+              <a class="failure-row__filename" href="${detailHref}">
+                ${escape(f.media_filename || f.media_item_id || 'Unknown')}
+              </a>
+              <span class="failure-row__type">${escape(f.extraction_type || '--')}</span>
+            </div>
+            <div class="failure-row__error">${escape(f.error_message || '--')}</div>
+            <div class="failure-row__meta">
+              attempts: ${f.attempts ?? '--'} · last: ${escape(lastAttempt)}
+            </div>
+          </div>
+          <div class="failure-row__actions">
+            <button class="action-btn" data-retry="${escape(f.id)}">Retry</button>
+            <button class="action-btn action-btn--success" data-resolve="${escape(f.id)}">Resolve</button>
+          </div>
+        </li>`;
         })
         .join('');
 
-      updateBatchBtn();
+      syncSelectToggle(filtered.length);
     }
 
     // Delegate clicks
-    tbody.addEventListener('click', async (e) => {
+    listEl!.addEventListener('click', async (e) => {
       const target = e.target as HTMLElement;
 
       // Checkbox
@@ -216,7 +412,7 @@ import Admin from '../../../layouts/Admin.astro';
         const id = checkbox.dataset.select!;
         if (checkbox.checked) selectedIds.add(id);
         else selectedIds.delete(id);
-        updateBatchBtn();
+        syncSelectToggle(getFilteredFailures().length);
         return;
       }
 

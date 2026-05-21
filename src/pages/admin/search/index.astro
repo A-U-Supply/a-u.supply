@@ -1637,10 +1637,17 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
       setTimeout(poll, 2000);
     }
 
-    // Default view: feed on mobile, grid on desktop. User's explicit
-    // choice (saved in localStorage) wins over both defaults.
+    // Default view: feed on mobile, grid on desktop. URL ?view= wins
+    // over localStorage so shareable links land on the chosen view; the
+    // user's explicit localStorage choice still applies if there's no
+    // URL param. Mobile vs desktop default is the last fallback.
     type ViewMode = 'grid' | 'feed' | 'list';
     function pickInitialView(): ViewMode {
+      try {
+        const urlView = new URL(window.location.href).searchParams.get('view');
+        if (urlView === 'grid' || urlView === 'feed' || urlView === 'list')
+          return urlView;
+      } catch {}
       try {
         const saved = localStorage.getItem('au.searchView');
         if (saved === 'grid' || saved === 'feed' || saved === 'list')
@@ -1696,6 +1703,14 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
       currentView = next;
       try {
         localStorage.setItem('au.searchView', next);
+      } catch {}
+      // Reflect the view in the URL so a copy-paste of the URL lands a
+      // visitor on the same view. replaceState — no new history entry
+      // per click.
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set('view', next);
+        window.history.replaceState({}, '', url.toString());
       } catch {}
       syncViewButtons();
       // Switching out of feed (which accumulates pages 1..N) into a

@@ -1010,11 +1010,208 @@
   font-weight: 700;
 }
 .status-pill--ok {
-  color: #080;
+  color: var(--color-status-ok);
 }
 .status-pill--fail {
-  color: #c00;
+  color: var(--color-status-fail);
+}
+.status-pill--warn {
+  color: var(--color-status-warn);
 }
 .status-pill--pending {
   color: var(--color-muted);
+}
+
+/* ─── Brutalist card head, inverted ──────────────────────────────────
+   Variant of .brutal-card__head that paints the bar fg-on-bg-inverted —
+   used for "selected" / "batch action" header bars where we want the
+   bar to read as the loudest element on the page. */
+.brutal-card__head--inverted {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+.brutal-card__head--inverted h2,
+.brutal-card__head--inverted h3 {
+  color: var(--color-bg);
+}
+
+/* ─── Brutalist select / input ───────────────────────────────────────
+   Pulled out of /admin/search/index.astro's .sort-select so other pages
+   can adopt the same control without copy-pasting. Pair with a
+   .brutal-select-wrap that hosts the chevron span. */
+.brutal-select-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.brutal-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 2px solid var(--color-fg);
+  padding: var(--space-xs) calc(var(--space-md) + 14px) var(--space-xs)
+    var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.5pt;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--color-fg);
+  transition:
+    background 80ms,
+    color 80ms,
+    transform 60ms ease,
+    box-shadow 60ms ease;
+  min-height: 32px;
+  width: 100%;
+}
+.brutal-select:hover {
+  background: var(--color-fg);
+  color: var(--color-bg);
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--color-fg);
+}
+.brutal-select:focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+}
+.brutal-select-chevron {
+  position: absolute;
+  right: var(--space-sm);
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.85rem;
+  pointer-events: none;
+  color: currentColor;
+}
+.brutal-select-wrap:hover .brutal-select-chevron {
+  color: var(--color-bg);
+}
+
+.brutal-input {
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 2px solid var(--color-fg);
+  box-shadow: 2px 2px 0 var(--color-fg);
+  padding: var(--space-xs) var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  min-height: 32px;
+}
+.brutal-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+/* ─── Config card ────────────────────────────────────────────────────
+   .brutal-card variant whose body is a labeled-grid form. Used by the
+   Workspace "Configure batch" panel and the Hecatomb form. */
+.config-card .brutal-card__body {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.5fr) 1fr;
+  gap: var(--space-xs) var(--space-md);
+  align-items: center;
+}
+.config-card .config-row-label {
+  font-size: 0.65rem;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5pt;
+}
+.config-card .config-row-full {
+  grid-column: 1 / -1;
+}
+@media (max-width: 540px) {
+  .config-card .brutal-card__body {
+    grid-template-columns: 1fr;
+    gap: var(--space-xs);
+  }
+  .config-card .config-row-label {
+    margin-top: var(--space-xs);
+  }
+}
+
+/* ─── Empty state, card variant ──────────────────────────────────────
+   Empty state wrapped in brutalist card chrome for use inside results
+   areas that otherwise have card-bordered headers above them. */
+.empty-state--card {
+  border: 2px solid var(--color-fg);
+  box-shadow: 4px 4px 0 var(--color-fg);
+  border-style: solid;
+  background: var(--color-surface);
+}
+
+/* ─── Brutalist windowed pagination ──────────────────────────────────
+   Hoisted out of search/index.astro so other pages can adopt the same
+   shape via BrutalPagination.astro. The .pagination wrapper class is
+   defined in the legacy block above; these page-button styles complete
+   it. */
+.pagination__pages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs, 4px);
+}
+.pagination__page {
+  min-width: 2.2rem;
+  padding: 4px 8px;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  border: 2px solid var(--color-fg);
+  box-shadow: 2px 2px 0 var(--color-fg);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  line-height: 1;
+  text-decoration: none;
+  display: inline-block;
+  transition:
+    transform 60ms ease,
+    box-shadow 60ms ease,
+    background 80ms,
+    color 80ms;
+}
+.pagination__page:hover:not(.is-current):not([aria-disabled='true']) {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--color-fg);
+}
+.pagination__page:active:not(.is-current):not([aria-disabled='true']) {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--color-fg);
+}
+.pagination__page.is-current {
+  background: var(--color-fg);
+  color: var(--color-bg);
+  cursor: default;
+}
+.pagination__page[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.pagination__ellipsis {
+  padding: 0 4px;
+  color: var(--color-muted);
+  user-select: none;
+}
+
+/* Respect reduced-motion. The brutalist hover-lift uses a 60ms transform;
+   for users with prefers-reduced-motion we still flip the colors but skip
+   the translate so nothing jitters. */
+@media (prefers-reduced-motion: reduce) {
+  .brutal-select,
+  .brutal-select:hover,
+  .brutal-select:active,
+  .pagination__page,
+  .pagination__page:hover,
+  .pagination__page:active,
+  .brutal-card__head-action,
+  .brutal-card__head-action:active {
+    transition: none;
+    transform: none;
+  }
 }

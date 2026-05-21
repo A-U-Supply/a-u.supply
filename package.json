@@ -7,7 +7,8 @@
     "build": "astro build",
     "preview": "astro preview",
     "format": "prettier --write 'src/**/*.{astro,js,ts,css,svelte}'",
-    "format:check": "prettier --check 'src/**/*.{astro,js,ts,css,svelte}'"
+    "format:check": "prettier --check 'src/**/*.{astro,js,ts,css,svelte}'",
+    "lint:design": "node scripts/lint-design.mjs"
   },
   "devDependencies": {
     "prettier": "^3.5.0",

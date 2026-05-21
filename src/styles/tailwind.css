@@ -37,6 +37,21 @@
   --shadow-md: 2px 2px 0 var(--color-fg);
   --shadow-lg: 3px 3px 0 var(--color-fg);
   --shadow-xl: 4px 4px 0 var(--color-fg);
+
+  /* Status colors. Tuned for legibility on both --color-bg (#fff) and the
+   * dark-mode override (#111). Each variant has an explicit dark counterpart
+   * below; do not hardcode #c00 / #080 / #b8860b for status text — use these. */
+  --color-status-ok: #1e7a1e;
+  --color-status-fail: #c4453a;
+  --color-status-warn: #b8860b;
+  --color-status-pending: var(--color-muted);
+
+  /* Overlay tint for badges/buttons floating on media (play arrow, type
+   * chip, duration). Semi-opaque so the underlying image still reads.
+   * Dark-mode version flips so the chrome stays visible on dark images. */
+  --color-overlay: rgba(0, 0, 0, 0.6);
+  --color-overlay-soft: rgba(0, 0, 0, 0.35);
+  --color-on-overlay: #fff;
 }
 
 /*
@@ -64,6 +79,14 @@ html[data-theme='dark'] {
   --color-accent: #d4a01d;
   --color-surface: #1a1a1a;
   --color-surface-2: #242424;
+  --color-status-ok: #5ec25e;
+  --color-status-fail: #f0746a;
+  --color-status-warn: #e0a020;
+  /* Overlays stay dark so chrome anchored to media (which is usually
+   * darker than the page) still reads. Tuned higher opacity than light
+   * mode because the surrounding page is already dark. */
+  --color-overlay: rgba(0, 0, 0, 0.7);
+  --color-overlay-soft: rgba(0, 0, 0, 0.5);
 }
 
 /*

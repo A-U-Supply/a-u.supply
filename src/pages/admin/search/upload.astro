@@ -44,8 +44,11 @@ import Admin from '../../../layouts/Admin.astro';
 </Admin>
 
 <style>
+  /* Drop zone — dashed brutalist tile. Light-mode dragover tints with
+     accent; both modes covered by the token. */
   .upload-zone {
-    border: 2px dashed var(--color-border);
+    border: 2px dashed var(--color-fg);
+    background: var(--color-surface);
     padding: var(--space-xl);
     text-align: center;
     margin: var(--space-md) 0;
@@ -56,7 +59,7 @@ import Admin from '../../../layouts/Admin.astro';
   }
   .upload-zone.dragover {
     border-color: var(--color-accent);
-    background: rgba(184, 134, 11, 0.05);
+    background: color-mix(in srgb, var(--color-accent) 8%, var(--color-bg));
   }
   .upload-zone__text {
     font-size: var(--text-lg);
@@ -79,15 +82,40 @@ import Admin from '../../../layouts/Admin.astro';
     letter-spacing: 1pt;
     background: var(--color-fg);
     color: var(--color-bg);
-    border: none;
+    border: 2px solid var(--color-fg);
+    box-shadow: 2px 2px 0 var(--color-fg);
     cursor: pointer;
+    transition:
+      transform 60ms ease,
+      box-shadow 60ms ease;
   }
   .upload-zone__btn:hover {
-    background: color-mix(in srgb, var(--color-fg) 80%, var(--color-bg));
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--color-fg);
+  }
+  .upload-zone__btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--color-fg);
   }
 
   .upload-shared {
     margin: var(--space-md) 0;
+  }
+  .upload-shared input[type='text'],
+  .upload-shared textarea {
+    width: 100%;
+    padding: var(--space-xs) var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    border: 2px solid var(--color-fg);
+    box-shadow: 2px 2px 0 var(--color-fg);
+    background: var(--color-bg);
+    color: var(--color-fg);
+  }
+  .upload-shared input:focus,
+  .upload-shared textarea:focus {
+    outline: none;
+    border-color: var(--color-accent);
   }
   .form-group {
     margin-bottom: var(--space-sm);
@@ -102,14 +130,16 @@ import Admin from '../../../layouts/Admin.astro';
     display: flex;
     align-items: center;
     gap: var(--space-sm);
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-fg);
+    background: var(--color-bg);
+    box-shadow: 2px 2px 0 var(--color-fg);
     padding: var(--space-sm);
   }
   .file-item__preview {
     width: 60px;
     height: 60px;
     flex-shrink: 0;
-    background: var(--color-surface);
+    background: var(--color-surface-2);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -141,6 +171,7 @@ import Admin from '../../../layouts/Admin.astro';
   .file-item__status {
     font-size: 0.65rem;
     text-transform: uppercase;
+    letter-spacing: 0.5pt;
   }
   .file-item__status--pending {
     color: var(--color-muted);
@@ -149,22 +180,22 @@ import Admin from '../../../layouts/Admin.astro';
     color: var(--color-accent);
   }
   .file-item__status--done {
-    color: #080;
+    color: var(--color-status-ok);
   }
   .file-item__status--error {
-    color: #c00;
+    color: var(--color-status-fail);
   }
   .file-item__remove {
     background: none;
     border: none;
-    color: #c00;
+    color: var(--color-status-fail);
     cursor: pointer;
     font-size: 1.2rem;
     padding: 0 4px;
     line-height: 1;
   }
   .file-item__remove:hover {
-    color: #a00;
+    color: color-mix(in srgb, var(--color-status-fail) 80%, black);
   }
 
   .upload-actions {
@@ -181,21 +212,36 @@ import Admin from '../../../layouts/Admin.astro';
     letter-spacing: 1pt;
     background: var(--color-fg);
     color: var(--color-bg);
-    border: none;
+    border: 2px solid var(--color-fg);
+    box-shadow: 4px 4px 0 var(--color-fg);
     cursor: pointer;
+    transition:
+      transform 60ms ease,
+      box-shadow 60ms ease;
   }
   .upload-btn:hover {
-    background: color-mix(in srgb, var(--color-fg) 80%, var(--color-bg));
+    transform: translate(-1px, -1px);
+    box-shadow: 5px 5px 0 var(--color-fg);
+  }
+  .upload-btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0 var(--color-fg);
   }
   .upload-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
+  .upload-btn:disabled:hover {
+    transform: none;
+    box-shadow: 4px 4px 0 var(--color-fg);
+  }
 
   .upload-status {
     margin-top: var(--space-md);
     padding: var(--space-sm);
-    border: 1px solid var(--color-border);
+    border: 2px solid var(--color-fg);
+    background: var(--color-surface);
+    box-shadow: 2px 2px 0 var(--color-fg);
     font-size: var(--text-sm);
   }
 

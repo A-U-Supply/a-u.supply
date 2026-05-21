@@ -49,7 +49,7 @@ import Admin from '../../layouts/Admin.astro';
       <div id="invite-error" class="login-error" style="display:none;"></div>
       <div
         id="invite-success"
-        style="display:none; color: green; font-size: var(--text-sm); margin-top: var(--space-xs);"
+        style="display:none; color: var(--color-status-ok); font-size: var(--text-sm); margin-top: var(--space-xs);"
       >
       </div>
     </form>
@@ -81,7 +81,7 @@ import Admin from '../../layouts/Admin.astro';
       <div id="pw-error" class="login-error" style="display:none;"></div>
       <div
         id="pw-success"
-        style="display:none; color: green; font-size: var(--text-sm); margin-top: var(--space-xs);"
+        style="display:none; color: var(--color-status-ok); font-size: var(--text-sm); margin-top: var(--space-xs);"
       >
       </div>
     </form>
@@ -227,13 +227,18 @@ import Admin from '../../layouts/Admin.astro';
     min-width: 160px;
     padding: 6px 10px;
     background: var(--color-bg);
-    color: var(--color-text);
-    border: 1px solid var(--color-border);
+    color: var(--color-fg);
+    border: 2px solid var(--color-fg);
+    box-shadow: 2px 2px 0 var(--color-fg);
     font-family: var(--font-mono);
     font-size: var(--text-sm);
   }
+  .settings-form input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+  }
   .settings-error {
-    color: #c00;
+    color: var(--color-status-fail);
     font-size: var(--text-sm);
     margin: var(--space-xs) 0 0;
   }
@@ -242,14 +247,14 @@ import Admin from '../../layouts/Admin.astro';
     align-items: center;
     gap: 6px;
     padding: 4px 10px;
-    background: #f4f4f4;
-    border: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-fg);
     font-size: var(--text-sm);
   }
   .linked-pill__dot {
     width: 8px;
     height: 8px;
-    background: #080;
+    background: var(--color-status-ok);
     border-radius: 50%;
   }
   .linked-pill__dot--off {
