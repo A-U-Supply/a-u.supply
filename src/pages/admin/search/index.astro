@@ -3362,9 +3362,12 @@ import IndexFilter from '../../../components/IndexFilter.svelte';
           const depth = Math.max(0, path.split('.').filter(Boolean).length - 2);
           const indent = Math.min(depth, 6) * 16;
           const body = c.deleted ? '(deleted)' : escapeHtml(c.content || '');
+          const author = escapeHtml(
+            c.creator_display_name || c.creator_name || `user #${c.creator_id}`,
+          );
           return `<li class="feed-item__comment" style="margin-left: ${indent}px">
             <div class="feed-item__comment-meta">
-              <span>user #${c.creator_id}</span>
+              <span>${author}</span>
               <span>${c.published ? new Date(c.published).toLocaleString() : ''}</span>
               <button type="button" class="feed-item__comment-reply" data-parent-id="${c.id}">Reply</button>
             </div>
