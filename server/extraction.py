@@ -181,7 +181,8 @@ def _dominant_colors_quantize(img, num_colors: int) -> list[str]:
 
 _OCR_CONF_THRESHOLD = 60
 _OCR_FAST_PATH_MIN_SCORE = 10
-_OCR_TIMEOUT_SECONDS = 30
+_OCR_MIN_RESULT_SCORE = 3
+_OCR_TIMEOUT_SECONDS = 90
 _OCR_MAX_DIM = 1600
 
 
@@ -262,7 +263,9 @@ def extract_text_ocr(file_path: str) -> str | None:
             if score > best_score:
                 best_text, best_score = text, score
 
-    return best_text if best_text else None
+    if best_score < _OCR_MIN_RESULT_SCORE:
+        return None
+    return best_text or None
 
 
 # ---------------------------------------------------------------------------

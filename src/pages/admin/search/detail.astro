@@ -763,9 +763,13 @@ import Admin from '../../../layouts/Admin.astro';
       const typeMeta = document.getElementById('type-meta')!;
       if (item.media_type === 'image' && item.image_meta) {
         const m = item.image_meta;
+        const captionHTML = m.caption
+          ? `<div class="meta-section"><div class="meta-label">OCR Text</div><div class="meta-value" style="white-space:pre-wrap;font-family:var(--font-mono,monospace);font-size:var(--text-sm);">${m.caption.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div></div>`
+          : '';
         typeMeta.innerHTML = `
           <div class="meta-section"><div class="meta-label">Dimensions</div><div class="meta-value">${m.width || '?'} x ${m.height || '?'}</div></div>
           <div class="meta-section"><div class="meta-label">Format</div><div class="meta-value">${m.format || '--'}</div></div>
+          ${captionHTML}
           ${
             m.dominant_colors
               ? (() => {
