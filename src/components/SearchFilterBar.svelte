@@ -36,14 +36,24 @@
     dateFrom: string;
     dateTo: string;
     tagsText: string;
+    // Range filters — min and max counterparts paired in the UI.
+    // `null` = open-ended for that bound. Reactions / tag-count use
+    // number with 0 as "not set" for backwards compat with the URL
+    // params (?rxn=0 was treated as none); the new max counterparts
+    // use number|null since they didn't exist before.
     reactionsMin: number;
+    reactionsMax: number | null;
     tagsMin: number;
+    tagsMax: number | null;
     hasTranscript: '' | 'yes' | 'no';
     hasText: '' | 'yes' | 'no';
     sortBy: string;
     includeEmulsion: boolean;
     voteScoreMin: number | null;
+    voteScoreMax: number | null;
     upMin: number | null;
+    upMax: number | null;
+    downMin: number | null;
     downMax: number | null;
     myVotes: '' | 'up' | 'down' | 'any' | 'none';
   };
@@ -88,13 +98,18 @@
       dateTo: '',
       tagsText: '',
       reactionsMin: 0,
+      reactionsMax: null,
       tagsMin: 0,
+      tagsMax: null,
       hasTranscript: '',
       hasText: '',
       sortBy: 'newest',
       includeEmulsion: false,
       voteScoreMin: null,
+      voteScoreMax: null,
       upMin: null,
+      upMax: null,
+      downMin: null,
       downMax: null,
       myVotes: '',
     };
@@ -195,9 +210,17 @@
       const n = parseInt(p.get('rxn')!, 10);
       if (!Number.isNaN(n)) out.reactionsMin = n;
     }
+    if (p.get('rxnmax')) {
+      const n = parseInt(p.get('rxnmax')!, 10);
+      if (!Number.isNaN(n)) out.reactionsMax = n;
+    }
     if (p.get('mintags')) {
       const n = parseInt(p.get('mintags')!, 10);
       if (!Number.isNaN(n)) out.tagsMin = n;
+    }
+    if (p.get('maxtags')) {
+      const n = parseInt(p.get('maxtags')!, 10);
+      if (!Number.isNaN(n)) out.tagsMax = n;
     }
     if (p.get('sort')) out.sortBy = p.get('sort')!;
 
@@ -207,12 +230,11 @@
         .split(',')
         .map((g) => g.trim())
         .filter(Boolean);
-      if (groups.length === 1) {
-        out.colorGroups = [groups[0]];
-      } else if (groups.length > 1) {
-        out.preservedMultiColors = groups;
-        out.colorGroups = [];
-      }
+      // Color is now a multi-select dropdown, so URL multi-color goes
+      // straight into colorGroups instead of the preservedMultiColors
+      // shadow state (which only existed because the UI was
+      // single-select).
+      if (groups.length) out.colorGroups = groups;
     }
 
     const t = p.get('transcript');
@@ -224,9 +246,21 @@
       const n = parseInt(p.get('vscore')!, 10);
       if (!Number.isNaN(n)) out.voteScoreMin = n;
     }
+    if (p.get('vscoremax')) {
+      const n = parseInt(p.get('vscoremax')!, 10);
+      if (!Number.isNaN(n)) out.voteScoreMax = n;
+    }
     if (p.get('upmin')) {
       const n = parseInt(p.get('upmin')!, 10);
       if (!Number.isNaN(n)) out.upMin = n;
+    }
+    if (p.get('upmax')) {
+      const n = parseInt(p.get('upmax')!, 10);
+      if (!Number.isNaN(n)) out.upMax = n;
+    }
+    if (p.get('downmin')) {
+      const n = parseInt(p.get('downmin')!, 10);
+      if (!Number.isNaN(n)) out.downMin = n;
     }
     if (p.get('downmax')) {
       const n = parseInt(p.get('downmax')!, 10);
@@ -322,25 +356,17 @@
   // Handlers
   // ---------------------------------------------------------------------
 
-  function toggleType(t: string, e: MouseEvent | KeyboardEvent) {
-    const modifier =
-      ('metaKey' in e && e.metaKey) ||
-      ('ctrlKey' in e && e.ctrlKey) ||
-      ('shiftKey' in e && e.shiftKey);
-    if (modifier) {
-      // Multi-toggle: add/remove this one.
-      if (filters.types.includes(t)) {
-        filters.types = filters.types.filter((x) => x !== t);
-      } else {
-        filters.types = [...filters.types, t];
-      }
+  // Media-type buttons are pure toggles — every click adds or removes
+  // the type from the set. Empty set means "all types" (same default
+  // behaviour as not passing the filter). Was previously
+  // click=single-switch / shift-click=multi, but the modifier-required
+  // multi was a desktop-only affordance — mobile users had no way to
+  // multi-select.
+  function toggleType(t: string) {
+    if (filters.types.includes(t)) {
+      filters.types = filters.types.filter((x) => x !== t);
     } else {
-      // Switch: only this one. (Clicking the already-only one keeps it.)
-      if (filters.types.length === 1 && filters.types[0] === t) {
-        // No-op — same single selection.
-      } else {
-        filters.types = [t];
-      }
+      filters.types = [...filters.types, t];
     }
   }
 
@@ -355,6 +381,11 @@
 
   function handleColorGroupChange(v: string) {
     filters.colorGroups = v ? [v] : [];
+    filters.preservedMultiColors = [];
+  }
+
+  function handleColorMultiChange(next: string[]) {
+    filters.colorGroups = next;
     filters.preservedMultiColors = [];
   }
 
@@ -398,13 +429,18 @@
       dateTo: filters.dateTo,
       tagsText: filters.tagsText,
       reactionsMin: filters.reactionsMin,
+      reactionsMax: filters.reactionsMax,
       tagsMin: filters.tagsMin,
+      tagsMax: filters.tagsMax,
       hasTranscript: filters.hasTranscript,
       hasText: filters.hasText,
       sortBy: filters.sortBy,
       includeEmulsion: filters.includeEmulsion,
       voteScoreMin: filters.voteScoreMin,
+      voteScoreMax: filters.voteScoreMax,
       upMin: filters.upMin,
+      upMax: filters.upMax,
+      downMin: filters.downMin,
       downMax: filters.downMax,
       myVotes: filters.myVotes,
     };
@@ -474,6 +510,14 @@
     return `${sel[0]} +${sel.length - 1}`;
   }
 
+  function colorTriggerLabel(sel: string[]): string {
+    if (!sel.length) return 'Any color';
+    const pretty = (s: string) => s[0].toUpperCase() + s.slice(1);
+    if (sel.length === 1) return pretty(sel[0]);
+    if (sel.length === 2) return sel.map(pretty).join(', ');
+    return `${pretty(sel[0])} +${sel.length - 1}`;
+  }
+
   // ---------------------------------------------------------------------
   // hide-section helpers
   // ---------------------------------------------------------------------
@@ -540,8 +584,9 @@
           class="type-switch"
           class:active={filters.types.includes(t)}
           type="button"
-          onclick={(e) => toggleType(t, e)}
-          title={`Click: only ${t} · Cmd/Ctrl/Shift-click: multi-select`}
+          aria-pressed={filters.types.includes(t)}
+          onclick={() => toggleType(t)}
+          title={`Toggle ${t}`}
         >
           {t}
         </button>
@@ -594,61 +639,157 @@
   {/if}
 
   {#if show.dates}
-    <div class="fg">
+    <div class="fg fg--wide">
       <label class="fg__label">Date Range</label>
-      <input type="date" bind:value={filters.dateFrom} aria-label="From" />
-      <input type="date" bind:value={filters.dateTo} aria-label="To" />
+      <div class="fg__range">
+        <input type="date" bind:value={filters.dateFrom} aria-label="From" />
+        <span class="fg__range-sep" aria-hidden="true">–</span>
+        <input type="date" bind:value={filters.dateTo} aria-label="To" />
+      </div>
     </div>
   {/if}
 
   {#if show.colors}
     <div class="fg">
       <label class="fg__label">Color</label>
-      <select
-        value={filters.colorGroups[0] ?? ''}
-        onchange={(e) =>
-          handleColorGroupChange((e.target as HTMLSelectElement).value)}
+      <Select.Root
+        type="multiple"
+        value={filters.colorGroups}
+        onValueChange={handleColorMultiChange}
       >
-        <option value="">Any color</option>
-        {#each COLOR_GROUPS as g (g)}
-          <option value={g}>{g[0].toUpperCase()}{g.slice(1)}</option>
-        {/each}
-      </select>
-      {#if filters.preservedMultiColors.length > 1}
-        <div class="fg__hint">
-          Active: {filters.preservedMultiColors.join(', ')} (URL multi-select)
-        </div>
-      {/if}
+        <Select.Trigger
+          class="fb-select__trigger brutalist-control"
+          aria-label="Color filter"
+        >
+          <span class="fb-select__label"
+            >{colorTriggerLabel(filters.colorGroups)}</span
+          >
+          <span class="fb-select__caret" aria-hidden="true">▾</span>
+        </Select.Trigger>
+        <Select.Portal>
+          <Select.Content
+            class="fb-select__content"
+            sideOffset={6}
+            align="start"
+          >
+            <Select.Viewport class="fb-select__viewport">
+              {#each COLOR_GROUPS as g (g)}
+                <Select.Item class="fb-select__item" value={g} label={g}>
+                  {#snippet children({ selected })}
+                    <span class="fb-select__check" aria-hidden="true"
+                      >{selected ? '✓' : ''}</span
+                    >
+                    <span class="fb-select__item-label"
+                      >{g[0].toUpperCase()}{g.slice(1)}</span
+                    >
+                  {/snippet}
+                </Select.Item>
+              {/each}
+            </Select.Viewport>
+          </Select.Content>
+        </Select.Portal>
+      </Select.Root>
     </div>
   {/if}
 
   {#if show.posters}
     <div class="fg">
       <label class="fg__label">Posted By</label>
-      <select bind:value={filters.poster}>
-        <option value="">All</option>
-        {#each posterOptions as u (u)}
-          <option value={u}>{u}</option>
-        {/each}
-      </select>
+      <Select.Root
+        type="single"
+        value={filters.poster}
+        onValueChange={(v) => (filters.poster = v ?? '')}
+      >
+        <Select.Trigger
+          class="fb-select__trigger brutalist-control"
+          aria-label="Posted by filter"
+        >
+          <span class="fb-select__label">{filters.poster || 'All'}</span>
+          <span class="fb-select__caret" aria-hidden="true">▾</span>
+        </Select.Trigger>
+        <Select.Portal>
+          <Select.Content
+            class="fb-select__content"
+            sideOffset={6}
+            align="start"
+          >
+            <Select.Viewport class="fb-select__viewport">
+              <Select.Item class="fb-select__item" value="" label="All">
+                {#snippet children({ selected })}
+                  <span class="fb-select__check" aria-hidden="true"
+                    >{selected ? '✓' : ''}</span
+                  >
+                  <span class="fb-select__item-label">All</span>
+                {/snippet}
+              </Select.Item>
+              {#each posterOptions as u (u)}
+                <Select.Item class="fb-select__item" value={u} label={u}>
+                  {#snippet children({ selected })}
+                    <span class="fb-select__check" aria-hidden="true"
+                      >{selected ? '✓' : ''}</span
+                    >
+                    <span class="fb-select__item-label">{u}</span>
+                  {/snippet}
+                </Select.Item>
+              {/each}
+            </Select.Viewport>
+          </Select.Content>
+        </Select.Portal>
+      </Select.Root>
     </div>
   {/if}
 
   <div class="fg" class:fg--disabled={jobAppDisabled}>
     <label class="fg__label">Job App</label>
-    <select bind:value={filters.jobApp} disabled={jobAppDisabled}>
-      <option value="">All</option>
-      {#each jobAppOptions as a (a)}
-        <option value={a}>{a}</option>
-      {/each}
-    </select>
+    <Select.Root
+      type="single"
+      value={filters.jobApp}
+      disabled={jobAppDisabled}
+      onValueChange={(v) => (filters.jobApp = v ?? '')}
+    >
+      <Select.Trigger
+        class="fb-select__trigger brutalist-control"
+        aria-label="Job app filter"
+      >
+        <span class="fb-select__label">{filters.jobApp || 'All'}</span>
+        <span class="fb-select__caret" aria-hidden="true">▾</span>
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Content
+          class="fb-select__content"
+          sideOffset={6}
+          align="start"
+        >
+          <Select.Viewport class="fb-select__viewport">
+            <Select.Item class="fb-select__item" value="" label="All">
+              {#snippet children({ selected })}
+                <span class="fb-select__check" aria-hidden="true"
+                  >{selected ? '✓' : ''}</span
+                >
+                <span class="fb-select__item-label">All</span>
+              {/snippet}
+            </Select.Item>
+            {#each jobAppOptions as a (a)}
+              <Select.Item class="fb-select__item" value={a} label={a}>
+                {#snippet children({ selected })}
+                  <span class="fb-select__check" aria-hidden="true"
+                    >{selected ? '✓' : ''}</span
+                  >
+                  <span class="fb-select__item-label">{a}</span>
+                {/snippet}
+              </Select.Item>
+            {/each}
+          </Select.Viewport>
+        </Select.Content>
+      </Select.Portal>
+    </Select.Root>
     {#if jobAppDisabled}
       <div class="fg__hint">Outputs only — switch Index to Outputs.</div>
     {/if}
   </div>
 
   {#if show.tagsText}
-    <div class="fg">
+    <div class="fg fg--wide">
       <label class="fg__label">Tags</label>
       <input
         type="text"
@@ -660,25 +801,101 @@
 
   {#if show.reactions}
     <div class="fg">
-      <label class="fg__label">Min Reactions</label>
-      <input type="number" bind:value={filters.reactionsMin} min="0" />
+      <label class="fg__label">Reactions</label>
+      <div class="fg__range">
+        <input
+          type="number"
+          min="0"
+          placeholder="min"
+          aria-label="Minimum reactions"
+          bind:value={filters.reactionsMin}
+        />
+        <span class="fg__range-sep" aria-hidden="true">–</span>
+        <input
+          type="number"
+          min="0"
+          placeholder="max"
+          aria-label="Maximum reactions"
+          value={filters.reactionsMax ?? ''}
+          oninput={(e) => {
+            const v = (e.target as HTMLInputElement).value;
+            filters.reactionsMax = v === '' ? null : (parseInt(v, 10) ?? null);
+          }}
+        />
+      </div>
     </div>
   {/if}
 
   {#if show.tagsMin}
     <div class="fg">
-      <label class="fg__label">Min Tags</label>
-      <input type="number" bind:value={filters.tagsMin} min="0" />
+      <label class="fg__label">Tag Count</label>
+      <div class="fg__range">
+        <input
+          type="number"
+          min="0"
+          placeholder="min"
+          aria-label="Minimum tag count"
+          bind:value={filters.tagsMin}
+        />
+        <span class="fg__range-sep" aria-hidden="true">–</span>
+        <input
+          type="number"
+          min="0"
+          placeholder="max"
+          aria-label="Maximum tag count"
+          value={filters.tagsMax ?? ''}
+          oninput={(e) => {
+            const v = (e.target as HTMLInputElement).value;
+            filters.tagsMax = v === '' ? null : (parseInt(v, 10) ?? null);
+          }}
+        />
+      </div>
     </div>
   {/if}
 
   <div class="fg" class:fg--disabled={hasTranscriptDisabled}>
     <label class="fg__label">Transcript</label>
-    <select bind:value={filters.hasTranscript} disabled={hasTranscriptDisabled}>
-      <option value="">Any</option>
-      <option value="yes">With transcript</option>
-      <option value="no">Without transcript</option>
-    </select>
+    <Select.Root
+      type="single"
+      value={filters.hasTranscript}
+      disabled={hasTranscriptDisabled}
+      onValueChange={(v) =>
+        (filters.hasTranscript = (v ?? '') as '' | 'yes' | 'no')}
+    >
+      <Select.Trigger
+        class="fb-select__trigger brutalist-control"
+        aria-label="Transcript filter"
+      >
+        <span class="fb-select__label"
+          >{filters.hasTranscript === 'yes'
+            ? 'With transcript'
+            : filters.hasTranscript === 'no'
+              ? 'Without transcript'
+              : 'Any'}</span
+        >
+        <span class="fb-select__caret" aria-hidden="true">▾</span>
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Content
+          class="fb-select__content"
+          sideOffset={6}
+          align="start"
+        >
+          <Select.Viewport class="fb-select__viewport">
+            {#each [{ v: '', l: 'Any' }, { v: 'yes', l: 'With transcript' }, { v: 'no', l: 'Without transcript' }] as opt (opt.v)}
+              <Select.Item class="fb-select__item" value={opt.v} label={opt.l}>
+                {#snippet children({ selected })}
+                  <span class="fb-select__check" aria-hidden="true"
+                    >{selected ? '✓' : ''}</span
+                  >
+                  <span class="fb-select__item-label">{opt.l}</span>
+                {/snippet}
+              </Select.Item>
+            {/each}
+          </Select.Viewport>
+        </Select.Content>
+      </Select.Portal>
+    </Select.Root>
     {#if hasTranscriptDisabled}
       <div class="fg__hint">Audio/video only.</div>
     {/if}
@@ -686,11 +903,47 @@
 
   <div class="fg" class:fg--disabled={hasTextDisabled}>
     <label class="fg__label">OCR Text</label>
-    <select bind:value={filters.hasText} disabled={hasTextDisabled}>
-      <option value="">Any</option>
-      <option value="yes">With OCR text</option>
-      <option value="no">Without OCR text</option>
-    </select>
+    <Select.Root
+      type="single"
+      value={filters.hasText}
+      disabled={hasTextDisabled}
+      onValueChange={(v) =>
+        (filters.hasText = (v ?? '') as '' | 'yes' | 'no')}
+    >
+      <Select.Trigger
+        class="fb-select__trigger brutalist-control"
+        aria-label="OCR text filter"
+      >
+        <span class="fb-select__label"
+          >{filters.hasText === 'yes'
+            ? 'With OCR text'
+            : filters.hasText === 'no'
+              ? 'Without OCR text'
+              : 'Any'}</span
+        >
+        <span class="fb-select__caret" aria-hidden="true">▾</span>
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Content
+          class="fb-select__content"
+          sideOffset={6}
+          align="start"
+        >
+          <Select.Viewport class="fb-select__viewport">
+            {#each [{ v: '', l: 'Any' }, { v: 'yes', l: 'With OCR text' }, { v: 'no', l: 'Without OCR text' }] as opt (opt.v)}
+              <Select.Item class="fb-select__item" value={opt.v} label={opt.l}>
+                {#snippet children({ selected })}
+                  <span class="fb-select__check" aria-hidden="true"
+                    >{selected ? '✓' : ''}</span
+                  >
+                  <span class="fb-select__item-label">{opt.l}</span>
+                {/snippet}
+              </Select.Item>
+            {/each}
+          </Select.Viewport>
+        </Select.Content>
+      </Select.Portal>
+    </Select.Root>
     {#if hasTextDisabled}
       <div class="fg__hint">Images only.</div>
     {/if}
@@ -698,70 +951,209 @@
 
   {#if show.votes}
     <div class="fg">
-      <label class="fg__label">Acclaim min (net)</label>
-      <input
-        type="number"
-        placeholder="any"
-        value={filters.voteScoreMin ?? ''}
-        oninput={(e) => {
-          const v = (e.target as HTMLInputElement).value;
-          filters.voteScoreMin = v === '' ? null : (parseInt(v, 10) ?? null);
-        }}
-      />
+      <label class="fg__label">Acclaim (net)</label>
+      <div class="fg__range">
+        <input
+          type="number"
+          placeholder="min"
+          aria-label="Minimum net acclaim"
+          value={filters.voteScoreMin ?? ''}
+          oninput={(e) => {
+            const v = (e.target as HTMLInputElement).value;
+            filters.voteScoreMin = v === '' ? null : (parseInt(v, 10) ?? null);
+          }}
+        />
+        <span class="fg__range-sep" aria-hidden="true">–</span>
+        <input
+          type="number"
+          placeholder="max"
+          aria-label="Maximum net acclaim"
+          value={filters.voteScoreMax ?? ''}
+          oninput={(e) => {
+            const v = (e.target as HTMLInputElement).value;
+            filters.voteScoreMax = v === '' ? null : (parseInt(v, 10) ?? null);
+          }}
+        />
+      </div>
     </div>
     <div class="fg">
-      <label class="fg__label">Upvotes min</label>
-      <input
-        type="number"
-        placeholder="any"
-        value={filters.upMin ?? ''}
-        oninput={(e) => {
-          const v = (e.target as HTMLInputElement).value;
-          filters.upMin = v === '' ? null : (parseInt(v, 10) ?? null);
-        }}
-      />
+      <label class="fg__label">Upvotes</label>
+      <div class="fg__range">
+        <input
+          type="number"
+          min="0"
+          placeholder="min"
+          aria-label="Minimum upvotes"
+          value={filters.upMin ?? ''}
+          oninput={(e) => {
+            const v = (e.target as HTMLInputElement).value;
+            filters.upMin = v === '' ? null : (parseInt(v, 10) ?? null);
+          }}
+        />
+        <span class="fg__range-sep" aria-hidden="true">–</span>
+        <input
+          type="number"
+          min="0"
+          placeholder="max"
+          aria-label="Maximum upvotes"
+          value={filters.upMax ?? ''}
+          oninput={(e) => {
+            const v = (e.target as HTMLInputElement).value;
+            filters.upMax = v === '' ? null : (parseInt(v, 10) ?? null);
+          }}
+        />
+      </div>
     </div>
     <div class="fg">
-      <label class="fg__label">Downvotes max</label>
-      <input
-        type="number"
-        placeholder="any"
-        value={filters.downMax ?? ''}
-        oninput={(e) => {
-          const v = (e.target as HTMLInputElement).value;
-          filters.downMax = v === '' ? null : (parseInt(v, 10) ?? null);
-        }}
-      />
+      <label class="fg__label">Downvotes</label>
+      <div class="fg__range">
+        <input
+          type="number"
+          min="0"
+          placeholder="min"
+          aria-label="Minimum downvotes"
+          value={filters.downMin ?? ''}
+          oninput={(e) => {
+            const v = (e.target as HTMLInputElement).value;
+            filters.downMin = v === '' ? null : (parseInt(v, 10) ?? null);
+          }}
+        />
+        <span class="fg__range-sep" aria-hidden="true">–</span>
+        <input
+          type="number"
+          min="0"
+          placeholder="max"
+          aria-label="Maximum downvotes"
+          value={filters.downMax ?? ''}
+          oninput={(e) => {
+            const v = (e.target as HTMLInputElement).value;
+            filters.downMax = v === '' ? null : (parseInt(v, 10) ?? null);
+          }}
+        />
+      </div>
     </div>
     <div class="fg">
       <label class="fg__label">My votes</label>
-      <select bind:value={filters.myVotes}>
-        <option value="">Any</option>
-        <option value="up">I acclaimed</option>
-        <option value="down">I disavowed</option>
-        <option value="any">Either way</option>
-        <option value="none">No votes yet</option>
-      </select>
+      <Select.Root
+        type="single"
+        value={filters.myVotes}
+        onValueChange={(v) =>
+          (filters.myVotes = (v ?? '') as
+            | ''
+            | 'up'
+            | 'down'
+            | 'any'
+            | 'none')}
+      >
+        <Select.Trigger
+          class="fb-select__trigger brutalist-control"
+          aria-label="My votes filter"
+        >
+          <span class="fb-select__label"
+            >{({
+              '': 'Any',
+              up: 'I acclaimed',
+              down: 'I disavowed',
+              any: 'Either way',
+              none: 'No votes yet',
+            } as Record<string, string>)[filters.myVotes] || 'Any'}</span
+          >
+          <span class="fb-select__caret" aria-hidden="true">▾</span>
+        </Select.Trigger>
+        <Select.Portal>
+          <Select.Content
+            class="fb-select__content"
+            sideOffset={6}
+            align="start"
+          >
+            <Select.Viewport class="fb-select__viewport">
+              {#each [{ v: '', l: 'Any' }, { v: 'up', l: 'I acclaimed' }, { v: 'down', l: 'I disavowed' }, { v: 'any', l: 'Either way' }, { v: 'none', l: 'No votes yet' }] as opt (opt.v)}
+                <Select.Item
+                  class="fb-select__item"
+                  value={opt.v}
+                  label={opt.l}
+                >
+                  {#snippet children({ selected })}
+                    <span class="fb-select__check" aria-hidden="true"
+                      >{selected ? '✓' : ''}</span
+                    >
+                    <span class="fb-select__item-label">{opt.l}</span>
+                  {/snippet}
+                </Select.Item>
+              {/each}
+            </Select.Viewport>
+          </Select.Content>
+        </Select.Portal>
+      </Select.Root>
     </div>
   {/if}
 
   {#if show.sort}
     <div class="fg">
       <label class="fg__label">Sort By</label>
-      <select bind:value={filters.sortBy}>
-        {#each SORT_OPTIONS as o (o.value)}
-          <option value={o.value}>{o.label}</option>
-        {/each}
-      </select>
+      <Select.Root
+        type="single"
+        value={filters.sortBy}
+        onValueChange={(v) => (filters.sortBy = v ?? 'newest')}
+      >
+        <Select.Trigger
+          class="fb-select__trigger brutalist-control"
+          aria-label="Sort filter"
+        >
+          <span class="fb-select__label"
+            >{SORT_OPTIONS.find((o) => o.value === filters.sortBy)?.label ??
+              'Newest'}</span
+          >
+          <span class="fb-select__caret" aria-hidden="true">▾</span>
+        </Select.Trigger>
+        <Select.Portal>
+          <Select.Content
+            class="fb-select__content"
+            sideOffset={6}
+            align="start"
+          >
+            <Select.Viewport class="fb-select__viewport">
+              {#each SORT_OPTIONS as o (o.value)}
+                <Select.Item
+                  class="fb-select__item"
+                  value={o.value}
+                  label={o.label}
+                >
+                  {#snippet children({ selected })}
+                    <span class="fb-select__check" aria-hidden="true"
+                      >{selected ? '✓' : ''}</span
+                    >
+                    <span class="fb-select__item-label">{o.label}</span>
+                  {/snippet}
+                </Select.Item>
+              {/each}
+            </Select.Viewport>
+          </Select.Content>
+        </Select.Portal>
+      </Select.Root>
     </div>
   {/if}
 </div>
 
 <style>
+  /* Filter drawer is a 2-col responsive grid: each `.fg` is one cell,
+     so short controls (selects, single numbers, range pairs) sit
+     side-by-side. Long-form controls (Tags text, Date range) span
+     both columns via `.fg--wide`. Collapses to single column below
+     540px so phones still get every control full-width. */
   .filter-bar {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-sm);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-sm) var(--space-md);
+    align-items: start;
+  }
+  .fg--wide {
+    grid-column: 1 / -1;
+  }
+  @media (max-width: 540px) {
+    .filter-bar {
+      grid-template-columns: 1fr;
+    }
   }
 
   .fg {
@@ -783,6 +1175,23 @@
     font-size: 0.6rem;
     color: var(--color-muted);
     margin-top: 2px;
+  }
+  /* min/max paired inputs — sits inside .fg under the label. Each
+     input is min-width: 0 so they don't overflow narrow viewports;
+     the en-dash separator sits between them with light styling. */
+  .fg__range {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .fg__range input {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .fg__range-sep {
+    color: var(--color-muted);
+    font-weight: 700;
+    flex-shrink: 0;
   }
   .fg input[type='text'],
   .fg input[type='number'],

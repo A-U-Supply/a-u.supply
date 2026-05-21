@@ -35,17 +35,29 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
   </div>
 
   <div class="search-row">
-    <button
-      class="filter-toggle"
-      id="filter-toggle"
-      type="button"
-      aria-expanded="false"
-      aria-controls="filter-body"
-    >
-      <span>Filters</span>
-      <span class="filter-toggle__count" id="filter-toggle-count" hidden>0</span
+    <div class="drawer-toggles">
+      <button
+        class="filter-toggle"
+        id="filter-toggle"
+        type="button"
+        aria-expanded="false"
+        aria-controls="filter-body"
       >
-    </button>
+        <span>Filters</span>
+        <span class="filter-toggle__count" id="filter-toggle-count" hidden
+          >0</span
+        >
+      </button>
+      <button
+        class="filter-toggle"
+        id="insights-toggle"
+        type="button"
+        aria-expanded="false"
+        aria-controls="insights-body"
+      >
+        <span>Insights</span>
+      </button>
+    </div>
     <form id="search-form" class="search-bar">
       <input
         type="text"
@@ -84,23 +96,19 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
     <div id="filter-bar-host">
       <SearchFilterBar client:load syncUrl={true} hide={['sort']} />
     </div>
+  </div>
 
-    <button
-      class="action-btn"
-      id="apply-filters"
-      style="width:100%; margin-top: var(--space-xs);">Apply Filters</button
-    >
-
-    <div class="insights-section" id="insights-section" style="display:none;">
-      <button class="insights-toggle" id="insights-toggle">Insights</button>
-      <div class="insights-body" id="insights-body">
-        <div class="insight-group" id="insight-uploaders"></div>
-        <div class="insight-group" id="insight-tags"></div>
-        <div class="insight-group" id="insight-reactions"></div>
-        <div class="insight-group" id="insight-timeline"></div>
-        <div class="insight-group" id="insight-colors"></div>
-      </div>
-    </div>
+  <!-- Insights peer drawer. Mutually exclusive with the filters drawer:
+       the toolbar buttons (FILTERS / INSIGHTS) toggle their own drawer
+       and close the sibling. Filter state is shared — clicking a color
+       chip in here writes to the same SearchFilterBar `filters` object,
+       so closing this and opening filters reflects the change. -->
+  <div class="filter-body insights-drawer" id="insights-body">
+    <div class="insight-group" id="insight-uploaders"></div>
+    <div class="insight-group" id="insight-tags"></div>
+    <div class="insight-group" id="insight-reactions"></div>
+    <div class="insight-group" id="insight-timeline"></div>
+    <div class="insight-group" id="insight-colors"></div>
   </div>
 
   <div class="results-area">
@@ -373,8 +381,15 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
     margin: var(--space-md) 0;
     align-items: stretch;
   }
-  .search-row .filter-toggle {
+  .search-row .drawer-toggles {
     grid-area: filter;
+    display: flex;
+    gap: var(--space-xs);
+    min-width: 0;
+  }
+  .search-row .drawer-toggles .filter-toggle {
+    flex: 1 1 auto;
+    min-width: 0;
   }
   .search-row .sort-cluster {
     grid-area: sort;
@@ -552,16 +567,11 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
     margin-bottom: var(--space-md);
   }
   .filter-body.open {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: var(--space-sm) var(--space-md);
-    align-items: start;
-  }
-  .filter-body.open #apply-filters {
-    grid-column: 1 / -1;
-  }
-  .filter-body.open .insights-section {
-    grid-column: 1 / -1;
+    /* Drawer layout: filter-bar (its own 2-col grid inside) and the
+       insights section stack vertically. */
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
   }
 
   .active-filters {
@@ -628,35 +638,18 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
     color: var(--color-border);
   }
 
-  /* Insights panel */
-  .insights-section {
-    margin-top: var(--space-md);
-    border-top: 1px solid var(--color-border);
-    padding-top: var(--space-sm);
-  }
-  .insights-toggle {
-    width: 100%;
-    padding: var(--space-xs);
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    background: none;
-    border: 1px solid var(--color-border);
-    cursor: pointer;
-    color: var(--color-text);
-  }
-  .insights-toggle:hover {
-    border-color: var(--color-text);
-  }
-  .insights-body {
-    margin-top: var(--space-sm);
-  }
-  .insights-body.collapsed {
-    display: none;
+  /* Insights drawer — peer of the filters drawer. Uses `.filter-body`
+     for the open/close mechanic (display:none → flex); the
+     `.insights-drawer` modifier just relaxes the inner layout (a
+     simple stack of insight groups, not a 2-col grid). */
+  .insights-drawer.open {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
   }
   .insight-group {
-    margin-bottom: var(--space-md);
+    /* gap on parent handles inter-group spacing */
+    margin-bottom: 0;
   }
   .insight-group:empty {
     display: none;
@@ -705,6 +698,43 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
     text-align: right;
     color: var(--color-muted);
     font-size: 0.55rem;
+  }
+
+  /* Color insights = clickable filter chips. Button variant resets the
+     default browser <button> chrome so the visual matches the original
+     div-row styling, then adds focus + active states. */
+  .insight-title-hint {
+    color: var(--color-muted);
+    font-weight: normal;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .insight-bar-row--button {
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--color-text);
+    font: inherit;
+    text-align: left;
+    padding: 2px 0;
+    border-radius: 0;
+  }
+  .insight-bar-row--button:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+  .insight-bar-row--button[data-active='true'] {
+    color: var(--color-accent);
+  }
+  .insight-bar-row--button[data-active='true'] .insight-bar-fill {
+    box-shadow: 0 0 0 1px var(--color-accent);
+  }
+  .insight-bar-tick {
+    display: inline-block;
+    width: 0.7rem;
+    text-align: center;
+    color: var(--color-accent);
+    font-weight: 700;
   }
 
   .selection-bar {
@@ -1593,36 +1623,64 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
       ?.addEventListener('click', () => setView('list'));
 
     // Filter toggle — collapsed by default on every viewport. Persisted
-    // across in-tab navigations via sessionStorage so a user who opens it
-    // doesn't have to re-open after every page change.
+    // across in-tab navigations via sessionStorage so a user who opens
+    // a drawer doesn't have to re-open after every page change.
+    // FILTERS and INSIGHTS are mutually exclusive — opening one closes
+    // the other. Underlying `filters` state is shared (the
+    // SearchFilterBar island owns it); the drawers are just two views
+    // into the same state object.
     const filterToggleEl = document.getElementById(
       'filter-toggle',
     ) as HTMLButtonElement | null;
+    const insightsToggleEl = document.getElementById(
+      'insights-toggle',
+    ) as HTMLButtonElement | null;
     const filterBodyEl = document.getElementById('filter-body');
-    function setFilterPanelOpen(open: boolean) {
-      if (!filterBodyEl || !filterToggleEl) return;
-      filterBodyEl.classList.toggle('open', open);
-      filterToggleEl.setAttribute('aria-expanded', open ? 'true' : 'false');
+    const insightsBodyEl = document.getElementById('insights-body');
+
+    type DrawerName = 'filters' | 'insights' | null;
+    function setOpenDrawer(name: DrawerName) {
+      const isFilters = name === 'filters';
+      const isInsights = name === 'insights';
+      filterBodyEl?.classList.toggle('open', isFilters);
+      insightsBodyEl?.classList.toggle('open', isInsights);
+      filterToggleEl?.setAttribute(
+        'aria-expanded',
+        isFilters ? 'true' : 'false',
+      );
+      insightsToggleEl?.setAttribute(
+        'aria-expanded',
+        isInsights ? 'true' : 'false',
+      );
       try {
-        sessionStorage.setItem('au.filterPanelOpen', open ? '1' : '0');
+        sessionStorage.setItem('au.openDrawer', name ?? '');
       } catch {}
     }
+
+    function currentDrawer(): DrawerName {
+      if (filterBodyEl?.classList.contains('open')) return 'filters';
+      if (insightsBodyEl?.classList.contains('open')) return 'insights';
+      return null;
+    }
+
     filterToggleEl?.addEventListener('click', () => {
-      setFilterPanelOpen(!filterBodyEl?.classList.contains('open'));
+      setOpenDrawer(currentDrawer() === 'filters' ? null : 'filters');
     });
-    // Restore state on load (default = closed).
+    insightsToggleEl?.addEventListener('click', () => {
+      setOpenDrawer(currentDrawer() === 'insights' ? null : 'insights');
+    });
+
+    // Restore state on load (default = closed). Legacy key
+    // `au.filterPanelOpen=1` migrates to the new shape.
     try {
-      if (sessionStorage.getItem('au.filterPanelOpen') === '1') {
-        setFilterPanelOpen(true);
+      const saved = sessionStorage.getItem('au.openDrawer');
+      if (saved === 'filters' || saved === 'insights') {
+        setOpenDrawer(saved);
+      } else if (sessionStorage.getItem('au.filterPanelOpen') === '1') {
+        setOpenDrawer('filters');
+        sessionStorage.removeItem('au.filterPanelOpen');
       }
     } catch {}
-
-    // Insights toggle
-    document
-      .getElementById('insights-toggle')
-      ?.addEventListener('click', () => {
-        document.getElementById('insights-body')?.classList.toggle('collapsed');
-      });
 
     // Reset scroll + page state when the user changes any filter.
     // Without scrolling back up, switching filters from deep in an
@@ -1639,11 +1697,6 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
       doSearch();
       window.scrollTo({ top: 0, behavior: 'auto' });
     }
-
-    // Apply filters button
-    document.getElementById('apply-filters')?.addEventListener('click', () => {
-      applyAndSearch();
-    });
 
     // SearchFilterBar island owns every filter control. It writes the
     // consolidated state to `data-filters` on its wrapper and dispatches
@@ -1995,13 +2048,18 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
       dateTo: string;
       tagsText: string;
       reactionsMin: number;
+      reactionsMax: number | null;
       tagsMin: number;
+      tagsMax: number | null;
       hasTranscript: '' | 'yes' | 'no';
       hasText: '' | 'yes' | 'no';
       sortBy: string;
       includeEmulsion: boolean;
       voteScoreMin: number | null;
+      voteScoreMax: number | null;
       upMin: number | null;
+      upMax: number | null;
+      downMin: number | null;
       downMax: number | null;
       myVotes: '' | 'up' | 'down' | 'any' | 'none';
     };
@@ -2039,13 +2097,18 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
         dateTo: '',
         tagsText: '',
         reactionsMin: 0,
+        reactionsMax: null,
         tagsMin: 0,
+        tagsMax: null,
         hasTranscript: '',
         hasText: '',
         sortBy: 'newest',
         includeEmulsion: false,
         voteScoreMin: null,
+        voteScoreMax: null,
         upMin: null,
+        upMax: null,
+        downMin: null,
         downMax: null,
         myVotes: '',
       };
@@ -2066,14 +2129,19 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
         dateTo: f.dateTo,
         tags: f.tagsText,
         reactionsMin: f.reactionsMin,
+        reactionsMax: f.reactionsMax,
         tagsMin: f.tagsMin,
+        tagsMax: f.tagsMax,
         sortBy: f.sortBy,
         jobApp: f.jobApp,
         hasTranscript: f.hasTranscript,
         hasText: f.hasText,
         includeEmulsion: f.includeEmulsion,
         voteScoreMin: f.voteScoreMin,
+        voteScoreMax: f.voteScoreMax,
         upMin: f.upMin,
+        upMax: f.upMax,
+        downMin: f.downMin,
         downMax: f.downMax,
         myVotes: f.myVotes,
       };
@@ -2117,20 +2185,39 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
           .split(',')
           .map((t: string) => t.trim())
           .filter(Boolean);
-      if (filters.reactionsMin > 0)
-        body.filters.reaction_count = { min: filters.reactionsMin };
-      if (filters.tagsMin > 0)
-        body.filters.tag_count = { min: filters.tagsMin };
+      // Range filters — emit `{min, max}` only with the bounds the user
+      // actually set, so we don't accidentally narrow the result set
+      // with a phantom 0-max upper bound.
+      const rxnRange: { min?: number; max?: number } = {};
+      if (filters.reactionsMin > 0) rxnRange.min = filters.reactionsMin;
+      if (filters.reactionsMax !== null) rxnRange.max = filters.reactionsMax;
+      if (Object.keys(rxnRange).length) body.filters.reaction_count = rxnRange;
+
+      const tagRange: { min?: number; max?: number } = {};
+      if (filters.tagsMin > 0) tagRange.min = filters.tagsMin;
+      if (filters.tagsMax !== null) tagRange.max = filters.tagsMax;
+      if (Object.keys(tagRange).length) body.filters.tag_count = tagRange;
+
       if (filters.jobApp) body.filters.job_app = filters.jobApp;
       if (filters.hasTranscript)
         body.filters.has_transcript = filters.hasTranscript === 'yes';
       if (filters.hasText) body.filters.has_text = filters.hasText === 'yes';
-      if (filters.voteScoreMin !== null)
-        body.filters.vote_score = { min: filters.voteScoreMin };
-      if (filters.upMin !== null)
-        body.filters.up_count = { min: filters.upMin };
-      if (filters.downMax !== null)
-        body.filters.down_count = { max: filters.downMax };
+
+      const vsRange: { min?: number; max?: number } = {};
+      if (filters.voteScoreMin !== null) vsRange.min = filters.voteScoreMin;
+      if (filters.voteScoreMax !== null) vsRange.max = filters.voteScoreMax;
+      if (Object.keys(vsRange).length) body.filters.vote_score = vsRange;
+
+      const upRange: { min?: number; max?: number } = {};
+      if (filters.upMin !== null) upRange.min = filters.upMin;
+      if (filters.upMax !== null) upRange.max = filters.upMax;
+      if (Object.keys(upRange).length) body.filters.up_count = upRange;
+
+      const downRange: { min?: number; max?: number } = {};
+      if (filters.downMin !== null) downRange.min = filters.downMin;
+      if (filters.downMax !== null) downRange.max = filters.downMax;
+      if (Object.keys(downRange).length) body.filters.down_count = downRange;
+
       if (filters.myVotes) body.filters.my_votes = filters.myVotes;
       return body;
     }
@@ -2180,8 +2267,12 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
       if (filters.dateTo) stateParams.set('to', filters.dateTo);
       if (filters.reactionsMin > 0)
         stateParams.set('rxn', String(filters.reactionsMin));
+      if (filters.reactionsMax !== null)
+        stateParams.set('rxnmax', String(filters.reactionsMax));
       if (filters.tagsMin > 0)
         stateParams.set('mintags', String(filters.tagsMin));
+      if (filters.tagsMax !== null)
+        stateParams.set('maxtags', String(filters.tagsMax));
       // Default = exactly ['__inputs__'] → omit param so URLs stay tidy.
       const indexIsDefault =
         filters.outputIndexes.length === 1 &&
@@ -2194,8 +2285,14 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
       if (filters.hasText) stateParams.set('ocr', filters.hasText);
       if (filters.voteScoreMin !== null)
         stateParams.set('vscore', String(filters.voteScoreMin));
+      if (filters.voteScoreMax !== null)
+        stateParams.set('vscoremax', String(filters.voteScoreMax));
       if (filters.upMin !== null)
         stateParams.set('upmin', String(filters.upMin));
+      if (filters.upMax !== null)
+        stateParams.set('upmax', String(filters.upMax));
+      if (filters.downMin !== null)
+        stateParams.set('downmin', String(filters.downMin));
       if (filters.downMax !== null)
         stateParams.set('downmax', String(filters.downMax));
       if (filters.myVotes) stateParams.set('myvotes', filters.myVotes);
@@ -2802,7 +2899,7 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
               <div class="feed-item__media">${media}</div>
               <div class="feed-item__body">
                 <div class="feed-item__title-row">
-                  <button class="bm-star bm-star--sm" data-bm-type="media_item" data-bm-id="${item.id}" title="Bookmark"></button>
+                  <button class="bm-star" data-bm-type="media_item" data-bm-id="${item.id}" title="Bookmark" aria-label="Bookmark"></button>
                   <span class="feed-item__name" title="${item.filename || ''}"
                     ><a href="/admin/search/detail?id=${item.id}">${item.filename || 'Untitled'}</a></span>
                 </div>
@@ -3765,9 +3862,9 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
     }
 
     function renderInsights(stats: any) {
-      const section = document.getElementById('insights-section')!;
-      section.style.display = 'block';
-
+      // No reveal-section needed anymore — insights live in their own
+      // top-level drawer that's toggleable from the toolbar regardless
+      // of data state.
       renderBarChart(
         'insight-uploaders',
         'Top Posters',
@@ -3920,29 +4017,40 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
         black: '#212121',
         white: '#f5f5f5',
       };
+      const activeColors = new Set(getFilters().colorGroups);
       const rows = entries
         .map(([color, count]) => {
           const pct = Math.round((count / max) * 100);
           const hex = colorMap[color] || '#999';
-          return `<div class="insight-bar-row" title="${color}: ${count} items" data-color-filter="${color}">
+          const isActive = activeColors.has(color);
+          // <button> so it's keyboard-activatable and has accessible
+          // semantics out of the box. aria-pressed shows current state.
+          return `<button type="button" class="insight-bar-row insight-bar-row--button" title="${isActive ? 'Active filter — click to remove' : 'Click to add to color filter'}: ${color} (${count} items)" data-color-filter="${color}" data-active="${isActive}" aria-pressed="${isActive}">
           <span class="insight-bar-label" style="display:flex;align-items:center;justify-content:flex-end;gap:4px;">
+            <span class="insight-bar-tick" aria-hidden="true">${isActive ? '✓' : ''}</span>
             <span style="display:inline-block;width:10px;height:10px;background:${hex};border:1px solid #ccc;flex-shrink:0;"></span>
             ${color}
           </span>
           <span class="insight-bar-track"><span class="insight-bar-fill" style="width:${pct}%;background:${hex}"></span></span>
           <span class="insight-bar-count">${count}</span>
-        </div>`;
+        </button>`;
         })
         .join('');
-      el.innerHTML = `<div class="insight-title">Colors</div>${rows}`;
+      el.innerHTML = `<div class="insight-title">Colors <span class="insight-title-hint">— click to filter</span></div>${rows}`;
 
-      // Click to filter by color — single-color selection overrides any
-      // URL-preserved multi-color state inside the bar.
+      // Click toggles the color in the multi-select color filter — adds
+      // if absent, removes if present. Stays additive with other active
+      // filters; the bar re-emits filters-change which triggers a fresh
+      // search (and re-renders this chart with the updated active state).
       el.querySelectorAll('[data-color-filter]').forEach((row) => {
         row.addEventListener('click', () => {
           const color = (row as HTMLElement).dataset.colorFilter!;
+          const current = getFilters().colorGroups;
+          const next = current.includes(color)
+            ? current.filter((c: string) => c !== color)
+            : [...current, color];
           patchFilterBar({
-            colorGroups: [color],
+            colorGroups: next,
             preservedMultiColors: [],
           });
         });
