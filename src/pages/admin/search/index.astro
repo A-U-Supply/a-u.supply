@@ -285,6 +285,21 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
     border-color: var(--color-text);
   }
 
+  /* Toolbar shared control height — every interactive element on the
+     search-row (filter button, search input, search submit, sort
+     select, dice button) takes this exact height so vertical alignment
+     is objective rather than depending on flex-stretch + font baseline
+     luck. The 42/44px split keeps phone tap targets ≥ 44px without
+     bloating desktop. */
+  :root {
+    --toolbar-h: 42px;
+  }
+  @media (max-width: 640px) {
+    :root {
+      --toolbar-h: 44px;
+    }
+  }
+
   .search-bar {
     display: flex;
     gap: 0;
@@ -292,7 +307,10 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
   }
   .search-bar input {
     flex: 1;
-    padding: var(--space-sm);
+    min-width: 0;
+    height: var(--toolbar-h);
+    box-sizing: border-box;
+    padding: 0 var(--space-sm);
     font-family: var(--font-mono);
     font-size: var(--text-base);
     border: 2px solid var(--color-text);
@@ -305,7 +323,14 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
     border-color: var(--color-accent);
   }
   .search-submit {
-    padding: var(--space-sm) var(--space-md);
+    /* Brutalist shadow to balance with the dice button across the
+       grid. Without it the dice's loud shadow read as "extending
+       further" than the submit on screenshots. Both controls now
+       throw the same 2px shadow so the right-edge alignment is
+       visually balanced. */
+    height: var(--toolbar-h);
+    box-sizing: border-box;
+    padding: 0 var(--space-md);
     font-family: var(--font-mono);
     font-size: var(--text-base);
     font-weight: bold;
@@ -313,12 +338,22 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
     letter-spacing: 1pt;
     background: var(--color-fg);
     color: var(--color-bg);
-    border: 2px solid #1a1a1a;
+    border: 2px solid var(--color-text);
+    box-shadow: 2px 2px 0 var(--color-text);
     cursor: pointer;
+    transition:
+      transform 60ms ease,
+      box-shadow 60ms ease,
+      background 80ms;
   }
   .search-submit:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--color-text);
     background: color-mix(in srgb, var(--color-fg) 80%, var(--color-bg));
-    border-color: color-mix(in srgb, var(--color-fg) 80%, var(--color-bg));
+  }
+  .search-submit:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--color-text);
   }
 
   /* Search toolbar: a two-row grid. Row 1 is the search bar spanning
@@ -349,6 +384,8 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
+    height: var(--toolbar-h);
+    box-sizing: border-box;
     padding: 0 var(--space-md);
     font-family: var(--font-mono);
     font-size: var(--text-base);
@@ -411,6 +448,8 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
   .sort-select {
     appearance: none;
     -webkit-appearance: none;
+    height: var(--toolbar-h);
+    box-sizing: border-box;
     background: var(--color-bg);
     color: var(--color-text);
     border: 2px solid var(--color-text);
@@ -449,7 +488,9 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
+    width: var(--toolbar-h);
+    height: var(--toolbar-h);
+    box-sizing: border-box;
     background: var(--color-bg);
     color: var(--color-text);
     border: 2px solid var(--color-text);
@@ -1317,6 +1358,20 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
     color: var(--color-muted);
     text-transform: uppercase;
     letter-spacing: 0.3pt;
+  }
+  /* Engagement row: vote chip + Comments toggle on the same line.
+     Sits between the text metadata above and the file-action buttons
+     below — it's the "what people think of this" rail, distinct from
+     navigation/file ops. Wraps cleanly on narrow viewports because the
+     chip is its own inline-flex and the toggle has its own button. */
+  .results-feed .feed-item__engagement {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+  .results-feed .feed-item__engagement .feed-item__discuss {
+    display: inline-flex;
   }
   .results-feed .feed-item__actions {
     display: flex;
@@ -2735,13 +2790,12 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
         `<a class="action-btn" href="/admin/search/detail?id=${item.id}">Details</a>`,
       );
 
-      // Comments toggle is rendered eagerly so it works even when the
-      // item has zero comments yet — the first comment auto-creates a
-      // backing Lemmy thread server-side. enrichDiscussionCounts swaps
-      // "Comments" → "N comments" once counts are known.
-      const commentsToggle = `<div class="feed-item__discuss" data-id="${item.id}">
-              <button class="feed-item__discuss-toggle" type="button" data-comments-id="${item.id}">💬 Comments</button>
-            </div>`;
+      // Engagement row (vote chip + Comments toggle) is rendered inline
+      // inside the feed-item template below. The Comments toggle is
+      // rendered eagerly so it works even when the item has zero
+      // comments yet — the first comment auto-creates a backing Lemmy
+      // thread server-side. enrichDiscussionCounts swaps "Comments" →
+      // "N comments" once counts are known.
 
       return `<article class="feed-item${selectedClass}" data-id="${item.id}"${pageStartAttr}>
               <input type="checkbox" class="feed-item__check" data-select="${item.id}" ${checked} aria-label="Select" />
@@ -2757,9 +2811,13 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
                   ${rxn > 0 ? `<span>${rxn} rxn</span>` : ''}
                   <span>${item.tag_count ?? 0} tags</span>
                   ${date ? `<span>${date}</span>` : ''}
-                  ${voteChipHtml(item, user?.id ?? null)}
                 </div>
-                ${commentsToggle}
+                <div class="feed-item__engagement">
+                  ${voteChipHtml(item, user?.id ?? null)}
+                  <div class="feed-item__discuss" data-id="${item.id}">
+                    <button class="feed-item__discuss-toggle" type="button" data-comments-id="${item.id}">💬 Comments</button>
+                  </div>
+                </div>
                 <div class="feed-item__actions">${actions.join('')}</div>
               </div>
             </article>`;
