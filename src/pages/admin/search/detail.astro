@@ -188,14 +188,6 @@ import Admin from '../../../layouts/Admin.astro';
         </div>
         <div class="ai-vision-footer">
           <span id="aiv-provenance"></span>
-          <button
-            class="action-btn action-btn--sm"
-            id="aiv-regenerate-btn"
-            type="button"
-            title="Re-run vision model on this image"
-          >
-            Regenerate
-          </button>
         </div>
       </div>
     </section>
@@ -1733,28 +1725,14 @@ import Admin from '../../../layouts/Admin.astro';
         };
       });
 
-      // Provenance + regenerate.
+      // Provenance footer — model, prompt version, when, tokens. No
+      // per-item regenerate button: the only legitimate reason to
+      // re-run is a prompt/model bump, and then the right tool is
+      // `manage.py backfill-ai-descriptions --all` which is checkpointed.
       const provEl = document.getElementById('aiv-provenance')!;
       const when = new Date(m.ai_description_generated_at).toLocaleString();
       const tokens = (m.ai_description_tokens_in || 0) + (m.ai_description_tokens_out || 0);
       provEl.textContent = `${m.ai_description_model || 'unknown model'} · ${m.ai_description_prompt_v || '?'} · ${when} · ${tokens} tokens`;
-      const regenBtn = document.getElementById('aiv-regenerate-btn') as HTMLButtonElement;
-      regenBtn.onclick = async () => {
-        if (!confirm('Re-run the vision model on this image? Human-overridden fields will be preserved.')) return;
-        regenBtn.disabled = true;
-        regenBtn.textContent = 'Regenerating…';
-        try {
-          const updated = await api(`/media/${currentItem.id}/regenerate-ai-description`, { method: 'POST' });
-          currentItem = updated;
-          (window as any).toast?.success('Regenerated');
-          renderAiVision(currentItem);
-        } catch (err: any) {
-          (window as any).toast?.error(`Regenerate failed: ${err.message ?? err}`);
-        } finally {
-          regenBtn.disabled = false;
-          regenBtn.textContent = 'Regenerate';
-        }
-      };
     }
 
     // Render a chip group for a controlled-vocab field. Returns HTML; bind
