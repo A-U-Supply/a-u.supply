@@ -18,20 +18,23 @@ OCR alone only caught the partial banner text. The pipeline must:
 
 ## Engine
 
-**Provider-agnostic, defaults to SiliconFlow hosting `deepseek-ai/deepseek-vl2`**
+**Provider-agnostic, defaults to SiliconFlow hosting `Qwen/Qwen3-VL-8B-Instruct`**
 (OpenAI-compatible API, free tier, ≈ $0.0002–0.0005 / image). The
 `server/ai_description.py` client reads `VISION_API_BASE_URL`,
 `VISION_API_KEY`, and `VISION_MODEL` from the environment, so we can swap
-to any OpenAI-compatible vision provider (Gemini Flash, Anthropic, Qwen-VL
-via DashScope, a local vLLM, etc.) without touching code.
+to any OpenAI-compatible vision provider (Gemini Flash, Anthropic,
+DeepSeek-VL2 elsewhere, a local vLLM, etc.) without touching code.
 
-Why not DeepSeek's own API? `api.deepseek.com` only serves `deepseek-v4-flash`
-and `deepseek-v4-pro` (text-only) as of May 2026 despite DeepSeek-VL2 existing
-as open weights — SiliconFlow is the canonical hosted route for the same model.
+Why not DeepSeek's own API? `api.deepseek.com` only serves
+`deepseek-v4-flash` and `deepseek-v4-pro` (text-only) as of May 2026.
+
+Why Qwen3-VL-8B over DeepSeek-VL2? SiliconFlow dropped DeepSeek-VL2
+from their catalog and Qwen3-VL benchmarks better on real-world photos
+anyway. The 8B variant is the cost/quality sweet spot.
 
 Defaults:
 - `VISION_API_BASE_URL=https://api.siliconflow.com/v1`
-- `VISION_MODEL=deepseek-ai/deepseek-vl2`
+- `VISION_MODEL=Qwen/Qwen3-VL-8B-Instruct`
 - (legacy `DEEPSEEK_API_KEY` is still honoured as a fallback for the key only)
 
 - Total backfill cost ≈ $0.50–1.00.

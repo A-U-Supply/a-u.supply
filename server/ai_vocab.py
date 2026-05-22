@@ -68,4 +68,10 @@ AI_DESCRIPTION_PROMPT_VERSION = "v1"
 
 # Default vision model id. Override per-deployment via env var VISION_MODEL.
 # Centralised here so swapping is a config change, not a code change.
-AI_DESCRIPTION_MODEL = "deepseek-ai/deepseek-vl2"
+#
+# Qwen3-VL-8B chosen over DeepSeek-VL2 because SiliconFlow dropped VL2
+# from their catalog (verified 2026-05-22 — request returns HTTP 403
+# "Model disabled"). Qwen3-VL benchmarks better on real-world photos
+# anyway. The 8B variant is the cost/quality sweet spot — verified
+# clean output on the Play Ground Chips reference image.
+AI_DESCRIPTION_MODEL = "Qwen/Qwen3-VL-8B-Instruct"
