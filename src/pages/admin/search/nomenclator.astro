@@ -33,6 +33,11 @@ import BrutalSelect from '../../../components/BrutalSelect.astro';
         <option value="7d">Last 7 days</option>
         <option value="30d">Last 30 days</option>
       </BrutalSelect>
+      <BrutalSelect id="triage-ai-description" ariaLabel="Filter by AI description status">
+        <option value="">AI: Any</option>
+        <option value="yes">AI: Has description</option>
+        <option value="no">AI: Missing description</option>
+      </BrutalSelect>
       <button class="action-btn" id="triage-refresh">Refresh</button>
     </div>
   </div>
@@ -527,6 +532,11 @@ import BrutalSelect from '../../../components/BrutalSelect.astro';
       if (channel) body.filters.source_channels = [channel];
       const ingestedFrom = ingestedSinceISO();
       if (ingestedFrom) body.filters.date_range = { from: ingestedFrom };
+      const aiDesc = (
+        document.getElementById('triage-ai-description') as HTMLSelectElement
+      )?.value;
+      if (aiDesc === 'yes') body.filters.has_ai_description = true;
+      else if (aiDesc === 'no') body.filters.has_ai_description = false;
 
       try {
         const res = await fetch('/api/search', {
@@ -722,6 +732,11 @@ import BrutalSelect from '../../../components/BrutalSelect.astro';
       if (channel) body.filters.source_channels = [channel];
       const ingestedFrom = ingestedSinceISO();
       if (ingestedFrom) body.filters.date_range = { from: ingestedFrom };
+      const aiDesc = (
+        document.getElementById('triage-ai-description') as HTMLSelectElement
+      )?.value;
+      if (aiDesc === 'yes') body.filters.has_ai_description = true;
+      else if (aiDesc === 'no') body.filters.has_ai_description = false;
       try {
         const res = await fetch('/api/search', {
           method: 'POST',

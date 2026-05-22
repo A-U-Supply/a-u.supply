@@ -54,7 +54,10 @@ ssh dokku run au-supply .venv/bin/python manage.py <subcommand> [args...]
 | `backfill-slack-uploader-id` | `[--dry-run]` | Populate `uploader_id` on legacy slack-source rows. Requires `seed-slack-mapping` + `backfill-posters` to have run first. |
 | `backfill-text` | — | Backfill `slack_message_text` on slack-source rows. |
 | `backfill-transcripts` | — | Generate audio transcripts via faster-whisper. |
-| `backfill-ocr` | — | OCR-extract text from images via tesseract. |
+| `backfill-ocr` | `[--include-empty] [--all] [--restart]` | OCR-extract text from images via EasyOCR. Checkpointed — interrupted runs resume. |
+| `test-ocr` | `<media_id> [--write]` | Spot-check OCR on a single item. |
+| `backfill-ai-descriptions` | `[--all] [--restart]` | Generate AI vision descriptions, tags, and structured attributes via the vision model. Requires `VISION_API_KEY`. Checkpointed. See [`ai-image-descriptions.md`](ai-image-descriptions.md). |
+| `test-ai-description` | `<media_id> [--write]` | Spot-check the vision pipeline on a single item. |
 | `backfill-thumbnails` | — | Generate sm / md / lg thumbnails for image media items missing any of them. |
 
 Run `ssh dokku run au-supply .venv/bin/python manage.py` (no subcommand) to print the live usage banner.

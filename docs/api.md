@@ -44,6 +44,17 @@ Session-cookie scope is derived from role: `admin` → `admin`, `member` → `wr
 | **Latents** | `GET/POST/PATCH/DELETE /api/projects[/...]` | Latents, slots, items, documents (see [`plans/2026-05-15-latents.md`](plans/2026-05-15-latents.md)) |
 | **Threads** | `GET/POST/PATCH/DELETE /api/threads[/...]` | Lemmy-backed discussion threads anchored to projects / slots / media items |
 
+### AI vision enrichment
+
+See [`ai-image-descriptions.md`](ai-image-descriptions.md) for the design.
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/media/{id}` | `image_meta` now includes `ai_description`, `ai_tags`, `ai_color_temperature`, `ai_color_character`, `ai_vibe`, the 9 content bool flags, and provenance (model, prompt version, timestamp, token counts). |
+| `PATCH /api/media/{id}/ai-fields` | Set human overrides for bool flags / vibe / color mood. Each touched field is preserved across AI regenerations. Vocab-clamped server-side. **Scope:** `write`. |
+| `POST /api/media/{id}/regenerate-ai-description` | Synchronously re-run the vision model on one image, honouring `ai_overrides`. **Scope:** `write`. |
+| `POST /api/search` | Accepts new filters: `has_ai_description`, `ai_vibe`, `ai_color_temperature`, `ai_color_character`, and the 9 bool flags (`is_screenshot`, `is_meme`, `is_photo`, `is_artwork`, `is_ai_generated`, `has_human`, `has_face`, `has_text_overlay`, `is_nsfw`). |
+
 For full endpoint documentation, use [`/docs`](https://a-u.supply/docs).
 
 ## Special characters in codes

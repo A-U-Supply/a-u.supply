@@ -148,6 +148,24 @@ See the [latents plan](plans/2026-05-15-latents.md) for the data model, API surf
 
 `tests/` is the pytest suite — auth, models, search API, extraction, dedup, midden, tags, thumbnails, and Slack scraper coverage. Run with `uv run pytest`. `tests/conftest.py` sets up an in-memory DB and patches the search client. See [`development.md`](development.md) for the working-directory expectations.
 
+## Media extraction pipeline
+
+Every newly-ingested image runs through `server/extraction._run_image_extraction`,
+which performs (in order):
+
+1. **Dimensions / format** via PIL.
+2. **Dominant colors** — PIL palette quantization → 12 hex codes (deterministic).
+3. **Thumbnails** — `_thumb_sm.webp` (128), `_thumb.webp` (400), `_thumb_lg.webp` (1600).
+4. **OCR text** — EasyOCR on the original, upscaled when small. Stored on `media_image_meta.caption`.
+5. **AI vision enrichment** — DeepSeek-VL2 (via SiliconFlow by default) on the
+   `_thumb_lg.webp`, given the OCR caption as a hint. Returns description, tags,
+   color temperature/character, vibe, and 9 content boolean flags. Skipped if
+   `VISION_API_KEY` (or legacy `DEEPSEEK_API_KEY`) is not set. See
+   [`ai-image-descriptions.md`](ai-image-descriptions.md).
+
+Each step is independent — a failure logs to `extraction_failures` and the
+others still run. Retries hit `/api/extraction-failures/:id/retry`.
+
 ## Related deep dives
 
 - [`frontend.md`](frontend.md) — UI kit, Svelte components, event-bus pattern
@@ -155,6 +173,7 @@ See the [latents plan](plans/2026-05-15-latents.md) for the data model, API surf
 - [`bots.md`](bots.md) — App Runner / TOML manifests / bot repos
 - [`player.md`](player.md) — persistent audio player events
 - [`api.md`](api.md) — API surface
+- [`ai-image-descriptions.md`](ai-image-descriptions.md) — vision-model enrichment design
 - [`operations.md`](operations.md) — `manage.py` and server-side commands
 - [`deployment.md`](deployment.md) — Dokku, SSL, legacy routing
 - [`glossary.md`](glossary.md) — admin nomenclature
