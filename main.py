@@ -216,6 +216,20 @@ for _col, _ddl in (
         with engine.begin() as _conn:
             _conn.execute(_sa_text(_ddl))
 
+# Migrate existing DB: create Inbox / Notifications tables if missing.
+# Tables: notifications, notification_high_water, fold_community_subs,
+# fold_thread_subs. See server/notifications/ for materializers.
+_existing_tables_n = set(_sa_inspect(engine).get_table_names())
+from server.models import (
+    Notification as _Notification,
+    NotificationHighWater as _NotificationHighWater,
+    FoldCommunitySubscription as _FoldCommunitySubscription,
+    FoldThreadSubscription as _FoldThreadSubscription,
+)
+for _model in (_Notification, _NotificationHighWater, _FoldCommunitySubscription, _FoldThreadSubscription):
+    if _model.__tablename__ not in _existing_tables_n:
+        _model.__table__.create(bind=engine)
+
 
 # Re-apply Meilisearch index settings on startup so additions to
 # FILTERABLE_ATTRIBUTES / SORTABLE_ATTRIBUTES (vote_score, upvoter_user_ids,
