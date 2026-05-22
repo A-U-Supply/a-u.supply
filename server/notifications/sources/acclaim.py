@@ -8,6 +8,8 @@ can have multiple sources, and any source with your uploader_id makes
 the item yours for acclaim purposes.
 """
 
+from sqlalchemy import select
+
 from server.models import MediaItem, MediaSource, MediaVote, User
 
 from ._base import (
@@ -24,11 +26,10 @@ def materialize(user: User, db) -> int:
     watermark = get_or_seed_watermark(db, user.id, SOURCE)
     window_end = utcnow()
 
-    my_item_ids = (
-        db.query(MediaSource.media_item_id)
-        .filter(MediaSource.uploader_id == user.id)
+    my_items_select = (
+        select(MediaSource.media_item_id)
+        .where(MediaSource.uploader_id == user.id)
         .distinct()
-        .subquery()
     )
 
     rows = (
@@ -38,7 +39,7 @@ def materialize(user: User, db) -> int:
         .filter(
             MediaVote.value == 1,
             MediaVote.user_id != user.id,
-            MediaVote.media_item_id.in_(my_item_ids),
+            MediaVote.media_item_id.in_(my_items_select),
             MediaVote.created_at >= watermark,
             MediaVote.created_at <= window_end,
         )
