@@ -2,6 +2,7 @@
 import Admin from '../../layouts/Admin.astro';
 import BrutalCard from '../../components/BrutalCard.astro';
 import BrutalSelect from '../../components/BrutalSelect.astro';
+import SearchFilterBar from '../../components/SearchFilterBar.svelte';
 ---
 
 <Admin title="Hecatomb" current="hecatomb">
@@ -69,50 +70,15 @@ import BrutalSelect from '../../components/BrutalSelect.astro';
         placeholder="Text search…"
       />
 
-      <div class="config-row-label" for="sf-channel">Channel</div>
-      <BrutalSelect
-        id="sf-channel"
-        ariaLabel="Channel"
-        wrapClass="config-card__select-wrap"
-      >
-        <option value="">All</option>
-      </BrutalSelect>
-
-      <div class="config-row-label" for="sf-tags">Tags</div>
-      <input
-        type="text"
-        id="sf-tags"
-        class="brutal-input"
-        placeholder="tag1, tag2"
-      />
-
-      <div class="config-row-label" for="sf-output-index">Index</div>
-      <BrutalSelect
-        id="sf-output-index"
-        ariaLabel="Index"
-        wrapClass="config-card__select-wrap"
-      >
-        <option value="__inputs__">Inputs</option>
-        <option value="outputs">Outputs</option>
-      </BrutalSelect>
-
-      <div class="config-row-label" for="sf-reactions-min">Min reactions</div>
-      <input
-        type="number"
-        id="sf-reactions-min"
-        class="brutal-input hec-input--narrow"
-        min="0"
-        value="0"
-      />
-
-      <div class="config-row-label" for="sf-tags-min">Min tags</div>
-      <input
-        type="number"
-        id="sf-tags-min"
-        class="brutal-input hec-input--narrow"
-        min="0"
-        value="0"
-      />
+      <!-- Single source of truth: the same SearchFilterBar that powers
+           /admin/search. Any group it grows automatically appears here.
+           The Filters → BatchShuffleSpec translator in the script below
+           consumes the fields the batch endpoint understands and silently
+           drops the rest (e.g. AI / votes / dates aren't pool-side filters
+           today). -->
+      <div id="hec-filter-host" class="hec-filter-host">
+        <SearchFilterBar client:load syncUrl={false} />
+      </div>
 
       <div class="config-row-full hec-exclude-row">
         <label class="hec-inline-check">
@@ -120,8 +86,19 @@ import BrutalSelect from '../../components/BrutalSelect.astro';
           <span>Exclude items already processed by this app</span>
         </label>
         <label class="hec-inline-check">
-          <input type="checkbox" id="hec-exclude-recipe" />
+          <input
+            type="checkbox"
+            id="hec-exclude-recipe"
+            disabled
+            aria-disabled="true"
+          />
           <span>Exclude items already processed with this recipe</span>
+          <span
+            class="hec-exclude-hint"
+            id="hec-exclude-recipe-hint"
+            aria-live="polite"
+            >— applies once a specific recipe is selected</span
+          >
         </label>
       </div>
     </BrutalCard>
@@ -180,6 +157,22 @@ import BrutalSelect from '../../components/BrutalSelect.astro';
   }
   .hec-input--narrow {
     width: 100px;
+  }
+  /* SearchFilterBar island host — give the embedded bar room to breathe
+     inside the Filters BrutalCard. The bar styles itself internally. */
+  .hec-filter-host {
+    margin-top: var(--space-xs);
+  }
+  .hec-exclude-hint {
+    color: var(--color-muted);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+  /* Toggle the hint visibility off when the recipe-exclude checkbox isn't
+     disabled — JS flips a data- attribute. */
+  .hec-exclude-row:not([data-recipe-locked='1']) .hec-exclude-hint {
+    display: none;
   }
   .hec-exclude-row {
     display: flex;
@@ -278,6 +271,12 @@ import BrutalSelect from '../../components/BrutalSelect.astro';
     ) as HTMLButtonElement;
     const statusEl = document.getElementById('hec-status')!;
     const candidatesEl = document.getElementById('hec-candidates')!;
+    const excludeRecipeCb = document.getElementById(
+      'hec-exclude-recipe',
+    ) as HTMLInputElement;
+    const excludeRow = document.querySelector(
+      '.hec-exclude-row',
+    ) as HTMLElement | null;
 
     let apps: any[] = [];
 
@@ -361,24 +360,6 @@ import BrutalSelect from '../../components/BrutalSelect.astro';
       }
     } catch {}
 
-    // Load channel facets
-    try {
-      const res = await fetch('/api/search/facets', {
-        credentials: 'include',
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const channelSelect = document.getElementById(
-          'sf-channel',
-        ) as HTMLSelectElement;
-        channelSelect.innerHTML =
-          '<option value="">All</option>' +
-          (data.channels || [])
-            .map((ch: string) => `<option value="${ch}">${ch}</option>`)
-            .join('');
-      }
-    } catch {}
-
     function selectedApp(): any | null {
       return apps.find((a) => a.name === appSelect.value) || null;
     }
@@ -408,6 +389,26 @@ import BrutalSelect from '../../components/BrutalSelect.astro';
       submitBtn.disabled = !valid;
     }
 
+    // The recipe-exclude checkbox can only meaningfully apply when a specific
+    // recipe is selected — the backend silently ignores it under random-recipe
+    // or when no recipe is picked, which made the toggle feel dead. Lock it
+    // and show a hint when it can't apply; clear the checked state too so
+    // the count preview matches what submit will actually do.
+    function updateExcludeRecipeState() {
+      const recipeAvailable = recipeRow.style.display !== 'none';
+      const recipeChosen = !!recipeSelect.value;
+      const canApply =
+        recipeAvailable && !randomRecipeCb.checked && recipeChosen;
+      excludeRecipeCb.disabled = !canApply;
+      excludeRecipeCb.setAttribute('aria-disabled', String(!canApply));
+      if (!canApply && excludeRecipeCb.checked) {
+        excludeRecipeCb.checked = false;
+      }
+      if (excludeRow) {
+        excludeRow.dataset.recipeLocked = canApply ? '0' : '1';
+      }
+    }
+
     appSelect.addEventListener('change', () => {
       const app = selectedApp();
       if (app) {
@@ -417,16 +418,20 @@ import BrutalSelect from '../../components/BrutalSelect.astro';
         recipeLabel.style.display = 'none';
       }
       updateSubmitEnabled();
+      updateExcludeRecipeState();
       schedulePreview();
     });
 
     randomRecipeCb.addEventListener('change', () => {
       recipeSelect.disabled = randomRecipeCb.checked;
       updateSubmitEnabled();
+      updateExcludeRecipeState();
+      schedulePreview();
     });
 
     recipeSelect.addEventListener('change', () => {
       updateSubmitEnabled();
+      updateExcludeRecipeState();
       schedulePreview();
     });
 
@@ -435,54 +440,80 @@ import BrutalSelect from '../../components/BrutalSelect.astro';
       updateSubmitEnabled();
     });
 
+    // SearchFilterBar (Svelte island) is the single source of truth for the
+    // structured filter state. It mirrors its consolidated state into
+    // `data-filters` JSON on its inner wrapper and dispatches `filters-change`
+    // CustomEvents that bubble up to #hec-filter-host. We read it on demand.
+    function filterBarEl(): HTMLElement | null {
+      return document.querySelector(
+        '#hec-filter-host [data-filters]',
+      ) as HTMLElement | null;
+    }
+
+    function readBarFilters(): any {
+      const raw = filterBarEl()?.dataset.filters;
+      if (!raw) return null;
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }
+
+    // Translate the bar's `Filters` shape into BatchShuffleSpec. The bar
+    // grows new filter groups over time; this translator consumes the
+    // fields the /api/jobs/batch endpoint understands today and silently
+    // drops the rest. When the batch endpoint grows (e.g. learns AI
+    // filters), extend this and `BatchShuffleSpec` together.
+    //
+    // Mapped today:  tagsText, channels, outputIndexes, reactionsMin, tagsMin
+    // Ignored:       types (manifest's allowed_media_types wins), dates,
+    //                colors, posters, sortBy, hasTranscript, hasText, votes,
+    //                AI fields, jobApp (batch is per-app already).
     function buildShufflePayload() {
       const query = (
         document.getElementById('sf-query') as HTMLInputElement
       ).value.trim();
-      const channel = (
-        document.getElementById('sf-channel') as HTMLSelectElement
-      ).value;
-      const tagsStr = (
-        document.getElementById('sf-tags') as HTMLInputElement
-      ).value.trim();
-      const outputIndex = (
-        document.getElementById('sf-output-index') as HTMLSelectElement
-      ).value;
+      const f = readBarFilters() || {};
+      const tagsText: string = typeof f.tagsText === 'string' ? f.tagsText : '';
+      const channels: string[] = Array.isArray(f.channels) ? f.channels : [];
+      const outputIndexes: string[] = Array.isArray(f.outputIndexes)
+        ? f.outputIndexes
+        : [];
       const reactionsMin =
-        parseInt(
-          (document.getElementById('sf-reactions-min') as HTMLInputElement)
-            .value,
-        ) || 0;
+        typeof f.reactionsMin === 'number' && f.reactionsMin > 0
+          ? f.reactionsMin
+          : 0;
       const tagsMin =
-        parseInt(
-          (document.getElementById('sf-tags-min') as HTMLInputElement).value,
-        ) || 0;
+        typeof f.tagsMin === 'number' && f.tagsMin > 0 ? f.tagsMin : 0;
 
       const payload: any = {
         query,
-        source_channels: channel ? [channel] : [],
-        tags: tagsStr
-          ? tagsStr
+        source_channels: channels,
+        tags: tagsText
+          ? tagsText
               .split(',')
-              .map((t) => t.trim())
+              .map((t: string) => t.trim())
               .filter(Boolean)
           : [],
-        output_index: outputIndex || null,
+        // BatchShuffleSpec.output_index is a single string. The bar can carry
+        // multiple — for now we take the first (PullFromIndex makes the same
+        // simplification). Extending the schema is a future call.
+        output_index: outputIndexes[0] || null,
         reaction_count_min: reactionsMin > 0 ? reactionsMin : null,
         tag_count_min: tagsMin > 0 ? tagsMin : null,
         exclude_processed_by_app: (
           document.getElementById('hec-exclude-app') as HTMLInputElement
         ).checked,
-        exclude_processed_by_recipe: (
-          document.getElementById('hec-exclude-recipe') as HTMLInputElement
-        ).checked,
+        exclude_processed_by_recipe: excludeRecipeCb.checked,
       };
       return payload;
     }
 
-    // Live candidate count via /api/search with per_page=1. We read the
-    // total off the same Meili query the batch endpoint would use under
-    // the hood — debounced so typing in the search box doesn't spam.
+    // Live candidate count via POST /api/jobs/batch/preview — runs the same
+    // _build_batch_pool the submit endpoint uses, so the count honors the
+    // app's allowed_media_types AND the exclude_processed_* toggles. Debounced
+    // so typing in the search box doesn't spam.
     let previewTimer: number | null = null;
     let previewSeq = 0;
     function schedulePreview() {
@@ -490,30 +521,31 @@ import BrutalSelect from '../../components/BrutalSelect.astro';
       previewTimer = window.setTimeout(runPreview, 300);
     }
     async function runPreview() {
-      const shuffle = buildShufflePayload();
-      const filters: any = {};
-      if (shuffle.tags?.length) filters.tags = shuffle.tags;
-      if (shuffle.source_channels?.length)
-        filters.source_channels = shuffle.source_channels;
-      if (shuffle.reaction_count_min)
-        filters.reaction_count = { min: shuffle.reaction_count_min };
-      if (shuffle.tag_count_min)
-        filters.tag_count = { min: shuffle.tag_count_min };
+      const app = selectedApp();
+      candidatesEl.classList.remove('has-many', 'has-none');
+      if (!app) {
+        candidatesEl.textContent = 'Pick an app to count candidates';
+        return;
+      }
 
+      const randomRecipe = randomRecipeCb.checked;
+      const params = buildJobParams(
+        app.manifest,
+        recipeSelect.value,
+        randomRecipe,
+      );
       const body = {
-        query: shuffle.query || '',
-        filters,
-        output_index: shuffle.output_index || '__inputs__',
-        page: 1,
-        per_page: 1,
+        app_name: app.name,
+        shuffle: buildShufflePayload(),
+        params,
+        random_recipe: randomRecipe,
       };
 
       const mySeq = ++previewSeq;
-      candidatesEl.classList.remove('has-many', 'has-none');
       candidatesEl.textContent = 'Counting…';
 
       try {
-        const res = await fetch('/api/search', {
+        const res = await fetch('/api/jobs/batch/preview', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
@@ -525,7 +557,7 @@ import BrutalSelect from '../../components/BrutalSelect.astro';
           return;
         }
         const data = await res.json();
-        const total = data.total ?? 0;
+        const total = data.count ?? 0;
         if (total === 0) {
           candidatesEl.textContent = '0 candidates — relax filters';
           candidatesEl.classList.add('has-none');
@@ -539,23 +571,19 @@ import BrutalSelect from '../../components/BrutalSelect.astro';
       }
     }
 
-    // Wire every filter input to the preview.
-    for (const id of [
-      'sf-query',
-      'sf-channel',
-      'sf-tags',
-      'sf-output-index',
-      'sf-reactions-min',
-      'sf-tags-min',
-      'hec-exclude-app',
-      'hec-exclude-recipe',
-    ]) {
-      const el = document.getElementById(id);
-      if (!el) continue;
-      el.addEventListener('input', schedulePreview);
-      el.addEventListener('change', schedulePreview);
-    }
-    // Initial preview after a beat (gives facets a chance to populate).
+    // Wire local controls (query + the two exclude checkboxes) directly,
+    // and the SearchFilterBar island via its bubbling `filters-change` event.
+    const sfQueryEl = document.getElementById('sf-query');
+    sfQueryEl?.addEventListener('input', schedulePreview);
+    document
+      .getElementById('hec-exclude-app')
+      ?.addEventListener('change', schedulePreview);
+    excludeRecipeCb.addEventListener('change', schedulePreview);
+    document
+      .getElementById('hec-filter-host')
+      ?.addEventListener('filters-change', () => schedulePreview());
+    // Initial preview after a beat (gives the bar a chance to render its
+    // data-filters attribute on first mount).
     setTimeout(runPreview, 100);
 
     // Build params from the app manifest: start with every param's default
@@ -658,5 +686,6 @@ import BrutalSelect from '../../components/BrutalSelect.astro';
 
     updateSubmitLabel();
     updateSubmitEnabled();
+    updateExcludeRecipeState();
   });
 </script>
