@@ -56,6 +56,22 @@
     downMin: number | null;
     downMax: number | null;
     myVotes: '' | 'up' | 'down' | 'any' | 'none';
+    // AI vision enrichment filters (see docs/ai-image-descriptions.md).
+    // Vibe / temperature / character are multi-select; flags are tri-state
+    // ('', 'yes', 'no') matching the existing hasText pattern.
+    aiVibe: string[];
+    aiColorTemperature: string[];
+    aiColorCharacter: string[];
+    hasAiDescription: '' | 'yes' | 'no';
+    isScreenshot: '' | 'yes' | 'no';
+    isMeme: '' | 'yes' | 'no';
+    isPhoto: '' | 'yes' | 'no';
+    isArtwork: '' | 'yes' | 'no';
+    isAiGenerated: '' | 'yes' | 'no';
+    hasHuman: '' | 'yes' | 'no';
+    hasFace: '' | 'yes' | 'no';
+    hasTextOverlay: '' | 'yes' | 'no';
+    isNsfw: '' | 'yes' | 'no';
   };
 
   type HideKey =
@@ -112,6 +128,19 @@
       downMin: null,
       downMax: null,
       myVotes: '',
+      aiVibe: [],
+      aiColorTemperature: [],
+      aiColorCharacter: [],
+      hasAiDescription: '',
+      isScreenshot: '',
+      isMeme: '',
+      isPhoto: '',
+      isArtwork: '',
+      isAiGenerated: '',
+      hasHuman: '',
+      hasFace: '',
+      hasTextOverlay: '',
+      isNsfw: '',
     };
   }
 
@@ -443,6 +472,19 @@
       downMin: filters.downMin,
       downMax: filters.downMax,
       myVotes: filters.myVotes,
+      aiVibe: [...filters.aiVibe],
+      aiColorTemperature: [...filters.aiColorTemperature],
+      aiColorCharacter: [...filters.aiColorCharacter],
+      hasAiDescription: filters.hasAiDescription,
+      isScreenshot: filters.isScreenshot,
+      isMeme: filters.isMeme,
+      isPhoto: filters.isPhoto,
+      isArtwork: filters.isArtwork,
+      isAiGenerated: filters.isAiGenerated,
+      hasHuman: filters.hasHuman,
+      hasFace: filters.hasFace,
+      hasTextOverlay: filters.hasTextOverlay,
+      isNsfw: filters.isNsfw,
     };
     if (!mounted) return;
     const wrapper = host;
@@ -949,6 +991,156 @@
     {/if}
   </div>
 
+  <!-- AI vision filters (see docs/ai-image-descriptions.md).
+       Grouped under a collapsed disclosure so the regular sidebar stays
+       calm. Inside: vibe chips, color temperature/character dropdowns,
+       and one tri-state dropdown per content-bool flag. -->
+  <details
+    class="fg-disclosure"
+    class:fg--disabled={hasTextDisabled}
+    id="fg-ai-vision"
+  >
+    <summary class="fg-disclosure__summary">
+      <span class="fg-disclosure__caret" aria-hidden="true">▸</span>
+      AI Vision
+      <span class="fg-disclosure__hint">images only · all optional</span>
+    </summary>
+    <div class="fg-disclosure__body">
+      <div class="fg">
+        <label class="fg__label">Has description</label>
+        <Select.Root
+          type="single"
+          value={filters.hasAiDescription}
+          onValueChange={(v) =>
+            (filters.hasAiDescription = (v ?? '') as '' | 'yes' | 'no')}
+        >
+          <Select.Trigger class="fb-select__trigger brutalist-control" aria-label="Has AI description filter">
+            <span class="fb-select__label">{filters.hasAiDescription === 'yes' ? 'With description' : filters.hasAiDescription === 'no' ? 'Without description' : 'Any'}</span>
+            <span class="fb-select__caret" aria-hidden="true">▾</span>
+          </Select.Trigger>
+          <Select.Portal>
+            <Select.Content class="fb-select__content" sideOffset={6} align="start">
+              <Select.Viewport class="fb-select__viewport">
+                {#each [{ v: '', l: 'Any' }, { v: 'yes', l: 'With description' }, { v: 'no', l: 'Without description' }] as opt (opt.v)}
+                  <Select.Item class="fb-select__item" value={opt.v} label={opt.l}>
+                    {#snippet children({ selected })}
+                      <span class="fb-select__check" aria-hidden="true">{selected ? '✓' : ''}</span>
+                      <span class="fb-select__item-label">{opt.l}</span>
+                    {/snippet}
+                  </Select.Item>
+                {/each}
+              </Select.Viewport>
+            </Select.Content>
+          </Select.Portal>
+        </Select.Root>
+      </div>
+
+      <div class="fg">
+        <label class="fg__label">Vibe</label>
+        <div class="fb-chip-group">
+          {#each ['moody','cheerful','melancholic','sterile','chaotic','nostalgic','dystopian','whimsical','aggressive','serene','mundane','surreal','ironic','gritty','clinical','dreamy'] as v (v)}
+            <button
+              type="button"
+              class="fb-chip"
+              class:fb-chip--active={filters.aiVibe.includes(v)}
+              onclick={() => {
+                if (filters.aiVibe.includes(v)) {
+                  filters.aiVibe = filters.aiVibe.filter((x) => x !== v);
+                } else {
+                  filters.aiVibe = [...filters.aiVibe, v];
+                }
+              }}
+            >{v}</button>
+          {/each}
+        </div>
+      </div>
+
+      <div class="fg">
+        <label class="fg__label">Color temperature</label>
+        <div class="fb-chip-group">
+          {#each ['warm','cool','neutral'] as v (v)}
+            <button
+              type="button"
+              class="fb-chip"
+              class:fb-chip--active={filters.aiColorTemperature.includes(v)}
+              onclick={() => {
+                if (filters.aiColorTemperature.includes(v)) {
+                  filters.aiColorTemperature = filters.aiColorTemperature.filter((x) => x !== v);
+                } else {
+                  filters.aiColorTemperature = [...filters.aiColorTemperature, v];
+                }
+              }}
+            >{v}</button>
+          {/each}
+        </div>
+      </div>
+
+      <div class="fg">
+        <label class="fg__label">Color character</label>
+        <div class="fb-chip-group">
+          {#each ['vibrant','muted','pastel','monochrome','high-contrast','earthy','dark','light'] as v (v)}
+            <button
+              type="button"
+              class="fb-chip"
+              class:fb-chip--active={filters.aiColorCharacter.includes(v)}
+              onclick={() => {
+                if (filters.aiColorCharacter.includes(v)) {
+                  filters.aiColorCharacter = filters.aiColorCharacter.filter((x) => x !== v);
+                } else {
+                  filters.aiColorCharacter = [...filters.aiColorCharacter, v];
+                }
+              }}
+            >{v}</button>
+          {/each}
+        </div>
+      </div>
+
+      <div class="fg">
+        <label class="fg__label">Content</label>
+        <div class="fb-tri-grid">
+          {#each [
+            { key: 'isPhoto',        label: 'photo'        },
+            { key: 'isScreenshot',   label: 'screenshot'   },
+            { key: 'isMeme',         label: 'meme'         },
+            { key: 'isArtwork',      label: 'artwork'      },
+            { key: 'isAiGenerated',  label: 'AI generated' },
+            { key: 'hasHuman',       label: 'has human'    },
+            { key: 'hasFace',        label: 'has face'     },
+            { key: 'hasTextOverlay', label: 'text overlay' },
+            { key: 'isNsfw',         label: 'NSFW'         },
+          ] as flag (flag.key)}
+            <div class="fb-tri">
+              <span class="fb-tri__label">{flag.label}</span>
+              <div class="fb-tri__buttons" role="group" aria-label={flag.label}>
+                <button
+                  type="button"
+                  class="fb-tri__btn"
+                  class:fb-tri__btn--active={(filters as any)[flag.key] === ''}
+                  aria-pressed={(filters as any)[flag.key] === ''}
+                  onclick={() => ((filters as any)[flag.key] = '')}
+                >any</button>
+                <button
+                  type="button"
+                  class="fb-tri__btn fb-tri__btn--yes"
+                  class:fb-tri__btn--active={(filters as any)[flag.key] === 'yes'}
+                  aria-pressed={(filters as any)[flag.key] === 'yes'}
+                  onclick={() => ((filters as any)[flag.key] = 'yes')}
+                >yes</button>
+                <button
+                  type="button"
+                  class="fb-tri__btn fb-tri__btn--no"
+                  class:fb-tri__btn--active={(filters as any)[flag.key] === 'no'}
+                  aria-pressed={(filters as any)[flag.key] === 'no'}
+                  onclick={() => ((filters as any)[flag.key] = 'no')}
+                >no</button>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
+    </div>
+  </details>
+
   {#if show.votes}
     <div class="fg">
       <label class="fg__label">Acclaim (net)</label>
@@ -1309,5 +1501,127 @@
     padding: 8px 10px;
     color: var(--color-muted);
     font-size: 0.7rem;
+  }
+
+  /* AI Vision disclosure — collapsed group inside the filter bar.
+     Uses the same brutalist border + colour tokens as the rest. */
+  .fg-disclosure {
+    border: 2px solid var(--color-text);
+    background: var(--color-bg);
+  }
+  .fg-disclosure[open] {
+    background: var(--color-surface-1, var(--color-bg));
+  }
+  .fg-disclosure__summary {
+    list-style: none;
+    padding: 8px 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+  .fg-disclosure__summary::-webkit-details-marker { display: none; }
+  .fg-disclosure__caret {
+    display: inline-block;
+    transition: transform 0.12s ease;
+    width: 1ch;
+  }
+  .fg-disclosure[open] .fg-disclosure__caret {
+    transform: rotate(90deg);
+  }
+  .fg-disclosure__hint {
+    margin-left: auto;
+    color: var(--color-muted);
+    font-size: 0.6rem;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .fg-disclosure__body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+    border-top: 2px solid var(--color-text);
+  }
+
+  /* Chip group — used by vibe / temp / character selectors.
+     Same shape as the brutalist tag-chips elsewhere in the admin. */
+  .fb-chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .fb-chip {
+    padding: 3px 8px;
+    border: 2px solid var(--color-text);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    cursor: pointer;
+    line-height: 1.4;
+  }
+  .fb-chip:hover {
+    background: var(--color-surface-2);
+  }
+  .fb-chip--active {
+    background: var(--color-text);
+    color: var(--color-bg);
+  }
+  .fb-chip--active:hover {
+    background: var(--color-text);
+    color: var(--color-bg);
+    opacity: 0.85;
+  }
+
+  /* Tri-state button row for bool flags. Layout: label · [any|yes|no]. */
+  .fb-tri-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .fb-tri {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 8px;
+  }
+  .fb-tri__label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--color-muted);
+  }
+  .fb-tri__buttons {
+    display: inline-flex;
+  }
+  .fb-tri__btn {
+    padding: 2px 8px;
+    border: 2px solid var(--color-text);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    cursor: pointer;
+    line-height: 1.6;
+  }
+  .fb-tri__btn + .fb-tri__btn {
+    border-left: 0;
+  }
+  .fb-tri__btn:hover {
+    background: var(--color-surface-2);
+  }
+  .fb-tri__btn--active {
+    background: var(--color-text);
+    color: var(--color-bg);
+  }
+  .fb-tri__btn--active:hover {
+    background: var(--color-text);
+    color: var(--color-bg);
+    opacity: 0.85;
   }
 </style>

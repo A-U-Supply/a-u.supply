@@ -2240,6 +2240,19 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
       downMin: number | null;
       downMax: number | null;
       myVotes: '' | 'up' | 'down' | 'any' | 'none';
+      aiVibe: string[];
+      aiColorTemperature: string[];
+      aiColorCharacter: string[];
+      hasAiDescription: '' | 'yes' | 'no';
+      isScreenshot: '' | 'yes' | 'no';
+      isMeme: '' | 'yes' | 'no';
+      isPhoto: '' | 'yes' | 'no';
+      isArtwork: '' | 'yes' | 'no';
+      isAiGenerated: '' | 'yes' | 'no';
+      hasHuman: '' | 'yes' | 'no';
+      hasFace: '' | 'yes' | 'no';
+      hasTextOverlay: '' | 'yes' | 'no';
+      isNsfw: '' | 'yes' | 'no';
     };
 
     // The SearchFilterBar Svelte island renders its own `<div class="filter-bar"
@@ -2289,6 +2302,19 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
         downMin: null,
         downMax: null,
         myVotes: '',
+        aiVibe: [],
+        aiColorTemperature: [],
+        aiColorCharacter: [],
+        hasAiDescription: '',
+        isScreenshot: '',
+        isMeme: '',
+        isPhoto: '',
+        isArtwork: '',
+        isAiGenerated: '',
+        hasHuman: '',
+        hasFace: '',
+        hasTextOverlay: '',
+        isNsfw: '',
       };
     }
 
@@ -2397,6 +2423,32 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
       if (Object.keys(downRange).length) body.filters.down_count = downRange;
 
       if (filters.myVotes) body.filters.my_votes = filters.myVotes;
+
+      // ----- AI vision enrichment filters -----
+      if (filters.hasAiDescription)
+        body.filters.has_ai_description = filters.hasAiDescription === 'yes';
+      if (filters.aiVibe?.length) body.filters.ai_vibe = filters.aiVibe;
+      if (filters.aiColorTemperature?.length)
+        body.filters.ai_color_temperature = filters.aiColorTemperature;
+      if (filters.aiColorCharacter?.length)
+        body.filters.ai_color_character = filters.aiColorCharacter;
+      const boolFlagMap: Array<[string, string]> = [
+        ['isScreenshot', 'is_screenshot'],
+        ['isMeme', 'is_meme'],
+        ['isPhoto', 'is_photo'],
+        ['isArtwork', 'is_artwork'],
+        ['isAiGenerated', 'is_ai_generated'],
+        ['hasHuman', 'has_human'],
+        ['hasFace', 'has_face'],
+        ['hasTextOverlay', 'has_text_overlay'],
+        ['isNsfw', 'is_nsfw'],
+      ];
+      for (const [uiKey, apiKey] of boolFlagMap) {
+        const v = (filters as any)[uiKey];
+        if (v === 'yes') body.filters[apiKey] = true;
+        else if (v === 'no') body.filters[apiKey] = false;
+      }
+
       return body;
     }
 

@@ -657,6 +657,7 @@ def _run_image_extraction(db, media_item_id: str, file_path: str, MediaImageMeta
         _log_failure(db, media_item_id, "thumbnail", exc)
 
     # Step 4: OCR text extraction
+    ocr_text: str | None = None
     try:
         ocr_text = extract_text_ocr(file_path)
         meta_kwargs["caption"] = ocr_text or ""
@@ -668,6 +669,19 @@ def _run_image_extraction(db, media_item_id: str, file_path: str, MediaImageMeta
         # Can't create meta record without basic dimensions
         return
 
+    # Step 5: AI vision-model enrichment — description + tags + structured
+    # attributes (vibe, color mood, content bools). See ai_description.py.
+    # Skipped silently if no vision API key is set so local dev still works.
+    if os.environ.get("VISION_API_KEY") or os.environ.get("DEEPSEEK_API_KEY"):
+        try:
+            from server.ai_description import generate_ai_description
+
+            ai = generate_ai_description(file_path, ocr_caption=ocr_text)
+            _apply_ai_description(meta_kwargs, ai, ai_overrides=None)
+        except Exception as exc:
+            logger.error("AI description failed for %s: %s", media_item_id, exc)
+            _log_failure(db, media_item_id, "ai_description", exc)
+
     # Create or update the meta record
     existing = db.query(MediaImageMeta).filter(MediaImageMeta.media_item_id == media_item_id).first()
     if existing:
@@ -677,6 +691,39 @@ def _run_image_extraction(db, media_item_id: str, file_path: str, MediaImageMeta
         record = MediaImageMeta(media_item_id=media_item_id, **meta_kwargs)
         db.add(record)
     db.commit()
+
+
+def _apply_ai_description(meta_kwargs: dict, ai: dict, ai_overrides: dict | None) -> None:
+    """Merge the normalized AI generation result into a meta_kwargs dict.
+
+    Fields listed in ai_overrides (manual human corrections) are preserved
+    untouched — the AI never clobbers what a person has explicitly set.
+    """
+    overrides = ai_overrides or {}
+    now = datetime.now(timezone.utc)
+
+    if "ai_description" not in overrides:
+        meta_kwargs["ai_description"] = ai.get("description")
+    meta_kwargs["ai_description_model"] = ai.get("model")
+    meta_kwargs["ai_description_prompt_v"] = ai.get("prompt_version")
+    meta_kwargs["ai_description_generated_at"] = now
+    meta_kwargs["ai_description_tokens_in"] = ai.get("tokens_in")
+    meta_kwargs["ai_description_tokens_out"] = ai.get("tokens_out")
+
+    if "ai_tags" not in overrides:
+        meta_kwargs["ai_tags"] = json.dumps(ai.get("tags") or [])
+    if "ai_color_temperature" not in overrides:
+        meta_kwargs["ai_color_temperature"] = ai.get("color_temperature")
+    if "ai_color_character" not in overrides:
+        meta_kwargs["ai_color_character"] = ai.get("color_character")
+    if "ai_vibe" not in overrides:
+        meta_kwargs["ai_vibe"] = json.dumps(ai.get("vibe") or [])
+
+    flags = ai.get("flags") or {}
+    for flag_name, value in flags.items():
+        if flag_name in overrides:
+            continue
+        meta_kwargs[flag_name] = value
 
 
 def _run_audio_extraction(db, media_item_id: str, file_path: str, MediaAudioMeta):
@@ -881,6 +928,25 @@ def _retry_single_step(db, media_item, file_path: str, extraction_type: str):
     elif extraction_type == "ocr":
         ocr_text = extract_text_ocr(file_path)
         _upsert_meta(db, MediaImageMeta, media_item_id, {"caption": ocr_text or ""})
+
+    elif extraction_type == "ai_description":
+        from server.ai_description import generate_ai_description
+
+        existing_meta = (
+            db.query(MediaImageMeta)
+            .filter(MediaImageMeta.media_item_id == media_item_id)
+            .first()
+        )
+        ocr_caption = existing_meta.caption if existing_meta else None
+        overrides_json = existing_meta.ai_overrides if existing_meta else None
+        try:
+            overrides = json.loads(overrides_json) if overrides_json else {}
+        except (TypeError, ValueError):
+            overrides = {}
+        ai = generate_ai_description(file_path, ocr_caption=ocr_caption)
+        ai_kwargs: dict = {}
+        _apply_ai_description(ai_kwargs, ai, ai_overrides=overrides)
+        _upsert_meta(db, MediaImageMeta, media_item_id, ai_kwargs)
 
     elif extraction_type == "ffprobe":
         if media_item.media_type == "audio":
