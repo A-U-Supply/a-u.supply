@@ -240,6 +240,35 @@ class MediaImageMeta(Base):
     dominant_colors = Column(String, nullable=True)  # JSON stored as text
     caption = Column(String, nullable=True)
 
+    # AI vision-model enrichment (see docs/ai-image-descriptions.md).
+    # All ai_* fields are NULL until the AI pipeline runs on the item.
+    ai_description = Column(String, nullable=True)
+    ai_description_model = Column(String, nullable=True)
+    ai_description_prompt_v = Column(String, nullable=True)
+    ai_description_generated_at = Column(DateTime, nullable=True)
+    ai_description_tokens_in = Column(Integer, nullable=True)
+    ai_description_tokens_out = Column(Integer, nullable=True)
+
+    ai_tags = Column(String, nullable=True)              # JSON list
+    ai_color_temperature = Column(String, nullable=True)  # warm | cool | neutral
+    ai_color_character = Column(String, nullable=True)    # vibrant | muted | pastel | monochrome | high-contrast | earthy | dark | light
+    ai_vibe = Column(String, nullable=True)              # JSON list (1-3 of vocab)
+
+    # Bool flags — NULL means "not analyzed yet" (distinct from explicit false).
+    is_screenshot = Column(Boolean, nullable=True)
+    is_meme = Column(Boolean, nullable=True)
+    is_photo = Column(Boolean, nullable=True)
+    is_artwork = Column(Boolean, nullable=True)
+    is_ai_generated = Column(Boolean, nullable=True)
+    has_human = Column(Boolean, nullable=True)
+    has_face = Column(Boolean, nullable=True)
+    has_text_overlay = Column(Boolean, nullable=True)
+    is_nsfw = Column(Boolean, nullable=True)
+
+    # JSON dict of fields the user has manually overridden — the AI pipeline
+    # never clobbers these on regeneration. Keys are field names.
+    ai_overrides = Column(String, nullable=True)
+
     media_item = relationship("MediaItem", back_populates="image_meta")
 
 

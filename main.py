@@ -187,6 +187,35 @@ if "web_audio_file_path" not in _track_cols:
     with engine.begin() as _conn:
         _conn.execute(_sa_text("ALTER TABLE tracks ADD COLUMN web_audio_file_path TEXT"))
 
+# Migrate existing DB: AI vision-model enrichment fields on media_image_meta
+# (see docs/ai-image-descriptions.md).
+_image_meta_cols = [c["name"] for c in _sa_inspect(engine).get_columns("media_image_meta")]
+for _col, _ddl in (
+    ("ai_description",              "ALTER TABLE media_image_meta ADD COLUMN ai_description TEXT"),
+    ("ai_description_model",        "ALTER TABLE media_image_meta ADD COLUMN ai_description_model TEXT"),
+    ("ai_description_prompt_v",     "ALTER TABLE media_image_meta ADD COLUMN ai_description_prompt_v TEXT"),
+    ("ai_description_generated_at", "ALTER TABLE media_image_meta ADD COLUMN ai_description_generated_at DATETIME"),
+    ("ai_description_tokens_in",    "ALTER TABLE media_image_meta ADD COLUMN ai_description_tokens_in INTEGER"),
+    ("ai_description_tokens_out",   "ALTER TABLE media_image_meta ADD COLUMN ai_description_tokens_out INTEGER"),
+    ("ai_tags",                     "ALTER TABLE media_image_meta ADD COLUMN ai_tags TEXT"),
+    ("ai_color_temperature",        "ALTER TABLE media_image_meta ADD COLUMN ai_color_temperature TEXT"),
+    ("ai_color_character",          "ALTER TABLE media_image_meta ADD COLUMN ai_color_character TEXT"),
+    ("ai_vibe",                     "ALTER TABLE media_image_meta ADD COLUMN ai_vibe TEXT"),
+    ("is_screenshot",               "ALTER TABLE media_image_meta ADD COLUMN is_screenshot BOOLEAN"),
+    ("is_meme",                     "ALTER TABLE media_image_meta ADD COLUMN is_meme BOOLEAN"),
+    ("is_photo",                    "ALTER TABLE media_image_meta ADD COLUMN is_photo BOOLEAN"),
+    ("is_artwork",                  "ALTER TABLE media_image_meta ADD COLUMN is_artwork BOOLEAN"),
+    ("is_ai_generated",             "ALTER TABLE media_image_meta ADD COLUMN is_ai_generated BOOLEAN"),
+    ("has_human",                   "ALTER TABLE media_image_meta ADD COLUMN has_human BOOLEAN"),
+    ("has_face",                    "ALTER TABLE media_image_meta ADD COLUMN has_face BOOLEAN"),
+    ("has_text_overlay",            "ALTER TABLE media_image_meta ADD COLUMN has_text_overlay BOOLEAN"),
+    ("is_nsfw",                     "ALTER TABLE media_image_meta ADD COLUMN is_nsfw BOOLEAN"),
+    ("ai_overrides",                "ALTER TABLE media_image_meta ADD COLUMN ai_overrides TEXT"),
+):
+    if _col not in _image_meta_cols:
+        with engine.begin() as _conn:
+            _conn.execute(_sa_text(_ddl))
+
 
 # Re-apply Meilisearch index settings on startup so additions to
 # FILTERABLE_ATTRIBUTES / SORTABLE_ATTRIBUTES (vote_score, upvoter_user_ids,
