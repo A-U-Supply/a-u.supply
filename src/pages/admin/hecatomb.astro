@@ -127,7 +127,9 @@ import BrutalSelect from '../../components/BrutalSelect.astro';
     </BrutalCard>
 
     <div class="hec-actions">
-      <button class="btn-save" id="hec-submit" disabled>Submit offering</button>
+      <button class="brutalist-control hec-submit" id="hec-submit" disabled
+        >Submit offering</button
+      >
     </div>
 
     <div class="hec-status" id="hec-status"></div>
@@ -220,15 +222,27 @@ import BrutalSelect from '../../components/BrutalSelect.astro';
     display: flex;
     justify-content: flex-end;
   }
-  .hec-actions .btn-save:disabled {
+  .hec-submit {
+    padding: var(--space-xs) var(--space-md);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+  .hec-submit:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+    /* Lock the brutal chrome in place when disabled — no hover/active travel. */
+    transform: none;
+    box-shadow: 2px 2px 0 var(--color-fg);
+  }
+  .hec-submit:disabled:hover {
+    transform: none;
+    box-shadow: 2px 2px 0 var(--color-fg);
   }
   @media (max-width: 640px) {
     .hec-actions {
       justify-content: stretch;
     }
-    .hec-actions .btn-save {
+    .hec-submit {
       flex: 1;
       padding: var(--space-sm);
       font-size: var(--text-base);
