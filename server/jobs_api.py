@@ -551,6 +551,24 @@ class JobBatchResponse(BaseModel):
     jobs: list["JobResponse"]
 
 
+class JobBatchPreviewBody(BaseModel):
+    """Body for previewing a batch's candidate pool without submitting jobs.
+
+    Mirrors the pool-resolution fields of ``JobBatchCreate`` so the preview
+    matches the submit pool exactly, including the ``exclude_processed_*``
+    toggles. No ``count`` / ``priority`` — the preview only sizes the pool.
+    """
+
+    app_name: str
+    shuffle: BatchShuffleSpec = Field(default_factory=BatchShuffleSpec)
+    params: dict = Field(default_factory=dict)
+    random_recipe: bool = False
+
+
+class JobBatchPreviewResponse(BaseModel):
+    count: int = Field(..., description="Pool size after all filters and exclusions.")
+
+
 class JobOutputResponse(BaseModel):
     id: str
     filename: str
@@ -1462,6 +1480,25 @@ def _processed_exclusion_ids(
     return {row[0] for row in rows}
 
 
+def _resolve_batch_excludes(
+    app_name: str, shuffle: BatchShuffleSpec, params: dict, random_recipe: bool
+) -> tuple[str | None, str | None]:
+    """Compute (exclude_app, exclude_recipe) from a batch submit/preview body.
+
+    Recipe-exclusion silently no-ops if ``random_recipe`` is true or no
+    fixed recipe is selected — that's the same gate the submit path uses,
+    kept here so the preview matches without drift.
+    """
+    exclude_app = app_name if shuffle.exclude_processed_by_app else None
+    fixed_recipe = params.get("recipe") if not random_recipe else None
+    exclude_recipe = (
+        fixed_recipe
+        if shuffle.exclude_processed_by_recipe and fixed_recipe
+        else None
+    )
+    return exclude_app, exclude_recipe
+
+
 def _build_batch_pool(
     db: Session,
     shuffle: BatchShuffleSpec,
@@ -1573,12 +1610,8 @@ def create_job_batch(
             )
 
     # Build the candidate pool (shared across all jobs in the batch)
-    exclude_app = body.app_name if body.shuffle.exclude_processed_by_app else None
-    fixed_recipe = body.params.get("recipe") if not body.random_recipe else None
-    exclude_recipe = (
-        fixed_recipe
-        if body.shuffle.exclude_processed_by_recipe and fixed_recipe
-        else None
+    exclude_app, exclude_recipe = _resolve_batch_excludes(
+        body.app_name, body.shuffle, body.params, body.random_recipe
     )
     pool = _build_batch_pool(
         db=db,
@@ -1681,6 +1714,50 @@ def create_job_batch(
             for j in created_jobs
         ],
     }
+
+
+@router.post(
+    "/jobs/batch/preview",
+    tags=["Jobs"],
+    summary="Preview the candidate pool size for a batch without submitting",
+    response_model=JobBatchPreviewResponse,
+)
+def preview_job_batch(
+    body: JobBatchPreviewBody,
+    auth: tuple[User, str] = Depends(require_scope("read")),
+    db: Session = Depends(get_db),
+):
+    """Resolve the candidate pool that ``POST /jobs/batch`` would draw from
+    and return its size — no jobs created. Lets the hecatomb UI show a live
+    count that honors the ``exclude_processed_*`` toggles and the app's
+    ``allowed_media_types`` (which a raw ``/api/search`` call cannot).
+    """
+    app = (
+        db.query(AppDefinition)
+        .filter(AppDefinition.name == body.app_name, AppDefinition.enabled == True)
+        .first()
+    )
+    if not app:
+        raise HTTPException(
+            status_code=404, detail=f"App '{body.app_name}' not found or disabled"
+        )
+
+    manifest = _parse_manifest(app.manifest)
+    allowed_types = manifest.get("input", {}).get("media_types", [])
+    if not allowed_types:
+        return JobBatchPreviewResponse(count=0)
+
+    exclude_app, exclude_recipe = _resolve_batch_excludes(
+        body.app_name, body.shuffle, body.params, body.random_recipe
+    )
+    pool = _build_batch_pool(
+        db=db,
+        shuffle=body.shuffle,
+        allowed_media_types=allowed_types,
+        exclude_app=exclude_app,
+        exclude_recipe=exclude_recipe,
+    )
+    return JobBatchPreviewResponse(count=len(pool))
 
 
 @router.get("/jobs", tags=["Jobs"], summary="List jobs")
