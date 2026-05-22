@@ -2050,6 +2050,59 @@ def override_ai_fields(
     return _media_item_response(item)
 
 
+@router.post(
+    "/media/{media_id}/regenerate-ai-description",
+    tags=["Media Items"],
+    summary="Re-run the vision model on a single image",
+)
+def regenerate_ai_description(
+    media_id: str,
+    _auth=Depends(require_scope("write")),
+    db: Session = Depends(get_db),
+):
+    """Synchronously re-run the AI vision pipeline for one image.
+
+    Honours ai_overrides — fields the user has manually set are preserved.
+    Returns the updated media item including the fresh ai_* fields.
+
+    **Scope required:** `write`
+    """
+    from server.ai_description import generate_ai_description, DeepSeekError
+    from server.extraction import (
+        SEARCH_MEDIA_DIR,
+        _apply_ai_description,
+        _upsert_meta,
+        _sync_to_search,
+    )
+    from server.models import MediaImageMeta
+
+    item = _get_media_item_or_404(db, media_id)
+    if item.media_type != "image":
+        raise HTTPException(status_code=400, detail="Not an image")
+    full_path = os.path.join(SEARCH_MEDIA_DIR, item.file_path)
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="Image file missing on disk")
+
+    meta = item.image_meta
+    ocr_caption = meta.caption if meta else None
+    try:
+        overrides = json.loads(meta.ai_overrides) if meta and meta.ai_overrides else {}
+    except (json.JSONDecodeError, TypeError):
+        overrides = {}
+
+    try:
+        ai = generate_ai_description(full_path, ocr_caption=ocr_caption)
+    except DeepSeekError as exc:
+        raise HTTPException(status_code=502, detail=f"vision API error: {exc}") from exc
+
+    kwargs: dict = {}
+    _apply_ai_description(kwargs, ai, ai_overrides=overrides)
+    _upsert_meta(db, MediaImageMeta, item.id, kwargs)
+    db.refresh(item)
+    _sync_to_search(db, item)
+    return _media_item_response(item)
+
+
 # ---------------------------------------------------------------------------
 # Tagging endpoints
 # ---------------------------------------------------------------------------
