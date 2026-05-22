@@ -36,6 +36,7 @@ from server.github_api import router as github_router
 from server.jobs_api import router as jobs_router
 from server.latents_api import router as latents_router, links_for_media_router
 from server.lemmy_api import router as lemmy_router
+from server.notifications_api import router as notifications_router
 from server.search_api import router as search_router
 from server.threads_api import router as threads_router
 from server.models import Base, User, engine
@@ -652,6 +653,7 @@ app.include_router(jobs_router)
 app.include_router(latents_router)
 app.include_router(links_for_media_router)
 app.include_router(lemmy_router)
+app.include_router(notifications_router)
 app.include_router(search_router)
 app.include_router(threads_router)
 
