@@ -50,6 +50,10 @@ SEARCHABLE_ATTRIBUTES = [
     "job_app",
     "job_recipe",
     "job_model",
+    # AI vision enrichment (see docs/ai-image-descriptions.md).
+    # Lower weight than caption (OCR is verbatim, AI prose is interpretive).
+    "ai_description",
+    "ai_tags",
 ]
 
 FILTERABLE_ATTRIBUTES = [
@@ -82,6 +86,21 @@ FILTERABLE_ATTRIBUTES = [
     "vote_score",
     "upvoter_user_ids",
     "downvoter_user_ids",
+    # AI vision enrichment fields (see docs/ai-image-descriptions.md).
+    "ai_tags",
+    "ai_color_temperature",
+    "ai_color_character",
+    "ai_vibe",
+    "has_ai_description",
+    "is_screenshot",
+    "is_meme",
+    "is_photo",
+    "is_artwork",
+    "is_ai_generated",
+    "has_human",
+    "has_face",
+    "has_text_overlay",
+    "is_nsfw",
 ]
 
 SORTABLE_ATTRIBUTES = [
@@ -416,6 +435,32 @@ def _build_document(db: Session, media_item: MediaItem) -> dict:
                 doc["color_names"] = ""
         doc["caption"] = meta.caption
         doc["has_text"] = bool(meta.caption)
+
+        # AI vision enrichment (see docs/ai-image-descriptions.md).
+        doc["ai_description"] = meta.ai_description
+        doc["has_ai_description"] = bool(meta.ai_description)
+        try:
+            doc["ai_tags"] = json.loads(meta.ai_tags) if meta.ai_tags else []
+        except (json.JSONDecodeError, TypeError):
+            doc["ai_tags"] = []
+        try:
+            doc["ai_vibe"] = json.loads(meta.ai_vibe) if meta.ai_vibe else []
+        except (json.JSONDecodeError, TypeError):
+            doc["ai_vibe"] = []
+        doc["ai_color_temperature"] = meta.ai_color_temperature
+        doc["ai_color_character"] = meta.ai_color_character
+        for _flag in (
+            "is_screenshot",
+            "is_meme",
+            "is_photo",
+            "is_artwork",
+            "is_ai_generated",
+            "has_human",
+            "has_face",
+            "has_text_overlay",
+            "is_nsfw",
+        ):
+            doc[_flag] = getattr(meta, _flag)
 
     elif media_item.media_type == "audio" and media_item.audio_meta:
         meta = media_item.audio_meta
