@@ -1,0 +1,853 @@
+---
+import Admin from '../../layouts/Admin.astro';
+---
+
+<Admin title="Inbox" current="notifications">
+  <div class="page-header">
+    <h1>Inbox</h1>
+    <p class="page-header__subtitle">
+      Fold replies, fallen items, midden, acclaim. All in one place.
+    </p>
+  </div>
+
+  <div class="status-tabs" role="tablist" id="notif-tabs">
+    <button
+      class="tab active"
+      role="tab"
+      data-tab="inbox"
+      aria-selected="true">Inbox</button
+    >
+    <button
+      class="tab"
+      role="tab"
+      data-tab="sources"
+      aria-selected="false">Sources</button
+    >
+  </div>
+
+  <!-- ───────── Inbox tab ───────── -->
+  <section
+    class="tab-panel"
+    id="tab-inbox"
+    role="tabpanel"
+    aria-labelledby="tab-inbox-trigger"
+  >
+    <div class="inbox-toolbar">
+      <div class="inbox-toolbar__count" id="inbox-count" hidden>
+        <span id="inbox-count-num">0</span> unread
+      </div>
+      <button
+        class="action-btn"
+        id="mark-all-read"
+        type="button"
+        disabled>Mark All Read</button
+      >
+    </div>
+
+    <div id="inbox-loading" class="muted-line">
+      <span class="loading-dots">Drawing the omens</span>
+    </div>
+    <div id="inbox-empty" class="empty-state" hidden>
+      <div class="empty-state__icon">&#10003;</div>
+      Nothing new. The omens are quiet.
+    </div>
+    <ol class="notif-list" id="notif-list" hidden></ol>
+  </section>
+
+  <!-- ───────── Sources tab ───────── -->
+  <section
+    class="tab-panel"
+    id="tab-sources"
+    role="tabpanel"
+    aria-labelledby="tab-sources-trigger"
+    hidden
+  >
+    <div id="fold-unconfigured" class="empty-state" hidden>
+      <div class="empty-state__icon">&#9888;</div>
+      Fold linkage isn't configured on this server yet. Internal sources
+      (fallen, midden, acclaim) still surface in your Inbox; ask whoever
+      handles ops to run the
+      <code>dokku postgres:link &mdash;alias FOLD_DATABASE</code> step.
+    </div>
+
+    <div class="sources-section">
+      <h2 class="sources-section__title">Subscribed communities</h2>
+      <p class="sources-section__hint">
+        Get notified on every new post and comment in these communities.
+      </p>
+      <ul class="sub-list" id="community-list" hidden></ul>
+      <div class="sub-empty" id="community-empty">
+        No community subscriptions yet.
+      </div>
+
+      <details class="picker" id="community-picker">
+        <summary class="picker__summary">Browse communities</summary>
+        <ul class="picker__results" id="community-picker-list">
+          <li class="muted-line">
+            <span class="loading-dots">Loading communities</span>
+          </li>
+        </ul>
+      </details>
+    </div>
+
+    <div class="sources-section">
+      <h2 class="sources-section__title">Watched threads</h2>
+      <p class="sources-section__hint">
+        Get notified on every new comment in these specific threads.
+      </p>
+      <ul class="sub-list" id="thread-list" hidden></ul>
+      <div class="sub-empty" id="thread-empty">
+        No thread subscriptions yet.
+      </div>
+
+      <details class="picker" id="thread-picker">
+        <summary class="picker__summary">Find threads</summary>
+        <div class="picker__search">
+          <input
+            type="search"
+            id="thread-search"
+            class="filter-input"
+            placeholder="search post titles…"
+            autocomplete="off"
+          />
+        </div>
+        <ul class="picker__results" id="thread-picker-list"></ul>
+      </details>
+    </div>
+  </section>
+</Admin>
+
+<style>
+  .page-header__subtitle {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    font-style: italic;
+    margin-top: calc(var(--space-xs) * -1);
+    margin-bottom: var(--space-md);
+  }
+
+  .muted-line {
+    color: var(--color-muted);
+    padding: var(--space-md) 0;
+  }
+
+  .tab-panel[hidden] {
+    display: none;
+  }
+
+  /* ───── Inbox tab ───── */
+  .inbox-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin: var(--space-sm) 0 var(--space-md);
+  }
+  .inbox-toolbar__count {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+  .inbox-toolbar__count[hidden] {
+    display: none;
+  }
+  .inbox-toolbar #mark-all-read {
+    margin-left: auto;
+  }
+
+  .notif-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+  .notif-list[hidden] {
+    display: none;
+  }
+  .notif-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    border: 2px solid var(--color-fg);
+    background: var(--color-bg);
+    box-shadow: 2px 2px 0 var(--color-fg);
+    align-items: start;
+  }
+  .notif-row__body {
+    min-width: 0;
+  }
+  .notif-row__head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+  }
+  .notif-row__source {
+    display: inline-block;
+    padding: 1px 6px;
+    border: 1px solid var(--color-fg);
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    color: var(--color-fg);
+  }
+  .notif-row__source[data-source^='fold_'] {
+    color: var(--color-bg);
+    background: var(--color-fg);
+  }
+  .notif-row__title {
+    font-weight: 700;
+    font-size: var(--text-sm);
+    color: var(--color-fg);
+    text-decoration: none;
+    word-break: break-word;
+  }
+  .notif-row__title:hover {
+    color: var(--color-accent);
+  }
+  .notif-row__snippet {
+    color: var(--color-muted);
+    font-size: 0.75rem;
+    line-height: 1.4;
+    word-break: break-word;
+    margin-top: 2px;
+  }
+  .notif-row__meta {
+    margin-top: 4px;
+    font-size: 0.6rem;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+  .notif-row__actions {
+    display: flex;
+    gap: var(--space-xs);
+    align-self: start;
+  }
+
+  @media (max-width: 640px) {
+    .notif-row {
+      grid-template-columns: 1fr;
+    }
+    .notif-row__actions {
+      justify-content: flex-end;
+    }
+  }
+
+  /* ───── Sources tab ───── */
+  .sources-section {
+    margin-bottom: var(--space-lg);
+  }
+  .sources-section__title {
+    font-size: var(--text-base);
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    margin: var(--space-md) 0 var(--space-xs);
+    padding-bottom: var(--space-xs);
+    border-bottom: 1px dotted var(--color-border);
+  }
+  .sources-section__hint {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    font-style: italic;
+    margin-bottom: var(--space-sm);
+  }
+  .sub-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 var(--space-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .sub-list[hidden] {
+    display: none;
+  }
+  .sub-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    border: 1px solid var(--color-fg);
+    background: var(--color-bg);
+  }
+  .sub-row__name {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--text-sm);
+    word-break: break-word;
+  }
+  .sub-empty {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    font-style: italic;
+    margin-bottom: var(--space-sm);
+  }
+  .sub-empty[hidden] {
+    display: none;
+  }
+
+  .picker {
+    border: 2px solid var(--color-fg);
+    background: var(--color-bg);
+    margin-top: var(--space-sm);
+  }
+  .picker__summary {
+    cursor: pointer;
+    padding: var(--space-xs) var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    border-bottom: 1px solid var(--color-fg);
+  }
+  .picker[open] .picker__summary {
+    background: var(--color-surface);
+  }
+  .picker__search {
+    padding: var(--space-xs) var(--space-sm);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .picker__search .filter-input {
+    width: 100%;
+  }
+  .picker__results {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+  .picker__row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .picker__row:last-child {
+    border-bottom: none;
+  }
+  .picker__row__label {
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+  }
+  .picker__row__sub {
+    color: var(--color-muted);
+    font-size: 0.75rem;
+  }
+
+  #fold-unconfigured code {
+    background: var(--color-surface);
+    padding: 1px 4px;
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+  }
+</style>
+
+<script>
+  document.addEventListener('astro:page-load', async () => {
+    // Only bind if we're on the notifications page (Admin layout reuses
+    // this script across pages via ViewTransitions).
+    if (!document.getElementById('notif-tabs')) return;
+
+    const user = await (window as any).__authReady;
+    if (!user) return;
+
+    // ───────── Tabs ─────────
+    const tabs = document.querySelectorAll<HTMLButtonElement>('#notif-tabs .tab');
+    const panels: Record<string, HTMLElement> = {
+      inbox: document.getElementById('tab-inbox')!,
+      sources: document.getElementById('tab-sources')!,
+    };
+    function showTab(name: string) {
+      tabs.forEach((t) => {
+        const active = t.dataset.tab === name;
+        t.classList.toggle('active', active);
+        t.setAttribute('aria-selected', String(active));
+      });
+      Object.entries(panels).forEach(([key, el]) => {
+        if (key === name) el.removeAttribute('hidden');
+        else el.setAttribute('hidden', '');
+      });
+      // Lazy-load sources data on first open.
+      if (name === 'sources' && !sourcesLoaded) {
+        loadSources();
+        sourcesLoaded = true;
+      }
+      // Persist tab choice in the hash so reload + share-link works.
+      history.replaceState(null, '', `#${name}`);
+    }
+    tabs.forEach((t) =>
+      t.addEventListener('click', () => showTab(t.dataset.tab!)),
+    );
+    if (location.hash === '#sources') showTab('sources');
+
+    // ───────── Inbox ─────────
+    const inboxLoading = document.getElementById('inbox-loading')!;
+    const inboxEmpty = document.getElementById('inbox-empty')!;
+    const listEl = document.getElementById('notif-list') as HTMLOListElement;
+    const countWrap = document.getElementById('inbox-count')!;
+    const countNum = document.getElementById('inbox-count-num')!;
+    const markAllBtn = document.getElementById(
+      'mark-all-read',
+    ) as HTMLButtonElement;
+
+    type Notif = {
+      id: number;
+      source: string;
+      source_ref: string;
+      title: string;
+      snippet: string | null;
+      url: string;
+      created_at: string | null;
+      dismissed_at: string | null;
+    };
+
+    let allNotifs: Notif[] = [];
+
+    function escapeHtml(s: string): string {
+      return (s ?? '').replace(/[&<>"']/g, (c) => {
+        return (
+          (
+            {
+              '&': '&amp;',
+              '<': '&lt;',
+              '>': '&gt;',
+              '"': '&quot;',
+              "'": '&#39;',
+            } as Record<string, string>
+          )[c] || c
+        );
+      });
+    }
+
+    function formatTimestamp(iso: string | null): string {
+      if (!iso) return '';
+      const d = new Date(iso);
+      const diff = (Date.now() - d.getTime()) / 1000;
+      if (diff < 60) return 'just now';
+      if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+      if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+      if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+      return d.toLocaleDateString();
+    }
+
+    function renderInbox() {
+      const unread = allNotifs.filter((n) => !n.dismissed_at);
+      if (unread.length === 0) {
+        listEl.hidden = true;
+        countWrap.hidden = true;
+        markAllBtn.disabled = true;
+        inboxEmpty.removeAttribute('hidden');
+        return;
+      }
+      inboxEmpty.setAttribute('hidden', '');
+      countWrap.hidden = false;
+      countNum.textContent = String(unread.length);
+      markAllBtn.disabled = false;
+
+      listEl.innerHTML = unread
+        .map((n) => {
+          const url = n.url ? escapeHtml(n.url) : '#';
+          const isExternal = url.startsWith('http');
+          const linkAttrs = isExternal
+            ? `target="_blank" rel="noopener noreferrer"`
+            : '';
+          return `
+            <li class="notif-row" data-id="${n.id}">
+              <div class="notif-row__body">
+                <div class="notif-row__head">
+                  <span class="notif-row__source" data-source="${escapeHtml(n.source)}">
+                    ${escapeHtml(n.source.replace(/_/g, ' '))}
+                  </span>
+                  <a class="notif-row__title" href="${url}" ${linkAttrs}>
+                    ${escapeHtml(n.title)}
+                  </a>
+                </div>
+                ${n.snippet ? `<div class="notif-row__snippet">${escapeHtml(n.snippet)}</div>` : ''}
+                <div class="notif-row__meta">${escapeHtml(formatTimestamp(n.created_at))}</div>
+              </div>
+              <div class="notif-row__actions">
+                <button class="action-btn" data-dismiss="${n.id}">Dismiss</button>
+              </div>
+            </li>`;
+        })
+        .join('');
+      listEl.hidden = false;
+    }
+
+    async function loadInbox() {
+      inboxLoading.removeAttribute('hidden');
+      try {
+        const res = await fetch('/api/admin/notifications', {
+          credentials: 'include',
+        });
+        if (!res.ok) throw new Error('Failed to load notifications');
+        const data = await res.json();
+        allNotifs = data.items || [];
+      } catch (err) {
+        (window as any).toast.error('Failed to load notifications');
+        allNotifs = [];
+      }
+      inboxLoading.setAttribute('hidden', '');
+      renderInbox();
+      // Nudge the sidebar badge in case materialization picked up new
+      // events.
+      (window as any).__inbox?.refresh?.();
+    }
+
+    listEl.addEventListener('click', async (e) => {
+      const btn = (e.target as HTMLElement).closest(
+        '[data-dismiss]',
+      ) as HTMLButtonElement | null;
+      if (!btn) return;
+      const id = Number(btn.dataset.dismiss);
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/api/admin/notifications/${id}/dismiss`, {
+          method: 'POST',
+          credentials: 'include',
+        });
+        if (!res.ok) throw new Error('dismiss failed');
+        const row = allNotifs.find((n) => n.id === id);
+        if (row) row.dismissed_at = new Date().toISOString();
+        renderInbox();
+        (window as any).__inbox?.refresh?.();
+      } catch {
+        btn.disabled = false;
+        (window as any).toast.error('Dismiss failed');
+      }
+    });
+
+    markAllBtn.addEventListener('click', async () => {
+      if (markAllBtn.disabled) return;
+      const confirmed = await (window as any).confirmDialog(
+        'Mark every notification as read?',
+        'Mark All Read',
+      );
+      if (!confirmed) return;
+      markAllBtn.disabled = true;
+      try {
+        const res = await fetch('/api/admin/notifications/dismiss-all', {
+          method: 'POST',
+          credentials: 'include',
+        });
+        if (!res.ok) throw new Error('dismiss-all failed');
+        const now = new Date().toISOString();
+        allNotifs.forEach((n) => {
+          if (!n.dismissed_at) n.dismissed_at = now;
+        });
+        renderInbox();
+        (window as any).__inbox?.refresh?.();
+      } catch {
+        markAllBtn.disabled = false;
+        (window as any).toast.error('Mark-all-read failed');
+      }
+    });
+
+    loadInbox();
+
+    // ───────── Sources ─────────
+    let sourcesLoaded = false;
+    const foldUnconfigured = document.getElementById('fold-unconfigured')!;
+    const communityList = document.getElementById(
+      'community-list',
+    ) as HTMLUListElement;
+    const communityEmpty = document.getElementById('community-empty')!;
+    const communityPickerList = document.getElementById(
+      'community-picker-list',
+    ) as HTMLUListElement;
+    const threadList = document.getElementById(
+      'thread-list',
+    ) as HTMLUListElement;
+    const threadEmpty = document.getElementById('thread-empty')!;
+    const threadSearch = document.getElementById(
+      'thread-search',
+    ) as HTMLInputElement;
+    const threadPickerList = document.getElementById(
+      'thread-picker-list',
+    ) as HTMLUListElement;
+
+    type CommunitySub = {
+      lemmy_community_id: number;
+      name: string;
+      created_at: string | null;
+    };
+    type ThreadSub = {
+      lemmy_post_id: number;
+      title: string;
+      created_at: string | null;
+    };
+    type SubsResponse = {
+      communities: CommunitySub[];
+      threads: ThreadSub[];
+      fold_configured: boolean;
+    };
+
+    let mySubs: SubsResponse = {
+      communities: [],
+      threads: [],
+      fold_configured: false,
+    };
+
+    function renderSubs() {
+      // Communities
+      if (mySubs.communities.length === 0) {
+        communityList.hidden = true;
+        communityEmpty.removeAttribute('hidden');
+      } else {
+        communityEmpty.setAttribute('hidden', '');
+        communityList.hidden = false;
+        communityList.innerHTML = mySubs.communities
+          .map(
+            (c) => `
+            <li class="sub-row" data-cid="${c.lemmy_community_id}">
+              <span class="sub-row__name">/c/${escapeHtml(c.name)}</span>
+              <button class="action-btn" data-remove-community="${c.lemmy_community_id}">Remove</button>
+            </li>`,
+          )
+          .join('');
+      }
+      // Threads
+      if (mySubs.threads.length === 0) {
+        threadList.hidden = true;
+        threadEmpty.removeAttribute('hidden');
+      } else {
+        threadEmpty.setAttribute('hidden', '');
+        threadList.hidden = false;
+        threadList.innerHTML = mySubs.threads
+          .map(
+            (t) => `
+            <li class="sub-row" data-pid="${t.lemmy_post_id}">
+              <span class="sub-row__name">${escapeHtml(t.title)}</span>
+              <button class="action-btn" data-remove-thread="${t.lemmy_post_id}">Remove</button>
+            </li>`,
+          )
+          .join('');
+      }
+    }
+
+    async function loadSources() {
+      try {
+        const res = await fetch('/api/admin/fold/subscriptions', {
+          credentials: 'include',
+        });
+        if (!res.ok) throw new Error('subs');
+        mySubs = await res.json();
+      } catch {
+        mySubs = { communities: [], threads: [], fold_configured: false };
+      }
+      if (!mySubs.fold_configured) {
+        foldUnconfigured.removeAttribute('hidden');
+      }
+      renderSubs();
+      // Kick off picker fills only if Fold is configured.
+      if (mySubs.fold_configured) {
+        loadCommunityPicker();
+        runThreadSearch('');
+      } else {
+        communityPickerList.innerHTML = `<li class="muted-line">Fold DB unavailable. Configure FOLD_DATABASE_URL on the server.</li>`;
+      }
+    }
+
+    async function loadCommunityPicker() {
+      try {
+        const res = await fetch('/api/admin/fold/communities', {
+          credentials: 'include',
+        });
+        if (!res.ok) throw new Error('communities');
+        const data = await res.json();
+        const subscribed = new Set(
+          mySubs.communities.map((c) => c.lemmy_community_id),
+        );
+        const rows = (data.communities || []) as {
+          id: number;
+          name: string;
+          title: string;
+        }[];
+        if (rows.length === 0) {
+          communityPickerList.innerHTML = `<li class="muted-line">No communities on Fold yet.</li>`;
+          return;
+        }
+        communityPickerList.innerHTML = rows
+          .map((c) => {
+            const isSub = subscribed.has(c.id);
+            const label = c.title
+              ? `${escapeHtml(c.title)} <span class="picker__row__sub">/c/${escapeHtml(c.name)}</span>`
+              : `/c/${escapeHtml(c.name)}`;
+            return `
+              <li class="picker__row">
+                <span class="picker__row__label">${label}</span>
+                <button class="action-btn" data-add-community="${c.id}" ${isSub ? 'disabled' : ''}>
+                  ${isSub ? 'Subscribed' : 'Subscribe'}
+                </button>
+              </li>`;
+          })
+          .join('');
+      } catch {
+        communityPickerList.innerHTML = `<li class="muted-line">Failed to load communities.</li>`;
+      }
+    }
+
+    let threadSearchTimer: number | undefined;
+    threadSearch.addEventListener('input', () => {
+      window.clearTimeout(threadSearchTimer);
+      threadSearchTimer = window.setTimeout(
+        () => runThreadSearch(threadSearch.value),
+        200,
+      );
+    });
+
+    async function runThreadSearch(q: string) {
+      threadPickerList.innerHTML = `<li class="muted-line"><span class="loading-dots">Searching</span></li>`;
+      try {
+        const res = await fetch(
+          `/api/admin/fold/threads?q=${encodeURIComponent(q)}`,
+          { credentials: 'include' },
+        );
+        if (!res.ok) throw new Error('search');
+        const data = await res.json();
+        const subscribed = new Set(
+          mySubs.threads.map((t) => t.lemmy_post_id),
+        );
+        const rows = (data.posts || []) as {
+          id: number;
+          title: string;
+          community_name: string;
+          published: string | null;
+        }[];
+        if (rows.length === 0) {
+          threadPickerList.innerHTML = `<li class="muted-line">No posts match.</li>`;
+          return;
+        }
+        threadPickerList.innerHTML = rows
+          .map((p) => {
+            const isSub = subscribed.has(p.id);
+            return `
+              <li class="picker__row">
+                <span class="picker__row__label">
+                  ${escapeHtml(p.title)}
+                  <span class="picker__row__sub">in /c/${escapeHtml(p.community_name)}</span>
+                </span>
+                <button class="action-btn" data-add-thread="${p.id}" ${isSub ? 'disabled' : ''}>
+                  ${isSub ? 'Watching' : 'Watch'}
+                </button>
+              </li>`;
+          })
+          .join('');
+      } catch {
+        threadPickerList.innerHTML = `<li class="muted-line">Search failed.</li>`;
+      }
+    }
+
+    // Subscription mutations — event-delegate from the section root.
+    panels.sources.addEventListener('click', async (e) => {
+      const target = e.target as HTMLElement;
+
+      const addC = target.closest(
+        '[data-add-community]',
+      ) as HTMLButtonElement | null;
+      if (addC) {
+        addC.disabled = true;
+        const cid = Number(addC.dataset.addCommunity);
+        try {
+          const res = await fetch('/api/admin/fold/subscriptions/community', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lemmy_community_id: cid }),
+          });
+          if (!res.ok) throw new Error('add');
+          const c = await res.json();
+          mySubs.communities = [...mySubs.communities, c];
+          renderSubs();
+          addC.textContent = 'Subscribed';
+        } catch {
+          addC.disabled = false;
+          (window as any).toast.error('Subscribe failed');
+        }
+        return;
+      }
+
+      const removeC = target.closest(
+        '[data-remove-community]',
+      ) as HTMLButtonElement | null;
+      if (removeC) {
+        removeC.disabled = true;
+        const cid = Number(removeC.dataset.removeCommunity);
+        try {
+          const res = await fetch(
+            `/api/admin/fold/subscriptions/community/${cid}`,
+            { method: 'DELETE', credentials: 'include' },
+          );
+          if (!res.ok) throw new Error('rm');
+          mySubs.communities = mySubs.communities.filter(
+            (c) => c.lemmy_community_id !== cid,
+          );
+          renderSubs();
+          loadCommunityPicker();
+        } catch {
+          removeC.disabled = false;
+          (window as any).toast.error('Remove failed');
+        }
+        return;
+      }
+
+      const addT = target.closest(
+        '[data-add-thread]',
+      ) as HTMLButtonElement | null;
+      if (addT) {
+        addT.disabled = true;
+        const pid = Number(addT.dataset.addThread);
+        try {
+          const res = await fetch('/api/admin/fold/subscriptions/thread', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lemmy_post_id: pid }),
+          });
+          if (!res.ok) throw new Error('add');
+          const t = await res.json();
+          mySubs.threads = [t, ...mySubs.threads];
+          renderSubs();
+          addT.textContent = 'Watching';
+        } catch {
+          addT.disabled = false;
+          (window as any).toast.error('Watch failed');
+        }
+        return;
+      }
+
+      const removeT = target.closest(
+        '[data-remove-thread]',
+      ) as HTMLButtonElement | null;
+      if (removeT) {
+        removeT.disabled = true;
+        const pid = Number(removeT.dataset.removeThread);
+        try {
+          const res = await fetch(
+            `/api/admin/fold/subscriptions/thread/${pid}`,
+            { method: 'DELETE', credentials: 'include' },
+          );
+          if (!res.ok) throw new Error('rm');
+          mySubs.threads = mySubs.threads.filter(
+            (t) => t.lemmy_post_id !== pid,
+          );
+          renderSubs();
+          runThreadSearch(threadSearch.value);
+        } catch {
+          removeT.disabled = false;
+          (window as any).toast.error('Remove failed');
+        }
+        return;
+      }
+    });
+  });
+</script>

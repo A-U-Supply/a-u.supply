@@ -789,9 +789,14 @@ def attach_items(
         for pi in attached:
             db.refresh(pi)
             if pi.media_item:
-                sync_media_item(db, pi.media_item)
+                try:
+                    sync_media_item(db, pi.media_item)
+                except Exception as exc:
+                    logger.exception("meili re-sync after attach failed for %s", pi.media_item.id)
+                    from server.extraction import record_extraction_failure
+                    record_extraction_failure(db, pi.media_item.id, "meilisearch_sync", exc)
     except Exception:
-        logger.exception("meili re-sync after attach failed")
+        logger.exception("meili re-sync after attach failed (loop)")
 
     try:
         from server.slack_notifier import queue_batched
@@ -928,8 +933,11 @@ def detach_item(
         mi = db.query(MediaItem).filter(MediaItem.id == mi_id).first()
         if mi:
             sync_media_item(db, mi)
-    except Exception:
+    except Exception as exc:
         logger.exception("meili re-sync after detach failed")
+        if mi_id:
+            from server.extraction import record_extraction_failure
+            record_extraction_failure(db, mi_id, "meilisearch_sync", exc)
     return None
 
 

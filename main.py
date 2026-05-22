@@ -36,6 +36,8 @@ from server.github_api import router as github_router
 from server.jobs_api import router as jobs_router
 from server.latents_api import router as latents_router, links_for_media_router
 from server.lemmy_api import router as lemmy_router
+from server.notifications_api import router as notifications_router
+from server.fold_subs_api import router as fold_subs_router
 from server.search_api import router as search_router
 from server.threads_api import router as threads_router
 from server.models import Base, User, engine
@@ -215,6 +217,20 @@ for _col, _ddl in (
     if _col not in _image_meta_cols:
         with engine.begin() as _conn:
             _conn.execute(_sa_text(_ddl))
+
+# Migrate existing DB: create Inbox / Notifications tables if missing.
+# Tables: notifications, notification_high_water, fold_community_subs,
+# fold_thread_subs. See server/notifications/ for materializers.
+_existing_tables_n = set(_sa_inspect(engine).get_table_names())
+from server.models import (
+    Notification as _Notification,
+    NotificationHighWater as _NotificationHighWater,
+    FoldCommunitySubscription as _FoldCommunitySubscription,
+    FoldThreadSubscription as _FoldThreadSubscription,
+)
+for _model in (_Notification, _NotificationHighWater, _FoldCommunitySubscription, _FoldThreadSubscription):
+    if _model.__tablename__ not in _existing_tables_n:
+        _model.__table__.create(bind=engine)
 
 
 # Re-apply Meilisearch index settings on startup so additions to
@@ -638,6 +654,8 @@ app.include_router(jobs_router)
 app.include_router(latents_router)
 app.include_router(links_for_media_router)
 app.include_router(lemmy_router)
+app.include_router(notifications_router)
+app.include_router(fold_subs_router)
 app.include_router(search_router)
 app.include_router(threads_router)
 

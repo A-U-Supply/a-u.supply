@@ -2729,8 +2729,10 @@ def _do_index_output(
         from server.search_client import sync_media_item
 
         sync_media_item(db, media_item)
-    except Exception:
+    except Exception as exc:
         logger.exception("Meilisearch sync failed for indexed output %s", output.id)
+        from server.extraction import record_extraction_failure
+        record_extraction_failure(db, media_item.id, "meilisearch_sync", exc)
 
     # Run extraction in background (will re-sync with enriched metadata when done)
     try:

@@ -69,6 +69,30 @@ const { title, current } = Astro.props;
               >Dog-ears</a
             >
           </li>
+          <li>
+            <a
+              href="/admin/notifications"
+              aria-current={current === 'notifications' ? 'page' : undefined}
+              class="sidebar__nav-with-badge"
+              ><span>Inbox</span><span
+                class="sidebar__badge"
+                id="inbox-badge"
+                data-count="0"
+                hidden>0</span
+              ></a
+            >
+          </li>
+          <li>
+            <a
+              href="https://fold.a-u.supply/"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="sidebar__nav-external"
+              ><span>The Fold</span><span class="sidebar__ext-glyph"
+                aria-hidden="true">&#x2197;</span
+              ></a
+            >
+          </li>
         </ul>
 
         <div class="sidebar__section">
@@ -400,6 +424,35 @@ const { title, current } = Astro.props;
       }
     }
     checkAuth();
+
+    // Inbox badge — fetches unread count on each page load. The endpoint
+    // also triggers source materialization, so any new fold/fallen/etc.
+    // events get materialized as a side-effect of nav. Soft-fails on auth
+    // race or network blip; checkAuth() already handles the hard logout.
+    async function refreshInboxBadge() {
+      const badge = document.getElementById('inbox-badge');
+      if (!badge) return;
+      try {
+        const res = await fetch('/api/admin/notifications/count', {
+          credentials: 'include',
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const n = Math.max(0, Number(data.unread) || 0);
+        badge.dataset.count = String(n);
+        if (n === 0) {
+          badge.setAttribute('hidden', '');
+          badge.textContent = '0';
+        } else {
+          badge.removeAttribute('hidden');
+          badge.textContent = n > 99 ? '99+' : String(n);
+        }
+      } catch {
+        /* leave previous badge state alone */
+      }
+    }
+    refreshInboxBadge();
+    (window as any).__inbox = { refresh: refreshInboxBadge };
 
     // Bookmarks helper — shared across all admin pages
     const bmCache = new Map<string, Set<string>>();

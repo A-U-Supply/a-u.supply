@@ -9,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Table,
@@ -757,3 +758,108 @@ class RepoRun(Base):
     repo = relationship("ProjectRepo")
     job = relationship("Job")
     runner = relationship("User")
+
+
+# ---------------------------------------------------------------------------
+# Notifications (Inbox) — per-user materialized rows
+# ---------------------------------------------------------------------------
+#
+# Sources fan-out lazily on demand: when a user hits the Inbox page (or the
+# sidebar badge fetch), we walk each source, find rows newer than the
+# per-source NotificationHighWater, and insert Notification rows with
+# ON CONFLICT (user_id, source, source_ref) DO NOTHING. Retries / re-attempts
+# do not re-notify because source_ref is keyed on the underlying event id.
+#
+# Dismissal sets dismissed_at; "mark all read" bulk-sets dismissed_at = now()
+# for all undismissed rows for the user. The high-water table is only
+# advanced after a successful materialization pass.
+
+
+# Valid `Notification.source` values. The materializers and UI rely on
+# these names; adding a new one means: new materializer module, new
+# source label in the Inbox grouping, and either gated UI surface (e.g.
+# subscription picker) or implicit-source (inbox-style) wiring.
+NOTIFICATION_SOURCES = (
+    "fold_community",   # new posts/comments in a subscribed Lemmy community
+    "fold_thread",      # new comments on a subscribed Lemmy post
+    "fold_inbox",       # replies + @-mentions to your linked lemmy_user_id
+    "fallen",           # new ExtractionFailure (incl. meilisearch_sync)
+    "midden",           # JobOutput moved to the midden
+    "acclaim",          # +1 vote on a media item you uploaded, by another user
+)
+
+
+class Notification(Base):
+    """One row per delivered notification event per user.
+
+    `source_ref` is the source's natural key (e.g. "fallen:<failure-id>",
+    "fold_comment:<comment-id>", "vote:<media-id>:<voter-id>"). The unique
+    constraint on (user_id, source, source_ref) makes repeated fan-outs
+    idempotent.
+    """
+
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    source = Column(String, nullable=False)
+    source_ref = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+    snippet = Column(String, nullable=True)
+    url = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+    dismissed_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "source", "source_ref",
+            name="uq_notifications_user_source_ref",
+        ),
+        Index("ix_notifications_user_dismissed", "user_id", "dismissed_at"),
+        Index("ix_notifications_user_created", "user_id", "created_at"),
+    )
+
+    user = relationship("User")
+
+
+class NotificationHighWater(Base):
+    """Per-(user, source) watermark — the upper bound of the last
+    materialization pass. The next pass only considers events newer than
+    `last_seen_at` to keep per-poll work bounded.
+
+    First-time materialization seeds this to NOW so users don't get a
+    backfill of every comment ever made when the Inbox first goes live.
+    """
+
+    __tablename__ = "notification_high_water"
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    source = Column(String, primary_key=True)
+    last_seen_at = Column(DateTime, nullable=False, default=_utcnow)
+
+
+class FoldCommunitySubscription(Base):
+    """User opted in to a fold (Lemmy) community. `name_snapshot` is a
+    cache so the picker UI can show subscribed-community names without
+    hitting the Fold DB on every load.
+    """
+
+    __tablename__ = "fold_community_subs"
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    lemmy_community_id = Column(Integer, primary_key=True)
+    name_snapshot = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+
+
+class FoldThreadSubscription(Base):
+    """User opted in to a fold (Lemmy) thread/post. `title_snapshot` is
+    a cache for the same reason as `name_snapshot` above.
+    """
+
+    __tablename__ = "fold_thread_subs"
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    lemmy_post_id = Column(Integer, primary_key=True)
+    title_snapshot = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
