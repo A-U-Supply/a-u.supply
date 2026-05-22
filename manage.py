@@ -693,9 +693,9 @@ def backfill_ai_descriptions(
     )
     from server.ai_description import DeepSeekError, generate_ai_description
 
-    if not os.environ.get("DEEPSEEK_API_KEY"):
-        log("ERROR: DEEPSEEK_API_KEY is not set in the environment.")
-        log("Set it with: ssh dokku config:set au-supply DEEPSEEK_API_KEY=sk-...")
+    if not (os.environ.get("VISION_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")):
+        log("ERROR: VISION_API_KEY (or legacy DEEPSEEK_API_KEY) is not set in the environment.")
+        log("Set it with: ssh dokku config:set au-supply VISION_API_KEY=sk-...")
         return
 
     db = SessionLocal()

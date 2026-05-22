@@ -1,5 +1,9 @@
-"""DeepSeek vision-model integration for image descriptions + structured
-attributes.
+"""Vision-model integration for image descriptions + structured attributes.
+
+Provider-agnostic: defaults to SiliconFlow + DeepSeek-VL2 (cheap,
+OpenAI-compatible, free tier), but any provider speaking the OpenAI
+chat-completions schema with image_url content blocks works — set
+VISION_API_BASE_URL, VISION_API_KEY, VISION_MODEL.
 
 Single public function: ``generate_ai_description(file_path, ocr_caption=None)``.
 Returns a dict that ``_run_image_extraction`` writes into ``media_image_meta``.
@@ -31,10 +35,17 @@ from server.ai_vocab import (
 
 logger = logging.getLogger(__name__)
 
-_DEEPSEEK_BASE_URL = os.environ.get(
-    "DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"
+# Provider-agnostic vision client. Defaults target SiliconFlow + DeepSeek-VL2
+# (cheap, OpenAI-compatible, free tier). Override via env vars to swap to
+# Gemini, Anthropic, Qwen-VL, a local TGI server, etc. without code changes.
+#
+# DeepSeek's own api.deepseek.com only serves deepseek-v4-flash/pro (text-only)
+# as of May 2026, despite DeepSeek-VL2 existing as open weights — that's why
+# the default host is SiliconFlow, not DeepSeek.
+_VISION_BASE_URL = os.environ.get(
+    "VISION_API_BASE_URL", "https://api.siliconflow.com/v1"
 )
-_DEEPSEEK_TIMEOUT = float(os.environ.get("DEEPSEEK_TIMEOUT_SECONDS", "60"))
+_VISION_TIMEOUT = float(os.environ.get("VISION_API_TIMEOUT_SECONDS", "60"))
 
 # Use the large thumbnail (1600px max dim) for vision inference. It's the
 # best size/cost trade-off — DeepSeek downsamples larger inputs anyway,
@@ -247,9 +258,15 @@ def generate_ai_description(
           "tokens_out":          int,
         }
     """
-    api_key = api_key or os.environ.get("DEEPSEEK_API_KEY")
+    # Accept either VISION_API_KEY (preferred) or the legacy DEEPSEEK_API_KEY.
+    api_key = (
+        api_key
+        or os.environ.get("VISION_API_KEY")
+        or os.environ.get("DEEPSEEK_API_KEY")
+    )
     if not api_key:
-        raise DeepSeekError("DEEPSEEK_API_KEY not set")
+        raise DeepSeekError("VISION_API_KEY not set (legacy alias: DEEPSEEK_API_KEY)")
+    model = model or os.environ.get("VISION_MODEL") or AI_DESCRIPTION_MODEL
 
     # Prefer the lg thumbnail; fall back to the original file.
     thumb = _thumbnail_lg_path(file_path)
@@ -279,9 +296,9 @@ def generate_ai_description(
     }
 
     try:
-        with httpx.Client(timeout=_DEEPSEEK_TIMEOUT) as client:
+        with httpx.Client(timeout=_VISION_TIMEOUT) as client:
             resp = client.post(
-                f"{_DEEPSEEK_BASE_URL}/chat/completions",
+                f"{_VISION_BASE_URL}/chat/completions",
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",

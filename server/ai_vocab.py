@@ -66,6 +66,6 @@ BOOL_FLAGS: tuple[str, ...] = (
 # generated row so we can target re-runs with WHERE ai_description_prompt_v != 'vN'.
 AI_DESCRIPTION_PROMPT_VERSION = "v1"
 
-# Model id sent to DeepSeek. Centralised here so swapping models is a
-# one-liner that the rest of the codebase doesn't need to know about.
-AI_DESCRIPTION_MODEL = "deepseek-vision-preview"
+# Default vision model id. Override per-deployment via env var VISION_MODEL.
+# Centralised here so swapping is a config change, not a code change.
+AI_DESCRIPTION_MODEL = "deepseek-ai/deepseek-vl2"

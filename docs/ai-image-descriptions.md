@@ -18,12 +18,24 @@ OCR alone only caught the partial banner text. The pipeline must:
 
 ## Engine
 
-**DeepSeek vision API** (`deepseek-vision-preview`, OpenAI-compatible). Reasoning:
+**Provider-agnostic, defaults to SiliconFlow hosting `deepseek-ai/deepseek-vl2`**
+(OpenAI-compatible API, free tier, ≈ $0.0002–0.0005 / image). The
+`server/ai_description.py` client reads `VISION_API_BASE_URL`,
+`VISION_API_KEY`, and `VISION_MODEL` from the environment, so we can swap
+to any OpenAI-compatible vision provider (Gemini Flash, Anthropic, Qwen-VL
+via DashScope, a local vLLM, etc.) without touching code.
 
-- Cheapest premium-quality vision model on the market (≈ $0.0002–0.0005 / image).
+Why not DeepSeek's own API? `api.deepseek.com` only serves `deepseek-v4-flash`
+and `deepseek-v4-pro` (text-only) as of May 2026 despite DeepSeek-VL2 existing
+as open weights — SiliconFlow is the canonical hosted route for the same model.
+
+Defaults:
+- `VISION_API_BASE_URL=https://api.siliconflow.com/v1`
+- `VISION_MODEL=deepseek-ai/deepseek-vl2`
+- (legacy `DEEPSEEK_API_KEY` is still honoured as a fallback for the key only)
+
 - Total backfill cost ≈ $0.50–1.00.
 - One unified prompt returns description + tags + flags + colors + vibe as JSON.
-- SDK is OpenAI-compatible — same shape as our other API integrations.
 
 The image is sent as base64 from the `_thumb_lg.webp` (1600 px max dim) that the
 extraction pipeline already produces — no public URL exposure, no extra resize.

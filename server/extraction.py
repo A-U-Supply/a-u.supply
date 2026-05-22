@@ -671,8 +671,8 @@ def _run_image_extraction(db, media_item_id: str, file_path: str, MediaImageMeta
 
     # Step 5: AI vision-model enrichment — description + tags + structured
     # attributes (vibe, color mood, content bools). See ai_description.py.
-    # Skipped silently if DEEPSEEK_API_KEY isn't set so local dev still works.
-    if os.environ.get("DEEPSEEK_API_KEY"):
+    # Skipped silently if no vision API key is set so local dev still works.
+    if os.environ.get("VISION_API_KEY") or os.environ.get("DEEPSEEK_API_KEY"):
         try:
             from server.ai_description import generate_ai_description
 
