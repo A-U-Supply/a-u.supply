@@ -523,38 +523,67 @@ def _extract_audio_track(video_path: str, output_path: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _log_failure(db, media_item_id: str, extraction_type: str, error: Exception):
-    """Record an extraction failure in the database."""
+def record_extraction_failure(
+    db, media_item_id: str, extraction_type: str, error: Exception
+) -> None:
+    """Record (or bump) an unresolved ExtractionFailure row.
+
+    Public helper — callers outside the extraction pipeline (Meilisearch sync
+    sites, etc.) use this to register pipeline failures under the unified
+    ExtractionFailure table so The Fallen surfaces every ingest-pipeline issue
+    in one place.
+
+    Idempotent: if an unresolved row already exists for the same
+    (media_item_id, extraction_type), `attempts` and `last_attempt_at` are
+    bumped instead of inserting a duplicate. Notification materializers key
+    on row id, so retries do not generate new notifications.
+
+    Best-effort: any failure to write is swallowed (rollback) so that the
+    caller's main flow is unaffected.
+    """
     from server.models import ExtractionFailure
 
     now = datetime.now(timezone.utc)
+    try:
+        existing = (
+            db.query(ExtractionFailure)
+            .filter(
+                ExtractionFailure.media_item_id == media_item_id,
+                ExtractionFailure.extraction_type == extraction_type,
+                ExtractionFailure.resolved == False,  # noqa: E712
+            )
+            .first()
+        )
+        if existing:
+            existing.attempts += 1
+            existing.error_message = str(error)
+            existing.last_attempt_at = now
+        else:
+            failure = ExtractionFailure(
+                id=str(uuid.uuid4()),
+                media_item_id=media_item_id,
+                extraction_type=extraction_type,
+                error_message=str(error),
+                attempts=1,
+                last_attempt_at=now,
+                resolved=False,
+            )
+            db.add(failure)
+        db.commit()
+    except Exception:
+        logger.exception(
+            "Failed to record ExtractionFailure (media=%s, type=%s)",
+            media_item_id,
+            extraction_type,
+        )
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
-    # Check for existing unresolved failure of the same type
-    existing = (
-        db.query(ExtractionFailure)
-        .filter(
-            ExtractionFailure.media_item_id == media_item_id,
-            ExtractionFailure.extraction_type == extraction_type,
-            ExtractionFailure.resolved == False,  # noqa: E712
-        )
-        .first()
-    )
-    if existing:
-        existing.attempts += 1
-        existing.error_message = str(error)
-        existing.last_attempt_at = now
-    else:
-        failure = ExtractionFailure(
-            id=str(uuid.uuid4()),
-            media_item_id=media_item_id,
-            extraction_type=extraction_type,
-            error_message=str(error),
-            attempts=1,
-            last_attempt_at=now,
-            resolved=False,
-        )
-        db.add(failure)
-    db.commit()
+
+# Backwards-compat alias for internal callers.
+_log_failure = record_extraction_failure
 
 
 # ---------------------------------------------------------------------------
@@ -572,6 +601,7 @@ def _sync_to_search(db, media_item):
         pass  # search_client not available yet
     except Exception as exc:
         logger.warning("Meilisearch sync failed: %s", exc)
+        record_extraction_failure(db, media_item.id, "meilisearch_sync", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -986,6 +1016,9 @@ def _retry_single_step(db, media_item, file_path: str, extraction_type: str):
             finally:
                 if os.path.exists(tmp_audio_path):
                     os.unlink(tmp_audio_path)
+    elif extraction_type == "meilisearch_sync":
+        from server.search_client import sync_media_item
+        sync_media_item(db, media_item)
     else:
         raise ValueError(f"Unknown extraction type: {extraction_type}")
 

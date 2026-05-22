@@ -608,8 +608,10 @@ def _run_repo_job(job: Job, db: Session) -> None:
                 from server.search_client import sync_media_item
                 db.flush()
                 sync_media_item(db, mi)
-            except Exception:
+            except Exception as exc:
                 logger.exception("meili sync failed for %s", mi.id)
+                from server.extraction import record_extraction_failure
+                record_extraction_failure(db, mi.id, "meilisearch_sync", exc)
 
         run_row.outputs_json = json.dumps(outputs_meta)
         run_row.finished_at = _utcnow()

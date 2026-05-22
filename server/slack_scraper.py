@@ -1020,6 +1020,8 @@ def _run_post_scrape_extraction():
                     sync_media_item(db, item)
                 except Exception as exc:
                     logger.error("Meilisearch sync failed for %s: %s", item.id, exc)
+                    from server.extraction import record_extraction_failure
+                    record_extraction_failure(db, item.id, "meilisearch_sync", exc)
         except ImportError:
             pass
 
@@ -1441,6 +1443,8 @@ def trigger_reaction_refresh(days_back: int = 7) -> dict:
                         sync_media_item(db, item)
                     except Exception as exc:
                         logger.error("Meilisearch sync failed for %s: %s", item_id, exc)
+                        from server.extraction import record_extraction_failure
+                        record_extraction_failure(db, item_id, "meilisearch_sync", exc)
         except ImportError:
             pass
         finally:
