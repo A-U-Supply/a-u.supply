@@ -98,6 +98,21 @@ fold's nginx config requires a manual `^~` override on `fold-api-proxy.conf` for
 
 We're on Lemmy 0.19.x. 0.19 doesn't have native post tags / flair — the 1.0 alpha adds backend support but the UI hasn't shipped. Revisit "tag a fold post" once 1.0 stable lands.
 
+### Read-side linkage (notifications / inbox)
+
+The Inbox feature in a-u.supply reads Fold's Postgres directly (raw SQL via a
+second SQLAlchemy engine — see `server/fold_db.py`). To enable it on Dokku:
+
+```
+dokku postgres:link <fold-postgres-svc> a-u-supply --alias FOLD_DATABASE
+```
+
+This exports `FOLD_DATABASE_URL` into the app container. The `--alias` keeps
+it from clobbering `DATABASE_URL` (a-u.supply uses SQLite, but other apps may
+not). If `FOLD_DATABASE_URL` is unset, the Fold notification sources
+(community / thread / inbox) gracefully no-op and the Inbox page only shows
+internal sources (fallen, midden, acclaim).
+
 ## GitHub Actions (overview)
 
 See [`deployment.md`](deployment.md) for the full deploy flow. Quick reference:
