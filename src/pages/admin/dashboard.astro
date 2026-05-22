@@ -260,12 +260,6 @@ import Admin from '../../layouts/Admin.astro';
     font-style: italic;
     margin: auto;
   }
-  .altar__title {
-    font-size: var(--text-lg);
-    font-weight: 700;
-    word-break: break-word;
-    line-height: 1.2;
-  }
   .altar__media {
     margin: 0;
     display: flex;
@@ -678,7 +672,6 @@ import Admin from '../../layouts/Admin.astro';
     const mediaBlock = renderAltarMedia(item, detailLink);
 
     el.innerHTML = `
-      <div class="altar__title">${escapeHtml(item.filename)}</div>
       ${mediaBlock}
       <div class="altar__meta">
         ${meta} · <a href="${detailLink}">details</a>
