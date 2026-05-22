@@ -85,6 +85,28 @@ class SearchFilters(BaseModel):
     down_count: dict | None = Field(None, description="Downvote count range: `{\"min\": 1}` and/or `{\"max\": 0}`.")
     my_votes: str | None = Field(None, description="Filter to items the calling user has voted on: `up`, `down`, `any`, or `none`.")
 
+    # ---- AI vision enrichment filters (see docs/ai-image-descriptions.md) ----
+    has_ai_description: bool | None = Field(None, description="Filter images by whether they have an AI-generated description.")
+    ai_vibe: list[str] | None = Field(None, description="Filter images by AI-derived vibe (controlled vocab; OR within the list).")
+    ai_color_temperature: list[str] | None = Field(None, description="Filter images by AI color temperature: `warm`, `cool`, `neutral`.")
+    ai_color_character: list[str] | None = Field(None, description="Filter images by AI color character: `vibrant`, `muted`, `pastel`, `monochrome`, `high-contrast`, `earthy`, `dark`, `light`.")
+    is_screenshot:    bool | None = Field(None, description="Filter images by `is_screenshot`.")
+    is_meme:          bool | None = Field(None, description="Filter images by `is_meme`.")
+    is_photo:         bool | None = Field(None, description="Filter images by `is_photo`.")
+    is_artwork:       bool | None = Field(None, description="Filter images by `is_artwork`.")
+    is_ai_generated:  bool | None = Field(None, description="Filter images by `is_ai_generated`.")
+    has_human:        bool | None = Field(None, description="Filter images by `has_human`.")
+    has_face:         bool | None = Field(None, description="Filter images by `has_face`.")
+    has_text_overlay: bool | None = Field(None, description="Filter images by `has_text_overlay`.")
+    is_nsfw:          bool | None = Field(None, description="Filter images by `is_nsfw`. Most useful as `false` to exclude NSFW.")
+
+    @field_validator("ai_vibe", "ai_color_temperature", "ai_color_character", mode="before")
+    @classmethod
+    def coerce_ai_lists(cls, v):
+        if isinstance(v, str):
+            return [v] if v else None
+        return v
+
     @field_validator("color_group", mode="before")
     @classmethod
     def coerce_color_group(cls, v):
@@ -145,6 +167,26 @@ class BatchReExtractRequest(BaseModel):
 class BatchExportRequest(BaseModel):
     """Download multiple media files as a ZIP archive."""
     media_ids: list[str] = Field(..., description="List of media item UUIDs to include in the ZIP export.")
+
+
+class AiFieldsOverrideRequest(BaseModel):
+    """Patch the AI-derived fields on an image with human corrections.
+
+    Any field present in the request body is updated AND marked in
+    ``ai_overrides`` so subsequent AI regenerations preserve it.
+    """
+    is_screenshot:        bool | None = None
+    is_meme:              bool | None = None
+    is_photo:             bool | None = None
+    is_artwork:           bool | None = None
+    is_ai_generated:      bool | None = None
+    has_human:            bool | None = None
+    has_face:             bool | None = None
+    has_text_overlay:     bool | None = None
+    is_nsfw:              bool | None = None
+    ai_color_temperature: str | None = None
+    ai_color_character:   str | None = None
+    ai_vibe:              list[str] | None = None
 
 
 class ApiKeyCreateRequest(BaseModel):
@@ -420,12 +462,45 @@ def _media_item_response(item: MediaItem) -> dict:
     }
     if item.image_meta:
         m = item.image_meta
+        try:
+            ai_tags_list = json.loads(m.ai_tags) if m.ai_tags else []
+        except (json.JSONDecodeError, TypeError):
+            ai_tags_list = []
+        try:
+            ai_vibe_list = json.loads(m.ai_vibe) if m.ai_vibe else []
+        except (json.JSONDecodeError, TypeError):
+            ai_vibe_list = []
+        try:
+            ai_overrides_dict = json.loads(m.ai_overrides) if m.ai_overrides else {}
+        except (json.JSONDecodeError, TypeError):
+            ai_overrides_dict = {}
         data["image_meta"] = {
             "width": m.width,
             "height": m.height,
             "format": m.format,
             "dominant_colors": m.dominant_colors,
             "caption": m.caption,
+            # AI vision enrichment (see docs/ai-image-descriptions.md).
+            "ai_description": m.ai_description,
+            "ai_description_model": m.ai_description_model,
+            "ai_description_prompt_v": m.ai_description_prompt_v,
+            "ai_description_generated_at": m.ai_description_generated_at.isoformat() if m.ai_description_generated_at else None,
+            "ai_description_tokens_in": m.ai_description_tokens_in,
+            "ai_description_tokens_out": m.ai_description_tokens_out,
+            "ai_tags": ai_tags_list,
+            "ai_color_temperature": m.ai_color_temperature,
+            "ai_color_character": m.ai_color_character,
+            "ai_vibe": ai_vibe_list,
+            "ai_overrides": ai_overrides_dict,
+            "is_screenshot": m.is_screenshot,
+            "is_meme": m.is_meme,
+            "is_photo": m.is_photo,
+            "is_artwork": m.is_artwork,
+            "is_ai_generated": m.is_ai_generated,
+            "has_human": m.has_human,
+            "has_face": m.has_face,
+            "has_text_overlay": m.has_text_overlay,
+            "is_nsfw": m.is_nsfw,
         }
     if item.audio_meta:
         m = item.audio_meta
@@ -548,6 +623,37 @@ def _build_meili_filter(
 
     if filters.has_text is not None:
         parts.append(f"has_text = {str(filters.has_text).lower()}")
+
+    # ---- AI vision enrichment filters ----
+    if filters.has_ai_description is not None:
+        parts.append(f"has_ai_description = {str(filters.has_ai_description).lower()}")
+    if filters.ai_vibe:
+        vibes = " OR ".join(f'ai_vibe = "{_escape_filter_value(v)}"' for v in filters.ai_vibe)
+        parts.append(f"({vibes})")
+    if filters.ai_color_temperature:
+        temps = " OR ".join(
+            f'ai_color_temperature = "{_escape_filter_value(v)}"' for v in filters.ai_color_temperature
+        )
+        parts.append(f"({temps})")
+    if filters.ai_color_character:
+        chars = " OR ".join(
+            f'ai_color_character = "{_escape_filter_value(v)}"' for v in filters.ai_color_character
+        )
+        parts.append(f"({chars})")
+    for _flag_name in (
+        "is_screenshot",
+        "is_meme",
+        "is_photo",
+        "is_artwork",
+        "is_ai_generated",
+        "has_human",
+        "has_face",
+        "has_text_overlay",
+        "is_nsfw",
+    ):
+        _flag_val = getattr(filters, _flag_name)
+        if _flag_val is not None:
+            parts.append(f"{_flag_name} = {str(_flag_val).lower()}")
 
     if filters.job_app:
         parts.append(f'job_app = "{_escape_filter_value(filters.job_app)}"')
@@ -1864,6 +1970,84 @@ def delete_media(
     meili_delete(media_id, media_type)
 
     return {"ok": True}
+
+
+@router.patch(
+    "/media/{media_id}/ai-fields",
+    tags=["Media Items"],
+    summary="Override AI-derived fields with human corrections",
+)
+def override_ai_fields(
+    media_id: str,
+    body: AiFieldsOverrideRequest,
+    _auth=Depends(require_scope("write")),
+    db: Session = Depends(get_db),
+):
+    """Set human corrections for AI-derived fields (bool flags, vibe, color mood).
+
+    Each field present in the request body is written to the image_meta row
+    AND its name is added to the ``ai_overrides`` JSON dict, so that future
+    AI regenerations preserve this value rather than clobbering it.
+
+    Bool fields are tri-state: omit to leave unchanged; ``true``/``false`` to set.
+
+    String/list fields are clamped to the controlled vocabulary (server/ai_vocab.py);
+    out-of-vocab values are rejected.
+
+    **Scope required:** `write`
+    """
+    from server.ai_vocab import (
+        COLOR_CHARACTER_VOCAB,
+        COLOR_TEMPERATURE_VOCAB,
+        VIBE_VOCAB,
+    )
+
+    item = _get_media_item_or_404(db, media_id)
+    if item.media_type != "image" or item.image_meta is None:
+        raise HTTPException(status_code=400, detail="Item is not an image with metadata")
+
+    meta = item.image_meta
+    try:
+        overrides = json.loads(meta.ai_overrides) if meta.ai_overrides else {}
+    except (json.JSONDecodeError, TypeError):
+        overrides = {}
+
+    patch = body.model_dump(exclude_unset=True)
+
+    # Validate controlled-vocab fields.
+    if "ai_color_temperature" in patch and patch["ai_color_temperature"] is not None:
+        if patch["ai_color_temperature"] not in COLOR_TEMPERATURE_VOCAB:
+            raise HTTPException(status_code=400, detail="invalid ai_color_temperature")
+    if "ai_color_character" in patch and patch["ai_color_character"] is not None:
+        if patch["ai_color_character"] not in COLOR_CHARACTER_VOCAB:
+            raise HTTPException(status_code=400, detail="invalid ai_color_character")
+    if "ai_vibe" in patch and patch["ai_vibe"] is not None:
+        bad = [v for v in patch["ai_vibe"] if v not in VIBE_VOCAB]
+        if bad:
+            raise HTTPException(status_code=400, detail=f"invalid ai_vibe entries: {bad}")
+        if len(patch["ai_vibe"]) > 3:
+            raise HTTPException(status_code=400, detail="ai_vibe accepts at most 3 entries")
+
+    # Apply the patch and mark each touched field as overridden.
+    for key, value in patch.items():
+        if key == "ai_vibe":
+            setattr(meta, "ai_vibe", json.dumps(value))
+        else:
+            setattr(meta, key, value)
+        overrides[key] = True
+    meta.ai_overrides = json.dumps(overrides)
+    db.commit()
+    db.refresh(item)
+
+    # Sync the updated row to the search index immediately.
+    try:
+        from server.search_client import sync_media_item
+
+        sync_media_item(db, item)
+    except Exception:
+        logger.exception("Meilisearch sync after ai-fields override failed for %s", media_id)
+
+    return _media_item_response(item)
 
 
 # ---------------------------------------------------------------------------
