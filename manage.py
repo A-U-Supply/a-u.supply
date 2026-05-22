@@ -14,6 +14,8 @@ Usage (from host):
     ssh dokku run au-supply .venv/bin/python manage.py resync-votes [<media_id>]
     ssh dokku run au-supply .venv/bin/python manage.py backfill-ocr [--include-empty]
     ssh dokku run au-supply .venv/bin/python manage.py test-ocr <media_id>
+    ssh dokku run au-supply .venv/bin/python manage.py backfill-ai-descriptions [--all] [--restart]
+    ssh dokku run au-supply .venv/bin/python manage.py test-ai-description <media_id> [--write]
 """
 
 import json
@@ -663,6 +665,128 @@ def backfill_ocr(
     reindex_search()
 
 
+_AI_DESC_CHECKPOINT_FILE = "/app/data/.ai-desc-backfill-progress"
+
+
+def backfill_ai_descriptions(
+    force_all: bool = False,
+    restart: bool = False,
+):
+    """Generate AI descriptions for every image that doesn't have one yet.
+
+    By default picks up items where ai_description_generated_at IS NULL.
+    With force_all=True, re-generates for every image regardless of state —
+    use after the prompt version bumps and you want to roll out new fields.
+
+    Same checkpoint pattern as backfill_ocr — progress survives deploys /
+    SSH drops / server reboots. Use ``restart=True`` to wipe the checkpoint.
+
+    Reads DEEPSEEK_API_KEY from env; aborts early with a clear error if it
+    isn't set.
+    """
+    import os
+    from server.models import MediaItem, MediaImageMeta
+    from server.extraction import (
+        _apply_ai_description,
+        _upsert_meta,
+        SEARCH_MEDIA_DIR,
+    )
+    from server.ai_description import DeepSeekError, generate_ai_description
+
+    if not os.environ.get("DEEPSEEK_API_KEY"):
+        log("ERROR: DEEPSEEK_API_KEY is not set in the environment.")
+        log("Set it with: ssh dokku config:set au-supply DEEPSEEK_API_KEY=sk-...")
+        return
+
+    db = SessionLocal()
+
+    query = db.query(MediaItem).outerjoin(MediaImageMeta).filter(
+        MediaItem.media_type == "image",
+    )
+    if not force_all:
+        query = query.filter(
+            (MediaImageMeta.ai_description_generated_at.is_(None))
+            | (MediaImageMeta.media_item_id.is_(None))
+        )
+    images = query.all()
+
+    if restart and os.path.exists(_AI_DESC_CHECKPOINT_FILE):
+        os.remove(_AI_DESC_CHECKPOINT_FILE)
+        log("Checkpoint cleared (restart=True).")
+
+    done_ids: set[str] = set()
+    if os.path.exists(_AI_DESC_CHECKPOINT_FILE):
+        with open(_AI_DESC_CHECKPOINT_FILE) as f:
+            done_ids = {line.strip() for line in f if line.strip()}
+        log(f"Resuming from checkpoint: {len(done_ids)} items already processed.")
+
+    pending = [it for it in images if it.id not in done_ids]
+    total = len(images)
+    remaining = len(pending)
+    log(
+        f"Found {total} images to describe (force_all={force_all}); "
+        f"{remaining} remaining after checkpoint."
+    )
+
+    if remaining == 0:
+        log("Nothing to do — clearing checkpoint.")
+        if os.path.exists(_AI_DESC_CHECKPOINT_FILE):
+            os.remove(_AI_DESC_CHECKPOINT_FILE)
+        db.close()
+        return
+
+    done = 0
+    errors = 0
+    for i, item in enumerate(pending):
+        full_path = os.path.join(SEARCH_MEDIA_DIR, item.file_path)
+        if not os.path.exists(full_path):
+            log(f"  SKIP {item.id} — file not found: {full_path}")
+            errors += 1
+            with open(_AI_DESC_CHECKPOINT_FILE, "a") as f:
+                f.write(item.id + "\n")
+            continue
+
+        meta = (
+            db.query(MediaImageMeta)
+            .filter(MediaImageMeta.media_item_id == item.id)
+            .first()
+        )
+        ocr_caption = meta.caption if meta else None
+        overrides_json = meta.ai_overrides if meta else None
+        try:
+            overrides = json.loads(overrides_json) if overrides_json else {}
+        except (TypeError, ValueError):
+            overrides = {}
+
+        log(f"  [{i + 1}/{remaining}] {item.filename}")
+
+        try:
+            ai = generate_ai_description(full_path, ocr_caption=ocr_caption)
+            kwargs: dict = {}
+            _apply_ai_description(kwargs, ai, ai_overrides=overrides)
+            _upsert_meta(db, MediaImageMeta, item.id, kwargs)
+            desc = ai.get("description") or ""
+            log(f"    OK ({len(desc)} chars, {ai.get('tokens_in', 0)}+{ai.get('tokens_out', 0)} tokens)")
+            done += 1
+        except DeepSeekError as exc:
+            log(f"    ERROR (deepseek): {exc}")
+            errors += 1
+        except Exception as exc:
+            log(f"    ERROR: {exc}")
+            errors += 1
+
+        with open(_AI_DESC_CHECKPOINT_FILE, "a") as f:
+            f.write(item.id + "\n")
+
+    log(f"Done! AI descriptions: {done}, Errors: {errors}")
+    if os.path.exists(_AI_DESC_CHECKPOINT_FILE):
+        os.remove(_AI_DESC_CHECKPOINT_FILE)
+    db.close()
+
+    log("Re-indexing all items to populate AI fields in search...")
+    reindex_search()
+
+
 def list_users():
     db = SessionLocal()
     users = db.query(User).all()
@@ -881,6 +1005,73 @@ if __name__ == "__main__":
             from server.extraction import _upsert_meta, _sync_to_search
             _upsert_meta(db, MediaImageMeta, item.id, {"caption": text or ""})
             print("wrote caption to DB")
+            db.refresh(item)
+            _sync_to_search(db, item)
+            print("synced to search index")
+        db.close()
+
+    elif cmd == "backfill-ai-descriptions":
+        force_all = "--all" in sys.argv[2:]
+        restart = "--restart" in sys.argv[2:]
+        backfill_ai_descriptions(force_all=force_all, restart=restart)
+
+    elif cmd == "test-ai-description":
+        if len(sys.argv) < 3:
+            print("Usage: manage.py test-ai-description <media_id> [--write]")
+            sys.exit(1)
+        import os as _os
+        from server.models import MediaItem, MediaImageMeta
+        from server.extraction import (
+            SEARCH_MEDIA_DIR,
+            _apply_ai_description,
+            _upsert_meta,
+            _sync_to_search,
+        )
+        from server.ai_description import generate_ai_description
+
+        db = SessionLocal()
+        item = db.query(MediaItem).filter(MediaItem.id == sys.argv[2]).first()
+        if not item:
+            print(f"no MediaItem with id={sys.argv[2]}")
+            sys.exit(1)
+        full_path = _os.path.join(SEARCH_MEDIA_DIR, item.file_path)
+        print(f"file: {full_path}")
+        print(f"exists: {_os.path.exists(full_path)}")
+        meta = db.query(MediaImageMeta).filter(MediaImageMeta.media_item_id == item.id).first()
+        if meta is None:
+            print("no image_meta row")
+        else:
+            print(f"current ai_description: {meta.ai_description!r}")
+            print(f"current ai_tags: {meta.ai_tags!r}")
+            print(f"current ai_vibe: {meta.ai_vibe!r}")
+
+        ocr_caption = meta.caption if meta else None
+        try:
+            ai = generate_ai_description(full_path, ocr_caption=ocr_caption)
+        except Exception as exc:
+            print(f"ERROR: {exc}")
+            sys.exit(1)
+
+        print(f"\nmodel: {ai['model']} | prompt: {ai['prompt_version']} | tokens: {ai['tokens_in']}+{ai['tokens_out']}")
+        print(f"description:\n  {ai['description']}")
+        print(f"tags: {ai['tags']}")
+        print(f"color_temperature: {ai['color_temperature']}")
+        print(f"color_character: {ai['color_character']}")
+        print(f"vibe: {ai['vibe']}")
+        print("flags:")
+        for fname, fval in ai["flags"].items():
+            print(f"  {fname}: {fval}")
+
+        if "--write" in sys.argv[3:]:
+            overrides_json = meta.ai_overrides if meta else None
+            try:
+                overrides = json.loads(overrides_json) if overrides_json else {}
+            except (TypeError, ValueError):
+                overrides = {}
+            kwargs: dict = {}
+            _apply_ai_description(kwargs, ai, ai_overrides=overrides)
+            _upsert_meta(db, MediaImageMeta, item.id, kwargs)
+            print("\nwrote AI fields to DB")
             db.refresh(item)
             _sync_to_search(db, item)
             print("synced to search index")
