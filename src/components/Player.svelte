@@ -33,10 +33,10 @@
   // picks a random next index, so we can't know which track to prefetch).
   let nextAudioUrl = $derived(
     !shuffleOn &&
-    !isVideo &&
-    currentIndex >= 0 &&
-    currentIndex + 1 < queue.length &&
-    queue[currentIndex + 1]?.media_type !== 'video'
+      !isVideo &&
+      currentIndex >= 0 &&
+      currentIndex + 1 < queue.length &&
+      queue[currentIndex + 1]?.media_type !== 'video'
       ? queue[currentIndex + 1].stream_url
       : null,
   );

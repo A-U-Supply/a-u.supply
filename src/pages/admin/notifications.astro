@@ -11,17 +11,11 @@ import Admin from '../../layouts/Admin.astro';
   </div>
 
   <div class="status-tabs" role="tablist" id="notif-tabs">
-    <button
-      class="tab active"
-      role="tab"
-      data-tab="inbox"
-      aria-selected="true">Inbox</button
+    <button class="tab active" role="tab" data-tab="inbox" aria-selected="true"
+      >Inbox</button
     >
-    <button
-      class="tab"
-      role="tab"
-      data-tab="sources"
-      aria-selected="false">Sources</button
+    <button class="tab" role="tab" data-tab="sources" aria-selected="false"
+      >Sources</button
     >
   </div>
 
@@ -36,11 +30,8 @@ import Admin from '../../layouts/Admin.astro';
       <div class="inbox-toolbar__count" id="inbox-count" hidden>
         <span id="inbox-count-num">0</span> unread
       </div>
-      <button
-        class="action-btn"
-        id="mark-all-read"
-        type="button"
-        disabled>Mark All Read</button
+      <button class="action-btn" id="mark-all-read" type="button" disabled
+        >Mark All Read</button
       >
     </div>
 
@@ -64,9 +55,9 @@ import Admin from '../../layouts/Admin.astro';
   >
     <div id="fold-unconfigured" class="empty-state" hidden>
       <div class="empty-state__icon">&#9888;</div>
-      Fold linkage isn't configured on this server yet. Internal sources
-      (fallen, midden, acclaim) still surface in your Inbox; ask whoever
-      handles ops to run the
+      Fold linkage isn't configured on this server yet. Internal sources (fallen,
+      midden, acclaim) still surface in your Inbox; ask whoever handles ops to run
+      the
       <code>dokku postgres:link &mdash;alias FOLD_DATABASE</code> step.
     </div>
 
@@ -361,7 +352,8 @@ import Admin from '../../layouts/Admin.astro';
     if (!user) return;
 
     // ───────── Tabs ─────────
-    const tabs = document.querySelectorAll<HTMLButtonElement>('#notif-tabs .tab');
+    const tabs =
+      document.querySelectorAll<HTMLButtonElement>('#notif-tabs .tab');
     const panels: Record<string, HTMLElement> = {
       inbox: document.getElementById('tab-inbox')!,
       sources: document.getElementById('tab-sources')!,
@@ -714,9 +706,7 @@ import Admin from '../../layouts/Admin.astro';
         );
         if (!res.ok) throw new Error('search');
         const data = await res.json();
-        const subscribed = new Set(
-          mySubs.threads.map((t) => t.lemmy_post_id),
-        );
+        const subscribed = new Set(mySubs.threads.map((t) => t.lemmy_post_id));
         const rows = (data.posts || []) as {
           id: number;
           title: string;

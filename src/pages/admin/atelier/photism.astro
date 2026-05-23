@@ -74,20 +74,33 @@ import Admin from '../../../layouts/Admin.astro';
           <div class="ph-drop-icon">▦</div>
           <div class="ph-drop-hint">Drop image here</div>
           <div class="ph-drop-actions">
-            <button class="ph-drop-btn" id="ph-img-upload-btn">↑ Upload Image</button>
+            <button class="ph-drop-btn" id="ph-img-upload-btn"
+              >↑ Upload Image</button
+            >
             <span class="ph-drop-or">or</span>
-            <button class="ph-drop-btn ph-drop-btn--lib" id="ph-img-lib-btn">From Library</button>
+            <button class="ph-drop-btn ph-drop-btn--lib" id="ph-img-lib-btn"
+              >From Library</button
+            >
           </div>
           <div class="ph-drop-sub">PNG · JPG · GIF · WEBP</div>
         </div>
         <div id="ph-img-loaded-zone" style="display:none">
-          <canvas id="ph-img-preview" width="240" height="80" style="width:100%;border-radius:3px"></canvas>
+          <canvas
+            id="ph-img-preview"
+            width="240"
+            height="80"
+            style="width:100%;border-radius:3px"></canvas>
           <div class="ph-loaded-footer">
             <span id="ph-img-meta" class="ph-audio-meta"></span>
             <button class="ph-change-btn" id="ph-img-change-btn">Change</button>
           </div>
         </div>
-        <input type="file" id="ph-img-file-input" accept="image/*" style="display:none" />
+        <input
+          type="file"
+          id="ph-img-file-input"
+          accept="image/*"
+          style="display:none"
+        />
       </div>
 
       <!-- Synth parameters (shown in Image tab) -->
@@ -96,28 +109,64 @@ import Admin from '../../../layouts/Admin.astro';
           <label class="ph-label">
             Freq Min <span class="ph-val" id="ph-smin-val">200 Hz</span>
           </label>
-          <input class="ph-range" type="range" id="ph-synth-fmin" min="20" max="4000" step="10" value="200" />
+          <input
+            class="ph-range"
+            type="range"
+            id="ph-synth-fmin"
+            min="20"
+            max="4000"
+            step="10"
+            value="200"
+          />
         </div>
         <div class="ph-field">
           <label class="ph-label">
             Freq Max <span class="ph-val" id="ph-smax-val">8 kHz</span>
           </label>
-          <input class="ph-range" type="range" id="ph-synth-fmax" min="2000" max="20000" step="100" value="8000" />
+          <input
+            class="ph-range"
+            type="range"
+            id="ph-synth-fmax"
+            min="2000"
+            max="20000"
+            step="100"
+            value="8000"
+          />
         </div>
         <div class="ph-field">
           <label class="ph-label">
             Duration <span class="ph-val" id="ph-sdur-val">8 s</span>
           </label>
-          <input class="ph-range" type="range" id="ph-synth-dur" min="1" max="30" step="1" value="8" />
+          <input
+            class="ph-range"
+            type="range"
+            id="ph-synth-dur"
+            min="1"
+            max="30"
+            step="1"
+            value="8"
+          />
         </div>
         <div class="ph-field">
           <label class="ph-label">
             Contrast <span class="ph-val" id="ph-scon-val">4</span>
           </label>
-          <input class="ph-range" type="range" id="ph-synth-contrast" min="1" max="8" step="0.5" value="4" />
+          <input
+            class="ph-range"
+            type="range"
+            id="ph-synth-contrast"
+            min="1"
+            max="8"
+            step="0.5"
+            value="4"
+          />
         </div>
-        <button class="btn btn--primary" id="ph-synth-generate-btn" disabled
-          style="margin-top:0.5rem;width:100%">Generate Audio</button>
+        <button
+          class="btn btn--primary"
+          id="ph-synth-generate-btn"
+          disabled
+          style="margin-top:0.5rem;width:100%">Generate Audio</button
+        >
       </div>
 
       <div class="ph-divider"></div>
@@ -2026,7 +2075,8 @@ import Admin from '../../../layouts/Admin.astro';
         (document.getElementById('ph-synth-dur') as HTMLInputElement).value,
       );
       const contrast = parseFloat(
-        (document.getElementById('ph-synth-contrast') as HTMLInputElement).value,
+        (document.getElementById('ph-synth-contrast') as HTMLInputElement)
+          .value,
       );
       const sampleRate = 44100;
       const numFrames = 300;
@@ -3339,103 +3389,138 @@ import Admin from '../../../layouts/Admin.astro';
     }
 
     // ─── Image library for synth — reuse existing image modal ─────────────────
-    document
-      .getElementById('ph-img-lib-btn')!
-      .addEventListener('click', () => {
-        imgModalPurpose = 'synth';
-        openImgLibrary();
-      });
+    document.getElementById('ph-img-lib-btn')!.addEventListener('click', () => {
+      imgModalPurpose = 'synth';
+      openImgLibrary();
+    });
 
     // Play / stop
-    document.getElementById('ph-play-btn')!.addEventListener('click', async () => {
-      const btn = document.getElementById('ph-play-btn') as HTMLButtonElement;
-      if (playbackSource) {
-        playbackSource.stop(); playbackSource = null;
-        btn.textContent = '▶'; stopProgress(); return;
-      }
-      if (!currentAudioBuffer || !spectrogramData) return;
-
-      // Create AudioContext immediately while still in user-gesture scope
-      // (creating it after async awaits would leave it suspended in Chrome/Safari)
-      playbackCtx = new AudioContext();
-
-      // Synthesize edited audio if needed
-      let bufToPlay: AudioBuffer = currentAudioBuffer;
-      const [t0, t1] = getTimeRange();
-      if (playMode === 'edited' && editedFrames) {
-        const trimChanged = !editedAudioTrimRange ||
-          editedAudioTrimRange[0] !== t0 || editedAudioTrimRange[1] !== t1;
-        if (editedAudioStale || !editedAudioBuffer || trimChanged) {
-          btn.textContent = '…'; btn.disabled = true;
-          try {
-            const { sampleRate, phases, maxMag, numFrames } = spectrogramData;
-            const fftSize = parseInt((document.getElementById('ph-fft') as HTMLSelectElement).value);
-            const hopSamples = fftSize >> 2;
-            // Trim frames to the current view window (same as export does)
-            const fStart = Math.floor(t0 * numFrames);
-            const fEnd = Math.ceil(t1 * numFrames);
-            const trimmedFrames = editedFrames.slice(fStart, fEnd);
-            const trimmedPhases = phases.slice(fStart, fEnd);
-            const signal = await istftOLA(trimmedFrames, trimmedPhases, maxMag, fftSize, hopSamples,
-              p => { btn.textContent = `${Math.round(p * 100)}%`; });
-
-            // RMS-match to the original audio so unedited regions remain audible
-            // alongside drawn regions (which would otherwise dominate peak normalization)
-            const origData = currentAudioBuffer.getChannelData(0);
-            const origStart = Math.floor(t0 * origData.length);
-            const origEnd = Math.ceil(t1 * origData.length);
-            let origSumSq = 0;
-            for (let i = origStart; i < origEnd; i++) origSumSq += origData[i] * origData[i];
-            const origRms = origEnd > origStart ? Math.sqrt(origSumSq / (origEnd - origStart)) : 0;
-            let synthSumSq = 0;
-            for (let i = 0; i < signal.length; i++) synthSumSq += signal[i] * signal[i];
-            const synthRms = signal.length > 0 ? Math.sqrt(synthSumSq / signal.length) : 0;
-            if (synthRms > 1e-8 && origRms > 1e-8) {
-              const scale = origRms / synthRms;
-              for (let i = 0; i < signal.length; i++) {
-                const s = signal[i] * scale;
-                signal[i] = s > 1 ? 1 : s < -1 ? -1 : s;
-              }
-            }
-
-            const ab = new AudioBuffer({ numberOfChannels: 1, length: signal.length, sampleRate });
-            ab.copyToChannel(signal, 0);
-            editedAudioBuffer = ab;
-            editedAudioStale = false;
-            editedAudioTrimRange = [t0, t1];
-            updatePlayModeUI();
-          } catch {
-            playbackCtx.close(); playbackCtx = null;
-            btn.textContent = '▶'; btn.disabled = false; return;
-          }
-          btn.disabled = false;
+    document
+      .getElementById('ph-play-btn')!
+      .addEventListener('click', async () => {
+        const btn = document.getElementById('ph-play-btn') as HTMLButtonElement;
+        if (playbackSource) {
+          playbackSource.stop();
+          playbackSource = null;
+          btn.textContent = '▶';
+          stopProgress();
+          return;
         }
-        bufToPlay = editedAudioBuffer!;
-      }
-      playbackSource = playbackCtx.createBufferSource();
-      playbackSource.buffer = bufToPlay;
-      playbackSource.connect(playbackCtx.destination);
-      const dur = bufToPlay.duration;
-      // For edited mode, synthesis is already trimmed — play the full buffer
-      // For original mode, seek using trim offsets as usual
-      const isEditedBuf = playMode === 'edited' && editedFrames != null;
-      playbackStartOffset = isEditedBuf ? 0 : t0 * dur;
-      playbackEndOffset   = isEditedBuf ? dur : t1 * dur;
-      playbackStartTime   = playbackCtx.currentTime;
-      if (loopEnabled) {
-        playbackSource.loop      = true;
-        playbackSource.loopStart = playbackStartOffset;
-        playbackSource.loopEnd   = playbackEndOffset;
-        playbackSource.start(0, playbackStartOffset);
-      } else {
-        playbackSource.start(0, playbackStartOffset, playbackEndOffset - playbackStartOffset);
-      }
-      btn.textContent = '⏹';
-      progressRaf = requestAnimationFrame(tickProgress);
-      playbackSource.onended = () => {
-        playbackSource = null; btn.textContent = '▶'; stopProgress();
-      };
-    });
+        if (!currentAudioBuffer || !spectrogramData) return;
+
+        // Create AudioContext immediately while still in user-gesture scope
+        // (creating it after async awaits would leave it suspended in Chrome/Safari)
+        playbackCtx = new AudioContext();
+
+        // Synthesize edited audio if needed
+        let bufToPlay: AudioBuffer = currentAudioBuffer;
+        const [t0, t1] = getTimeRange();
+        if (playMode === 'edited' && editedFrames) {
+          const trimChanged =
+            !editedAudioTrimRange ||
+            editedAudioTrimRange[0] !== t0 ||
+            editedAudioTrimRange[1] !== t1;
+          if (editedAudioStale || !editedAudioBuffer || trimChanged) {
+            btn.textContent = '…';
+            btn.disabled = true;
+            try {
+              const { sampleRate, phases, maxMag, numFrames } = spectrogramData;
+              const fftSize = parseInt(
+                (document.getElementById('ph-fft') as HTMLSelectElement).value,
+              );
+              const hopSamples = fftSize >> 2;
+              // Trim frames to the current view window (same as export does)
+              const fStart = Math.floor(t0 * numFrames);
+              const fEnd = Math.ceil(t1 * numFrames);
+              const trimmedFrames = editedFrames.slice(fStart, fEnd);
+              const trimmedPhases = phases.slice(fStart, fEnd);
+              const signal = await istftOLA(
+                trimmedFrames,
+                trimmedPhases,
+                maxMag,
+                fftSize,
+                hopSamples,
+                (p) => {
+                  btn.textContent = `${Math.round(p * 100)}%`;
+                },
+              );
+
+              // RMS-match to the original audio so unedited regions remain audible
+              // alongside drawn regions (which would otherwise dominate peak normalization)
+              const origData = currentAudioBuffer.getChannelData(0);
+              const origStart = Math.floor(t0 * origData.length);
+              const origEnd = Math.ceil(t1 * origData.length);
+              let origSumSq = 0;
+              for (let i = origStart; i < origEnd; i++)
+                origSumSq += origData[i] * origData[i];
+              const origRms =
+                origEnd > origStart
+                  ? Math.sqrt(origSumSq / (origEnd - origStart))
+                  : 0;
+              let synthSumSq = 0;
+              for (let i = 0; i < signal.length; i++)
+                synthSumSq += signal[i] * signal[i];
+              const synthRms =
+                signal.length > 0 ? Math.sqrt(synthSumSq / signal.length) : 0;
+              if (synthRms > 1e-8 && origRms > 1e-8) {
+                const scale = origRms / synthRms;
+                for (let i = 0; i < signal.length; i++) {
+                  const s = signal[i] * scale;
+                  signal[i] = s > 1 ? 1 : s < -1 ? -1 : s;
+                }
+              }
+
+              const ab = new AudioBuffer({
+                numberOfChannels: 1,
+                length: signal.length,
+                sampleRate,
+              });
+              ab.copyToChannel(signal, 0);
+              editedAudioBuffer = ab;
+              editedAudioStale = false;
+              editedAudioTrimRange = [t0, t1];
+              updatePlayModeUI();
+            } catch {
+              playbackCtx.close();
+              playbackCtx = null;
+              btn.textContent = '▶';
+              btn.disabled = false;
+              return;
+            }
+            btn.disabled = false;
+          }
+          bufToPlay = editedAudioBuffer!;
+        }
+        playbackSource = playbackCtx.createBufferSource();
+        playbackSource.buffer = bufToPlay;
+        playbackSource.connect(playbackCtx.destination);
+        const dur = bufToPlay.duration;
+        // For edited mode, synthesis is already trimmed — play the full buffer
+        // For original mode, seek using trim offsets as usual
+        const isEditedBuf = playMode === 'edited' && editedFrames != null;
+        playbackStartOffset = isEditedBuf ? 0 : t0 * dur;
+        playbackEndOffset = isEditedBuf ? dur : t1 * dur;
+        playbackStartTime = playbackCtx.currentTime;
+        if (loopEnabled) {
+          playbackSource.loop = true;
+          playbackSource.loopStart = playbackStartOffset;
+          playbackSource.loopEnd = playbackEndOffset;
+          playbackSource.start(0, playbackStartOffset);
+        } else {
+          playbackSource.start(
+            0,
+            playbackStartOffset,
+            playbackEndOffset - playbackStartOffset,
+          );
+        }
+        btn.textContent = '⏹';
+        progressRaf = requestAnimationFrame(tickProgress);
+        playbackSource.onended = () => {
+          playbackSource = null;
+          btn.textContent = '▶';
+          stopProgress();
+        };
+      });
 
     // Loop toggle
     document.getElementById('ph-loop-btn')!.addEventListener('click', () => {
