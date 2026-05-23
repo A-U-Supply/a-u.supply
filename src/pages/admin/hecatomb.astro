@@ -281,29 +281,34 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
     border: 1px solid var(--color-border);
     padding: var(--space-sm);
   }
-  .hec-preview-grid {
+</style>
+
+<style is:global>
+  /* Preview tile styles MUST be global — the tiles are created dynamically
+     via innerHTML and don't carry the page's scoped data-astro-cid attr. */
+  #hec-preview-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 6px;
   }
-  .hec-preview-tile {
+  #hec-preview-grid .hec-preview-tile {
     border: 1px solid var(--color-border);
     overflow: hidden;
     position: relative;
     min-width: 0;
     background: var(--color-surface-2);
   }
-  .hec-preview-tile a {
+  #hec-preview-grid .hec-preview-tile a {
     display: block;
     aspect-ratio: 1;
   }
-  .hec-preview-tile img {
+  #hec-preview-grid .hec-preview-tile img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
   }
-  .hec-preview-tile__label {
+  #hec-preview-grid .hec-preview-tile__label {
     position: absolute;
     bottom: 0;
     left: 0;
@@ -320,7 +325,7 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
     letter-spacing: 0.5pt;
     line-height: 1.3;
   }
-  .hec-preview-empty {
+  #hec-preview-grid .hec-preview-empty {
     grid-column: 1 / -1;
     padding: var(--space-md);
     text-align: center;

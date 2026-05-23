@@ -61,6 +61,7 @@ def materialize(user: User, db) -> int:
             title=title,
             snippet=snippet,
             url=url,
+            actor=voter.name,
             created_at=vote.created_at,
         ):
             inserted += 1

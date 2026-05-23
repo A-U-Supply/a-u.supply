@@ -80,6 +80,8 @@ def upsert_notification(
     snippet: str | None,
     url: str,
     created_at: datetime,
+    actor: str | None = None,
+    community: str | None = None,
 ) -> bool:
     """Insert a Notification row if (user_id, source, source_ref) is new.
 
@@ -101,6 +103,8 @@ def upsert_notification(
             title=title,
             snippet=snippet,
             url=url,
+            actor=actor,
+            community=community,
             created_at=created_at,
         )
     )

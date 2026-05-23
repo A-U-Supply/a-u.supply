@@ -39,6 +39,8 @@ def _serialize(n) -> dict:
         "title": n.title,
         "snippet": n.snippet,
         "url": n.url,
+        "actor": n.actor,
+        "community": n.community,
         "created_at": n.created_at.isoformat() if n.created_at else None,
         "dismissed_at": n.dismissed_at.isoformat() if n.dismissed_at else None,
     }

@@ -807,6 +807,8 @@ class Notification(Base):
     title = Column(String, nullable=False)
     snippet = Column(String, nullable=True)
     url = Column(String, nullable=False)
+    actor = Column(String, nullable=True)
+    community = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=_utcnow)
     dismissed_at = Column(DateTime, nullable=True)
 
