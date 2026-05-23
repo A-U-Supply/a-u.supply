@@ -351,6 +351,9 @@ import Admin from '../../layouts/Admin.astro';
     const user = await (window as any).__authReady;
     if (!user) return;
 
+    // ───────── Sources lazy state (must precede showTab reference) ─────────
+    let sourcesLoaded = false;
+
     // ───────── Tabs ─────────
     const tabs =
       document.querySelectorAll<HTMLButtonElement>('#notif-tabs .tab');
@@ -547,7 +550,6 @@ import Admin from '../../layouts/Admin.astro';
     loadInbox();
 
     // ───────── Sources ─────────
-    let sourcesLoaded = false;
     const foldUnconfigured = document.getElementById('fold-unconfigured')!;
     const communityList = document.getElementById(
       'community-list',
