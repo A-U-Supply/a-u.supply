@@ -53,54 +53,60 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
       </div>
     </BrutalCard>
 
-    <BrutalCard title="Filters" class="config-card">
+    <BrutalCard title="Filters" id="hec-filters-card">
       <Fragment slot="meta">
         <span id="hec-candidates" class="hec-candidates">
           Estimating candidates…
         </span>
       </Fragment>
 
-      <div class="config-row-label" for="sf-query">Search</div>
-      <input
-        type="text"
-        id="sf-query"
-        class="brutal-input"
-        placeholder="Text search…"
-      />
-
-      <div id="hec-filter-host" class="config-row-full hec-filter-host">
-        <SearchFilterBar client:load syncUrl={false} hide={['sort']} />
-      </div>
-
-      <div class="config-row-full hec-exclude-row">
-        <label class="hec-inline-check">
-          <input type="checkbox" id="hec-exclude-app" />
-          <span>Exclude items already processed by this app</span>
-        </label>
-        <label class="hec-inline-check">
+      <div class="hec-filter-body">
+        <div class="hec-search-row">
+          <label class="config-row-label" for="sf-query">Search</label>
           <input
-            type="checkbox"
-            id="hec-exclude-recipe"
-            disabled
-            aria-disabled="true"
+            type="text"
+            id="sf-query"
+            class="brutal-input"
+            placeholder="Text search…"
           />
-          <span>Exclude items already processed with this recipe</span>
-          <span
-            class="hec-exclude-hint"
-            id="hec-exclude-recipe-hint"
-            aria-live="polite"
-            >&mdash; applies once a specific recipe is selected</span
-          >
-        </label>
+        </div>
+
+        <div id="hec-filter-host" class="hec-filter-host">
+          <SearchFilterBar client:load syncUrl={false} hide={['sort']} />
+        </div>
+
+        <div class="hec-exclude-row">
+          <label class="hec-inline-check">
+            <input type="checkbox" id="hec-exclude-app" />
+            <span>Exclude items already processed by this app</span>
+          </label>
+          <label class="hec-inline-check">
+            <input
+              type="checkbox"
+              id="hec-exclude-recipe"
+              disabled
+              aria-disabled="true"
+            />
+            <span>Exclude items already processed with this recipe</span>
+            <span
+              class="hec-exclude-hint"
+              id="hec-exclude-recipe-hint"
+              aria-live="polite"
+              >&mdash; applies once a specific recipe is selected</span
+            >
+          </label>
+        </div>
       </div>
     </BrutalCard>
 
     <!-- Preview: shows up to 20 matching candidates so the user can
          see what the filters will select before submitting. -->
-    <div id="hec-preview-wrapper" style="display:none;">
-      <BrutalCard title="Preview" hideHead={true} flush id="hec-preview-card">
-        <div class="hec-preview-grid" id="hec-preview-grid"></div>
-      </BrutalCard>
+    <div
+      id="hec-preview-wrapper"
+      style="display:none;"
+      class="hec-preview-section"
+    >
+      <div class="hec-preview-grid" id="hec-preview-grid"></div>
     </div>
 
     <div class="hec-actions">
@@ -157,6 +163,26 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
   }
   .hec-input--narrow {
     width: 100px;
+  }
+  /* Filter body: vertical stack matching the search page's .filter-body.
+     No grid — the SearchFilterBar handles its own 2-col layout internally. */
+  .hec-filter-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+  .hec-search-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+  .hec-search-row .config-row-label {
+    flex-shrink: 0;
+    min-width: 60px;
+  }
+  .hec-search-row .brutal-input {
+    flex: 1;
+    min-width: 0;
   }
   /* Constrain the embedded filter-bar so it doesn't overflow the card.
      The bar uses a 2-col grid; min-width:0 keeps grid cells from bursting. */
@@ -249,6 +275,12 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
 
   /* Preview grid — compact 4-col tile strip that mirrors the Stacks grid
      aesthetic. Tiles are square, monochrome, and link to the detail page. */
+  /* Preview section: matches the search page's .filter-body look —
+     a bordered section, not a BrutalCard. */
+  .hec-preview-section {
+    border: 1px solid var(--color-border);
+    padding: var(--space-sm);
+  }
   .hec-preview-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
