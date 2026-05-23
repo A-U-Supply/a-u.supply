@@ -48,9 +48,9 @@ import Admin from '../../layouts/Admin.astro';
           <th class="notif-col-type">Type</th>
           <th class="notif-col-user">User</th>
           <th class="notif-col-preview">Preview</th>
-          <th class="notif-col-link">Link</th>
-          <th class="notif-col-time">Time</th>
+          <th class="notif-col-community">Community</th>
           <th class="notif-col-actions">Act</th>
+          <th class="notif-col-link">Link</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -163,12 +163,14 @@ import Admin from '../../layouts/Admin.astro';
     width: 100%;
     border-collapse: collapse;
     font-size: var(--text-sm);
+    border: 2px solid var(--color-fg);
   }
   .notif-table[hidden] {
     display: none;
   }
   .notif-table thead {
     border-bottom: 2px solid var(--color-fg);
+    background: var(--color-surface);
   }
   .notif-table th {
     font-family: var(--font-mono);
@@ -176,14 +178,17 @@ import Admin from '../../layouts/Admin.astro';
     text-transform: uppercase;
     letter-spacing: 0.5pt;
     color: var(--color-muted);
-    padding: var(--space-xs) var(--space-sm);
+    padding: var(--space-sm) var(--space-sm);
     text-align: left;
     white-space: nowrap;
   }
   .notif-table td {
-    padding: var(--space-xs) var(--space-sm);
-    border-bottom: 1px dotted var(--color-border);
-    vertical-align: top;
+    padding: var(--space-sm) var(--space-sm);
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+  .notif-table tbody tr {
+    border-bottom: 1px solid var(--color-border);
   }
   .notif-table tbody tr:last-child td {
     border-bottom: none;
@@ -193,78 +198,94 @@ import Admin from '../../layouts/Admin.astro';
   }
   .notif-table__source {
     display: inline-block;
-    padding: 1px 6px;
+    padding: 2px 8px;
     border: 1px solid var(--color-fg);
     font-size: 0.55rem;
     text-transform: uppercase;
-    letter-spacing: 0.5pt;
+    letter-spacing: 0.8pt;
     white-space: nowrap;
+    font-family: var(--font-mono);
   }
   .notif-table__source[data-source^='fold_community'],
   .notif-table__source[data-source^='fold_thread'],
   .notif-table__source[data-source^='fold_inbox'] {
     color: var(--color-bg);
     background: var(--color-fg);
+    border-color: var(--color-fg);
   }
   .notif-table__actor {
     font-weight: 600;
     font-size: var(--text-sm);
     white-space: nowrap;
-    max-width: 140px;
+    max-width: 120px;
     overflow: hidden;
     text-overflow: ellipsis;
+    display: inline-block;
+  }
+  .notif-table__actor a {
+    color: var(--color-fg);
+    text-decoration: none;
+  }
+  .notif-table__actor a:hover {
+    color: var(--color-accent);
   }
   .notif-table__preview {
     color: var(--color-muted);
     font-size: 0.75rem;
     line-height: 1.4;
     word-break: break-word;
-    max-width: 400px;
+    max-width: 320px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
   .notif-table__community {
     font-size: 0.6rem;
+    font-family: var(--font-mono);
+    white-space: nowrap;
+  }
+  .notif-table__community a {
     color: var(--color-accent);
     text-decoration: none;
-    display: inline-block;
-    margin-left: 4px;
   }
-  .notif-table__community:hover {
+  .notif-table__community a:hover {
     color: var(--color-fg);
   }
   .notif-table__link {
-    color: var(--color-fg);
-    text-decoration: none;
-    font-size: 1rem;
-    white-space: nowrap;
-  }
-  .notif-table__link:hover {
-    color: var(--color-accent);
-  }
-  .notif-table__time {
     font-family: var(--font-mono);
-    font-size: 0.6rem;
-    color: var(--color-muted);
+    font-size: 0.65rem;
     white-space: nowrap;
     text-transform: uppercase;
     letter-spacing: 0.5pt;
   }
+  .notif-table__link a {
+    color: var(--color-muted);
+    text-decoration: none;
+    font-size: 0.65rem;
+  }
+  .notif-table__link a:hover {
+    color: var(--color-fg);
+    text-decoration: underline;
+  }
 
   @media (max-width: 640px) {
+    .notif-table {
+      border: none;
+    }
     .notif-col-preview,
-    .notif-col-link,
-    .notif-col-time {
+    .notif-col-community {
       display: none;
     }
     .notif-table td:nth-child(3),
-    .notif-table td:nth-child(4),
-    .notif-table td:nth-child(5) {
+    .notif-table td:nth-child(4) {
       display: none;
     }
-    .notif-table td:nth-child(6) {
+    .notif-table td:nth-child(5) {
       text-align: right;
     }
     .notif-table__actor {
-      max-width: 100px;
+      max-width: 80px;
     }
   }
 
@@ -496,24 +517,25 @@ import Admin from '../../layouts/Admin.astro';
           const linkAttrs = isExternal
             ? 'target="_blank" rel="noopener noreferrer"'
             : '';
-          const sourceLabel = escapeHtml(n.source.replace(/_/g, ' '));
+          const isFold = n.source.startsWith('fold_');
+          const sourceLabel = isFold ? 'THE FOLD' : escapeHtml(n.source.replace(/_/g, ' '));
           const actor = n.actor ? escapeHtml(n.actor) : '—';
+          const actorCell = n.actor && (isFold || n.source === 'fold_inbox')
+            ? `<a href="https://fold.a-u.supply/u/${escapeHtml(n.actor)}" target="_blank" rel="noopener noreferrer">${actor}</a>`
+            : actor;
           const preview = n.snippet ? escapeHtml(n.snippet) : '';
           const community = n.community
-            ? `<a class="notif-table__community" href="https://fold.a-u.supply/c/${escapeHtml(n.community)}" target="_blank" rel="noopener noreferrer">/c/${escapeHtml(n.community)}</a>`
-            : '';
+            ? `<a href="https://fold.a-u.supply/c/${escapeHtml(n.community)}" target="_blank" rel="noopener noreferrer">/c/${escapeHtml(n.community)}</a>`
+            : '—';
           const time = escapeHtml(formatTimestamp(n.created_at));
           return `
             <tr data-id="${n.id}">
               <td><span class="notif-table__source" data-source="${escapeHtml(n.source)}">${sourceLabel}</span></td>
-              <td><span class="notif-table__actor" title="${actor}">${actor}</span></td>
-              <td>
-                <span class="notif-table__preview">${preview}</span>
-                ${community}
-              </td>
-              <td><a class="notif-table__link" href="${url}" ${linkAttrs} title="Open">&#x2197;</a></td>
-              <td><span class="notif-table__time">${time}</span></td>
+              <td><span class="notif-table__actor" title="${actor}">${actorCell}</span></td>
+              <td><span class="notif-table__preview">${preview}</span></td>
+              <td><span class="notif-table__community">${community}</span></td>
               <td><button class="action-btn" data-dismiss="${n.id}">Dismiss</button></td>
+              <td><span class="notif-table__link"><a href="${url}" ${linkAttrs}>${time}</a></span></td>
             </tr>`;
         })
         .join('');
