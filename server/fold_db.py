@@ -42,7 +42,7 @@ def get_engine() -> Engine:
         if not FOLD_DATABASE_URL:
             raise RuntimeError("FOLD_DATABASE_URL is not configured")
         _engine = create_engine(
-            FOLD_DATABASE_URL,
+            FOLD_DATABASE_URL.replace("postgres://", "postgresql://"),
             pool_pre_ping=True,
             pool_recycle=1800,
             future=True,
