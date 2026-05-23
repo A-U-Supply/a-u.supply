@@ -182,7 +182,6 @@ import Admin from '../../layouts/Admin.astro';
     padding: var(--space-sm);
     text-align: left;
     white-space: nowrap;
-    border-right: 2px solid var(--color-fg);
   }
   .notif-table th:last-child {
     border-right: none;
@@ -190,19 +189,6 @@ import Admin from '../../layouts/Admin.astro';
   .notif-table td {
     padding: var(--space-sm);
     vertical-align: middle;
-    border-right: 2px solid var(--color-fg);
-  }
-  .notif-table td:last-child {
-    border-right: none;
-  }
-  .notif-table tbody tr {
-    border-bottom: 2px solid var(--color-fg);
-  }
-  .notif-table tbody tr:last-child {
-    border-bottom: none;
-  }
-  .notif-table tbody tr:hover td {
-    background: var(--color-surface);
   }
   .notif-col-type { width: 10%; }
   .notif-col-user { width: 12%; }
@@ -210,6 +196,14 @@ import Admin from '../../layouts/Admin.astro';
   .notif-col-community { width: 14%; }
   .notif-col-actions { width: 12%; }
   .notif-col-link { width: 14%; }
+
+  :global(.notif-table th) { border-right: 2px solid var(--color-fg); }
+  :global(.notif-table td) { border-right: 2px solid var(--color-fg); }
+  :global(.notif-table td:last-child) { border-right: none; }
+  :global(.notif-table tbody tr) { border-bottom: 2px solid var(--color-fg); }
+  :global(.notif-table tbody tr:last-child) { border-bottom: none; }
+  :global(.notif-table tbody tr:hover td) { background: var(--color-surface); }
+
   .notif-table__source {
     display: inline-block;
     padding: 2px 8px;
@@ -528,11 +522,14 @@ import Admin from '../../layouts/Admin.astro';
             ? 'target="_blank" rel="noopener noreferrer"'
             : '';
           const isFold = n.source.startsWith('fold_');
-          const sourceLabel = isFold ? 'THE FOLD' : escapeHtml(n.source.replace(/_/g, ' '));
+          const sourceLabel = isFold
+            ? 'THE FOLD'
+            : escapeHtml(n.source.replace(/_/g, ' '));
           const actor = n.actor ? escapeHtml(n.actor) : '—';
-          const actorCell = n.actor && (isFold || n.source === 'fold_inbox')
-            ? `<a href="https://fold.a-u.supply/u/${escapeHtml(n.actor)}" target="_blank" rel="noopener noreferrer">${actor}</a>`
-            : actor;
+          const actorCell =
+            n.actor && (isFold || n.source === 'fold_inbox')
+              ? `<a href="https://fold.a-u.supply/u/${escapeHtml(n.actor)}" target="_blank" rel="noopener noreferrer">${actor}</a>`
+              : actor;
           const preview = n.snippet ? escapeHtml(n.snippet) : '';
           const community = n.community
             ? `<a href="https://fold.a-u.supply/c/${escapeHtml(n.community)}" target="_blank" rel="noopener noreferrer">/c/${escapeHtml(n.community)}</a>`
