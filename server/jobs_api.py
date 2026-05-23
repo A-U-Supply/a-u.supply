@@ -573,7 +573,8 @@ class JobBatchPreviewBody(BaseModel):
 
 
 class JobBatchPreviewResponse(BaseModel):
-    count: int = Field(..., description="Pool size after all filters and exclusions.")
+    count: int = Field(..., description="Pool size after all filters and exclusions (capped at ~10000).")
+    total: int | None = Field(None, description="Total matching items before the cap, or None if the search didn't return a total.")
 
 
 class JobOutputResponse(BaseModel):
@@ -1512,10 +1513,10 @@ def _build_batch_pool(
     allowed_media_types: list[str],
     exclude_app: str | None,
     exclude_recipe: str | None,
-    max_candidates: int = 500,
-) -> list[MediaItem]:
+    max_candidates: int = 10000,
+) -> tuple[list[MediaItem], int]:
     """Resolve a candidate pool from the search index, filter to media types,
-    subtract already-processed items, return MediaItem rows.
+    subtract already-processed items, return (MediaItem rows, meili_total).
     """
     from server.search_api import SearchFilters, _build_meili_filter
     from server.search_client import multi_search
@@ -1558,15 +1559,16 @@ def _build_batch_pool(
         per_page=max_candidates,
     )
     hit_ids = [h.get("id") for h in results.get("hits", []) if h.get("id")]
+    meili_total = results.get("total", len(hit_ids))
     if not hit_ids:
-        return []
+        return ([], meili_total)
 
     excluded: set[str] = set()
     if exclude_app:
         excluded = _processed_exclusion_ids(db, exclude_app, exclude_recipe)
     pool_ids = [hid for hid in hit_ids if hid not in excluded]
     if not pool_ids:
-        return []
+        return ([], meili_total)
 
     items = (
         db.query(MediaItem)
@@ -1578,7 +1580,7 @@ def _build_batch_pool(
     )
     # Preserve the random order from Meilisearch
     by_id = {item.id: item for item in items}
-    return [by_id[i] for i in pool_ids if i in by_id]
+    return ([by_id[i] for i in pool_ids if i in by_id], meili_total)
 
 
 @router.post(
@@ -1637,7 +1639,7 @@ def create_job_batch(
     exclude_app, exclude_recipe = _resolve_batch_excludes(
         body.app_name, body.shuffle, body.params, body.random_recipe
     )
-    pool = _build_batch_pool(
+    pool, _meili_total = _build_batch_pool(
         db=db,
         shuffle=body.shuffle,
         allowed_media_types=allowed_types,
@@ -1769,19 +1771,19 @@ def preview_job_batch(
     manifest = _parse_manifest(app.manifest)
     allowed_types = manifest.get("input", {}).get("media_types", [])
     if not allowed_types:
-        return JobBatchPreviewResponse(count=0)
+        return JobBatchPreviewResponse(count=0, total=0)
 
     exclude_app, exclude_recipe = _resolve_batch_excludes(
         body.app_name, body.shuffle, body.params, body.random_recipe
     )
-    pool = _build_batch_pool(
+    pool, meili_total = _build_batch_pool(
         db=db,
         shuffle=body.shuffle,
         allowed_media_types=allowed_types,
         exclude_app=exclude_app,
         exclude_recipe=exclude_recipe,
     )
-    return JobBatchPreviewResponse(count=len(pool))
+    return JobBatchPreviewResponse(count=len(pool), total=meili_total)
 
 
 @router.get("/jobs", tags=["Jobs"], summary="List jobs")
