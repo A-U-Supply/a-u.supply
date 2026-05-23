@@ -98,13 +98,7 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
     <!-- Preview: shows up to 20 matching candidates so the user can
          see what the filters will select before submitting. -->
     <div id="hec-preview-wrapper" style="display:none;">
-      <BrutalCard
-        title="Preview"
-        hideHead={true}
-        class="config-card"
-        flush
-        id="hec-preview-card"
-      >
+      <BrutalCard title="Preview" hideHead={true} flush id="hec-preview-card">
         <div class="hec-preview-grid" id="hec-preview-grid"></div>
       </BrutalCard>
     </div>
@@ -165,12 +159,10 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
     width: 100px;
   }
   /* Constrain the embedded filter-bar so it doesn't overflow the card.
-     The bar uses a 2-col grid; min-width:0 on the host and overflow:hidden
-     on the card body keep long chip groups and selects inside the bounds. */
+     The bar uses a 2-col grid; min-width:0 keeps grid cells from bursting. */
   .hec-filter-host {
     margin-top: var(--space-xs);
     min-width: 0;
-    overflow: hidden;
   }
   .hec-exclude-hint {
     color: var(--color-muted);
