@@ -97,7 +97,14 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
 
     <!-- Preview: shows up to 20 matching candidates so the user can
          see what the filters will select before submitting. -->
-    <BrutalCard title="Preview" hideHead={true} class="config-card" flush id="hec-preview-card" style="display:none;">
+    <BrutalCard
+      title="Preview"
+      hideHead={true}
+      class="config-card"
+      flush
+      id="hec-preview-card"
+      style="display:none;"
+    >
       <div class="hec-preview-grid" id="hec-preview-grid"></div>
     </BrutalCard>
 
@@ -305,23 +312,129 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
   }
 </style>
 
-<script type="module">
-  import { filtersToBatchShuffle, filtersToSearchBody } from '../../lib/filterTranslator.ts';
-
+<script>
   document.addEventListener('astro:page-load', async () => {
     await (window as any).__authReady;
+
+    // ── Inlined from src/lib/filterTranslator.ts ──────────────────────────
+    // (imports in inline <script type="module"> aren't bundled by Astro in
+    // production, so the two translation helpers are reproduced here.)
+
+    function filtersToBatchShuffle(
+      filters: any,
+      query: string,
+      opts: {
+        excludeProcessedByApp: boolean;
+        excludeProcessedByRecipe: boolean;
+      },
+    ) {
+      const payload: any = {
+        query,
+        source_channels: filters.channels,
+        tags: filters.tagsText
+          ? filters.tagsText
+              .split(',')
+              .map((t: string) => t.trim())
+              .filter(Boolean)
+          : [],
+        output_index: filters.outputIndexes?.[0] || null,
+        reaction_count_min:
+          filters.reactionsMin > 0 ? filters.reactionsMin : null,
+        tag_count_min: filters.tagsMin > 0 ? filters.tagsMin : null,
+        exclude_processed_by_app: opts.excludeProcessedByApp,
+        exclude_processed_by_recipe: opts.excludeProcessedByRecipe,
+      };
+      if (filters.dateFrom || filters.dateTo) {
+        payload.date_range = {
+          from: filters.dateFrom || undefined,
+          to: filters.dateTo || undefined,
+        };
+      }
+      if (filters.poster) payload.poster = filters.poster;
+      if (filters.colorGroups?.length)
+        payload.color_group = filters.colorGroups;
+      if (filters.reactionsMax !== null && filters.reactionsMax !== undefined)
+        payload.reaction_count_max = filters.reactionsMax;
+      if (filters.tagsMax !== null && filters.tagsMax !== undefined)
+        payload.tag_count_max = filters.tagsMax;
+      if (filters.hasTranscript)
+        payload.has_transcript = filters.hasTranscript === 'yes';
+      if (filters.hasText) payload.has_text = filters.hasText === 'yes';
+      return payload;
+    }
+
+    function filtersToSearchBody(
+      filters: any,
+      query: string,
+      opts?: { perPage?: number },
+    ) {
+      const body: any = {
+        query,
+        media_types: filters.types,
+        sort: null,
+        filters: {} as any,
+      };
+      if (filters.includeEmulsion) body.include_emulsion = true;
+      if (filters.channels?.length)
+        body.filters.source_channels = filters.channels;
+      if (filters.poster) body.filters.poster = filters.poster;
+      if (filters.outputIndexes?.length)
+        body.filters.output_index = filters.outputIndexes;
+      if (filters.colorGroups?.length)
+        body.filters.color_group = filters.colorGroups;
+      if (filters.dateFrom || filters.dateTo) {
+        body.filters.date_range = {
+          from: filters.dateFrom || undefined,
+          to: filters.dateTo || undefined,
+        };
+      }
+      if (filters.tagsText) {
+        body.filters.tags = filters.tagsText
+          .split(',')
+          .map((t: string) => t.trim())
+          .filter(Boolean);
+      }
+      const rxnRange: any = {};
+      if (filters.reactionsMin > 0) rxnRange.min = filters.reactionsMin;
+      if (filters.reactionsMax !== null && filters.reactionsMax !== undefined)
+        rxnRange.max = filters.reactionsMax;
+      if (Object.keys(rxnRange).length) body.filters.reaction_count = rxnRange;
+      const tagRange: any = {};
+      if (filters.tagsMin > 0) tagRange.min = filters.tagsMin;
+      if (filters.tagsMax !== null && filters.tagsMax !== undefined)
+        tagRange.max = filters.tagsMax;
+      if (Object.keys(tagRange).length) body.filters.tag_count = tagRange;
+      if (filters.jobApp) body.filters.job_app = filters.jobApp;
+      if (filters.hasTranscript)
+        body.filters.has_transcript = filters.hasTranscript === 'yes';
+      if (filters.hasText) body.filters.has_text = filters.hasText === 'yes';
+      if (opts?.perPage) body.per_page = opts.perPage;
+      return body;
+    }
+
+    // ── End inlined filter translator ─────────────────────────────────────
 
     const appSelect = document.getElementById('hec-app') as HTMLSelectElement;
     const recipeRow = document.getElementById('hec-recipe-row')!;
     const recipeLabel = document.getElementById('hec-recipe-label')!;
-    const recipeSelect = document.getElementById('hec-recipe') as HTMLSelectElement;
-    const randomRecipeCb = document.getElementById('hec-random-recipe') as HTMLInputElement;
+    const recipeSelect = document.getElementById(
+      'hec-recipe',
+    ) as HTMLSelectElement;
+    const randomRecipeCb = document.getElementById(
+      'hec-random-recipe',
+    ) as HTMLInputElement;
     const countInput = document.getElementById('hec-count') as HTMLInputElement;
-    const submitBtn = document.getElementById('hec-submit') as HTMLButtonElement;
+    const submitBtn = document.getElementById(
+      'hec-submit',
+    ) as HTMLButtonElement;
     const statusEl = document.getElementById('hec-status')!;
     const candidatesEl = document.getElementById('hec-candidates')!;
-    const excludeRecipeCb = document.getElementById('hec-exclude-recipe') as HTMLInputElement;
-    const excludeRow = document.querySelector('.hec-exclude-row') as HTMLElement | null;
+    const excludeRecipeCb = document.getElementById(
+      'hec-exclude-recipe',
+    ) as HTMLInputElement;
+    const excludeRow = document.querySelector(
+      '.hec-exclude-row',
+    ) as HTMLElement | null;
     const previewCard = document.getElementById('hec-preview-card')!;
     const previewGrid = document.getElementById('hec-preview-grid')!;
 
@@ -479,8 +592,6 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
       updateSubmitEnabled();
     });
 
-    // ── Filter bar reader (shared between preview and submit) ────────────
-
     function filterBarEl(): HTMLElement | null {
       return document.querySelector(
         '#hec-filter-host [data-filters]',
@@ -490,7 +601,11 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
     function readBarFilters(): any {
       const raw = filterBarEl()?.dataset.filters;
       if (!raw) return null;
-      try { return JSON.parse(raw); } catch { return null; }
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
     }
 
     function buildShufflePayload() {
@@ -506,7 +621,7 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
       });
     }
 
-    // ── Live candidate count (via batch preview endpoint) ────────────────
+    // ── Live candidate count ──────────────────────────────────────────────
 
     let previewTimer: number | null = null;
     let previewSeq = 0;
@@ -565,7 +680,7 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
       }
     }
 
-    // ── Search preview — shows actual matching items via /api/search ─────
+    // ── Search preview ────────────────────────────────────────────────────
 
     let searchPreviewTimer: number | null = null;
     let searchPreviewSeq = 0;
@@ -575,8 +690,13 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
     }
     async function runSearchPreview() {
       const f = readBarFilters();
-      if (!f) { previewCard.style.display = 'none'; return; }
-      const query = (document.getElementById('sf-query') as HTMLInputElement).value.trim();
+      if (!f) {
+        previewCard.style.display = 'none';
+        return;
+      }
+      const query = (
+        document.getElementById('sf-query') as HTMLInputElement
+      ).value.trim();
       const body = filtersToSearchBody(f, query, { perPage: 20 });
 
       const mySeq = ++searchPreviewSeq;
@@ -592,44 +712,54 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
         previewCard.style.display = '';
 
         if (!res.ok) {
-          previewGrid.innerHTML = '<div class="hec-preview-empty">Search unavailable</div>';
+          previewGrid.innerHTML =
+            '<div class="hec-preview-empty">Search unavailable</div>';
           return;
         }
         const data = await res.json();
         const hits = data.results || data.hits || [];
         if (!hits.length) {
-          previewGrid.innerHTML = '<div class="hec-preview-empty">No matching items</div>';
+          previewGrid.innerHTML =
+            '<div class="hec-preview-empty">No matching items</div>';
           return;
         }
-        previewGrid.innerHTML = hits.map((item: any) => {
-          const thumbSrc = `/api/media/${item.id}/thumbnail?size=sm`;
-          const detailUrl = `/admin/search/detail?id=${encodeURIComponent(item.id)}`;
-          return `<div class="hec-preview-tile">
+        previewGrid.innerHTML = hits
+          .map((item: any) => {
+            const thumbSrc = `/api/media/${item.id}/thumbnail?size=sm`;
+            const detailUrl = `/admin/search/detail?id=${encodeURIComponent(item.id)}`;
+            return `<div class="hec-preview-tile">
             <a href="${detailUrl}" target="_blank" rel="noopener">
               <img src="${thumbSrc}" alt="${(item.filename || '').replace(/"/g, '')}" loading="lazy" />
             </a>
             <div class="hec-preview-tile__label">${item.media_type || '?'} &middot; ${item.tag_count ?? 0} tags</div>
           </div>`;
-        }).join('');
+          })
+          .join('');
       } catch {
         if (mySeq !== searchPreviewSeq) return;
-        previewGrid.innerHTML = '<div class="hec-preview-empty">Preview unavailable</div>';
+        previewGrid.innerHTML =
+          '<div class="hec-preview-empty">Preview unavailable</div>';
       }
     }
 
     // ── Wiring ───────────────────────────────────────────────────────────
 
     const sfQueryEl = document.getElementById('sf-query');
-    sfQueryEl?.addEventListener('input', () => { schedulePreview(); scheduleSearchPreview(); });
-    document.getElementById('hec-exclude-app')?.addEventListener('change', schedulePreview);
-    excludeRecipeCb.addEventListener('change', schedulePreview);
-    document.getElementById('hec-filter-host')?.addEventListener('filters-change', () => {
+    sfQueryEl?.addEventListener('input', () => {
       schedulePreview();
       scheduleSearchPreview();
     });
+    document
+      .getElementById('hec-exclude-app')
+      ?.addEventListener('change', schedulePreview);
+    excludeRecipeCb.addEventListener('change', schedulePreview);
+    document
+      .getElementById('hec-filter-host')
+      ?.addEventListener('filters-change', () => {
+        schedulePreview();
+        scheduleSearchPreview();
+      });
 
-    // Wait for the bar to mount, then do a first search preview.
-    // poll until data-filters is populated (the bar sets it in onMount).
     function waitForBar(maxTries: number = 30) {
       const f = readBarFilters();
       if (f) {
