@@ -53,13 +53,16 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
       </div>
     </BrutalCard>
 
-    <BrutalCard title="Filters" id="hec-filters-card">
-      <Fragment slot="meta">
+    <!-- Filters: simple bordered section, exactly like the search page's
+         .filter-body. No BrutalCard — its chrome and padding fight the
+         SearchFilterBar's internal layout on mobile. -->
+    <div class="hec-filters-section">
+      <div class="hec-filters-head">
+        <h2>Filters</h2>
         <span id="hec-candidates" class="hec-candidates">
           Estimating candidates…
         </span>
-      </Fragment>
-
+      </div>
       <div class="hec-filter-body">
         <div class="hec-search-row">
           <label class="config-row-label" for="sf-query">Search</label>
@@ -97,7 +100,7 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
           </label>
         </div>
       </div>
-    </BrutalCard>
+    </div>
 
     <!-- Preview: shows up to 20 matching candidates so the user can
          see what the filters will select before submitting. -->
@@ -181,12 +184,33 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
   .hec-input--narrow {
     width: 100px;
   }
+  /* Filters section: matches the search page's .filter-body —
+     a bordered section with heading row, no BrutalCard chrome. */
+  .hec-filters-section {
+    border: 1px solid var(--color-border);
+  }
+  .hec-filters-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+  }
+  .hec-filters-head h2 {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    margin: 0;
+  }
   /* Filter body: vertical stack matching the search page's .filter-body.
      No grid — the SearchFilterBar handles its own 2-col layout internally. */
   .hec-filter-body {
     display: flex;
     flex-direction: column;
     gap: var(--space-sm);
+    padding: var(--space-md);
   }
   .hec-search-row {
     display: flex;
