@@ -48,9 +48,9 @@ import Admin from '../../layouts/Admin.astro';
           <th class="notif-col-type">Type</th>
           <th class="notif-col-user">User</th>
           <th class="notif-col-preview">Preview</th>
-          <th class="notif-col-link">Link</th>
-          <th class="notif-col-time">Time</th>
+          <th class="notif-col-community">Community</th>
           <th class="notif-col-actions">Act</th>
+          <th class="notif-col-link">When</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -164,6 +164,7 @@ import Admin from '../../layouts/Admin.astro';
     border-collapse: collapse;
     font-size: var(--text-sm);
     border: 2px solid var(--color-fg);
+    table-layout: fixed;
   }
   .notif-table[hidden] {
     display: none;
@@ -178,10 +179,10 @@ import Admin from '../../layouts/Admin.astro';
     text-transform: uppercase;
     letter-spacing: 1pt;
     color: var(--color-muted);
-    padding: var(--space-sm) var(--space-sm);
+    padding: var(--space-sm);
     text-align: left;
     white-space: nowrap;
-    border-right: 1px solid var(--color-border);
+    border-right: 2px solid var(--color-fg);
   }
   .notif-table th:last-child {
     border-right: none;
@@ -189,19 +190,37 @@ import Admin from '../../layouts/Admin.astro';
   .notif-table td {
     padding: var(--space-sm);
     vertical-align: middle;
-    border-right: 1px solid var(--color-border);
+    border-right: 2px solid var(--color-fg);
   }
   .notif-table td:last-child {
     border-right: none;
   }
   .notif-table tbody tr {
-    border-bottom: 1px solid var(--color-fg);
+    border-bottom: 2px solid var(--color-fg);
   }
   .notif-table tbody tr:last-child {
     border-bottom: none;
   }
   .notif-table tbody tr:hover td {
     background: var(--color-surface);
+  }
+  .notif-col-type {
+    width: 10%;
+  }
+  .notif-col-user {
+    width: 12%;
+  }
+  .notif-col-preview {
+    width: 38%;
+  }
+  .notif-col-community {
+    width: 14%;
+  }
+  .notif-col-actions {
+    width: 12%;
+  }
+  .notif-col-link {
+    width: 14%;
   }
   .notif-table__source {
     display: inline-block;
@@ -281,24 +300,19 @@ import Admin from '../../layouts/Admin.astro';
       background: none;
     }
     .notif-col-preview,
-    .notif-col-community,
-    .notif-col-link {
+    .notif-col-community {
       display: none;
     }
     .notif-table td:nth-child(3),
-    .notif-table td:nth-child(4),
-    .notif-table td:nth-child(6) {
+    .notif-table td:nth-child(4) {
       display: none;
     }
     .notif-table td {
       border-right: none;
+      padding: var(--space-xs) var(--space-sm);
     }
     .notif-table__actor {
-      max-width: 100px;
-    }
-    .notif-table td:nth-child(5) {
-      text-align: right;
-      padding-right: var(--space-xs);
+      max-width: 80px;
     }
   }
 
@@ -525,24 +539,28 @@ import Admin from '../../layouts/Admin.astro';
           const linkAttrs = isExternal
             ? 'target="_blank" rel="noopener noreferrer"'
             : '';
-          const sourceLabel = escapeHtml(n.source.replace(/_/g, ' '));
+          const isFold = n.source.startsWith('fold_');
+          const sourceLabel = isFold
+            ? 'THE FOLD'
+            : escapeHtml(n.source.replace(/_/g, ' '));
           const actor = n.actor ? escapeHtml(n.actor) : '—';
+          const actorCell =
+            n.actor && (isFold || n.source === 'fold_inbox')
+              ? `<a href="https://fold.a-u.supply/u/${escapeHtml(n.actor)}" target="_blank" rel="noopener noreferrer">${actor}</a>`
+              : actor;
           const preview = n.snippet ? escapeHtml(n.snippet) : '';
           const community = n.community
-            ? `<a class="notif-table__community" href="https://fold.a-u.supply/c/${escapeHtml(n.community)}" target="_blank" rel="noopener noreferrer">/c/${escapeHtml(n.community)}</a>`
-            : '';
+            ? `<a href="https://fold.a-u.supply/c/${escapeHtml(n.community)}" target="_blank" rel="noopener noreferrer">/c/${escapeHtml(n.community)}</a>`
+            : '—';
           const time = escapeHtml(formatTimestamp(n.created_at));
           return `
             <tr data-id="${n.id}">
               <td><span class="notif-table__source" data-source="${escapeHtml(n.source)}">${sourceLabel}</span></td>
-              <td><span class="notif-table__actor" title="${actor}">${actor}</span></td>
-              <td>
-                <span class="notif-table__preview">${preview}</span>
-                ${community}
-              </td>
-              <td><a class="notif-table__link" href="${url}" ${linkAttrs} title="Open">&#x2197;</a></td>
-              <td><span class="notif-table__time">${time}</span></td>
+              <td><span class="notif-table__actor" title="${actor}">${actorCell}</span></td>
+              <td><span class="notif-table__preview">${preview}</span></td>
+              <td><span class="notif-table__community">${community}</span></td>
               <td><button class="action-btn" data-dismiss="${n.id}">Dismiss</button></td>
+              <td><span class="notif-table__link"><a href="${url}" ${linkAttrs}>${time}</a></span></td>
             </tr>`;
         })
         .join('');

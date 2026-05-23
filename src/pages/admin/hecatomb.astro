@@ -280,6 +280,36 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
       font-size: var(--text-base);
     }
   }
+  @media (max-width: 540px) {
+    .hecatomb-form {
+      gap: var(--space-sm);
+    }
+    .hec-search-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .hec-search-row .config-row-label {
+      min-width: 0;
+    }
+    .hec-preview-grid {
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 4px;
+    }
+    .hec-recipe-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .hec-count-cell {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .hec-count-cell .brutal-input {
+      width: 100%;
+    }
+    .hec-filter-host {
+      margin-top: var(--space-xs);
+    }
+  }
   .hec-status {
     font-family: var(--font-mono);
     font-size: var(--text-sm);
