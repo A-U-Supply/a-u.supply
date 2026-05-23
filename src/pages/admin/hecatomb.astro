@@ -128,10 +128,27 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
   }
   .hecatomb-form {
     margin-top: var(--space-lg);
-    max-width: 720px;
+    max-width: 900px;
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
+  }
+  @media (max-width: 960px) {
+    .hecatomb-form {
+      max-width: none;
+    }
+  }
+  @media (max-width: 540px) {
+    .hecatomb-form {
+      gap: var(--space-sm);
+    }
+    .hec-search-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .hec-search-row .config-row-label {
+      min-width: 0;
+    }
   }
   .config-card__select-wrap {
     display: flex;
