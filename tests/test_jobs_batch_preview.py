@@ -51,7 +51,7 @@ def _hits_for(items):
         "total": len(items),
         "facets": {},
         "page": 1,
-        "per_page": 500,
+        "per_page": 10000,
     }
 
 
@@ -98,7 +98,7 @@ class TestBatchPreview:
                 headers=auth_headers,
             )
         assert resp.status_code == 200
-        assert resp.json() == {"count": 3}
+        assert resp.json() == {"count": 3, "total": 3}
 
     def test_app_exclusion_removes_already_processed(
         self,
@@ -130,7 +130,7 @@ class TestBatchPreview:
                 headers=auth_headers,
             )
         assert resp.status_code == 200
-        assert resp.json() == {"count": 2}
+        assert resp.json() == {"count": 2, "total": 3}
 
     def test_recipe_exclusion_scopes_to_matching_recipe(
         self,
@@ -176,7 +176,7 @@ class TestBatchPreview:
                 headers=auth_headers,
             )
         assert resp.status_code == 200
-        assert resp.json() == {"count": 2}, "alpha-processed item[0] excluded; beta untouched"
+        assert resp.json() == {"count": 2, "total": 3}
 
     def test_recipe_exclusion_silently_skipped_under_random_recipe(
         self,
@@ -215,7 +215,7 @@ class TestBatchPreview:
                 headers=auth_headers,
             )
         assert resp.status_code == 200
-        assert resp.json() == {"count": 2}, "app exclusion still applies; recipe flag no-ops"
+        assert resp.json() == {"count": 2, "total": 3}, "app exclusion still applies; recipe flag no-ops"
 
     def test_app_without_input_media_types_returns_zero(
         self, client, auth_headers, db_session
@@ -235,4 +235,4 @@ class TestBatchPreview:
             headers=auth_headers,
         )
         assert resp.status_code == 200
-        assert resp.json() == {"count": 0}
+        assert resp.json() == {"count": 0, "total": 0}
