@@ -797,11 +797,7 @@
         <span class="fb-select__caret" aria-hidden="true">▾</span>
       </Select.Trigger>
       <Select.Portal>
-        <Select.Content
-          class="fb-select__content"
-          sideOffset={6}
-          align="start"
-        >
+        <Select.Content class="fb-select__content" sideOffset={6} align="start">
           <Select.Viewport class="fb-select__viewport">
             <Select.Item class="fb-select__item" value="" label="All">
               {#snippet children({ selected })}
@@ -918,11 +914,7 @@
         <span class="fb-select__caret" aria-hidden="true">▾</span>
       </Select.Trigger>
       <Select.Portal>
-        <Select.Content
-          class="fb-select__content"
-          sideOffset={6}
-          align="start"
-        >
+        <Select.Content class="fb-select__content" sideOffset={6} align="start">
           <Select.Viewport class="fb-select__viewport">
             {#each [{ v: '', l: 'Any' }, { v: 'yes', l: 'With transcript' }, { v: 'no', l: 'Without transcript' }] as opt (opt.v)}
               <Select.Item class="fb-select__item" value={opt.v} label={opt.l}>
@@ -949,8 +941,7 @@
       type="single"
       value={filters.hasText}
       disabled={hasTextDisabled}
-      onValueChange={(v) =>
-        (filters.hasText = (v ?? '') as '' | 'yes' | 'no')}
+      onValueChange={(v) => (filters.hasText = (v ?? '') as '' | 'yes' | 'no')}
     >
       <Select.Trigger
         class="fb-select__trigger brutalist-control"
@@ -966,11 +957,7 @@
         <span class="fb-select__caret" aria-hidden="true">▾</span>
       </Select.Trigger>
       <Select.Portal>
-        <Select.Content
-          class="fb-select__content"
-          sideOffset={6}
-          align="start"
-        >
+        <Select.Content class="fb-select__content" sideOffset={6} align="start">
           <Select.Viewport class="fb-select__viewport">
             {#each [{ v: '', l: 'Any' }, { v: 'yes', l: 'With OCR text' }, { v: 'no', l: 'Without OCR text' }] as opt (opt.v)}
               <Select.Item class="fb-select__item" value={opt.v} label={opt.l}>
@@ -1014,17 +1001,36 @@
           onValueChange={(v) =>
             (filters.hasAiDescription = (v ?? '') as '' | 'yes' | 'no')}
         >
-          <Select.Trigger class="fb-select__trigger brutalist-control" aria-label="Has AI description filter">
-            <span class="fb-select__label">{filters.hasAiDescription === 'yes' ? 'With description' : filters.hasAiDescription === 'no' ? 'Without description' : 'Any'}</span>
+          <Select.Trigger
+            class="fb-select__trigger brutalist-control"
+            aria-label="Has AI description filter"
+          >
+            <span class="fb-select__label"
+              >{filters.hasAiDescription === 'yes'
+                ? 'With description'
+                : filters.hasAiDescription === 'no'
+                  ? 'Without description'
+                  : 'Any'}</span
+            >
             <span class="fb-select__caret" aria-hidden="true">▾</span>
           </Select.Trigger>
           <Select.Portal>
-            <Select.Content class="fb-select__content" sideOffset={6} align="start">
+            <Select.Content
+              class="fb-select__content"
+              sideOffset={6}
+              align="start"
+            >
               <Select.Viewport class="fb-select__viewport">
                 {#each [{ v: '', l: 'Any' }, { v: 'yes', l: 'With description' }, { v: 'no', l: 'Without description' }] as opt (opt.v)}
-                  <Select.Item class="fb-select__item" value={opt.v} label={opt.l}>
+                  <Select.Item
+                    class="fb-select__item"
+                    value={opt.v}
+                    label={opt.l}
+                  >
                     {#snippet children({ selected })}
-                      <span class="fb-select__check" aria-hidden="true">{selected ? '✓' : ''}</span>
+                      <span class="fb-select__check" aria-hidden="true"
+                        >{selected ? '✓' : ''}</span
+                      >
                       <span class="fb-select__item-label">{opt.l}</span>
                     {/snippet}
                   </Select.Item>
@@ -1038,7 +1044,7 @@
       <div class="fg">
         <label class="fg__label">Vibe</label>
         <div class="fb-chip-group">
-          {#each ['moody','cheerful','melancholic','sterile','chaotic','nostalgic','dystopian','whimsical','aggressive','serene','mundane','surreal','ironic','gritty','clinical','dreamy'] as v (v)}
+          {#each ['moody', 'cheerful', 'melancholic', 'sterile', 'chaotic', 'nostalgic', 'dystopian', 'whimsical', 'aggressive', 'serene', 'mundane', 'surreal', 'ironic', 'gritty', 'clinical', 'dreamy'] as v (v)}
             <button
               type="button"
               class="fb-chip"
@@ -1049,8 +1055,8 @@
                 } else {
                   filters.aiVibe = [...filters.aiVibe, v];
                 }
-              }}
-            >{v}</button>
+              }}>{v}</button
+            >
           {/each}
         </div>
       </div>
@@ -1058,19 +1064,23 @@
       <div class="fg">
         <label class="fg__label">Color temperature</label>
         <div class="fb-chip-group">
-          {#each ['warm','cool','neutral'] as v (v)}
+          {#each ['warm', 'cool', 'neutral'] as v (v)}
             <button
               type="button"
               class="fb-chip"
               class:fb-chip--active={filters.aiColorTemperature.includes(v)}
               onclick={() => {
                 if (filters.aiColorTemperature.includes(v)) {
-                  filters.aiColorTemperature = filters.aiColorTemperature.filter((x) => x !== v);
+                  filters.aiColorTemperature =
+                    filters.aiColorTemperature.filter((x) => x !== v);
                 } else {
-                  filters.aiColorTemperature = [...filters.aiColorTemperature, v];
+                  filters.aiColorTemperature = [
+                    ...filters.aiColorTemperature,
+                    v,
+                  ];
                 }
-              }}
-            >{v}</button>
+              }}>{v}</button
+            >
           {/each}
         </div>
       </div>
@@ -1078,19 +1088,21 @@
       <div class="fg">
         <label class="fg__label">Color character</label>
         <div class="fb-chip-group">
-          {#each ['vibrant','muted','pastel','monochrome','high-contrast','earthy','dark','light'] as v (v)}
+          {#each ['vibrant', 'muted', 'pastel', 'monochrome', 'high-contrast', 'earthy', 'dark', 'light'] as v (v)}
             <button
               type="button"
               class="fb-chip"
               class:fb-chip--active={filters.aiColorCharacter.includes(v)}
               onclick={() => {
                 if (filters.aiColorCharacter.includes(v)) {
-                  filters.aiColorCharacter = filters.aiColorCharacter.filter((x) => x !== v);
+                  filters.aiColorCharacter = filters.aiColorCharacter.filter(
+                    (x) => x !== v,
+                  );
                 } else {
                   filters.aiColorCharacter = [...filters.aiColorCharacter, v];
                 }
-              }}
-            >{v}</button>
+              }}>{v}</button
+            >
           {/each}
         </div>
       </div>
@@ -1098,17 +1110,7 @@
       <div class="fg">
         <label class="fg__label">Content</label>
         <div class="fb-tri-grid">
-          {#each [
-            { key: 'isPhoto',        label: 'photo'        },
-            { key: 'isScreenshot',   label: 'screenshot'   },
-            { key: 'isMeme',         label: 'meme'         },
-            { key: 'isArtwork',      label: 'artwork'      },
-            { key: 'isAiGenerated',  label: 'AI generated' },
-            { key: 'hasHuman',       label: 'has human'    },
-            { key: 'hasFace',        label: 'has face'     },
-            { key: 'hasTextOverlay', label: 'text overlay' },
-            { key: 'isNsfw',         label: 'NSFW'         },
-          ] as flag (flag.key)}
+          {#each [{ key: 'isPhoto', label: 'photo' }, { key: 'isScreenshot', label: 'screenshot' }, { key: 'isMeme', label: 'meme' }, { key: 'isArtwork', label: 'artwork' }, { key: 'isAiGenerated', label: 'AI generated' }, { key: 'hasHuman', label: 'has human' }, { key: 'hasFace', label: 'has face' }, { key: 'hasTextOverlay', label: 'text overlay' }, { key: 'isNsfw', label: 'NSFW' }] as flag (flag.key)}
             <div class="fb-tri">
               <span class="fb-tri__label">{flag.label}</span>
               <div class="fb-tri__buttons" role="group" aria-label={flag.label}>
@@ -1117,22 +1119,25 @@
                   class="fb-tri__btn"
                   class:fb-tri__btn--active={(filters as any)[flag.key] === ''}
                   aria-pressed={(filters as any)[flag.key] === ''}
-                  onclick={() => ((filters as any)[flag.key] = '')}
-                >any</button>
+                  onclick={() => ((filters as any)[flag.key] = '')}>any</button
+                >
                 <button
                   type="button"
                   class="fb-tri__btn fb-tri__btn--yes"
-                  class:fb-tri__btn--active={(filters as any)[flag.key] === 'yes'}
+                  class:fb-tri__btn--active={(filters as any)[flag.key] ===
+                    'yes'}
                   aria-pressed={(filters as any)[flag.key] === 'yes'}
                   onclick={() => ((filters as any)[flag.key] = 'yes')}
-                >yes</button>
+                  >yes</button
+                >
                 <button
                   type="button"
                   class="fb-tri__btn fb-tri__btn--no"
-                  class:fb-tri__btn--active={(filters as any)[flag.key] === 'no'}
+                  class:fb-tri__btn--active={(filters as any)[flag.key] ===
+                    'no'}
                   aria-pressed={(filters as any)[flag.key] === 'no'}
-                  onclick={() => ((filters as any)[flag.key] = 'no')}
-                >no</button>
+                  onclick={() => ((filters as any)[flag.key] = 'no')}>no</button
+                >
               </div>
             </div>
           {/each}
@@ -1230,25 +1235,22 @@
         type="single"
         value={filters.myVotes}
         onValueChange={(v) =>
-          (filters.myVotes = (v ?? '') as
-            | ''
-            | 'up'
-            | 'down'
-            | 'any'
-            | 'none')}
+          (filters.myVotes = (v ?? '') as '' | 'up' | 'down' | 'any' | 'none')}
       >
         <Select.Trigger
           class="fb-select__trigger brutalist-control"
           aria-label="My votes filter"
         >
           <span class="fb-select__label"
-            >{({
-              '': 'Any',
-              up: 'I acclaimed',
-              down: 'I disavowed',
-              any: 'Either way',
-              none: 'No votes yet',
-            } as Record<string, string>)[filters.myVotes] || 'Any'}</span
+            >{(
+              {
+                '': 'Any',
+                up: 'I acclaimed',
+                down: 'I disavowed',
+                any: 'Either way',
+                none: 'No votes yet',
+              } as Record<string, string>
+            )[filters.myVotes] || 'Any'}</span
           >
           <span class="fb-select__caret" aria-hidden="true">▾</span>
         </Select.Trigger>
@@ -1524,7 +1526,9 @@
     text-transform: uppercase;
     letter-spacing: 0.5pt;
   }
-  .fg-disclosure__summary::-webkit-details-marker { display: none; }
+  .fg-disclosure__summary::-webkit-details-marker {
+    display: none;
+  }
   .fg-disclosure__caret {
     display: inline-block;
     transition: transform 0.12s ease;

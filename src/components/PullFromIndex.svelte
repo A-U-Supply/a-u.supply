@@ -11,6 +11,7 @@
 -->
 <script lang="ts">
   import SearchFilterBar, { type Filters } from './SearchFilterBar.svelte';
+  import { filtersToSearchBody } from '../lib/filterTranslator.ts';
 
   type Props = {
     open: boolean;
@@ -49,15 +50,33 @@
     dateTo: '',
     tagsText: '',
     reactionsMin: 0,
+    reactionsMax: null,
     tagsMin: 0,
+    tagsMax: null,
     hasTranscript: '',
     hasText: '',
     sortBy: 'newest',
     includeEmulsion: false,
     voteScoreMin: null,
+    voteScoreMax: null,
     upMin: null,
+    upMax: null,
+    downMin: null,
     downMax: null,
     myVotes: '',
+    aiVibe: [],
+    aiColorTemperature: [],
+    aiColorCharacter: [],
+    hasAiDescription: '',
+    isScreenshot: '',
+    isMeme: '',
+    isPhoto: '',
+    isArtwork: '',
+    isAiGenerated: '',
+    hasHuman: '',
+    hasFace: '',
+    hasTextOverlay: '',
+    isNsfw: '',
   });
   let filtersOpen = $state(false);
   let results = $state<Hit[]>([]);
@@ -75,43 +94,13 @@
   }
 
   function buildBody() {
-    const sortMap: Record<string, string> = {
-      newest: 'created_at:desc',
-      oldest: 'created_at:asc',
-      random: 'random',
-      most_reactions: 'total_reaction_count:desc',
-      acclaim: 'vote_score:desc',
-      largest: 'file_size_bytes:desc',
-      longest: 'duration_seconds:desc',
-    };
-    // "Emulsion-only" mode: when the user picked exactly __emulsion__ and
-    // nothing else, send media_types=[] so the backend skips the public
-    // indexes entirely. Without this, default media_types (image/audio/video)
-    // makes the backend return all public hits in addition to emulsion.
     const onlyEmulsion =
       filters.outputIndexes.length === 1 &&
       filters.outputIndexes[0] === '__emulsion__';
-    const body: any = {
-      query: q,
-      per_page: 60,
-      media_types: onlyEmulsion ? [] : filters.types,
-      sort: sortMap[filters.sortBy] || null,
-      include_emulsion: filters.includeEmulsion,
-      filters: {},
-    };
-    if (filters.outputIndexes.length) {
-      body.filters.output_index = filters.outputIndexes;
+    const body = filtersToSearchBody(filters, q, { perPage: 60 });
+    if (onlyEmulsion) {
+      body.media_types = [];
     }
-    if (filters.jobApp) body.filters.job_app = filters.jobApp;
-    if (filters.tagsText.trim()) {
-      body.filters.tags = filters.tagsText
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean);
-    }
-    if (filters.hasTranscript)
-      body.filters.has_transcript = filters.hasTranscript === 'yes';
-    if (filters.hasText) body.filters.has_text = filters.hasText === 'yes';
     return body;
   }
 

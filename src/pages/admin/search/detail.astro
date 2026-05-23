@@ -184,7 +184,8 @@ import Admin from '../../../layouts/Admin.astro';
         </div>
         <div class="ai-vision-row" id="aiv-flags-row">
           <div class="ai-vision-row__label">Flags</div>
-          <div class="ai-vision-row__value ai-vision-flags" id="aiv-flags"></div>
+          <div class="ai-vision-row__value ai-vision-flags" id="aiv-flags">
+          </div>
         </div>
         <div class="ai-vision-footer">
           <span id="aiv-provenance"></span>
@@ -194,10 +195,8 @@ import Admin from '../../../layouts/Admin.astro';
 
     <!-- ACTIONS -->
     <div class="detail-actions">
-      <button
-        class="action-btn"
-        id="add-to-workspace-btn"
-        type="button">Add to workspace</button
+      <button class="action-btn" id="add-to-workspace-btn" type="button"
+        >Add to workspace</button
       >
       <a
         class="action-btn"
@@ -237,10 +236,8 @@ import Admin from '../../../layouts/Admin.astro';
         title="Re-render this Atelier image at full resolution and export as PNG"
         >HD PNG</a
       >
-      <button
-        class="action-btn"
-        id="re-extract-btn"
-        type="button">Re-extract</button
+      <button class="action-btn" id="re-extract-btn" type="button"
+        >Re-extract</button
       >
       <button
         class="action-btn action-btn--danger"
@@ -277,7 +274,6 @@ import Admin from '../../../layouts/Admin.astro';
   arrangement + the look of content rendered into card bodies.
 -->
 <style is:global>
-
   /* All sections (brutal-cards + the threads-island wrapper + action
      row) are spaced via the page container's flex gap. Section labels
      live INSIDE each card's head bar; there are no external h2s above
@@ -543,11 +539,7 @@ import Admin from '../../../layouts/Admin.astro';
     left: 0;
     right: 0;
     height: 60px;
-    background: linear-gradient(
-      to bottom,
-      transparent,
-      var(--color-surface)
-    );
+    background: linear-gradient(to bottom, transparent, var(--color-surface));
     pointer-events: none;
   }
   .extracted-text-card
@@ -751,7 +743,6 @@ import Admin from '../../../layouts/Admin.astro';
     }
   }
 </style>
-
 
 <script>
   import { addItemsToWorkspace } from '../../../lib/workspace';
@@ -1052,7 +1043,9 @@ import Admin from '../../../layouts/Admin.astro';
       rows.push(fieldRow('Type', escapeHtml(item.media_type || '--')));
 
       // Size + duration combined into one terse row when both are known.
-      const sizeStr = item.file_size_bytes ? formatSize(item.file_size_bytes) : null;
+      const sizeStr = item.file_size_bytes
+        ? formatSize(item.file_size_bytes)
+        : null;
       const durSec =
         item.video_meta?.duration_seconds ??
         item.audio_meta?.duration_seconds ??
@@ -1139,7 +1132,10 @@ import Admin from '../../../layouts/Admin.astro';
       const unresolved = failures.filter((f: any) => !f.resolved);
       if (failures.length === 0) {
         rows.push(
-          fieldRow('Extraction', `<span class="status-pill status-pill--ok">OK</span>`),
+          fieldRow(
+            'Extraction',
+            `<span class="status-pill status-pill--ok">OK</span>`,
+          ),
         );
       } else if (unresolved.length === 0) {
         rows.push(
@@ -1168,9 +1164,7 @@ import Admin from '../../../layouts/Admin.astro';
       // ── File chrome (collapsed disclosure): the boring data you almost
       // never need but still want one click away.
       const chromeRows: string[] = [];
-      chromeRows.push(
-        fieldRow('Filename', escapeHtml(item.filename || '--')),
-      );
+      chromeRows.push(fieldRow('Filename', escapeHtml(item.filename || '--')));
       chromeRows.push(fieldRow('MIME', escapeHtml(item.mime_type || '--')));
       chromeRows.push(
         fieldRow(
@@ -1199,9 +1193,7 @@ import Admin from '../../../layouts/Admin.astro';
         fieldRow(
           'Created',
           escapeHtml(
-            item.created_at
-              ? new Date(item.created_at).toLocaleString()
-              : '--',
+            item.created_at ? new Date(item.created_at).toLocaleString() : '--',
           ),
         ),
       );
@@ -1223,7 +1215,12 @@ import Admin from '../../../layouts/Admin.astro';
 
       const sources = item.sources || [];
       if (sources.length === 0) {
-        rows.push(fieldRow('Origin', '<em style="color:var(--color-muted);">unknown</em>'));
+        rows.push(
+          fieldRow(
+            'Origin',
+            '<em style="color:var(--color-muted);">unknown</em>',
+          ),
+        );
       } else {
         rows.push(
           fieldRow(
@@ -1231,12 +1228,14 @@ import Admin from '../../../layouts/Admin.astro';
             sources
               .map((s: any) => {
                 const kindLabel =
-                  ({
-                    slack_file: 'Slack',
-                    slack_link: 'Slack',
-                    upload: 'Upload',
-                    job_output: 'Job',
-                  } as Record<string, string>)[s.source_type] ||
+                  (
+                    {
+                      slack_file: 'Slack',
+                      slack_link: 'Slack',
+                      upload: 'Upload',
+                      job_output: 'Job',
+                    } as Record<string, string>
+                  )[s.source_type] ||
                   s.source_type ||
                   'Source';
                 let meta: any = null;
@@ -1252,15 +1251,15 @@ import Admin from '../../../layouts/Admin.astro';
                 if (meta?.poster) parts.push(`@${escapeHtml(meta.poster)}`);
                 if (s.created_at)
                   parts.push(
-                    escapeHtml(
-                      new Date(s.created_at).toLocaleDateString(),
-                    ),
+                    escapeHtml(new Date(s.created_at).toLocaleDateString()),
                   );
                 // Slack reactions are sometimes the *reason* an item got
                 // pulled into the archive — surface them inline rather
                 // than hiding the count in a sub-field.
                 if (s.reaction_count) {
-                  parts.push(`${s.reaction_count} reaction${s.reaction_count === 1 ? '' : 's'}`);
+                  parts.push(
+                    `${s.reaction_count} reaction${s.reaction_count === 1 ? '' : 's'}`,
+                  );
                 }
                 let line = parts.join(' · ');
                 if (s.slack_link) {
@@ -1576,32 +1575,57 @@ import Admin from '../../../layouts/Admin.astro';
     // build dropdowns without an extra round-trip. If you change one, change
     // the other (and bump AI_DESCRIPTION_PROMPT_VERSION).
     const VIBE_VOCAB = [
-      'moody', 'cheerful', 'melancholic', 'sterile', 'chaotic',
-      'nostalgic', 'dystopian', 'whimsical', 'aggressive', 'serene',
-      'mundane', 'surreal', 'ironic', 'gritty', 'clinical', 'dreamy',
+      'moody',
+      'cheerful',
+      'melancholic',
+      'sterile',
+      'chaotic',
+      'nostalgic',
+      'dystopian',
+      'whimsical',
+      'aggressive',
+      'serene',
+      'mundane',
+      'surreal',
+      'ironic',
+      'gritty',
+      'clinical',
+      'dreamy',
     ];
     const COLOR_TEMPERATURE_VOCAB = ['warm', 'cool', 'neutral'];
     const COLOR_CHARACTER_VOCAB = [
-      'vibrant', 'muted', 'pastel', 'monochrome', 'high-contrast',
-      'earthy', 'dark', 'light',
+      'vibrant',
+      'muted',
+      'pastel',
+      'monochrome',
+      'high-contrast',
+      'earthy',
+      'dark',
+      'light',
     ];
     const BOOL_FLAGS = [
-      ['is_photo',         'photo'],
-      ['is_screenshot',    'screenshot'],
-      ['is_meme',          'meme'],
-      ['is_artwork',       'artwork'],
-      ['is_ai_generated',  'AI-generated'],
-      ['has_human',        'has human'],
-      ['has_face',         'has face'],
+      ['is_photo', 'photo'],
+      ['is_screenshot', 'screenshot'],
+      ['is_meme', 'meme'],
+      ['is_artwork', 'artwork'],
+      ['is_ai_generated', 'AI-generated'],
+      ['has_human', 'has human'],
+      ['has_face', 'has face'],
       ['has_text_overlay', 'has text overlay'],
-      ['is_nsfw',          'NSFW'],
+      ['is_nsfw', 'NSFW'],
     ];
 
     // Render the AI Vision card. Only shown for images that have a generation
     // on file. Collapsed by default — click "Show" in the head to expand.
     function renderAiVision(item: any) {
-      const sectionEl = document.getElementById('ai-vision-section') as HTMLElement;
-      if (item.media_type !== 'image' || !item.image_meta || !item.image_meta.ai_description_generated_at) {
+      const sectionEl = document.getElementById(
+        'ai-vision-section',
+      ) as HTMLElement;
+      if (
+        item.media_type !== 'image' ||
+        !item.image_meta ||
+        !item.image_meta.ai_description_generated_at
+      ) {
         sectionEl.style.display = 'none';
         return;
       }
@@ -1609,7 +1633,9 @@ import Admin from '../../../layouts/Admin.astro';
 
       const m = item.image_meta;
       const statsEl = document.getElementById('ai-vision-stats')!;
-      const toggleBtn = document.getElementById('ai-vision-toggle') as HTMLButtonElement;
+      const toggleBtn = document.getElementById(
+        'ai-vision-toggle',
+      ) as HTMLButtonElement;
       const bodyEl = document.getElementById('ai-vision-body') as HTMLElement;
 
       const tagCount = (m.ai_tags || []).length;
@@ -1630,31 +1656,38 @@ import Admin from '../../../layouts/Admin.astro';
       // Tags — chips with promote-to-tag action.
       const tagsEl = document.getElementById('aiv-tags')!;
       const existingTags: string[] = item.tags || [];
-      tagsEl.innerHTML = (m.ai_tags || []).map((t: string) => {
-        const already = existingTags.includes(t);
-        const safe = escapeHtml(t);
-        return already
-          ? `<span class="ai-chip ai-chip--promoted" title="Already a manual tag">${safe} ✓</span>`
-          : `<button class="ai-chip ai-chip--promote" data-tag="${safe}" type="button" title="Promote to manual tag">${safe}<span class="ai-chip__add"> +</span></button>`;
-      }).join(' ') || '<span class="ai-vision-empty">none</span>';
-      tagsEl.querySelectorAll<HTMLButtonElement>('.ai-chip--promote').forEach((btn) => {
-        btn.onclick = async () => {
-          const tag = btn.dataset.tag!;
-          try {
-            await api(`/media/${currentItem.id}/tags`, {
-              method: 'POST',
-              body: JSON.stringify({ tags: [tag] }),
-            });
-            (window as any).toast?.success(`Added tag "${tag}"`);
-            // Re-fetch current item to pick up the new tag, then re-render.
-            currentItem = await api(`/media/${currentItem.id}`);
-            renderTags();
-            renderAiVision(currentItem);
-          } catch (err: any) {
-            (window as any).toast?.error(`Promote failed: ${err.message ?? err}`);
-          }
-        };
-      });
+      tagsEl.innerHTML =
+        (m.ai_tags || [])
+          .map((t: string) => {
+            const already = existingTags.includes(t);
+            const safe = escapeHtml(t);
+            return already
+              ? `<span class="ai-chip ai-chip--promoted" title="Already a manual tag">${safe} ✓</span>`
+              : `<button class="ai-chip ai-chip--promote" data-tag="${safe}" type="button" title="Promote to manual tag">${safe}<span class="ai-chip__add"> +</span></button>`;
+          })
+          .join(' ') || '<span class="ai-vision-empty">none</span>';
+      tagsEl
+        .querySelectorAll<HTMLButtonElement>('.ai-chip--promote')
+        .forEach((btn) => {
+          btn.onclick = async () => {
+            const tag = btn.dataset.tag!;
+            try {
+              await api(`/media/${currentItem.id}/tags`, {
+                method: 'POST',
+                body: JSON.stringify({ tags: [tag] }),
+              });
+              (window as any).toast?.success(`Added tag "${tag}"`);
+              // Re-fetch current item to pick up the new tag, then re-render.
+              currentItem = await api(`/media/${currentItem.id}`);
+              renderTags();
+              renderAiVision(currentItem);
+            } catch (err: any) {
+              (window as any).toast?.error(
+                `Promote failed: ${err.message ?? err}`,
+              );
+            }
+          };
+        });
 
       // Vibe — multi-select chip group with editable controlled-vocab dropdown.
       const vibeEl = document.getElementById('aiv-vibe')!;
@@ -1681,8 +1714,12 @@ import Admin from '../../../layouts/Admin.astro';
           <span class="ai-vision-color-label">Character</span>
           <span data-color-axis="character"></span>
         </div>`;
-      const tempHost = colorEl.querySelector('[data-color-axis="temperature"]') as HTMLElement;
-      const charHost = colorEl.querySelector('[data-color-axis="character"]') as HTMLElement;
+      const tempHost = colorEl.querySelector(
+        '[data-color-axis="temperature"]',
+      ) as HTMLElement;
+      const charHost = colorEl.querySelector(
+        '[data-color-axis="character"]',
+      ) as HTMLElement;
       tempHost.innerHTML = renderVocabChips({
         active: m.ai_color_temperature ? [m.ai_color_temperature] : [],
         vocab: COLOR_TEMPERATURE_VOCAB,
@@ -1710,7 +1747,12 @@ import Admin from '../../../layouts/Admin.astro';
       const flagsEl = document.getElementById('aiv-flags')!;
       flagsEl.innerHTML = BOOL_FLAGS.map(([key, label]) => {
         const val = m[key];
-        const stateClass = val === true ? 'ai-flag--on' : val === false ? 'ai-flag--off' : 'ai-flag--unset';
+        const stateClass =
+          val === true
+            ? 'ai-flag--on'
+            : val === false
+              ? 'ai-flag--off'
+              : 'ai-flag--unset';
         const overrideClass = overrides[key] ? ' ai-flag--overridden' : '';
         const symbol = val === true ? '✓' : val === false ? '✗' : '–';
         return `<button class="ai-flag ${stateClass}${overrideClass}" data-flag="${key}" data-value="${val === null || val === undefined ? '' : val}" type="button" title="${overrides[key] ? 'Human override' : 'AI generated'}">${symbol} ${label}</button>`;
@@ -1731,7 +1773,8 @@ import Admin from '../../../layouts/Admin.astro';
       // `manage.py backfill-ai-descriptions --all` which is checkpointed.
       const provEl = document.getElementById('aiv-provenance')!;
       const when = new Date(m.ai_description_generated_at).toLocaleString();
-      const tokens = (m.ai_description_tokens_in || 0) + (m.ai_description_tokens_out || 0);
+      const tokens =
+        (m.ai_description_tokens_in || 0) + (m.ai_description_tokens_out || 0);
       provEl.textContent = `${m.ai_description_model || 'unknown model'} · ${m.ai_description_prompt_v || '?'} · ${when} · ${tokens} tokens`;
     }
 
@@ -1746,44 +1789,54 @@ import Admin from '../../../layouts/Admin.astro';
     }): string {
       const host = document.createElement('span');
       (host as any)._opts = opts;
-      const chips = opts.vocab.map((v) => {
-        const on = opts.active.includes(v);
-        const cls = `ai-chip ai-chip--vocab${on ? ' ai-chip--active' : ''}${opts.overridden ? ' ai-chip--overridden' : ''}`;
-        return `<button class="${cls}" data-value="${escapeHtml(v)}" type="button">${escapeHtml(v)}</button>`;
-      }).join(' ');
+      const chips = opts.vocab
+        .map((v) => {
+          const on = opts.active.includes(v);
+          const cls = `ai-chip ai-chip--vocab${on ? ' ai-chip--active' : ''}${opts.overridden ? ' ai-chip--overridden' : ''}`;
+          return `<button class="${cls}" data-value="${escapeHtml(v)}" type="button">${escapeHtml(v)}</button>`;
+        })
+        .join(' ');
       return `<span class="ai-vision-chip-group" data-multi="${opts.multi ? '1' : '0'}">${chips}</span>`;
     }
 
     function bindVocabChips(rootEl: HTMLElement) {
-      rootEl.querySelectorAll<HTMLElement>('.ai-vision-chip-group').forEach((group) => {
-        const multi = group.getAttribute('data-multi') === '1';
-        const chips = Array.from(group.querySelectorAll<HTMLButtonElement>('.ai-chip--vocab'));
-        chips.forEach((chip) => {
-          chip.onclick = async () => {
-            let active = chips.filter((c) => c.classList.contains('ai-chip--active')).map((c) => c.dataset.value!);
-            const val = chip.dataset.value!;
-            if (multi) {
-              if (active.includes(val)) {
-                active = active.filter((v) => v !== val);
-              } else if (active.length < 3) {
-                active = [...active, val];
+      rootEl
+        .querySelectorAll<HTMLElement>('.ai-vision-chip-group')
+        .forEach((group) => {
+          const multi = group.getAttribute('data-multi') === '1';
+          const chips = Array.from(
+            group.querySelectorAll<HTMLButtonElement>('.ai-chip--vocab'),
+          );
+          chips.forEach((chip) => {
+            chip.onclick = async () => {
+              let active = chips
+                .filter((c) => c.classList.contains('ai-chip--active'))
+                .map((c) => c.dataset.value!);
+              const val = chip.dataset.value!;
+              if (multi) {
+                if (active.includes(val)) {
+                  active = active.filter((v) => v !== val);
+                } else if (active.length < 3) {
+                  active = [...active, val];
+                } else {
+                  (window as any).toast?.error('Max 3 vibe values');
+                  return;
+                }
               } else {
-                (window as any).toast?.error('Max 3 vibe values');
-                return;
+                active = active[0] === val ? [] : [val];
               }
-            } else {
-              active = active[0] === val ? [] : [val];
-            }
-            // Re-fetch after the patch to reflect the server-side state
-            // (including the override flag that affects styling).
-            try {
-              await patchAiFieldsRaw(group, active, multi);
-            } catch (err: any) {
-              (window as any).toast?.error(`Update failed: ${err.message ?? err}`);
-            }
-          };
+              // Re-fetch after the patch to reflect the server-side state
+              // (including the override flag that affects styling).
+              try {
+                await patchAiFieldsRaw(group, active, multi);
+              } catch (err: any) {
+                (window as any).toast?.error(
+                  `Update failed: ${err.message ?? err}`,
+                );
+              }
+            };
+          });
         });
-      });
     }
 
     // Convenience wrappers for the PATCH /media/:id/ai-fields endpoint.
@@ -1798,16 +1851,25 @@ import Admin from '../../../layouts/Admin.astro';
 
     // Special-case wrapper for vocab chips: figures out which field a chip
     // group is for from its surrounding markup.
-    async function patchAiFieldsRaw(group: HTMLElement, active: string[], multi: boolean) {
+    async function patchAiFieldsRaw(
+      group: HTMLElement,
+      active: string[],
+      multi: boolean,
+    ) {
       // Find the row that owns this group to determine the field name.
       const row = group.closest('.ai-vision-row, .ai-vision-color-row');
-      const label = (row?.querySelector('.ai-vision-row__label, .ai-vision-color-label')?.textContent || '').trim().toLowerCase();
+      const label = (
+        row?.querySelector('.ai-vision-row__label, .ai-vision-color-label')
+          ?.textContent || ''
+      )
+        .trim()
+        .toLowerCase();
       let field: string;
       if (label === 'vibe') field = 'ai_vibe';
       else if (label === 'temperature') field = 'ai_color_temperature';
       else if (label === 'character') field = 'ai_color_character';
       else throw new Error(`unknown vocab field for label "${label}"`);
-      const value = multi ? active : (active[0] || null);
+      const value = multi ? active : active[0] || null;
       await patchAiFields({ [field]: value });
     }
 

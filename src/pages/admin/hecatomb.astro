@@ -14,7 +14,6 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
   </div>
 
   <div class="hecatomb-form">
-    <!-- Recipe card: which app, which recipe, how many. -->
     <BrutalCard title="Recipe" class="config-card">
       <div class="config-row-label" for="hec-app">App</div>
       <BrutalSelect
@@ -54,7 +53,6 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
       </div>
     </BrutalCard>
 
-    <!-- Filters card: candidate pool. Always visible (no <details>). -->
     <BrutalCard title="Filters" class="config-card">
       <Fragment slot="meta">
         <span id="hec-candidates" class="hec-candidates">
@@ -70,14 +68,8 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
         placeholder="Text search…"
       />
 
-      <!-- Single source of truth: the same SearchFilterBar that powers
-           /admin/search. Any group it grows automatically appears here.
-           The Filters → BatchShuffleSpec translator in the script below
-           consumes the fields the batch endpoint understands and silently
-           drops the rest (e.g. AI / votes / dates aren't pool-side filters
-           today). -->
       <div id="hec-filter-host" class="hec-filter-host">
-        <SearchFilterBar client:load syncUrl={false} />
+        <SearchFilterBar client:load syncUrl={false} hide={['sort']} />
       </div>
 
       <div class="config-row-full hec-exclude-row">
@@ -97,10 +89,16 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
             class="hec-exclude-hint"
             id="hec-exclude-recipe-hint"
             aria-live="polite"
-            >— applies once a specific recipe is selected</span
+            >&mdash; applies once a specific recipe is selected</span
           >
         </label>
       </div>
+    </BrutalCard>
+
+    <!-- Preview: shows up to 20 matching candidates so the user can
+         see what the filters will select before submitting. -->
+    <BrutalCard title="Preview" hideHead={true} class="config-card" flush id="hec-preview-card" style="display:none;">
+      <div class="hec-preview-grid" id="hec-preview-grid"></div>
     </BrutalCard>
 
     <div class="hec-actions">
@@ -158,10 +156,13 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
   .hec-input--narrow {
     width: 100px;
   }
-  /* SearchFilterBar island host — give the embedded bar room to breathe
-     inside the Filters BrutalCard. The bar styles itself internally. */
+  /* Constrain the embedded filter-bar so it doesn't overflow the card.
+     The bar uses a 2-col grid; min-width:0 on the host and overflow:hidden
+     on the card body keep long chip groups and selects inside the bounds. */
   .hec-filter-host {
     margin-top: var(--space-xs);
+    min-width: 0;
+    overflow: hidden;
   }
   .hec-exclude-hint {
     color: var(--color-muted);
@@ -169,8 +170,6 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
     text-transform: uppercase;
     letter-spacing: 0.5pt;
   }
-  /* Toggle the hint visibility off when the recipe-exclude checkbox isn't
-     disabled — JS flips a data- attribute. */
   .hec-exclude-row:not([data-recipe-locked='1']) .hec-exclude-hint {
     display: none;
   }
@@ -195,8 +194,6 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
     height: 14px;
     accent-color: var(--color-fg);
   }
-  /* Live candidate count: sits in the Filters card head's `meta` slot, so
-     the user sees the impact of every filter change as they edit. */
   .hec-candidates {
     font-family: var(--font-mono);
     font-size: 0.65rem;
@@ -223,7 +220,6 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
   .hec-submit:disabled {
     opacity: 0.4;
     cursor: not-allowed;
-    /* Lock the brutal chrome in place when disabled — no hover/active travel. */
     transform: none;
     box-shadow: 2px 2px 0 var(--color-fg);
   }
@@ -250,37 +246,87 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
   .hec-status.hec-err {
     color: var(--color-status-fail);
   }
+
+  /* Preview grid — compact 4-col tile strip that mirrors the Stacks grid
+     aesthetic. Tiles are square, monochrome, and link to the detail page. */
+  .hec-preview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 4px;
+  }
+  .hec-preview-tile {
+    border: 1px solid var(--color-border);
+    overflow: hidden;
+    position: relative;
+    min-width: 0;
+  }
+  .hec-preview-tile a {
+    display: block;
+    aspect-ratio: 1;
+  }
+  .hec-preview-tile img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    background: var(--color-surface-2);
+  }
+  .hec-preview-tile__label {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: color-mix(in srgb, var(--color-text) 70%, transparent);
+    color: var(--color-bg);
+    font-family: var(--font-mono);
+    font-size: 0.55rem;
+    padding: 2px 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+  }
+  .hec-preview-empty {
+    grid-column: 1 / -1;
+    padding: var(--space-md);
+    text-align: center;
+    color: var(--color-muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+  }
 </style>
 
-<script>
+<style is:global>
+  /* hecatomb: keep filter-bar grid cells from bursting out of the card.
+     Must be global because .brutal-card__body is rendered by BrutalCard.astro
+     which has its own scoped styles. */
+  #hec-filter-host .filter-bar {
+    min-width: 0;
+  }
+</style>
+
+<script type="module">
+  import { filtersToBatchShuffle, filtersToSearchBody } from '../../lib/filterTranslator.ts';
+
   document.addEventListener('astro:page-load', async () => {
     await (window as any).__authReady;
 
     const appSelect = document.getElementById('hec-app') as HTMLSelectElement;
     const recipeRow = document.getElementById('hec-recipe-row')!;
     const recipeLabel = document.getElementById('hec-recipe-label')!;
-    const recipeSelect = document.getElementById(
-      'hec-recipe',
-    ) as HTMLSelectElement;
-    const randomRecipeCb = document.getElementById(
-      'hec-random-recipe',
-    ) as HTMLInputElement;
+    const recipeSelect = document.getElementById('hec-recipe') as HTMLSelectElement;
+    const randomRecipeCb = document.getElementById('hec-random-recipe') as HTMLInputElement;
     const countInput = document.getElementById('hec-count') as HTMLInputElement;
-    const submitBtn = document.getElementById(
-      'hec-submit',
-    ) as HTMLButtonElement;
+    const submitBtn = document.getElementById('hec-submit') as HTMLButtonElement;
     const statusEl = document.getElementById('hec-status')!;
     const candidatesEl = document.getElementById('hec-candidates')!;
-    const excludeRecipeCb = document.getElementById(
-      'hec-exclude-recipe',
-    ) as HTMLInputElement;
-    const excludeRow = document.querySelector(
-      '.hec-exclude-row',
-    ) as HTMLElement | null;
+    const excludeRecipeCb = document.getElementById('hec-exclude-recipe') as HTMLInputElement;
+    const excludeRow = document.querySelector('.hec-exclude-row') as HTMLElement | null;
+    const previewCard = document.getElementById('hec-preview-card')!;
+    const previewGrid = document.getElementById('hec-preview-grid')!;
 
     let apps: any[] = [];
 
-    // Collect flat list of recipe options (values only) across option_groups + options
     function collectRecipeOptions(
       manifest: any,
     ): Array<{ value: string; label: string; group?: string }> {
@@ -317,7 +363,6 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
       recipeRow.style.display = '';
       recipeLabel.style.display = '';
 
-      // Group options if we have group labels
       const groups = new Map<string, typeof opts>();
       for (const o of opts) {
         const g = o.group || '';
@@ -346,7 +391,6 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
       }
     }
 
-    // Load apps
     try {
       const res = await fetch('/api/apps', { credentials: 'include' });
       if (res.ok) {
@@ -389,11 +433,6 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
       submitBtn.disabled = !valid;
     }
 
-    // The recipe-exclude checkbox can only meaningfully apply when a specific
-    // recipe is selected — the backend silently ignores it under random-recipe
-    // or when no recipe is picked, which made the toggle feel dead. Lock it
-    // and show a hint when it can't apply; clear the checked state too so
-    // the count preview matches what submit will actually do.
     function updateExcludeRecipeState() {
       const recipeAvailable = recipeRow.style.display !== 'none';
       const recipeChosen = !!recipeSelect.value;
@@ -440,10 +479,8 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
       updateSubmitEnabled();
     });
 
-    // SearchFilterBar (Svelte island) is the single source of truth for the
-    // structured filter state. It mirrors its consolidated state into
-    // `data-filters` JSON on its inner wrapper and dispatches `filters-change`
-    // CustomEvents that bubble up to #hec-filter-host. We read it on demand.
+    // ── Filter bar reader (shared between preview and submit) ────────────
+
     function filterBarEl(): HTMLElement | null {
       return document.querySelector(
         '#hec-filter-host [data-filters]',
@@ -453,67 +490,24 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
     function readBarFilters(): any {
       const raw = filterBarEl()?.dataset.filters;
       if (!raw) return null;
-      try {
-        return JSON.parse(raw);
-      } catch {
-        return null;
-      }
+      try { return JSON.parse(raw); } catch { return null; }
     }
 
-    // Translate the bar's `Filters` shape into BatchShuffleSpec. The bar
-    // grows new filter groups over time; this translator consumes the
-    // fields the /api/jobs/batch endpoint understands today and silently
-    // drops the rest. When the batch endpoint grows (e.g. learns AI
-    // filters), extend this and `BatchShuffleSpec` together.
-    //
-    // Mapped today:  tagsText, channels, outputIndexes, reactionsMin, tagsMin
-    // Ignored:       types (manifest's allowed_media_types wins), dates,
-    //                colors, posters, sortBy, hasTranscript, hasText, votes,
-    //                AI fields, jobApp (batch is per-app already).
     function buildShufflePayload() {
       const query = (
         document.getElementById('sf-query') as HTMLInputElement
       ).value.trim();
       const f = readBarFilters() || {};
-      const tagsText: string = typeof f.tagsText === 'string' ? f.tagsText : '';
-      const channels: string[] = Array.isArray(f.channels) ? f.channels : [];
-      const outputIndexes: string[] = Array.isArray(f.outputIndexes)
-        ? f.outputIndexes
-        : [];
-      const reactionsMin =
-        typeof f.reactionsMin === 'number' && f.reactionsMin > 0
-          ? f.reactionsMin
-          : 0;
-      const tagsMin =
-        typeof f.tagsMin === 'number' && f.tagsMin > 0 ? f.tagsMin : 0;
-
-      const payload: any = {
-        query,
-        source_channels: channels,
-        tags: tagsText
-          ? tagsText
-              .split(',')
-              .map((t: string) => t.trim())
-              .filter(Boolean)
-          : [],
-        // BatchShuffleSpec.output_index is a single string. The bar can carry
-        // multiple — for now we take the first (PullFromIndex makes the same
-        // simplification). Extending the schema is a future call.
-        output_index: outputIndexes[0] || null,
-        reaction_count_min: reactionsMin > 0 ? reactionsMin : null,
-        tag_count_min: tagsMin > 0 ? tagsMin : null,
-        exclude_processed_by_app: (
+      return filtersToBatchShuffle(f, query, {
+        excludeProcessedByApp: (
           document.getElementById('hec-exclude-app') as HTMLInputElement
         ).checked,
-        exclude_processed_by_recipe: excludeRecipeCb.checked,
-      };
-      return payload;
+        excludeProcessedByRecipe: excludeRecipeCb.checked,
+      });
     }
 
-    // Live candidate count via POST /api/jobs/batch/preview — runs the same
-    // _build_batch_pool the submit endpoint uses, so the count honors the
-    // app's allowed_media_types AND the exclude_processed_* toggles. Debounced
-    // so typing in the search box doesn't spam.
+    // ── Live candidate count (via batch preview endpoint) ────────────────
+
     let previewTimer: number | null = null;
     let previewSeq = 0;
     function schedulePreview() {
@@ -571,28 +565,85 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
       }
     }
 
-    // Wire local controls (query + the two exclude checkboxes) directly,
-    // and the SearchFilterBar island via its bubbling `filters-change` event.
-    const sfQueryEl = document.getElementById('sf-query');
-    sfQueryEl?.addEventListener('input', schedulePreview);
-    document
-      .getElementById('hec-exclude-app')
-      ?.addEventListener('change', schedulePreview);
-    excludeRecipeCb.addEventListener('change', schedulePreview);
-    document
-      .getElementById('hec-filter-host')
-      ?.addEventListener('filters-change', () => schedulePreview());
-    // Initial preview after a beat (gives the bar a chance to render its
-    // data-filters attribute on first mount).
-    setTimeout(runPreview, 100);
+    // ── Search preview — shows actual matching items via /api/search ─────
 
-    // Build params from the app manifest: start with every param's default
-    // (so required-with-default params like processing_mode / model are
-    // covered), then force processing_mode to "recipe" if the app offers it
-    // (otherwise an app like rottengenizdat that defaults to "single_pass"
-    // would silently ignore the recipe choice), and finally overlay the user's
-    // recipe pick. Params with unmet depends_on are skipped server-side by
-    // _validate_job_input, so extra defaults are harmless.
+    let searchPreviewTimer: number | null = null;
+    let searchPreviewSeq = 0;
+    function scheduleSearchPreview() {
+      if (searchPreviewTimer !== null) window.clearTimeout(searchPreviewTimer);
+      searchPreviewTimer = window.setTimeout(runSearchPreview, 350);
+    }
+    async function runSearchPreview() {
+      const f = readBarFilters();
+      if (!f) { previewCard.style.display = 'none'; return; }
+      const query = (document.getElementById('sf-query') as HTMLInputElement).value.trim();
+      const body = filtersToSearchBody(f, query, { perPage: 20 });
+
+      const mySeq = ++searchPreviewSeq;
+      try {
+        const res = await fetch('/api/search', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (mySeq !== searchPreviewSeq) return;
+
+        previewCard.style.display = '';
+
+        if (!res.ok) {
+          previewGrid.innerHTML = '<div class="hec-preview-empty">Search unavailable</div>';
+          return;
+        }
+        const data = await res.json();
+        const hits = data.results || data.hits || [];
+        if (!hits.length) {
+          previewGrid.innerHTML = '<div class="hec-preview-empty">No matching items</div>';
+          return;
+        }
+        previewGrid.innerHTML = hits.map((item: any) => {
+          const thumbSrc = `/api/media/${item.id}/thumbnail?size=sm`;
+          const detailUrl = `/admin/search/detail?id=${encodeURIComponent(item.id)}`;
+          return `<div class="hec-preview-tile">
+            <a href="${detailUrl}" target="_blank" rel="noopener">
+              <img src="${thumbSrc}" alt="${(item.filename || '').replace(/"/g, '')}" loading="lazy" />
+            </a>
+            <div class="hec-preview-tile__label">${item.media_type || '?'} &middot; ${item.tag_count ?? 0} tags</div>
+          </div>`;
+        }).join('');
+      } catch {
+        if (mySeq !== searchPreviewSeq) return;
+        previewGrid.innerHTML = '<div class="hec-preview-empty">Preview unavailable</div>';
+      }
+    }
+
+    // ── Wiring ───────────────────────────────────────────────────────────
+
+    const sfQueryEl = document.getElementById('sf-query');
+    sfQueryEl?.addEventListener('input', () => { schedulePreview(); scheduleSearchPreview(); });
+    document.getElementById('hec-exclude-app')?.addEventListener('change', schedulePreview);
+    excludeRecipeCb.addEventListener('change', schedulePreview);
+    document.getElementById('hec-filter-host')?.addEventListener('filters-change', () => {
+      schedulePreview();
+      scheduleSearchPreview();
+    });
+
+    // Wait for the bar to mount, then do a first search preview.
+    // poll until data-filters is populated (the bar sets it in onMount).
+    function waitForBar(maxTries: number = 30) {
+      const f = readBarFilters();
+      if (f) {
+        schedulePreview();
+        scheduleSearchPreview();
+        return;
+      }
+      if (maxTries <= 0) return;
+      setTimeout(() => waitForBar(maxTries - 1), 100);
+    }
+    setTimeout(() => waitForBar(), 50);
+
+    // ── Submit ───────────────────────────────────────────────────────────
+
     function buildJobParams(
       manifest: any,
       userRecipe: string,
@@ -657,7 +708,6 @@ import SearchFilterBar from '../../components/SearchFilterBar.svelte';
           return;
         }
 
-        // Error path
         let msg = `Batch submission failed (HTTP ${res.status})`;
         try {
           const err = await res.json();

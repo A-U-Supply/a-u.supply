@@ -500,10 +500,10 @@ class JobResponse(BaseModel):
 class BatchShuffleSpec(BaseModel):
     """Filter spec for the candidate pool from which batch jobs draw inputs.
 
-    Mirrors the shuffle form on the workspace page: the same ``query`` and
-    ``filters`` you'd send to ``POST /api/search``. Only media items matching
-    these filters (after excluding already-processed ones, if requested)
-    are eligible to be drawn into batch jobs.
+    Mirrors the ``POST /api/search`` filter vocabulary as closely as possible.
+    Fields that don't apply (sort, votes, AI vision) are intentionally absent.
+    Only media items matching these filters (after excluding already-processed
+    ones, if requested) are eligible to be drawn into batch jobs.
     """
 
     query: str = Field("", description="Full-text query string. Empty matches all items.")
@@ -511,7 +511,14 @@ class BatchShuffleSpec(BaseModel):
     tags: list[str] = Field(default_factory=list)
     output_index: str | None = Field(None, description="`__inputs__` (default) or an output collection name.")
     reaction_count_min: int | None = None
+    reaction_count_max: int | None = None
     tag_count_min: int | None = None
+    tag_count_max: int | None = None
+    date_range: dict | None = Field(None, description="Date range filter: `{\"from\": \"YYYY-MM-DD\", \"to\": \"YYYY-MM-DD\"}`.")
+    poster: str | None = Field(None, description="Filter by uploader/poster name.")
+    color_group: list[str] | None = Field(None, description="Filter by color group names (red, blue, etc.).")
+    has_transcript: bool | None = Field(None, description="Filter to items with/without a speech transcript.")
+    has_text: bool | None = Field(None, description="Filter to images with/without OCR-extracted text.")
     exclude_processed_by_app: bool = Field(
         False, description="Exclude items already used as inputs to a job for this app."
     )
@@ -1513,16 +1520,33 @@ def _build_batch_pool(
     from server.search_api import SearchFilters, _build_meili_filter
     from server.search_client import multi_search
 
+    rxn_range: dict | None = None
+    if shuffle.reaction_count_min is not None or shuffle.reaction_count_max is not None:
+        rxn_range = {}
+        if shuffle.reaction_count_min is not None:
+            rxn_range["min"] = shuffle.reaction_count_min
+        if shuffle.reaction_count_max is not None:
+            rxn_range["max"] = shuffle.reaction_count_max
+
+    tag_range: dict | None = None
+    if shuffle.tag_count_min is not None or shuffle.tag_count_max is not None:
+        tag_range = {}
+        if shuffle.tag_count_min is not None:
+            tag_range["min"] = shuffle.tag_count_min
+        if shuffle.tag_count_max is not None:
+            tag_range["max"] = shuffle.tag_count_max
+
     filters = SearchFilters(
         tags=shuffle.tags or None,
         source_channels=shuffle.source_channels or None,
         output_index=shuffle.output_index,
-        reaction_count={"min": shuffle.reaction_count_min}
-        if shuffle.reaction_count_min is not None
-        else None,
-        tag_count={"min": shuffle.tag_count_min}
-        if shuffle.tag_count_min is not None
-        else None,
+        reaction_count=rxn_range,
+        tag_count=tag_range,
+        date_range=shuffle.date_range,
+        poster=shuffle.poster,
+        color_group=shuffle.color_group,
+        has_transcript=shuffle.has_transcript,
+        has_text=shuffle.has_text,
     )
     meili_filter = _build_meili_filter(filters)
     results = multi_search(
