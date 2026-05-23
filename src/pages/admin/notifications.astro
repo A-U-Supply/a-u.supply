@@ -42,7 +42,19 @@ import Admin from '../../layouts/Admin.astro';
       <div class="empty-state__icon">&#10003;</div>
       Nothing new. The omens are quiet.
     </div>
-    <ol class="notif-list" id="notif-list" hidden></ol>
+    <table class="notif-table" id="notif-list" hidden>
+      <thead>
+        <tr>
+          <th class="notif-col-type">Type</th>
+          <th class="notif-col-user">User</th>
+          <th class="notif-col-preview">Preview</th>
+          <th class="notif-col-link">Link</th>
+          <th class="notif-col-time">Time</th>
+          <th class="notif-col-actions">Act</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
   </section>
 
   <!-- ───────── Sources tab ───────── -->
@@ -147,86 +159,112 @@ import Admin from '../../layouts/Admin.astro';
     margin-left: auto;
   }
 
-  .notif-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-xs);
+  .notif-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
   }
-  .notif-list[hidden] {
+  .notif-table[hidden] {
     display: none;
   }
-  .notif-row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: var(--space-sm);
-    padding: var(--space-sm) var(--space-md);
-    border: 2px solid var(--color-fg);
-    background: var(--color-bg);
-    box-shadow: 2px 2px 0 var(--color-fg);
-    align-items: start;
+  .notif-table thead {
+    border-bottom: 2px solid var(--color-fg);
   }
-  .notif-row__body {
-    min-width: 0;
-  }
-  .notif-row__head {
-    display: flex;
-    align-items: center;
-    gap: var(--space-xs);
-    flex-wrap: wrap;
-    margin-bottom: 4px;
-  }
-  .notif-row__source {
-    display: inline-block;
-    padding: 1px 6px;
-    border: 1px solid var(--color-fg);
+  .notif-table th {
+    font-family: var(--font-mono);
     font-size: 0.6rem;
     text-transform: uppercase;
     letter-spacing: 0.5pt;
-    color: var(--color-fg);
+    color: var(--color-muted);
+    padding: var(--space-xs) var(--space-sm);
+    text-align: left;
+    white-space: nowrap;
   }
-  .notif-row__source[data-source^='fold_'] {
+  .notif-table td {
+    padding: var(--space-xs) var(--space-sm);
+    border-bottom: 1px dotted var(--color-border);
+    vertical-align: top;
+  }
+  .notif-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+  .notif-table tbody tr:hover td {
+    background: var(--color-surface);
+  }
+  .notif-table__source {
+    display: inline-block;
+    padding: 1px 6px;
+    border: 1px solid var(--color-fg);
+    font-size: 0.55rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    white-space: nowrap;
+  }
+  .notif-table__source[data-source^='fold_community'],
+  .notif-table__source[data-source^='fold_thread'],
+  .notif-table__source[data-source^='fold_inbox'] {
     color: var(--color-bg);
     background: var(--color-fg);
   }
-  .notif-row__title {
-    font-weight: 700;
+  .notif-table__actor {
+    font-weight: 600;
     font-size: var(--text-sm);
-    color: var(--color-fg);
-    text-decoration: none;
-    word-break: break-word;
+    white-space: nowrap;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .notif-row__title:hover {
-    color: var(--color-accent);
-  }
-  .notif-row__snippet {
+  .notif-table__preview {
     color: var(--color-muted);
     font-size: 0.75rem;
     line-height: 1.4;
     word-break: break-word;
-    margin-top: 2px;
+    max-width: 400px;
   }
-  .notif-row__meta {
-    margin-top: 4px;
+  .notif-table__community {
+    font-size: 0.6rem;
+    color: var(--color-accent);
+    text-decoration: none;
+    display: inline-block;
+    margin-left: 4px;
+  }
+  .notif-table__community:hover {
+    color: var(--color-fg);
+  }
+  .notif-table__link {
+    color: var(--color-fg);
+    text-decoration: none;
+    font-size: 1rem;
+    white-space: nowrap;
+  }
+  .notif-table__link:hover {
+    color: var(--color-accent);
+  }
+  .notif-table__time {
+    font-family: var(--font-mono);
     font-size: 0.6rem;
     color: var(--color-muted);
+    white-space: nowrap;
     text-transform: uppercase;
     letter-spacing: 0.5pt;
   }
-  .notif-row__actions {
-    display: flex;
-    gap: var(--space-xs);
-    align-self: start;
-  }
 
   @media (max-width: 640px) {
-    .notif-row {
-      grid-template-columns: 1fr;
+    .notif-col-preview,
+    .notif-col-link,
+    .notif-col-time {
+      display: none;
     }
-    .notif-row__actions {
-      justify-content: flex-end;
+    .notif-table td:nth-child(3),
+    .notif-table td:nth-child(4),
+    .notif-table td:nth-child(5) {
+      display: none;
+    }
+    .notif-table td:nth-child(6) {
+      text-align: right;
+    }
+    .notif-table__actor {
+      max-width: 100px;
     }
   }
 
@@ -387,7 +425,7 @@ import Admin from '../../layouts/Admin.astro';
     // ───────── Inbox ─────────
     const inboxLoading = document.getElementById('inbox-loading')!;
     const inboxEmpty = document.getElementById('inbox-empty')!;
-    const listEl = document.getElementById('notif-list') as HTMLOListElement;
+    const listEl = document.getElementById('notif-list') as HTMLTableElement;
     const countWrap = document.getElementById('inbox-count')!;
     const countNum = document.getElementById('inbox-count-num')!;
     const markAllBtn = document.getElementById(
@@ -401,6 +439,8 @@ import Admin from '../../layouts/Admin.astro';
       title: string;
       snippet: string | null;
       url: string;
+      actor: string | null;
+      community: string | null;
       created_at: string | null;
       dismissed_at: string | null;
     };
@@ -448,31 +488,33 @@ import Admin from '../../layouts/Admin.astro';
       countNum.textContent = String(unread.length);
       markAllBtn.disabled = false;
 
-      listEl.innerHTML = unread
+      const tbody = listEl.querySelector('tbody')!;
+      tbody.innerHTML = unread
         .map((n) => {
           const url = n.url ? escapeHtml(n.url) : '#';
           const isExternal = url.startsWith('http');
           const linkAttrs = isExternal
-            ? `target="_blank" rel="noopener noreferrer"`
+            ? 'target="_blank" rel="noopener noreferrer"'
             : '';
+          const sourceLabel = escapeHtml(n.source.replace(/_/g, ' '));
+          const actor = n.actor ? escapeHtml(n.actor) : '—';
+          const preview = n.snippet ? escapeHtml(n.snippet) : '';
+          const community = n.community
+            ? `<a class="notif-table__community" href="https://fold.a-u.supply/c/${escapeHtml(n.community)}" target="_blank" rel="noopener noreferrer">/c/${escapeHtml(n.community)}</a>`
+            : '';
+          const time = escapeHtml(formatTimestamp(n.created_at));
           return `
-            <li class="notif-row" data-id="${n.id}">
-              <div class="notif-row__body">
-                <div class="notif-row__head">
-                  <span class="notif-row__source" data-source="${escapeHtml(n.source)}">
-                    ${escapeHtml(n.source.replace(/_/g, ' '))}
-                  </span>
-                  <a class="notif-row__title" href="${url}" ${linkAttrs}>
-                    ${escapeHtml(n.title)}
-                  </a>
-                </div>
-                ${n.snippet ? `<div class="notif-row__snippet">${escapeHtml(n.snippet)}</div>` : ''}
-                <div class="notif-row__meta">${escapeHtml(formatTimestamp(n.created_at))}</div>
-              </div>
-              <div class="notif-row__actions">
-                <button class="action-btn" data-dismiss="${n.id}">Dismiss</button>
-              </div>
-            </li>`;
+            <tr data-id="${n.id}">
+              <td><span class="notif-table__source" data-source="${escapeHtml(n.source)}">${sourceLabel}</span></td>
+              <td><span class="notif-table__actor" title="${actor}">${actor}</span></td>
+              <td>
+                <span class="notif-table__preview">${preview}</span>
+                ${community}
+              </td>
+              <td><a class="notif-table__link" href="${url}" ${linkAttrs} title="Open">&#x2197;</a></td>
+              <td><span class="notif-table__time">${time}</span></td>
+              <td><button class="action-btn" data-dismiss="${n.id}">Dismiss</button></td>
+            </tr>`;
         })
         .join('');
       listEl.hidden = false;

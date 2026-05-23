@@ -113,6 +113,8 @@ def materialize(user: User, db) -> int:
                 title=title,
                 snippet=snippet,
                 url=url,
+                actor=row["author_name"],
+                community=row["community_name"],
                 created_at=row["published"],
             ):
                 inserted += 1
@@ -131,6 +133,8 @@ def materialize(user: User, db) -> int:
                 title=title,
                 snippet=snippet,
                 url=url,
+                actor=row["author_name"],
+                community=row["community_name"],
                 created_at=row["published"],
             ):
                 inserted += 1

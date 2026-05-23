@@ -232,6 +232,15 @@ for _model in (_Notification, _NotificationHighWater, _FoldCommunitySubscription
     if _model.__tablename__ not in _existing_tables_n:
         _model.__table__.create(bind=engine)
 
+# Migrate existing notifications table: add actor column if missing.
+_notif_cols = [c["name"] for c in _sa_inspect(engine).get_columns("notifications")]
+if "actor" not in _notif_cols:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE notifications ADD COLUMN actor TEXT"))
+if "community" not in _notif_cols:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE notifications ADD COLUMN community TEXT"))
+
 
 # Re-apply Meilisearch index settings on startup so additions to
 # FILTERABLE_ATTRIBUTES / SORTABLE_ATTRIBUTES (vote_score, upvoter_user_ids,
