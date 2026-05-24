@@ -20,6 +20,7 @@ silently rendering empty.
 
 from __future__ import annotations
 
+import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -88,11 +89,63 @@ def list_subscriptions(
         .order_by(FoldThreadSubscription.created_at.desc())
         .all()
     )
+    # Parse muted community IDs for the frontend
+    muted_ids = set()
+    if user.muted_communities:
+        try:
+            muted_ids = set(json.loads(user.muted_communities))
+        except (json.JSONDecodeError, TypeError):
+            pass
     return {
-        "communities": [_community_dict(c) for c in communities],
+        "communities": [
+            {**_community_dict(c), "muted": c.lemmy_community_id in muted_ids}
+            for c in communities
+        ],
         "threads": [_thread_dict(t) for t in threads],
         "fold_configured": fold_db.is_configured(),
     }
+
+
+class CommunityMuteBody(BaseModel):
+    community_id: int
+    muted: bool
+
+
+@router.put("/communities/muted", summary="Mute or unmute a fold community")
+def toggle_community_mute(
+    body: CommunityMuteBody,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    muted_ids = set()
+    if user.muted_communities:
+        try:
+            muted_ids = set(json.loads(user.muted_communities))
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if body.muted:
+        muted_ids.add(body.community_id)
+    else:
+        muted_ids.discard(body.community_id)
+    user.muted_communities = json.dumps(sorted(muted_ids))
+    # Sync subscriptions: remove if muted, add if unmuted
+    if body.muted:
+        db.query(FoldCommunitySubscription).filter_by(
+            user_id=user.id, lemmy_community_id=body.community_id
+        ).delete()
+    else:
+        existing = db.query(FoldCommunitySubscription).filter_by(
+            user_id=user.id, lemmy_community_id=body.community_id
+        ).first()
+        if not existing:
+            name = _fetch_community_name(body.community_id)
+            db.add(FoldCommunitySubscription(
+                user_id=user.id,
+                lemmy_community_id=body.community_id,
+                name_snapshot=name,
+            ))
+    db.commit()
+    return {"muted": sorted(muted_ids)}
 
 
 def _fetch_community_name(community_id: int) -> str:

@@ -39,6 +39,7 @@ def materialize_for_user(user: User, db: Session) -> int:
     shared session.
     """
     total = 0
+    _seed_default_muted(user, db)
     muted = _parse_muted(user.muted_sources)
     for module in SOURCE_MODULES:
         source_name = getattr(module, "SOURCE", module.__name__)
@@ -117,3 +118,11 @@ def _parse_muted(raw: str | None) -> set[str]:
         return set(json.loads(raw))
     except (json.JSONDecodeError, TypeError):
         return set()
+
+
+def _seed_default_muted(user: User, db):
+    """Seed muted_sources with ['midden'] on first materialize for new users."""
+    if user.muted_sources is not None:
+        return
+    user.muted_sources = json.dumps(["midden"])
+    db.flush()
