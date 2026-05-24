@@ -168,6 +168,37 @@ def remove_community(
     return None
 
 
+@router.post("/subscriptions/community/all", summary="Subscribe to every community on fold")
+def subscribe_all(
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Subscribe the calling user to every non-deleted community on Fold."""
+    if not fold_db.is_configured():
+        raise HTTPException(status_code=503, detail="Fold linkage not configured")
+    existing = {s.lemmy_community_id for s in
+                db.query(FoldCommunitySubscription).filter_by(user_id=user.id).all()}
+    with fold_db.fold_connection() as conn:
+        rows = conn.execute(
+            text(
+                """SELECT id, name FROM community
+                    WHERE removed = false AND deleted = false
+                    ORDER BY name ASC LIMIT 500"""
+            )
+        ).mappings().all()
+    added = 0
+    for r in rows:
+        if r["id"] not in existing:
+            db.add(FoldCommunitySubscription(
+                user_id=user.id,
+                lemmy_community_id=r["id"],
+                name_snapshot=r["name"],
+            ))
+            added += 1
+    db.commit()
+    return {"subscribed": added}
+
+
 @router.post("/subscriptions/thread", summary="Subscribe to a fold thread")
 def add_thread(
     body: ThreadBody,
