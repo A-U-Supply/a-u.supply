@@ -87,6 +87,9 @@ import Admin from '../../layouts/Admin.astro';
       <p class="sources-section__hint">
         Get notified on every new post and comment in these communities.
       </p>
+      <div class="sources-section__actions">
+        <button class="action-btn" id="subscribe-all-btn" type="button" hidden>Subscribe All</button>
+      </div>
       <ul class="sub-list" id="community-list" hidden></ul>
       <div class="sub-empty" id="community-empty">
         No community subscriptions yet.
@@ -346,6 +349,9 @@ import Admin from '../../layouts/Admin.astro';
     color: var(--color-muted);
     font-size: var(--text-sm);
     font-style: italic;
+    margin-bottom: var(--space-sm);
+  }
+  .sources-section__actions {
     margin-bottom: var(--space-sm);
   }
   .sub-list {
@@ -847,14 +853,44 @@ import Admin from '../../layouts/Admin.astro';
         foldUnconfigured.removeAttribute('hidden');
       }
       renderSubs();
-      // Kick off picker fills only if Fold is configured.
       if (mySubs.fold_configured) {
+        // Show Subscribe All button and auto-subscribe on first visit
+        if (mySubs.communities.length === 0) {
+          await subscribeAll();
+        }
+        subscribeAllBtn.removeAttribute('hidden');
         loadCommunityPicker();
         runThreadSearch('');
       } else {
         communityPickerList.innerHTML = `<li class="muted-line">Fold DB unavailable. Configure FOLD_DATABASE_URL on the server.</li>`;
       }
     }
+
+    const subscribeAllBtn = document.getElementById('subscribe-all-btn') as HTMLButtonElement;
+
+    async function subscribeAll() {
+      subscribeAllBtn.disabled = true;
+      subscribeAllBtn.textContent = 'Subscribing...';
+      try {
+        const res = await fetch('/api/admin/fold/subscriptions/community/all', {
+          method: 'POST',
+          credentials: 'include',
+        });
+        if (!res.ok) throw new Error('subscribe all');
+        const data = await res.json();
+        // Reload subscriptions to get the full list
+        const res2 = await fetch('/api/admin/fold/subscriptions', { credentials: 'include' });
+        if (res2.ok) mySubs = await res2.json();
+        renderSubs();
+        if (data.subscribed > 0) loadCommunityPicker();
+      } catch {
+        (window as any).toast.error('Subscribe all failed');
+      }
+      subscribeAllBtn.textContent = 'Subscribe All';
+      subscribeAllBtn.disabled = false;
+    }
+
+    subscribeAllBtn.addEventListener('click', subscribeAll);
 
     async function loadCommunityPicker() {
       try {
