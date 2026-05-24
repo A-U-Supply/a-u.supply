@@ -290,11 +290,7 @@ import Admin from '../../layouts/Admin.astro';
     overflow: hidden;
   }
   .notif-table__time {
-    font-family: var(--font-mono);
-    font-size: 0.55rem;
-    color: var(--color-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
+    display: none;
   }
   .notif-table__community {
     font-size: 0.6rem;
@@ -609,7 +605,7 @@ import Admin from '../../layouts/Admin.astro';
             <tr data-id="${n.id}">
               <td><span class="notif-table__source" data-source="${escapeHtml(n.source)}">${sourceLabel}</span></td>
               <td><span class="notif-table__actor" title="${actor}">${actorCell}</span></td>
-              <td><a href="${url}" ${linkAttrs} class="notif-table__preview-link"><span class="notif-table__preview">${preview}</span><br><span class="notif-table__time">${time}</span></a></td>
+              <td><a href="${url}" ${linkAttrs} class="notif-table__preview-link"><span class="notif-table__preview">${preview}</span></a></td>
               <td><span class="notif-table__community">${community}</span></td>
               <td><button class="action-btn" data-dismiss="${n.id}">Dismiss</button></td>
             </tr>`;
