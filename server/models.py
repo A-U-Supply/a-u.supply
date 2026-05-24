@@ -64,6 +64,7 @@ class User(Base):
     created_at = Column(DateTime, default=_utcnow)
     lemmy_user_id = Column(Integer, nullable=True)
     lemmy_token_encrypted = Column(String, nullable=True)
+    muted_sources = Column(String, nullable=True)  # JSON array of source names
 
 
 class SlackUserMapping(Base):

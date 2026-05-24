@@ -98,6 +98,9 @@ if "lemmy_user_id" not in _user_cols:
 if "lemmy_token_encrypted" not in _user_cols:
     with engine.begin() as _conn:
         _conn.execute(_sa_text("ALTER TABLE users ADD COLUMN lemmy_token_encrypted TEXT"))
+if "muted_sources" not in _user_cols:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE users ADD COLUMN muted_sources TEXT"))
 
 # Migrate existing DB: create Latents tables first so the FK from releases.latent_id resolves
 _existing_tables = set(_sa_inspect(engine).get_table_names())

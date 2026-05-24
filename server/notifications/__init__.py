@@ -17,6 +17,7 @@ Public surface used by server.notifications_api:
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
 
@@ -38,13 +39,17 @@ def materialize_for_user(user: User, db: Session) -> int:
     shared session.
     """
     total = 0
+    muted = _parse_muted(user.muted_sources)
     for module in SOURCE_MODULES:
+        source_name = getattr(module, "SOURCE", module.__name__)
+        if source_name in muted:
+            continue
         try:
             total += module.materialize(user, db)
         except Exception:
             logger.exception(
                 "Notification source %s materializer failed for user %s",
-                getattr(module, "SOURCE", module.__name__),
+                source_name,
                 user.id,
             )
             try:
@@ -103,3 +108,12 @@ def dismiss_all(user: User, db: Session) -> int:
     )
     db.commit()
     return int(rows)
+
+
+def _parse_muted(raw: str | None) -> set[str]:
+    if not raw:
+        return set()
+    try:
+        return set(json.loads(raw))
+    except (json.JSONDecodeError, TypeError):
+        return set()
