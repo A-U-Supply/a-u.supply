@@ -1,12 +1,14 @@
 """Fold community materializer.
 
-For each FoldCommunitySubscription, surface new posts and comments
-within the subscribed community since the last poll. Excludes events
-authored by the subscribing user themselves (no self-notifications).
+Auto-subscribes every user to all non-deleted communities on each pass
+(except communities the user has explicitly muted). New communities are
+picked up automatically — no manual subscription needed.
 
 Reads raw SQL from Fold's Postgres via server.fold_db. Skips silently
 when FOLD_DATABASE_URL is unset.
 """
+
+import json
 
 from sqlalchemy import bindparam, text
 
@@ -76,6 +78,47 @@ def materialize(user: User, db) -> int:
     if not fold_db.is_configured():
         return 0
 
+    # Parse explicitly muted community IDs
+    muted_ids = set()
+    if user.muted_communities:
+        try:
+            muted_ids = set(json.loads(user.muted_communities))
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Auto-subscribe to all communities except muted ones
+    with fold_db.fold_connection() as conn:
+        all_communities = conn.execute(
+            text(
+                """SELECT id, name FROM community
+                    WHERE removed = false AND deleted = false"""
+            )
+        ).mappings().all()
+
+    existing_subs = {
+        s.lemmy_community_id: s
+        for s in db.query(FoldCommunitySubscription)
+        .filter_by(user_id=user.id)
+        .all()
+    }
+
+    for c in all_communities:
+        cid = c["id"]
+        if cid not in muted_ids and cid not in existing_subs:
+            db.add(FoldCommunitySubscription(
+                user_id=user.id,
+                lemmy_community_id=cid,
+                name_snapshot=c["name"],
+            ))
+
+    # Remove subscriptions for communities the user muted
+    for cid, sub in existing_subs.items():
+        if cid in muted_ids:
+            db.delete(sub)
+
+    db.flush()
+
+    # Now query notifications for subscribed (non-muted) communities
     subs = (
         db.query(FoldCommunitySubscription)
         .filter_by(user_id=user.id)
@@ -87,12 +130,10 @@ def materialize(user: User, db) -> int:
     watermark = get_or_seed_watermark(db, user.id, SOURCE)
     window_end = utcnow()
     community_ids = [s.lemmy_community_id for s in subs]
-    # -1 sentinel: when a user hasn't linked their Lemmy account, no row
-    # ever matches creator_id != -1 (every real Lemmy person has id > 0).
     my_id = user.lemmy_user_id if user.lemmy_user_id else -1
 
     inserted = 0
-    with fold_db.fold_connection() as conn:
+    with fold_db.fold_connection() as conn2:
         params = {
             "community_ids": community_ids,
             "watermark": watermark,
@@ -100,7 +141,7 @@ def materialize(user: User, db) -> int:
             "my_id": my_id,
         }
 
-        for row in conn.execute(_POSTS_SQL, params).mappings():
+        for row in conn2.execute(_POSTS_SQL, params).mappings():
             ref = f"fold_post:{row['post_id']}"
             url = f"{_FOLD_BASE}/post/{row['post_id']}"
             title = f"new post in /c/{row['community_name']}"
@@ -119,7 +160,7 @@ def materialize(user: User, db) -> int:
             ):
                 inserted += 1
 
-        for row in conn.execute(_COMMENTS_SQL, params).mappings():
+        for row in conn2.execute(_COMMENTS_SQL, params).mappings():
             ref = f"fold_comment:{row['comment_id']}"
             url = f"{_FOLD_BASE}/comment/{row['comment_id']}"
             title = f"new comment in /c/{row['community_name']}"

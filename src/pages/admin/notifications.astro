@@ -83,26 +83,14 @@ import Admin from '../../layouts/Admin.astro';
     </div>
 
     <div class="sources-section">
-      <h2 class="sources-section__title">Subscribed communities</h2>
+      <h2 class="sources-section__title">Communities</h2>
       <p class="sources-section__hint">
-        Get notified on every new post and comment in these communities.
+        All fold communities — mute any you don't want notifications from.
       </p>
-      <div class="sources-section__actions">
-        <button class="action-btn" id="subscribe-all-btn" type="button" hidden>Subscribe All</button>
-      </div>
       <ul class="sub-list" id="community-list" hidden></ul>
       <div class="sub-empty" id="community-empty">
-        No community subscriptions yet.
+        No communities on Fold yet.
       </div>
-
-      <details class="picker" id="community-picker">
-        <summary class="picker__summary">Browse communities</summary>
-        <ul class="picker__results" id="community-picker-list">
-          <li class="muted-line">
-            <span class="loading-dots">Loading communities</span>
-          </li>
-        </ul>
-      </details>
     </div>
 
     <div class="sources-section">
@@ -762,9 +750,6 @@ import Admin from '../../layouts/Admin.astro';
       'community-list',
     ) as HTMLUListElement;
     const communityEmpty = document.getElementById('community-empty')!;
-    const communityPickerList = document.getElementById(
-      'community-picker-list',
-    ) as HTMLUListElement;
     const threadList = document.getElementById(
       'thread-list',
     ) as HTMLUListElement;
@@ -779,6 +764,7 @@ import Admin from '../../layouts/Admin.astro';
     type CommunitySub = {
       lemmy_community_id: number;
       name: string;
+      muted: boolean;
       created_at: string | null;
     };
     type ThreadSub = {
@@ -799,7 +785,6 @@ import Admin from '../../layouts/Admin.astro';
     };
 
     function renderSubs() {
-      // Communities
       if (mySubs.communities.length === 0) {
         communityList.hidden = true;
         communityEmpty.removeAttribute('hidden');
@@ -811,7 +796,9 @@ import Admin from '../../layouts/Admin.astro';
             (c) => `
             <li class="sub-row" data-cid="${c.lemmy_community_id}">
               <span class="sub-row__name">/c/${escapeHtml(c.name)}</span>
-              <button class="action-btn" data-remove-community="${c.lemmy_community_id}">Remove</button>
+              <button class="action-btn ${c.muted ? 'muted' : ''}" data-mute-community="${c.lemmy_community_id}">
+                ${c.muted ? 'Unmute' : 'Mute'}
+              </button>
             </li>`,
           )
           .join('');
@@ -850,80 +837,9 @@ import Admin from '../../layouts/Admin.astro';
       }
       renderSubs();
       if (mySubs.fold_configured) {
-        // Show Subscribe All button and auto-subscribe on first visit
-        if (mySubs.communities.length === 0) {
-          await subscribeAll();
-        }
-        subscribeAllBtn.removeAttribute('hidden');
-        loadCommunityPicker();
         runThreadSearch('');
       } else {
-        communityPickerList.innerHTML = `<li class="muted-line">Fold DB unavailable. Configure FOLD_DATABASE_URL on the server.</li>`;
-      }
-    }
-
-    const subscribeAllBtn = document.getElementById('subscribe-all-btn') as HTMLButtonElement;
-
-    async function subscribeAll() {
-      subscribeAllBtn.disabled = true;
-      subscribeAllBtn.textContent = 'Subscribing...';
-      try {
-        const res = await fetch('/api/admin/fold/subscriptions/community/all', {
-          method: 'POST',
-          credentials: 'include',
-        });
-        if (!res.ok) throw new Error('subscribe all');
-        const data = await res.json();
-        // Reload subscriptions to get the full list
-        const res2 = await fetch('/api/admin/fold/subscriptions', { credentials: 'include' });
-        if (res2.ok) mySubs = await res2.json();
-        renderSubs();
-        if (data.subscribed > 0) loadCommunityPicker();
-      } catch {
-        (window as any).toast.error('Subscribe all failed');
-      }
-      subscribeAllBtn.textContent = 'Subscribe All';
-      subscribeAllBtn.disabled = false;
-    }
-
-    subscribeAllBtn.addEventListener('click', subscribeAll);
-
-    async function loadCommunityPicker() {
-      try {
-        const res = await fetch('/api/admin/fold/communities', {
-          credentials: 'include',
-        });
-        if (!res.ok) throw new Error('communities');
-        const data = await res.json();
-        const subscribed = new Set(
-          mySubs.communities.map((c) => c.lemmy_community_id),
-        );
-        const rows = (data.communities || []) as {
-          id: number;
-          name: string;
-          title: string;
-        }[];
-        if (rows.length === 0) {
-          communityPickerList.innerHTML = `<li class="muted-line">No communities on Fold yet.</li>`;
-          return;
-        }
-        communityPickerList.innerHTML = rows
-          .map((c) => {
-            const isSub = subscribed.has(c.id);
-            const label = c.title
-              ? `${escapeHtml(c.title)} <span class="picker__row__sub">/c/${escapeHtml(c.name)}</span>`
-              : `/c/${escapeHtml(c.name)}`;
-            return `
-              <li class="picker__row">
-                <span class="picker__row__label">${label}</span>
-                <button class="action-btn" data-add-community="${c.id}" ${isSub ? 'disabled' : ''}>
-                  ${isSub ? 'Subscribed' : 'Subscribe'}
-                </button>
-              </li>`;
-          })
-          .join('');
-      } catch {
-        communityPickerList.innerHTML = `<li class="muted-line">Failed to load communities.</li>`;
+        threadPickerList.innerHTML = `<li class="muted-line">Fold DB unavailable.</li>`;
       }
     }
 
@@ -980,52 +896,29 @@ import Admin from '../../layouts/Admin.astro';
     panels.sources.addEventListener('click', async (e) => {
       const target = e.target as HTMLElement;
 
-      const addC = target.closest(
-        '[data-add-community]',
+      const muteC = target.closest(
+        '[data-mute-community]',
       ) as HTMLButtonElement | null;
-      if (addC) {
-        addC.disabled = true;
-        const cid = Number(addC.dataset.addCommunity);
+      if (muteC) {
+        muteC.disabled = true;
+        const cid = Number(muteC.dataset.muteCommunity);
+        const c = mySubs.communities.find(c => c.lemmy_community_id === cid);
+        if (!c) { muteC.disabled = false; return; }
+        const newMuted = !c.muted;
         try {
-          const res = await fetch('/api/admin/fold/subscriptions/community', {
-            method: 'POST',
+          const res = await fetch('/api/admin/fold/communities/muted', {
+            method: 'PUT',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lemmy_community_id: cid }),
+            body: JSON.stringify({ community_id: cid, muted: newMuted }),
           });
-          if (!res.ok) throw new Error('add');
-          const c = await res.json();
-          mySubs.communities = [...mySubs.communities, c];
+          if (!res.ok) throw new Error('mute');
+          c.muted = newMuted;
           renderSubs();
-          addC.textContent = 'Subscribed';
         } catch {
-          addC.disabled = false;
-          (window as any).toast.error('Subscribe failed');
+          (window as any).toast.error('Mute toggle failed');
         }
-        return;
-      }
-
-      const removeC = target.closest(
-        '[data-remove-community]',
-      ) as HTMLButtonElement | null;
-      if (removeC) {
-        removeC.disabled = true;
-        const cid = Number(removeC.dataset.removeCommunity);
-        try {
-          const res = await fetch(
-            `/api/admin/fold/subscriptions/community/${cid}`,
-            { method: 'DELETE', credentials: 'include' },
-          );
-          if (!res.ok) throw new Error('rm');
-          mySubs.communities = mySubs.communities.filter(
-            (c) => c.lemmy_community_id !== cid,
-          );
-          renderSubs();
-          loadCommunityPicker();
-        } catch {
-          removeC.disabled = false;
-          (window as any).toast.error('Remove failed');
-        }
+        muteC.disabled = false;
         return;
       }
 

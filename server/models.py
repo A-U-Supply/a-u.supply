@@ -65,6 +65,7 @@ class User(Base):
     lemmy_user_id = Column(Integer, nullable=True)
     lemmy_token_encrypted = Column(String, nullable=True)
     muted_sources = Column(String, nullable=True)  # JSON array of source names
+    muted_communities = Column(String, nullable=True)  # JSON array of lemmy_community_ids
 
 
 class SlackUserMapping(Base):
