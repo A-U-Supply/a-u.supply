@@ -15,6 +15,7 @@ poll.
 
 from __future__ import annotations
 
+import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -89,3 +90,26 @@ def dismiss(
     if not notif.dismiss(notification_id, user, db):
         raise HTTPException(status_code=404, detail="Notification not found")
     return None
+
+
+@router.get("/muted", summary="List muted notification sources for the calling user")
+def get_muted(
+    user: User = Depends(require_admin),
+):
+    from server.notifications import _parse_muted
+    return {"muted": sorted(_parse_muted(user.muted_sources))}
+
+
+class MutedBody(BaseModel):
+    muted: list[str]
+
+
+@router.put("/muted", summary="Set muted notification sources for the calling user")
+def set_muted(
+    body: MutedBody,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    user.muted_sources = json.dumps(sorted(set(body.muted)))
+    db.commit()
+    return {"muted": sorted(set(body.muted))}

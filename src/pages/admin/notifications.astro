@@ -73,6 +73,16 @@ import Admin from '../../layouts/Admin.astro';
     </div>
 
     <div class="sources-section">
+      <h2 class="sources-section__title">Muted sources</h2>
+      <p class="sources-section__hint">
+        Notifications from muted sources won't appear in your Inbox.
+      </p>
+      <div class="mute-list" id="mute-list">
+        <span class="loading-dots">Loading sources</span>
+      </div>
+    </div>
+
+    <div class="sources-section">
       <h2 class="sources-section__title">Subscribed communities</h2>
       <p class="sources-section__hint">
         Get notified on every new post and comment in these communities.
@@ -373,6 +383,38 @@ import Admin from '../../layouts/Admin.astro';
     display: none;
   }
 
+  .mute-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .mute-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    border: 1px solid var(--color-fg);
+    background: var(--color-bg);
+  }
+  .mute-row__info {
+    flex: 1;
+    min-width: 0;
+  }
+  .mute-row__name {
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+  .mute-row__desc {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--color-muted);
+    font-style: italic;
+  }
+  .mute-toggle.muted {
+    background: var(--color-fg);
+    color: var(--color-bg);
+  }
+
   .picker {
     border: 2px solid var(--color-fg);
     background: var(--color-bg);
@@ -640,6 +682,77 @@ import Admin from '../../layouts/Admin.astro';
     });
 
     loadInbox();
+
+    // ───────── Mute sources ─────────
+    const muteList = document.getElementById('mute-list')!;
+    const ALL_SOURCES = [
+      { key: 'fold_inbox', label: 'Fold Inbox', desc: 'replies and @-mentions' },
+      { key: 'fold_community', label: 'Fold Community', desc: 'posts and comments in subscribed communities' },
+      { key: 'fold_thread', label: 'Fold Thread', desc: 'comments on watched threads' },
+      { key: 'acclaim', label: 'Acclaim', desc: 'votes on your uploads' },
+      { key: 'fallen', label: 'Fallen', desc: 'extraction failures' },
+      { key: 'midden', label: 'Midden', desc: 'discarded items' },
+    ];
+
+    let mutedSet: Set<string> = new Set();
+
+    async function loadMuted() {
+      try {
+        const res = await fetch('/api/admin/notifications/muted', { credentials: 'include' });
+        if (!res.ok) throw new Error('muted');
+        const data = await res.json();
+        mutedSet = new Set(data.muted || []);
+      } catch {
+        mutedSet = new Set();
+      }
+      renderMuted();
+    }
+
+    async function toggleMute(source: string) {
+      const newMuted = mutedSet.has(source)
+        ? [...mutedSet].filter(s => s !== source)
+        : [...mutedSet, source];
+      try {
+        const res = await fetch('/api/admin/notifications/muted', {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ muted: newMuted }),
+        });
+        if (!res.ok) throw new Error('save');
+        mutedSet = new Set(newMuted);
+        renderMuted();
+      } catch {
+        (window as any).toast.error('Failed to update mute setting');
+      }
+    }
+
+    function renderMuted() {
+      muteList.innerHTML = ALL_SOURCES.map(s => {
+        const muted = mutedSet.has(s.key);
+        return `
+          <div class="mute-row">
+            <div class="mute-row__info">
+              <span class="mute-row__name">${escapeHtml(s.label)}</span>
+              <span class="mute-row__desc">${escapeHtml(s.desc)}</span>
+            </div>
+            <button class="action-btn mute-toggle ${muted ? 'muted' : ''}" data-mute="${s.key}">
+              ${muted ? 'Unmute' : 'Mute'}
+            </button>
+          </div>`;
+      }).join('');
+    }
+
+    muteList.addEventListener('click', async (e) => {
+      const btn = (e.target as HTMLElement).closest('[data-mute]') as HTMLButtonElement | null;
+      if (btn) {
+        btn.disabled = true;
+        await toggleMute(btn.dataset.mute!);
+        btn.disabled = false;
+      }
+    });
+
+    loadMuted();
 
     // ───────── Sources ─────────
     const foldUnconfigured = document.getElementById('fold-unconfigured')!;
