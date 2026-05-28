@@ -19,6 +19,7 @@ Usage (from host):
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -1115,6 +1116,22 @@ if __name__ == "__main__":
         db.close()
         print(f"Migrated {len(items)} items. Running reindex...")
         reindex_search()
+
+    elif cmd == "index-samples":
+        import subprocess as _sp
+        zip_path = "/tmp/music2000.zip"
+        if not os.path.exists(zip_path):
+            log("Downloading Music 2000 sample library zip...")
+            r = _sp.run([
+                "curl", "-L", "-o", zip_path,
+                "https://archive.org/download/music-2000-sample-library-44k-wav-rip/Music_2000_Sample_library_44k_WAV_RIP.zip",
+            ])
+            if r.returncode != 0:
+                print(f"Download failed (exit {r.returncode})")
+                sys.exit(1)
+        log("Running index_samples.py...")
+        r = _sp.run([".venv/bin/python", "scripts/index_samples.py", zip_path])
+        sys.exit(r.returncode)
 
     else:
         print(f"Unknown command: {cmd}")
