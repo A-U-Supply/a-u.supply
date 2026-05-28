@@ -620,6 +620,7 @@ def run_extraction(media_item_id: str, file_path: str, media_type: str):
         MediaAudioMeta,
         MediaImageMeta,
         MediaItem,
+        MediaTag,
         MediaVideoMeta,
         SessionLocal,
     )
@@ -780,6 +781,43 @@ def _run_audio_extraction(db, media_item_id: str, file_path: str, MediaAudioMeta
     except Exception as exc:
         logger.error("Audio transcription failed for %s: %s", media_item_id, exc)
         _log_failure(db, media_item_id, "whisper", exc)
+
+    # Step 3: AI description + tagging from filename context
+    try:
+        filename = os.path.basename(file_path)
+        dir_name = os.path.basename(os.path.dirname(file_path))
+        from server.ai_audio import generate_audio_ai_description
+
+        ai = generate_audio_ai_description(filename, dir_name=dir_name)
+        if ai.get("description"):
+            media_item = db.query(MediaItem).filter(MediaItem.id == media_item_id).first()
+            if media_item:
+                media_item.description = ai["description"]
+        ai_tags = ai.get("tags", [])
+        if ai_tags:
+            meta_kwargs["acoustic_tags"] = json.dumps(ai_tags)
+            # Also store as MediaTag records for filtering
+            for tag in ai_tags:
+                existing_tag = (
+                    db.query(MediaTag)
+                    .filter(
+                        MediaTag.media_item_id == media_item_id,
+                        MediaTag.tag == tag,
+                    )
+                    .first()
+                )
+                if not existing_tag:
+                    import uuid
+                    db.add(MediaTag(
+                        id=str(uuid.uuid4()),
+                        media_item_id=media_item_id,
+                        tag=tag,
+                    ))
+    except ImportError:
+        pass  # ai_audio not available
+    except Exception as exc:
+        logger.error("Audio AI tagging failed for %s: %s", media_item_id, exc)
+        _log_failure(db, media_item_id, "ai_audio_tagging", exc)
 
     if not meta_kwargs.get("duration_seconds") and "duration_seconds" not in meta_kwargs:
         # Can't create meta record without basic audio info
@@ -943,7 +981,7 @@ def retry_extraction(failure_id: str):
 
 def _retry_single_step(db, media_item, file_path: str, extraction_type: str):
     """Re-run a single extraction step by type."""
-    from server.models import MediaAudioMeta, MediaImageMeta, MediaVideoMeta
+    from server.models import MediaAudioMeta, MediaImageMeta, MediaTag, MediaVideoMeta
 
     media_item_id = media_item.id
 
@@ -978,6 +1016,27 @@ def _retry_single_step(db, media_item, file_path: str, extraction_type: str):
         _apply_ai_description(ai_kwargs, ai, ai_overrides=overrides)
         _upsert_meta(db, MediaImageMeta, media_item_id, ai_kwargs)
 
+    el    if extraction_type == "ai_audio_tagging":
+        if media_item.media_type == "audio":
+            filename = os.path.basename(file_path)
+            dir_name = os.path.basename(os.path.dirname(file_path))
+            from server.ai_audio import generate_audio_ai_description
+            ai = generate_audio_ai_description(filename, dir_name=dir_name)
+            if ai.get("description"):
+                media_item.description = ai["description"]
+            ai_tags = ai.get("tags", [])
+            if ai_tags:
+                _upsert_meta(db, MediaAudioMeta, media_item_id, {"acoustic_tags": json.dumps(ai_tags)})
+                for tag in ai_tags:
+                    existing_tag = (
+                        db.query(MediaTag)
+                        .filter(MediaTag.media_item_id == media_item_id, MediaTag.tag == tag)
+                        .first()
+                    )
+                    if not existing_tag:
+                        import uuid
+                        db.add(MediaTag(id=str(uuid.uuid4()), media_item_id=media_item_id, tag=tag))
+                db.commit()
     elif extraction_type == "ffprobe":
         if media_item.media_type == "audio":
             audio_meta = extract_audio_metadata(file_path)
