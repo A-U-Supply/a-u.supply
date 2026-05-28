@@ -16,7 +16,6 @@ Run from the repo root with `uv run python`.
 
 import hashlib
 import json
-import logging
 import mimetypes
 import os
 import re
@@ -28,8 +27,6 @@ import wave
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-
-import httpx
 
 # Allow importing server.* from the repo root
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -48,22 +45,12 @@ from server.models import (
 )
 from server.search_client import SAMPLES_INDEX, configure_indexes, sync_media_item
 
-logger = logging.getLogger(__name__)
-
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-DEEPSEEK_MODEL = "deepseek-v4-flash"
-DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 
 SOURCE_URL = "https://archive.org/details/music-2000-sample-library-44k-wav-rip"
 SOURCE_NAME = "Music 2000 Sample library 44k WAV RIP"
 SOURCE_CREATOR = "Jester Interactive, Codemasters"
 SOURCE_YEAR = 2000
-
-AI_TAG_DIRS = {
-    "sound effect_animal",
-    "sound effect_musical",
-    "sound effect_objects",
-}
 
 DIR_TAGS = {
     "bass_acoustic":         (["bass", "acoustic"], "bass"),
@@ -211,50 +198,10 @@ def derive_tags(filename, dir_base_tags):
     return [t for t in tags if not (t in seen or seen.add(t))]
 
 
-def tag_sound_effects_via_deepseek(dir_name, filenames):
-    if not DEEPSEEK_API_KEY:
-        return {}
-    prompt = f"""You are tagging one-shot audio samples from Music 2000 (MTV Music Generator), a 2000 PlayStation music game by Jester Interactive/Codemasters. These are royalty-free production samples.
-
-Directory: "{dir_name}"
-
-Filenames:
-{chr(10).join(f"  {f}" for f in filenames)}
-
-For each file, give a short description (5-15 words) describing the sound, and 3-6 relevant tags describing the sound character, source, and possible use.
-Return ONLY a JSON array, no preamble:
-[
-  {{"filename": "example.wav", "description": "...", "tags": ["tag1", "tag2", "tag3"]}},
-  ...
-]"""
-    payload = {
-        "model": DEEPSEEK_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.3,
-        "max_tokens": 3000,
-    }
-    try:
-        with httpx.Client(timeout=90) as client:
-            resp = client.post(
-                f"{DEEPSEEK_BASE_URL}/chat/completions",
-                headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
-                json=payload,
-            )
-        if resp.status_code >= 400:
-            log(f"  DeepSeek error: HTTP {resp.status_code}")
-            return {}
-        text = resp.json()["choices"][0]["message"]["content"].strip()
-        if text.startswith("```"):
-            nl = text.find("\n")
-            text = text[nl + 1:] if nl != -1 else text[3:]
-        if text.endswith("```"):
-            text = text[:-3].rstrip()
-        results = json.loads(text)
-        if isinstance(results, list):
-            return {r["filename"]: r for r in results}
-    except Exception as exc:
-        log(f"  AI tagging failed for {dir_name}: {exc}")
-    return {}
+def batch_tag_dir_via_deepseek(dir_name, filenames, api_key):
+    """Batch-tag all files in a directory via DeepSeek. Returns {filename: {description, tags}}."""
+    from server.ai_audio import generate_audio_ai_descriptions
+    return generate_audio_ai_descriptions(filenames, dir_name=dir_name, api_key=api_key)
 
 
 def index_samples(zip_path):
@@ -291,13 +238,15 @@ def index_samples(zip_path):
             d = w.parent.name
             by_dir.setdefault(d, []).append(w)
 
-        # AI tagging for sound effect dirs
+        # AI tagging for ALL directories via DeepSeek
         ai_results = {}
-        for dir_name in sorted(by_dir):
-            if dir_name in AI_TAG_DIRS and DEEPSEEK_API_KEY:
-                fnames = [w.name for w in by_dir[dir_name]]
+        if DEEPSEEK_API_KEY:
+            for dir_name in sorted(by_dir):
+                fnames = [f"{dir_name}-{w.name}" for w in by_dir[dir_name]]
                 log(f"AI tagging {len(fnames)} files in '{dir_name}'...")
-                ai_results[dir_name] = tag_sound_effects_via_deepseek(dir_name, fnames)
+                ai_results[dir_name] = batch_tag_dir_via_deepseek(dir_name, fnames, DEEPSEEK_API_KEY)
+        else:
+            log("No DEEPSEEK_API_KEY set, skipping AI tagging")
 
         db = SessionLocal()
         try:
@@ -337,6 +286,7 @@ def index_samples(zip_path):
                         media_type="audio",
                         file_size_bytes=file_size,
                         mime_type=mime,
+                        output_index="samples-bored",
                     )
                     db.add(media_item)
                     db.flush()
@@ -385,8 +335,8 @@ def index_samples(zip_path):
                         tag=f"dir:{dir_name}",
                     ))
 
-                    # AI tags + description (from DeepSeek for sound effect dirs)
-                    ai_info = ai_results.get(dir_name, {}).get(filename, {})
+                    # AI tags + description (from DeepSeek, keyed by renamed filename)
+                    ai_info = ai_results.get(dir_name, {}).get(renamed, {})
                     ai_desc = ai_info.get("description", "")
                     ai_tag_list = ai_info.get("tags", [])
 

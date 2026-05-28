@@ -103,7 +103,7 @@
 
   function defaults(): Filters {
     return {
-      types: ['image', 'audio', 'video', 'sample'],
+      types: ['image', 'audio', 'video'],
       outputIndexes: ['__inputs__'],
       channels: [],
       poster: '',
@@ -621,7 +621,7 @@
   <div class="fg">
     <label class="fg__label">Media Type</label>
     <div class="type-switches" role="group" aria-label="Media types">
-      {#each ['image', 'audio', 'video', 'sample'] as t (t)}
+      {#each ['image', 'audio', 'video'] as t (t)}
         <button
           class="type-switch"
           class:active={filters.types.includes(t)}
