@@ -788,7 +788,10 @@ def _resolve_index_routing(body: SearchRequest) -> tuple[list[str] | None, bool]
       - color filters narrow to the image index
       - ``__emulsion__`` alone in ``output_index`` forces emulsion-only
       - ``__emulsion__`` alongside other indexes turns on include_emulsion
+      - ``samples-bored`` in output_index adds "sample" to searched indexes
     """
+    from server.search_client import SAMPLES_INDEX
+
     media_types = body.media_types
     include_emulsion = body.include_emulsion
     if body.filters and (body.filters.color or body.filters.color_group):
@@ -803,6 +806,14 @@ def _resolve_index_routing(body: SearchRequest) -> tuple[list[str] | None, bool]
             include_emulsion = True
         elif "__emulsion__" in body.filters.output_index:
             include_emulsion = True
+
+        # If samples-bored is selected in the Index dropdown, add it to the
+        # searched indexes alongside whatever types are already selected.
+        if SAMPLES_INDEX in body.filters.output_index:
+            mtypes = set(media_types or ["image", "audio", "video"])
+            mtypes.add("sample")
+            media_types = list(mtypes)
+
     return media_types, include_emulsion
 
 
@@ -1065,12 +1076,14 @@ def search_facets(
 
     # Distinct output index names (excludes NULL — those are "inputs", surfaced
     # in the UI as a synthetic `__inputs__` pill).
-    output_indexes = [
+    from server.search_client import SAMPLES_INDEX
+    output_indexes = {
         r[0] for r in
         db.query(distinct(MediaItem.output_index))
         .filter(MediaItem.output_index.isnot(None))
         .all()
-    ]
+    }
+    output_indexes.add(SAMPLES_INDEX)
 
     return {
         "channels": sorted(channels),
