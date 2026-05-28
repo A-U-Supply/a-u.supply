@@ -33,6 +33,11 @@ INDEX_NAMES = {"image": "images", "audio": "audio", "video": "video"}
 # Emulsion is the destination for user-uploaded items (any media_type) and for
 # the `session` media type (DAW/NLE project files), routed at index time.
 EMULSION_INDEX = "emulsion"
+
+# Samples-bored is the destination for the Music 2000 / one-shot sample library
+# (instrument samples, drum hits, sound effects). Managed by scripts/index_samples.py.
+SAMPLES_INDEX = "samples-bored"
+
 STACKS_COMMUNITY_NAME = "stacks"
 
 # Shared index configuration
@@ -54,6 +59,11 @@ SEARCHABLE_ATTRIBUTES = [
     # Lower weight than caption (OCR is verbatim, AI prose is interpretive).
     "ai_description",
     "ai_tags",
+    # Sample library index fields (samples-bored)
+    "instruments",
+    "dir",
+    "source_name",
+    "source_creator",
 ]
 
 FILTERABLE_ATTRIBUTES = [
@@ -72,6 +82,8 @@ FILTERABLE_ATTRIBUTES = [
     "color_groups",
     "primary_color_group",
     "sources.uploader",
+    "sources.source_url",
+    "sources.source_type",
     "output_index",
     "job_app",
     "job_recipe",
@@ -101,6 +113,17 @@ FILTERABLE_ATTRIBUTES = [
     "has_face",
     "has_text_overlay",
     "is_nsfw",
+    # Sample library index fields (samples-bored)
+    "instruments",
+    "category",
+    "dir",
+    "sample_rate",
+    "channels",
+    "bit_depth",
+    "source_name",
+    "source_creator",
+    "source_year",
+    "royalty_free",
 ]
 
 SORTABLE_ATTRIBUTES = [
@@ -148,7 +171,7 @@ def configure_indexes() -> None:
         "displayedAttributes": ["*"],
     }
 
-    all_indexes = list(INDEX_NAMES.values()) + [EMULSION_INDEX]
+    all_indexes = list(INDEX_NAMES.values()) + [EMULSION_INDEX, SAMPLES_INDEX]
     for index_name in all_indexes:
         try:
             client.create_index(index_name, {"primaryKey": "id"})
@@ -164,6 +187,7 @@ def _index_for_media_item(media_item: MediaItem) -> str | None:
 
     - `session` media type always goes to Emulsion.
     - Items whose only sources are `manual_upload` go to Emulsion (user uploads).
+    - Items with a `sample_library` source type go to the Samples index.
     - Everything else routes by media_type via INDEX_NAMES.
     """
     if media_item.media_type == "session":
@@ -171,6 +195,9 @@ def _index_for_media_item(media_item: MediaItem) -> str | None:
     sources = list(media_item.sources or [])
     if sources and all(getattr(s, "source_type", None) == "manual_upload" for s in sources):
         return EMULSION_INDEX
+    for src in sources:
+        if getattr(src, "source_type", None) == "sample_library":
+            return SAMPLES_INDEX
     return INDEX_NAMES.get(media_item.media_type)
 
 
@@ -684,6 +711,8 @@ def multi_search(
             if not include_emulsion:
                 continue
             index_name = EMULSION_INDEX
+        elif mt == "sample":
+            index_name = SAMPLES_INDEX
         else:
             index_name = INDEX_NAMES.get(mt)
         if not index_name:
