@@ -2796,9 +2796,8 @@ def serve_media(
     The file is served inline (opens in browser) with the correct MIME type.
     Uses ``302 redirect`` to the authenticated file endpoint so auth works.
     """
-    from server.search_client import SAMPLES_INDEX, EMULSION_INDEX, multi_search
+    from server.search_client import SAMPLES_INDEX, EMULSION_INDEX, INDEX_NAMES, multi_search
 
-    mtypes = [t.strip() for t in media_types.split(",") if t.strip()] if media_types else None
     filters_obj = SearchFilters()
     if output_index:
         filters_obj.output_index = [o.strip() for o in output_index.split(",") if o.strip()]
@@ -2811,6 +2810,16 @@ def serve_media(
         "longest": "duration_seconds:desc",
     }
     sort_list = sort_map.get(sort, ["random"])
+
+    # Resolve media_types from param, with routing for samples-bored
+    mtypes_set = set()
+    if media_types:
+        mtypes_set.update(t.strip() for t in media_types.split(",") if t.strip())
+    if filters_obj.output_index and SAMPLES_INDEX in filters_obj.output_index:
+        mtypes_set.add("sample")
+    if not mtypes_set:
+        mtypes_set = {"image", "audio", "video"}
+    mtypes = list(mtypes_set)
 
     meili_filter = _build_meili_filter(filters_obj)
     results = multi_search(
