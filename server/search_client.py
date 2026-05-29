@@ -64,6 +64,8 @@ SEARCHABLE_ATTRIBUTES = [
     "dir",
     "source_name",
     "source_creator",
+    "voice",
+    "instrument",
 ]
 
 FILTERABLE_ATTRIBUTES = [
@@ -124,6 +126,8 @@ FILTERABLE_ATTRIBUTES = [
     "source_creator",
     "source_year",
     "royalty_free",
+    "voice",
+    "instrument",
 ]
 
 SORTABLE_ATTRIBUTES = [
@@ -499,7 +503,13 @@ def _build_document(db: Session, media_item: MediaItem) -> dict:
         doc["has_transcript"] = bool(meta.transcript)
         if meta.acoustic_tags:
             try:
-                doc["acoustic_tags"] = json.loads(meta.acoustic_tags)
+                _at = json.loads(meta.acoustic_tags)
+                if isinstance(_at, dict):
+                    doc["acoustic_tags"] = _at.get("ai_tags", [])
+                    doc["voice"] = _at.get("voice")
+                    doc["instrument"] = _at.get("instrument")
+                else:
+                    doc["acoustic_tags"] = _at
             except (json.JSONDecodeError, TypeError):
                 doc["acoustic_tags"] = []
 

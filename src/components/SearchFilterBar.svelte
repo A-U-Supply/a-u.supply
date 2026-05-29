@@ -49,6 +49,8 @@
     hasText: '' | 'yes' | 'no';
     sortBy: string;
     includeEmulsion: boolean;
+    voice: string;
+    instrument: string;
     voteScoreMin: number | null;
     voteScoreMax: number | null;
     upMin: number | null;
@@ -121,6 +123,8 @@
       hasText: '',
       sortBy: 'newest',
       includeEmulsion: false,
+      voice: '',
+      instrument: '',
       voteScoreMin: null,
       voteScoreMax: null,
       upMin: null,
@@ -635,6 +639,62 @@
       {/each}
     </div>
   </div>
+
+  {#if !hide.includes('voice')}
+    <div class="fg">
+      <label class="fg__label">Voice</label>
+      <select class="fb-select fb-select--native" bind:value={filters.voice} aria-label="Voice type">
+        <option value="">Any</option>
+        <option value="kick">Kick</option>
+        <option value="snare">Snare</option>
+        <option value="hi-hat">Hi-hat</option>
+        <option value="tom">Tom</option>
+        <option value="cymbal">Cymbal</option>
+        <option value="percussion">Percussion</option>
+        <option value="clap">Clap</option>
+        <option value="bass">Bass</option>
+        <option value="guitar">Guitar</option>
+        <option value="synth">Synth</option>
+        <option value="vox">Vox</option>
+        <option value="fx">FX</option>
+        <option value="melody">Melody</option>
+        <option value="pad">Pad</option>
+        <option value="organ">Organ</option>
+        <option value="vinyl">Vinyl</option>
+        <option value="noise">Noise</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+  {/if}
+
+  {#if !hide.includes('instrument')}
+    <div class="fg">
+      <label class="fg__label">Instrument</label>
+      <select class="fb-select fb-select--native" bind:value={filters.instrument} aria-label="Instrument">
+        <option value="">Any</option>
+        <option value="tr-808">TR-808</option>
+        <option value="tr-909">TR-909</option>
+        <option value="tb-303">TB-303</option>
+        <option value="acoustic">Acoustic</option>
+        <option value="electric">Electric</option>
+        <option value="distorted">Distorted</option>
+        <option value="synth">Synth</option>
+        <option value="mandy">Mandy</option>
+        <option value="danny">Danny</option>
+        <option value="paul">Paul</option>
+        <option value="shena">Shena</option>
+        <option value="stepz">Stepz</option>
+        <option value="steve">Steve</option>
+        <option value="cathi">Cathi</option>
+        <option value="howard">Howard</option>
+        <option value="ruby">Ruby</option>
+        <option value="jackie">Jackie</option>
+        <option value="laurel">Laurel</option>
+        <option value="ted">Ted</option>
+        <option value="sean">Sean</option>
+      </select>
+    </div>
+  {/if}
 
   {#if show.channels}
     <div class="fg">

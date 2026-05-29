@@ -100,10 +100,15 @@ def _call_deepseek(
 Filenames:
 {list_str}
 
-For each file, give a short description (5-15 words) describing what the sample sounds like, and 3-6 relevant tags (instrument, technique, genre, mood, use).
+For each file, return:
+- description (5-15 words): what the sample sounds like
+- tags (3-6): instrument, technique, genre, mood, use
+- voice (single word): the sound type — pick from: kick, snare, hi-hat, tom, cymbal, percussion, clap, bass, guitar, synth, vox, fx, melody, pad, organ, vinyl, noise, other. Be specific.
+- instrument (single word or short phrase, or null): the specific instrument or source, e.g. tr-808, tr-909, tb-303, acoustic, electric, distorted, mandy, danny, paul, cathi, howard, ruby, shena, stepz, steve, laurel, ted, jackie, sean. null if unknown.
+
 Return ONLY a JSON array, no preamble:
 [
-  {{"filename": "example.wav", "description": "...", "tags": ["tag1", "tag2", "tag3"]}},
+  {{"filename": "example.wav", "description": "...", "tags": ["tag1", "tag2"], "voice": "kick", "instrument": "tr-909"}},
   ...
 ]"""
 
@@ -145,6 +150,8 @@ Return ONLY a JSON array, no preamble:
             out[fname] = {
                 "description": (entry.get("description") or "").strip(),
                 "tags": [t.strip().lower() for t in (entry.get("tags") or []) if t.strip()],
+                "voice": (entry.get("voice") or "").strip().lower() or None,
+                "instrument": (entry.get("instrument") or "").strip().lower() or None,
             }
     return out
 
