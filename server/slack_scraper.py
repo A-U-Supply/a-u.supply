@@ -35,7 +35,13 @@ SEARCH_MEDIA_DIR = Path(os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data"))
 SCRAPE_CHANNELS: dict[str, str] = {
     "image-gen": os.environ.get("SLACK_CHANNEL_IMAGE_GEN", "C_IMAGE_GEN_ID"),
     "sample-sale": os.environ.get("SLACK_CHANNEL_SAMPLE_SALE", "C_SAMPLE_SALE_ID"),
+    "sounds-bored": os.environ.get("SLACK_CHANNEL_SOUNDS_BORED", "C0B6RBKBK3P"),
 }
+
+# Channels whose files route to the samples-bored index instead of inputs.
+# Files from these channels use source_type="sample_library". Zip files are
+# extracted and each contained WAV is ingested individually.
+SAMPLE_LIBRARY_CHANNELS = {"sounds-bored"}
 
 SLACK_API_BASE = "https://slack.com/api/"
 
@@ -595,14 +601,24 @@ def _process_message_files(
     channel_name: str,
     stats: dict,
     dry_run: bool = False,
+    *,
+    source_type: str = "slack_file",
 ) -> None:
-    """Process file attachments in a Slack message."""
+    """Process file attachments in a Slack message.
+
+    For sample_library channels, zip files are extracted and each contained
+    WAV is ingested individually with ``source_type="sample_library"``.
+    """
+    import zipfile as _zipfile
+
     files = message.get("files", [])
     ts = message.get("ts", "")
     text = message.get("text", "")
     user_id = message.get("user", "")
     poster = _get_slack_username(user_id) if user_id else ""
     reactions, reaction_count = _extract_reactions_from_message(message)
+
+    is_sample_library = source_type == "sample_library"
 
     for file_info in files:
         file_id = file_info.get("id", "")
@@ -620,16 +636,19 @@ def _process_message_files(
         prefix = mimetype.split("/")[0] if mimetype else ""
         media_type = _MIME_TO_MEDIA_TYPE.get(prefix)
         if not media_type:
-            # Try from filename
             media_type = _detect_media_type(filename)
-        if not media_type:
+        is_zip = media_type is None and (filename.endswith(".zip") or mimetype == "application/zip")
+        if not media_type and not is_zip:
             logger.debug("Skipping non-media file: %s (%s)", filename, mimetype)
             continue
 
         if dry_run:
             stats["total_size_bytes"] += file_size
             by_type = stats.setdefault("by_type", {"image": 0, "audio": 0, "video": 0})
-            by_type[media_type] = by_type.get(media_type, 0) + 1
+            if is_zip:
+                by_type["audio"] = by_type.get("audio", 0) + 1  # assume zips contain audio
+            else:
+                by_type[media_type] = by_type.get(media_type, 0) + 1
             stats["total_files"] = stats.get("total_files", 0) + 1
             continue
 
@@ -649,29 +668,62 @@ def _process_message_files(
             continue
 
         try:
-            result = _ingest_file(
-                db,
-                tmp_path,
-                filename,
-                source_type="slack_file",
-                source_channel=channel_name,
-                slack_file_id=file_id,
-                slack_message_ts=ts,
-                slack_message_text=text,
-                slack_reactions=reactions,
-                reaction_count=reaction_count,
-                source_metadata={"poster": poster, "slack_user_id": user_id} if poster else None,
-                slack_user_id=user_id or None,
-            )
-            if result["status"] == "skipped":
-                stats["files_skipped_dedup"] += 1
+            if is_zip and is_sample_library:
+                # Extract WAVs from zip and ingest each one
+                extract_dir = tmp_dir / f"extract_{uuid.uuid4().hex}"
+                extract_dir.mkdir(parents=True, exist_ok=True)
+                try:
+                    with _zipfile.ZipFile(tmp_path, "r") as zf:
+                        zf.extractall(extract_dir)
+                    wavs = sorted(extract_dir.rglob("*.wav"))
+                    for wav_path in wavs:
+                        wav_filename = wav_path.name
+                        result = _ingest_file(
+                            db, wav_path, wav_filename,
+                            source_type="sample_library",
+                            source_channel=channel_name,
+                            slack_file_id=file_id,
+                            slack_message_ts=ts,
+                            slack_message_text=text,
+                            slack_reactions=reactions,
+                            reaction_count=reaction_count,
+                            source_metadata={
+                                "poster": poster,
+                                "slack_user_id": user_id,
+                                "from_zip": filename,
+                            } if poster else {"from_zip": filename},
+                            slack_user_id=user_id or None,
+                        )
+                        if result["status"] == "skipped":
+                            stats["files_skipped_dedup"] += 1
+                        else:
+                            stats["files_downloaded"] += 1
+                finally:
+                    import shutil as _shutil
+                    _shutil.rmtree(extract_dir, ignore_errors=True)
             else:
-                stats["files_downloaded"] += 1
+                # Regular file ingest
+                s_type = source_type if not is_sample_library else "sample_library"
+                result = _ingest_file(
+                    db, tmp_path, filename,
+                    source_type=s_type,
+                    source_channel=channel_name,
+                    slack_file_id=file_id,
+                    slack_message_ts=ts,
+                    slack_message_text=text,
+                    slack_reactions=reactions,
+                    reaction_count=reaction_count,
+                    source_metadata={"poster": poster, "slack_user_id": user_id} if poster else None,
+                    slack_user_id=user_id or None,
+                )
+                if result["status"] == "skipped":
+                    stats["files_skipped_dedup"] += 1
+                else:
+                    stats["files_downloaded"] += 1
         except Exception as exc:
             logger.error("Error ingesting file %s: %s", filename, exc)
             stats["errors"] += 1
         finally:
-            # Clean up temp file
             if tmp_path.exists():
                 tmp_path.unlink()
 
@@ -820,7 +872,10 @@ def scrape_channel(
                 break
 
             for message in messages:
-                _process_message_files(db, message, channel_name, stats, dry_run=dry_run)
+                _process_message_files(
+                    db, message, channel_name, stats, dry_run=dry_run,
+                    source_type="sample_library" if channel_name in SAMPLE_LIBRARY_CHANNELS else "slack_file",
+                )
                 _process_message_urls(db, message, channel_name, stats, dry_run=dry_run, skip_ytdlp=True)
 
             if not dry_run:
