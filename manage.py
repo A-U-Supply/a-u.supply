@@ -1119,7 +1119,8 @@ if __name__ == "__main__":
 
     elif cmd == "index-samples":
         import subprocess as _sp
-        zip_path = "/tmp/music2000.zip"
+        zip_dir = os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data")
+        zip_path = os.path.join(zip_dir, "music2000.zip")
         if not os.path.exists(zip_path):
             log("Downloading Music 2000 sample library zip...")
             r = _sp.run([
