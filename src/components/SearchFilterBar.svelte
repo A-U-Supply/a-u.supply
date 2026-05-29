@@ -508,6 +508,11 @@
   // Mount
   // ---------------------------------------------------------------------
 
+  if (syncUrl) {
+    const seed = parseUrlFilters();
+    if (Object.keys(seed).length) applyPatch(seed);
+  }
+
   onMount(async () => {
     const seed: Partial<Filters> = {
       ...(syncUrl ? parseUrlFilters() : {}),
