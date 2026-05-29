@@ -989,10 +989,11 @@ def _run_scrape(channels: dict[str, str], incremental: bool = False) -> dict:
                 _scrape_status["current_channel"] = name
             results[name] = scrape_channel(name, cid, incremental=incremental)
 
-        # Run extraction and Meilisearch sync for all items missing metadata
+        # Run extraction and Meilisearch sync in a background thread so
+        # it doesn't block new scrapes from starting.
         with _status_lock:
             _scrape_status["current_channel"] = "_extraction"
-        _run_post_scrape_extraction()
+        threading.Thread(target=_run_post_scrape_extraction, daemon=True).start()
 
     finally:
         with _status_lock:
