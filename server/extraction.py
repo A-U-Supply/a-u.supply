@@ -794,8 +794,17 @@ def _run_audio_extraction(db, media_item_id: str, file_path: str, MediaAudioMeta
             if media_item:
                 media_item.description = ai["description"]
         ai_tags = ai.get("tags", [])
-        if ai_tags:
-            meta_kwargs["acoustic_tags"] = json.dumps(ai_tags)
+        ai_voice = ai.get("voice")
+        ai_instrument = ai.get("instrument")
+        if ai_tags or ai_voice or ai_instrument:
+            acoustic = {}
+            if ai_voice:
+                acoustic["voice"] = ai_voice
+            if ai_instrument:
+                acoustic["instrument"] = ai_instrument
+            if ai_tags:
+                acoustic["ai_tags"] = ai_tags
+            meta_kwargs["acoustic_tags"] = json.dumps(acoustic)
             # Also store as MediaTag records for filtering
             for tag in ai_tags:
                 existing_tag = (
@@ -1016,7 +1025,7 @@ def _retry_single_step(db, media_item, file_path: str, extraction_type: str):
         _apply_ai_description(ai_kwargs, ai, ai_overrides=overrides)
         _upsert_meta(db, MediaImageMeta, media_item_id, ai_kwargs)
 
-    el    if extraction_type == "ai_audio_tagging":
+    elif extraction_type == "ai_audio_tagging":
         if media_item.media_type == "audio":
             filename = os.path.basename(file_path)
             dir_name = os.path.basename(os.path.dirname(file_path))
@@ -1025,8 +1034,17 @@ def _retry_single_step(db, media_item, file_path: str, extraction_type: str):
             if ai.get("description"):
                 media_item.description = ai["description"]
             ai_tags = ai.get("tags", [])
+            ai_voice = ai.get("voice")
+            ai_instrument = ai.get("instrument")
+            acoustic = {}
+            if ai_voice:
+                acoustic["voice"] = ai_voice
+            if ai_instrument:
+                acoustic["instrument"] = ai_instrument
             if ai_tags:
-                _upsert_meta(db, MediaAudioMeta, media_item_id, {"acoustic_tags": json.dumps(ai_tags)})
+                acoustic["ai_tags"] = ai_tags
+            if acoustic:
+                _upsert_meta(db, MediaAudioMeta, media_item_id, {"acoustic_tags": json.dumps(acoustic)})
                 for tag in ai_tags:
                     existing_tag = (
                         db.query(MediaTag)

@@ -325,19 +325,8 @@ def index_samples(zip_path):
                     ai_info = ai_results.get(dir_name, {}).get(renamed, {})
                     ai_desc = ai_info.get("description", "")
                     ai_tag_list = ai_info.get("tags", [])
-
-                    seen = set(all_tags)
-                    for ai_tag in ai_tag_list:
-                        if ai_tag not in seen:
-                            seen.add(ai_tag)
-                            all_tags.append(ai_tag)
-
-                    for tag in all_tags:
-                        db.add(MediaTag(
-                            id=str(uuid.uuid4()),
-                            media_item_id=media_item.id,
-                            tag=tag,
-                        ))
+                    ai_voice = ai_info.get("voice")
+                    ai_instrument = ai_info.get("instrument")
 
                     desc_parts = [f"Music 2000 sample — {dir_name}"]
                     if ai_desc:
@@ -350,12 +339,16 @@ def index_samples(zip_path):
                     full_path = str(dest)
                     try:
                         meta = extract_audio_metadata(full_path)
+                        acoustic = {"voice": ai_voice, "instrument": ai_instrument}
+                        if ai_tag_list:
+                            acoustic["ai_tags"] = ai_tag_list
                         audio_meta = MediaAudioMeta(
                             media_item_id=media_item.id,
                             duration_seconds=meta["duration_seconds"],
                             sample_rate=meta["sample_rate"],
                             channels=meta["channels"],
                             bit_depth=meta["bit_depth"],
+                            acoustic_tags=json.dumps(acoustic),
                         )
                         db.add(audio_meta)
                         db.flush()
