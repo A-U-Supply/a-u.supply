@@ -742,24 +742,9 @@ def search_media(
     meili_filter = _build_meili_filter(body.filters, user_id=user.id if user else None)
     sort_list = [body.sort] if body.sort else None
 
-    # If filtering by color, only search images (other indexes don't have dominant_colors)
-    media_types = body.media_types
-    if body.filters and (body.filters.color or body.filters.color_group):
-        media_types = ["image"]
-
-    # IndexFilter selection containing only `__emulsion__` means "search the
-    # Emulsion index only" — force media_types so multi_search skips the
-    # public per-type indexes entirely.
-    include_emulsion = body.include_emulsion
-    if body.filters and body.filters.output_index:
-        if (
-            "__emulsion__" in body.filters.output_index
-            and not any(n != "__emulsion__" for n in body.filters.output_index)
-        ):
-            media_types = ["emulsion"]
-            include_emulsion = True
-        elif "__emulsion__" in body.filters.output_index:
-            include_emulsion = True
+    # Delegate index routing to shared helper (handles color → image,
+    # emulsion, and samples-bored output_index routing)
+    media_types, include_emulsion = _resolve_index_routing(body)
 
     results = multi_search(
         query=body.query,
@@ -885,20 +870,7 @@ def search_stats(
     user, _scope = auth
     meili_filter = _build_meili_filter(body.filters, user_id=user.id if user else None)
 
-    media_types = body.media_types
-    if body.filters and (body.filters.color or body.filters.color_group):
-        media_types = ["image"]
-
-    include_emulsion = body.include_emulsion
-    if body.filters and body.filters.output_index:
-        if (
-            "__emulsion__" in body.filters.output_index
-            and not any(n != "__emulsion__" for n in body.filters.output_index)
-        ):
-            media_types = ["emulsion"]
-            include_emulsion = True
-        elif "__emulsion__" in body.filters.output_index:
-            include_emulsion = True
+    media_types, include_emulsion = _resolve_index_routing(body)
 
     # Search with limit=0: we only want facets and stats, not hits
     results = multi_search(
