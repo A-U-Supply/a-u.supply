@@ -504,6 +504,7 @@ def _ingest_file(
     source_url: str | None = None,
     source_metadata: dict | None = None,
     slack_user_id: str | None = None,
+    output_index: str | None = None,
 ) -> dict:
     """Hash a downloaded file, dedup, create MediaItem + MediaSource.
 
@@ -524,6 +525,8 @@ def _ingest_file(
     if existing:
         # Duplicate content — add a new source pointing to the existing item
         media_item = existing
+        if output_index and not media_item.output_index:
+            media_item.output_index = output_index
         status = "duplicate"
     else:
         # New file — move to permanent storage
@@ -543,6 +546,7 @@ def _ingest_file(
             media_type=media_type,
             file_size_bytes=file_size,
             mime_type=mime_type,
+            output_index=output_index,
         )
         db.add(media_item)
         db.flush()
@@ -676,6 +680,7 @@ def _process_message_files(
                     with _zipfile.ZipFile(tmp_path, "r") as zf:
                         zf.extractall(extract_dir)
                     wavs = sorted(extract_dir.rglob("*.wav"))
+                    oi = "samples-bored" if is_sample_library else None
                     for wav_path in wavs:
                         wav_filename = wav_path.name
                         result = _ingest_file(
@@ -693,6 +698,7 @@ def _process_message_files(
                                 "from_zip": filename,
                             } if poster else {"from_zip": filename},
                             slack_user_id=user_id or None,
+                            output_index=oi,
                         )
                         if result["status"] == "skipped":
                             stats["files_skipped_dedup"] += 1
@@ -704,6 +710,7 @@ def _process_message_files(
             else:
                 # Regular file ingest
                 s_type = source_type if not is_sample_library else "sample_library"
+                oi = "samples-bored" if is_sample_library else None
                 result = _ingest_file(
                     db, tmp_path, filename,
                     source_type=s_type,
@@ -715,6 +722,7 @@ def _process_message_files(
                     reaction_count=reaction_count,
                     source_metadata={"poster": poster, "slack_user_id": user_id} if poster else None,
                     slack_user_id=user_id or None,
+                    output_index=oi,
                 )
                 if result["status"] == "skipped":
                     stats["files_skipped_dedup"] += 1
@@ -989,10 +997,11 @@ def _run_scrape(channels: dict[str, str], incremental: bool = False) -> dict:
                 _scrape_status["current_channel"] = name
             results[name] = scrape_channel(name, cid, incremental=incremental)
 
-        # Run extraction and Meilisearch sync for all items missing metadata
+        # Run extraction and Meilisearch sync in a background thread so
+        # it doesn't block new scrapes from starting.
         with _status_lock:
             _scrape_status["current_channel"] = "_extraction"
-        _run_post_scrape_extraction()
+        threading.Thread(target=_run_post_scrape_extraction, daemon=True).start()
 
     finally:
         with _status_lock:
