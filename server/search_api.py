@@ -2823,11 +2823,15 @@ def serve_media(
     mtypes = list(mtypes_set)
 
     meili_filter = _build_meili_filter(filters_obj)
+    # Always pass sort_list — multi_search handles ["random"] internally
+    # by shuffling the fetched results. Without it the first hit is
+    # deterministic (newest or relevance), so repeated calls return the
+    # same file.
     results = multi_search(
         query=q,
         media_types=mtypes,
         filters=meili_filter,
-        sort=sort_list if sort_list != ["random"] else None,
+        sort=sort_list,
         page=1,
         per_page=limit,
     )
