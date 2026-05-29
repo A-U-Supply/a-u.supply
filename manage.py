@@ -1117,6 +1117,14 @@ if __name__ == "__main__":
         print(f"Migrated {len(items)} items. Running reindex...")
         reindex_search()
 
+    elif cmd == "clean-sample-orphans":
+        from server.models import MediaItem, SessionLocal as _SL
+        _db = _SL()
+        _n = _db.query(MediaItem).filter(MediaItem.filename.is_(None)).delete()
+        _db.commit()
+        log(f"Deleted {_n} orphaned items with null filename")
+        _db.close()
+
     elif cmd == "index-samples":
         import subprocess as _sp
         from server.models import MediaItem, MediaSource, SessionLocal as _SL
