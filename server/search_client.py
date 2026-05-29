@@ -336,6 +336,14 @@ def _hex_to_color_groups(hex_color: str) -> list[str]:
     return ["pink"]
 
 
+def _sample_output_index(media_item: MediaItem) -> str | None:
+    """Return ``"samples-bored"`` if any source is sample_library, else None."""
+    for src in (media_item.sources or []):
+        if getattr(src, "source_type", None) == "sample_library":
+            return SAMPLES_INDEX
+    return None
+
+
 def _build_document(db: Session, media_item: MediaItem) -> dict:
     """Build a flat Meilisearch document from a MediaItem and its relations."""
     # Collect tags
@@ -413,7 +421,7 @@ def _build_document(db: Session, media_item: MediaItem) -> dict:
         "file_size_bytes": media_item.file_size_bytes,
         "mime_type": media_item.mime_type,
         "description": media_item.description,
-        "output_index": media_item.output_index,
+        "output_index": _sample_output_index(media_item) or media_item.output_index,
         "job_app": job_app,
         "job_recipe": job_recipe,
         "job_model": job_model,
