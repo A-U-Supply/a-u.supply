@@ -2778,7 +2778,7 @@ def resolve_extraction_failure(
 @router.get("/serve", tags=["Media Search"], summary="Serve a random matching media file")
 def serve_media(
     request: Request,
-    q: str = Query("", alias="query", description="Search query"),
+    query: str = Query("", description="Search query"),
     media_types: str = Query(None, description="Comma-separated media types (image,audio,video,sample)"),
     output_index: str = Query(None, description="Output index name (e.g. samples-bored)"),
     sort: str = Query("random", description="Sort order (random, newest, oldest)"),
@@ -2828,7 +2828,7 @@ def serve_media(
     # deterministic (newest or relevance), so repeated calls return the
     # same file.
     results = multi_search(
-        query=q,
+        query=query,
         media_types=mtypes,
         filters=meili_filter,
         sort=sort_list,
