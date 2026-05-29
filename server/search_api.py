@@ -2778,7 +2778,7 @@ def resolve_extraction_failure(
 @router.get("/serve", tags=["Media Search"], summary="Serve a random matching media file")
 def serve_media(
     request: Request,
-    query: str = Query("", description="Search query"),
+    q: str = Query("", alias="query", description="Search query. Accepts `q` or `query`."),
     media_types: str = Query(None, description="Comma-separated media types (image,audio,video,sample)"),
     output_index: str = Query(None, description="Output index name (e.g. samples-bored)"),
     sort: str = Query("random", description="Sort order (random, newest, oldest)"),
@@ -2788,9 +2788,13 @@ def serve_media(
 ):
     """Search for media matching the given criteria and serve the Nth result's file directly.
 
+    Accepts the same ``q`` / ``query`` parameter as the main search endpoint.
+    Supports all output indexes (``samples-bored``, ``__inputs__``, etc.) and
+    media types.
+
     Examples:
         ``/api/serve?output_index=samples-bored&sort=random`` — random sample
-        ``/api/serve?query=kick&output_index=samples-bored&sort=random`` — random kick sample
+        ``/api/serve?q=kick&output_index=samples-bored&sort=random`` — random kick sample
         ``/api/serve?media_types=image&sort=random`` — random image from inputs
         ``/api/serve?output_index=samples-bored&sort=random&limit=3`` — 3rd random sample
 
@@ -2828,7 +2832,7 @@ def serve_media(
     # deterministic (newest or relevance), so repeated calls return the
     # same file.
     results = multi_search(
-        query=query,
+        query=q,
         media_types=mtypes,
         filters=meili_filter,
         sort=sort_list,
