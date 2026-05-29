@@ -44,6 +44,39 @@ Session-cookie scope is derived from role: `admin` → `admin`, `member` → `wr
 | **Latents** | `GET/POST/PATCH/DELETE /api/projects[/...]` | Latents, slots, items, documents (see [`plans/2026-05-15-latents.md`](plans/2026-05-15-latents.md)) |
 | **Threads** | `GET/POST/PATCH/DELETE /api/threads[/...]` | Lemmy-backed discussion threads anchored to projects / slots / media items |
 
+### Samples-bored (Music 2000 sample library)
+
+A dedicated Meilisearch index (`samples-bored`) containing 2,886 royalty-free one-shot WAV samples from the PlayStation game Music 2000 (MTV Music Generator). Managed by `scripts/index_samples.py`. Items route to this index automatically when created with `source_type="sample_library"`.
+
+Search by selecting "samples-bored" in the search page's **Index** dropdown, or via the API:
+
+```bash
+curl -X POST https://a-u.supply/api/search \
+  -H "Authorization: Bearer $API_KEY" \
+  -d '{"query":"kick","media_types":["sample"]}'
+```
+
+Random sample serving (see below): `/api/serve?output_index=samples-bored&sort=random`
+
+### Serving random media (`GET /api/serve`)
+
+Searches for media matching the given criteria and redirects to the first matching file. The file is served inline with the correct MIME type.
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `q` / `query` | string | `""` | Search query (same as the main search) |
+| `media_types` | string | `image,audio,video` | Comma-separated media types to search |
+| `output_index` | string | — | Output index name (e.g. `samples-bored`, `__inputs__`) |
+| `sort` | string | `random` | Sort order: `random`, `newest`, `oldest`, `largest`, `longest` |
+| `limit` | int | `1` | Position in results to serve (`1` = first match) |
+
+Examples:
+```
+/api/serve?output_index=samples-bored&sort=random
+/api/serve?q=kick&output_index=samples-bored&sort=random
+/api/serve?media_types=image&sort=random&limit=3
+```
+
 ### AI vision enrichment
 
 See [`ai-image-descriptions.md`](ai-image-descriptions.md) for the design.
