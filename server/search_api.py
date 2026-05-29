@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, RedirectResponse, Request, Response, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session, joinedload
@@ -742,24 +742,9 @@ def search_media(
     meili_filter = _build_meili_filter(body.filters, user_id=user.id if user else None)
     sort_list = [body.sort] if body.sort else None
 
-    # If filtering by color, only search images (other indexes don't have dominant_colors)
-    media_types = body.media_types
-    if body.filters and (body.filters.color or body.filters.color_group):
-        media_types = ["image"]
-
-    # IndexFilter selection containing only `__emulsion__` means "search the
-    # Emulsion index only" — force media_types so multi_search skips the
-    # public per-type indexes entirely.
-    include_emulsion = body.include_emulsion
-    if body.filters and body.filters.output_index:
-        if (
-            "__emulsion__" in body.filters.output_index
-            and not any(n != "__emulsion__" for n in body.filters.output_index)
-        ):
-            media_types = ["emulsion"]
-            include_emulsion = True
-        elif "__emulsion__" in body.filters.output_index:
-            include_emulsion = True
+    # Delegate index routing to shared helper (handles color → image,
+    # emulsion, and samples-bored output_index routing)
+    media_types, include_emulsion = _resolve_index_routing(body)
 
     results = multi_search(
         query=body.query,
@@ -885,20 +870,7 @@ def search_stats(
     user, _scope = auth
     meili_filter = _build_meili_filter(body.filters, user_id=user.id if user else None)
 
-    media_types = body.media_types
-    if body.filters and (body.filters.color or body.filters.color_group):
-        media_types = ["image"]
-
-    include_emulsion = body.include_emulsion
-    if body.filters and body.filters.output_index:
-        if (
-            "__emulsion__" in body.filters.output_index
-            and not any(n != "__emulsion__" for n in body.filters.output_index)
-        ):
-            media_types = ["emulsion"]
-            include_emulsion = True
-        elif "__emulsion__" in body.filters.output_index:
-            include_emulsion = True
+    media_types, include_emulsion = _resolve_index_routing(body)
 
     # Search with limit=0: we only want facets and stats, not hits
     results = multi_search(
@@ -2800,3 +2772,74 @@ def resolve_extraction_failure(
     failure.last_attempt_at = datetime.now(timezone.utc)
     db.commit()
     return {"ok": True}
+
+
+@router.get("/serve", tags=["Media Search"], summary="Serve a random matching media file")
+def serve_media(
+    request: Request,
+    q: str = Query("", alias="query", description="Search query"),
+    media_types: str = Query(None, description="Comma-separated media types (image,audio,video,sample)"),
+    output_index: str = Query(None, description="Output index name (e.g. samples-bored)"),
+    sort: str = Query("random", description="Sort order (random, newest, oldest)"),
+    limit: int = Query(1, ge=1, le=100, description="Position in results to serve (1 = first match)"),
+    _auth=Depends(require_scope("read")),
+    db: Session = Depends(get_db),
+):
+    """Search for media matching the given criteria and serve the Nth result's file directly.
+
+    Examples:
+        ``/api/serve?output_index=samples-bored&sort=random`` — random sample
+        ``/api/serve?query=kick&output_index=samples-bored&sort=random`` — random kick sample
+        ``/api/serve?media_types=image&sort=random`` — random image from inputs
+        ``/api/serve?output_index=samples-bored&sort=random&limit=3`` — 3rd random sample
+
+    The file is served inline (opens in browser) with the correct MIME type.
+    Uses ``302 redirect`` to the authenticated file endpoint so auth works.
+    """
+    from server.search_client import SAMPLES_INDEX, EMULSION_INDEX, INDEX_NAMES, multi_search
+
+    filters_obj = SearchFilters()
+    if output_index:
+        filters_obj.output_index = [o.strip() for o in output_index.split(",") if o.strip()]
+
+    sort_map = {
+        "newest": "created_at:desc",
+        "oldest": "created_at:asc",
+        "random": ["random"],
+        "largest": "file_size_bytes:desc",
+        "longest": "duration_seconds:desc",
+    }
+    sort_list = sort_map.get(sort, ["random"])
+
+    # Resolve media_types from param, with routing for samples-bored
+    mtypes_set = set()
+    if media_types:
+        mtypes_set.update(t.strip() for t in media_types.split(",") if t.strip())
+    if filters_obj.output_index and SAMPLES_INDEX in filters_obj.output_index:
+        mtypes_set.add("sample")
+    if not mtypes_set:
+        mtypes_set = {"image", "audio", "video"}
+    mtypes = list(mtypes_set)
+
+    meili_filter = _build_meili_filter(filters_obj)
+    results = multi_search(
+        query=q,
+        media_types=mtypes,
+        filters=meili_filter,
+        sort=sort_list if sort_list != ["random"] else None,
+        page=1,
+        per_page=limit,
+    )
+
+    hits = results.get("hits", [])
+    if not hits:
+        raise HTTPException(status_code=404, detail="No matching media found")
+
+    target = hits[limit - 1]
+    media_id = target.get("id")
+    if not media_id:
+        raise HTTPException(status_code=404, detail="Hit has no id")
+
+    filename = target.get("filename", "download")
+    url = request.url_for("get_media_file", media_id=media_id)
+    return RedirectResponse(url=url, status_code=302)
