@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, RedirectResponse, Request, Response, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session, joinedload
@@ -2772,3 +2772,65 @@ def resolve_extraction_failure(
     failure.last_attempt_at = datetime.now(timezone.utc)
     db.commit()
     return {"ok": True}
+
+
+@router.get("/serve", tags=["Media Search"], summary="Serve a random matching media file")
+def serve_media(
+    request: Request,
+    q: str = Query("", alias="query", description="Search query"),
+    media_types: str = Query(None, description="Comma-separated media types (image,audio,video,sample)"),
+    output_index: str = Query(None, description="Output index name (e.g. samples-bored)"),
+    sort: str = Query("random", description="Sort order (random, newest, oldest)"),
+    limit: int = Query(1, ge=1, le=100, description="Position in results to serve (1 = first match)"),
+    _auth=Depends(require_scope("read")),
+    db: Session = Depends(get_db),
+):
+    """Search for media matching the given criteria and serve the Nth result's file directly.
+
+    Examples:
+        ``/api/serve?output_index=samples-bored&sort=random`` — random sample
+        ``/api/serve?query=kick&output_index=samples-bored&sort=random`` — random kick sample
+        ``/api/serve?media_types=image&sort=random`` — random image from inputs
+        ``/api/serve?output_index=samples-bored&sort=random&limit=3`` — 3rd random sample
+
+    The file is served inline (opens in browser) with the correct MIME type.
+    Uses ``302 redirect`` to the authenticated file endpoint so auth works.
+    """
+    from server.search_client import SAMPLES_INDEX, EMULSION_INDEX, multi_search
+
+    mtypes = [t.strip() for t in media_types.split(",") if t.strip()] if media_types else None
+    filters_obj = SearchFilters()
+    if output_index:
+        filters_obj.output_index = [o.strip() for o in output_index.split(",") if o.strip()]
+
+    sort_map = {
+        "newest": "created_at:desc",
+        "oldest": "created_at:asc",
+        "random": ["random"],
+        "largest": "file_size_bytes:desc",
+        "longest": "duration_seconds:desc",
+    }
+    sort_list = sort_map.get(sort, ["random"])
+
+    meili_filter = _build_meili_filter(filters_obj)
+    results = multi_search(
+        query=q,
+        media_types=mtypes,
+        filters=meili_filter,
+        sort=sort_list if sort_list != ["random"] else None,
+        page=1,
+        per_page=limit,
+    )
+
+    hits = results.get("hits", [])
+    if not hits:
+        raise HTTPException(status_code=404, detail="No matching media found")
+
+    target = hits[limit - 1]
+    media_id = target.get("id")
+    if not media_id:
+        raise HTTPException(status_code=404, detail="Hit has no id")
+
+    filename = target.get("filename", "download")
+    url = request.url_for("get_media_file", media_id=media_id)
+    return RedirectResponse(url=url, status_code=302)
