@@ -1119,7 +1119,17 @@ if __name__ == "__main__":
 
     elif cmd == "index-samples":
         import subprocess as _sp
-        zip_path = "/tmp/music2000.zip"
+        from server.models import MediaItem, MediaSource, SessionLocal as _SL
+        # Clear any orphaned sample records that were never synced to Meilisearch
+        _db = _SL()
+        _ids = [r[0] for r in _db.query(MediaSource.media_item_id).filter(MediaSource.source_type == "sample_library").all()]
+        if _ids:
+            _db.query(MediaItem).filter(MediaItem.id.in_(_ids)).delete(synchronize_session=False)
+            _db.commit()
+            log(f"Cleared {len(_ids)} orphaned sample records")
+        _db.close()
+        zip_dir = os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data")
+        zip_path = os.path.join(zip_dir, "music2000.zip")
         if not os.path.exists(zip_path):
             log("Downloading Music 2000 sample library zip...")
             r = _sp.run([

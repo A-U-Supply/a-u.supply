@@ -311,28 +311,14 @@ def index_samples(zip_path):
                     )
                     db.add(source)
 
-                    # Derive and add tags
+                    # Derive and add tags (deduplicated)
                     base_tags, category = DIR_TAGS.get(dir_name, ([dir_name.replace("_", " ")], "other"))
-                    tags = derive_tags(filename, base_tags)
+                    derived_tags = derive_tags(filename, base_tags)
 
-                    for tag in tags:
-                        db.add(MediaTag(
-                            id=str(uuid.uuid4()),
-                            media_item_id=media_item.id,
-                            tag=tag,
-                        ))
-
-                    # Source metadata tags (searchable via tags filter)
-                    for src_tag in SOURCE_TOPICS:
-                        db.add(MediaTag(
-                            id=str(uuid.uuid4()),
-                            media_item_id=media_item.id,
-                            tag=src_tag,
-                        ))
-                    db.add(MediaTag(
-                        id=str(uuid.uuid4()),
-                        media_item_id=media_item.id,
-                        tag=f"dir:{dir_name}",
+                    all_tags = list(dict.fromkeys(
+                        derived_tags
+                        + SOURCE_TOPICS
+                        + [f"dir:{dir_name}"]
                     ))
 
                     # AI tags + description (from DeepSeek, keyed by renamed filename)
@@ -340,17 +326,23 @@ def index_samples(zip_path):
                     ai_desc = ai_info.get("description", "")
                     ai_tag_list = ai_info.get("tags", [])
 
+                    seen = set(all_tags)
+                    for ai_tag in ai_tag_list:
+                        if ai_tag not in seen:
+                            seen.add(ai_tag)
+                            all_tags.append(ai_tag)
+
+                    for tag in all_tags:
+                        db.add(MediaTag(
+                            id=str(uuid.uuid4()),
+                            media_item_id=media_item.id,
+                            tag=tag,
+                        ))
+
                     desc_parts = [f"Music 2000 sample — {dir_name}"]
                     if ai_desc:
                         desc_parts.append(ai_desc)
                     media_item.description = " | ".join(desc_parts)
-
-                    for ai_tag in ai_tag_list:
-                        db.add(MediaTag(
-                            id=str(uuid.uuid4()),
-                            media_item_id=media_item.id,
-                            tag=ai_tag,
-                        ))
 
                     db.flush()
 
