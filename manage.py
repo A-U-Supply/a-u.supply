@@ -1117,6 +1117,28 @@ if __name__ == "__main__":
         print(f"Migrated {len(items)} items. Running reindex...")
         reindex_search()
 
+    elif cmd == "clean-sample-orphans":
+        from server.models import MediaItem, SessionLocal as _SL
+        _db = _SL()
+        _n = _db.query(MediaItem).filter(MediaItem.filename.is_(None)).delete()
+        _db.commit()
+        log(f"Deleted {_n} orphaned items with null filename")
+        _db.close()
+
+    elif cmd == "reset-samples-index":
+        from server.search_client import SAMPLES_INDEX, get_client
+        _c = get_client()
+        try:
+            _c.delete_index(SAMPLES_INDEX)
+            log(f"Deleted Meilisearch index '{SAMPLES_INDEX}'")
+        except Exception as _e:
+            log(f"Delete failed (may not exist): {_e}")
+        log("Recreating index...")
+        _c.create_index(SAMPLES_INDEX, {"primaryKey": "id"})
+        log(f"Created index '{SAMPLES_INDEX}'")
+        from server.search_client import configure_indexes
+        configure_indexes()
+
     elif cmd == "index-samples":
         import subprocess as _sp
         from server.models import MediaItem, MediaSource, SessionLocal as _SL
