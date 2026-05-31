@@ -28,6 +28,10 @@ The Punctum source lives at `src/pages/admin/atelier/punctum.astro`. Each bot is
 
 Spectral audio editor. Two entry points: drop an audio file (MP3 / WAV / OGG / FLAC / M4A) to analyse it as a spectrogram, or switch to the **▦ Image** tab to synthesise audio directly from an image (additive synthesis, the former Spectralize workflow). From either starting point the user can paint on the spectrogram, stamp images, apply spectral FX, and export as image, video, or resynthesised audio (ISTFT/OLA). Source: `src/pages/admin/atelier/photism.astro`. Design doc: [`/photism.md`](../photism.md).
 
+### Litany — `/admin/atelier/litany`
+
+Sample step sequencer. Voices are configured by search query (e.g. `kick`, `snare`, `vocal chop`) and pull random samples from the sounds-bored index, rotating through them on a configurable schedule (every hit, every bar, every 4 bars, or pinned to one sample). A 16-step grid (configurable per voice: 8 / 16 / 32) controls which beats each voice fires on — different step counts enable polyrhythm. Per-voice FX chain: delay → reverb → filter. Full app state (voices, patterns, FX, BPM) is gzip+base64 encoded in the URL hash for sharing. Source: `src/components/Litany.svelte` + `src/components/litany/` + `src/lib/litany/`. Design doc: [`plans/2026-05-29-sequencer.md`](plans/2026-05-29-sequencer.md).
+
 ### Spectralize — deprecated
 
 Folded into Photism (2026-05-18). The page at `/admin/atelier/spectralize` now shows a redirect notice. Source retained as `src/pages/admin/atelier/spectralize.astro` for the redirect.
