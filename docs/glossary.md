@@ -22,8 +22,9 @@ The naming system blends ecclesiastical, scientific-warehouse, and photographic-
 |  |  | Hecatomb | `hecatomb` | Bulk job-submit UI — runs an app against many random inputs at once (`/admin/hecatomb`). "Hecatomb" is the dispatch UI, not an app itself. |
 |  |  | The Queue | `jobs` | Job-queue browser + detail (`/admin/jobs`) |
 | **The Darkroom** | pre-release workspace | Latents | `latents` | Private admin-only workspace for assembling pre-release works of any media type. See [`plans/2026-05-15-latents.md`](plans/2026-05-15-latents.md). |
-| **The Atelier** | generative image tools | Punctum | `punctum` | Multi-bot image atelier (`/admin/atelier/punctum`). See [`atelier.md`](atelier.md). |
+| **The Atelier** | browser-side creative tools | Punctum | `punctum` | Multi-bot image atelier (`/admin/atelier/punctum`). See [`atelier.md`](atelier.md). |
 |  |  | Photism | `photism` | Audio → image spectral editor (`/admin/atelier/photism`) |
+|  |  | Litany | `litany` | Sample sequencer — voices fired from the sounds-bored index in step-pattern loops (`/admin/atelier/litany`). See [`plans/2026-05-29-sequencer.md`](plans/2026-05-29-sequencer.md). |
 | **The Sacristy** | keys, settings | Keys | `api-keys` | API key generation + revocation (`/admin/api-keys`) |
 |  |  | Settings | `settings` | User management, integrations, site settings (`/admin/settings`) |
 

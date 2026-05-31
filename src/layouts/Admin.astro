@@ -218,7 +218,7 @@ const { title, current } = Astro.props;
 
         <div class="sidebar__section">
           The Atelier<span class="sidebar__section-hint"
-            >generative image tools</span
+            >browser-side creative tools</span
           >
         </div>
         <ul class="sidebar__nav">
@@ -234,6 +234,12 @@ const { title, current } = Astro.props;
               href="/admin/atelier/photism"
               aria-current={current === 'photism' ? 'page' : undefined}
               >Photism</a
+            >
+          </li>
+          <li>
+            <a
+              href="/admin/atelier/litany"
+              aria-current={current === 'litany' ? 'page' : undefined}>Litany</a
             >
           </li>
         </ul>
@@ -388,6 +394,8 @@ const { title, current } = Astro.props;
       document.body.style.background = '#221c00';
     } else if (window.location.pathname === '/admin/atelier/photism') {
       document.body.style.background = '#1a1200';
+    } else if (window.location.pathname === '/admin/atelier/litany') {
+      document.body.style.background = '#0d0d0d';
     } else {
       document.body.style.removeProperty('background');
     }

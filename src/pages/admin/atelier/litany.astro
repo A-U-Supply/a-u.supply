@@ -1,0 +1,8 @@
+---
+import Admin from '../../../layouts/Admin.astro';
+import Litany from '../../../components/Litany.svelte';
+---
+
+<Admin title="Litany" current="litany">
+  <Litany client:only="svelte" />
+</Admin>
