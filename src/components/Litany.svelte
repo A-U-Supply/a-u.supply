@@ -53,14 +53,14 @@
     }
   }
 
-  async function ensureEngine() {
-    if (engine) return;
+  // Called once on mount. Creates AudioContext (suspended is fine for decoding)
+  // and starts filling pools immediately so they're ready when play is clicked.
+  function initEngine() {
     engine = new AudioEngine();
     for (const v of voices) {
       engine.createVoiceChain(v.id);
     }
     syncEngineParams();
-    // Fill pools
     for (const v of voices) {
       fillPool(v);
     }
@@ -78,9 +78,12 @@
     });
   }
 
+  let poolsLoading = $derived(
+    Object.values(poolInfo).some((p) => p.status === 'loading'),
+  );
+
   // ── Play / Stop ──────────────────────────────────────────────────────────
   async function play() {
-    await ensureEngine();
     await engine!.resume();
     scheduler = new Scheduler(
       engine!,
@@ -160,12 +163,10 @@
     }
     voices = newVoices;
     const info: Record<string, { status: PoolStatus; name: string }> = {};
-    if (engine) {
-      for (const v of newVoices) {
-        engine.createVoiceChain(v.id);
-        info[v.id] = { status: 'loading', name: '' };
-        fillPool(v);
-      }
+    for (const v of newVoices) {
+      engine!.createVoiceChain(v.id);
+      info[v.id] = { status: 'loading', name: '' };
+      fillPool(v);
     }
     poolInfo = info;
   }
@@ -221,6 +222,9 @@
         // malformed hash — use defaults
       }
     }
+    // Create AudioContext and start filling pools immediately.
+    // A suspended context can decode audio fine; resume() is called on play click.
+    initEngine();
   });
 
   onDestroy(() => {
@@ -235,6 +239,7 @@
     {bpm}
     onPlay={play}
     onStop={stop}
+    {poolsLoading}
     onBpmChange={(v) => (bpm = v)}
     onRandomizeSteps={doRandomizeSteps}
     onRandomizeQuery={doRandomizeQuery}
