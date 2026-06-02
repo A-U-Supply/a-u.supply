@@ -11,6 +11,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -647,6 +648,10 @@ app.state.limiter = limiter
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     return JSONResponse(status_code=429, content={"detail": "Too many requests"})
+
+# Trust X-Forwarded-Proto from the Dokku/nginx reverse proxy so that
+# request.url_for() generates https:// URLs instead of http://.
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 # CORS — allow Astro dev server in development
 ALLOWED_ORIGINS = os.environ.get(

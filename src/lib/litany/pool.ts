@@ -46,16 +46,24 @@ export class SamplePool {
   private async fetchOne(query: string): Promise<PoolEntry> {
     const url = `/api/serve?output_index=samples-bored&query=${encodeURIComponent(query)}&sort=random`;
     const headers: Record<string, string> = {};
-    const key = (import.meta as { env?: Record<string, string> }).env
-      ?.VITE_AU_API_KEY;
+    const key = import.meta.env.VITE_AU_API_KEY as string | undefined;
     if (key) headers['Authorization'] = `Bearer ${key}`;
 
-    const response = await fetch(url, {
-      credentials: 'include',
-      redirect: 'follow',
-      headers,
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        credentials: 'include',
+        redirect: 'follow',
+        headers,
+      });
+    } catch (err) {
+      console.error(`[litany] fetch failed for query "${query}":`, err);
+      throw err;
+    }
+    if (!response.ok) {
+      console.error(`[litany] HTTP ${response.status} for query "${query}"`);
+      throw new Error(`HTTP ${response.status}`);
+    }
 
     const disposition = response.headers.get('content-disposition') ?? '';
     const nameMatch = disposition.match(/filename="([^"]+)"/);
@@ -82,12 +90,10 @@ export class SamplePool {
       (rotation === 'every-bar' && isBarStart) ||
       (rotation === 'every-4bars' && is4BarStart);
 
-    if (shouldAdvance) {
-      this.advanceIndex();
-    }
-
+    // Return current entry first, then advance for next call
     const entry = this.currentEntry();
     if (entry) this.currentName = entry.name;
+    if (shouldAdvance) this.advanceIndex();
     return entry?.buffer ?? null;
   }
 

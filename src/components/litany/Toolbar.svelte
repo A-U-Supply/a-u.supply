@@ -1,6 +1,7 @@
 <script lang="ts">
   interface Props {
     playing: boolean;
+    poolsLoading: boolean;
     bpm: number;
     onPlay: () => void;
     onStop: () => void;
@@ -15,6 +16,7 @@
 
   let {
     playing,
+    poolsLoading,
     bpm,
     onPlay,
     onStop,
@@ -44,9 +46,11 @@
     <button
       class="brutalist-control transport-btn"
       class:transport-btn--playing={playing}
+      class:transport-btn--loading={poolsLoading && !playing}
+      disabled={poolsLoading && !playing}
       onclick={playing ? onStop : onPlay}
     >
-      {playing ? '◼ STOP' : '▶ PLAY'}
+      {playing ? '◼ STOP' : poolsLoading ? '… LOADING' : '▶ PLAY'}
     </button>
   </div>
 
@@ -118,6 +122,11 @@
   .transport-btn--playing {
     background: #1a1a0a !important;
     color: #b8860b !important;
+  }
+
+  .transport-btn--loading {
+    color: #555 !important;
+    cursor: wait !important;
   }
 
   .bpm-label {
