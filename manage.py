@@ -16,6 +16,8 @@ Usage (from host):
     ssh dokku run au-supply .venv/bin/python manage.py test-ocr <media_id>
     ssh dokku run au-supply .venv/bin/python manage.py backfill-ai-descriptions [--all] [--restart]
     ssh dokku run au-supply .venv/bin/python manage.py test-ai-description <media_id> [--write]
+    ssh dokku run au-supply .venv/bin/python manage.py backfill-audio-ai-tags [--all]
+    ssh dokku run au-supply .venv/bin/python manage.py index-drum-machines [--limit N]
 """
 
 import json
@@ -1163,6 +1165,107 @@ if __name__ == "__main__":
                 sys.exit(1)
         log("Running index_samples.py...")
         r = _sp.run([".venv/bin/python", "scripts/index_samples.py", zip_path])
+        sys.exit(r.returncode)
+
+    elif cmd == "clean-drum-machine-orphans":
+        from server.models import MediaItem, MediaSource, SessionLocal as _SL
+        _db = _SL()
+        _ids = [r[0] for r in _db.query(MediaSource.media_item_id).filter(
+            MediaSource.source_type == "sample_library",
+            MediaSource.source_metadata.like('%drum-machines%'),
+        ).all()]
+        if _ids:
+            _db.query(MediaItem).filter(MediaItem.id.in_(_ids)).delete(synchronize_session=False)
+            _db.commit()
+            log(f"Cleared {len(_ids)} orphaned drum-machine sample records")
+        _db.close()
+
+    elif cmd == "backfill-audio-ai-tags":
+        """Run centralized audio AI tagging on all sample_library items that need it."""
+        force_all = "--all" in sys.argv
+
+        from server.extraction import _run_audio_extraction
+        from server.models import (
+            MediaAudioMeta,
+            MediaItem,
+            MediaSource,
+            MediaTag,
+            SessionLocal as _SL,
+        )
+        from server.search_client import sync_media_item
+
+        _db = _SL()
+        try:
+            # Find all sample_library media items
+            source_ids = [
+                r[0] for r in _db.query(MediaSource.media_item_id).filter(
+                    MediaSource.source_type == "sample_library",
+                ).all()
+            ]
+            if not source_ids:
+                log("No sample_library items found.")
+                return
+
+            total = len(source_ids)
+            log(f"Found {total} sample_library items")
+
+            if not force_all:
+                # Only process items without acoustic_tags (voice/instrument/ai_tags)
+                items_with_tags = {
+                    r[0] for r in _db.query(MediaAudioMeta.media_item_id).filter(
+                        MediaAudioMeta.media_item_id.in_(source_ids),
+                        MediaAudioMeta.acoustic_tags.isnot(None),
+                    ).all()
+                }
+                source_ids = [sid for sid in source_ids if sid not in items_with_tags]
+                log(f"  {len(source_ids)} need AI tagging ({total - len(source_ids)} already have tags)")
+
+            if not source_ids:
+                log("Nothing to do.")
+                return
+
+            processed = 0
+            for media_item_id in source_ids:
+                try:
+                    item = _db.query(MediaItem).filter(MediaItem.id == media_item_id).first()
+                    if not item or not item.file_path:
+                        continue
+
+                    full_path = os.path.join(SEARCH_MEDIA_DIR, item.file_path)
+                    if not os.path.exists(full_path):
+                        log(f"  SKIP {item.filename}: file not found at {full_path}")
+                        continue
+
+                    _run_audio_extraction(_db, media_item_id, full_path, MediaAudioMeta)
+                    _db.commit()
+
+                    # Re-sync to Meilisearch with enriched data
+                    try:
+                        sync_media_item(_db, item)
+                    except Exception as exc:
+                        log(f"  WARNING Meilisearch sync for {item.filename}: {exc}")
+
+                    processed += 1
+                    if processed % 100 == 0:
+                        log(f"  [{processed}/{len(source_ids)}] tagged")
+                except Exception as exc:
+                    log(f"  ERROR {media_item_id}: {exc}")
+                    _db.rollback()
+
+            log(f"Done. Tagged {processed}/{len(source_ids)} items.")
+        finally:
+            _db.close()
+
+    elif cmd == "index-drum-machines":
+        import subprocess as _sp
+        dl_arg = os.environ.get("DRUM_MACHINE_DOWNLOAD_DIR", "")
+        limit_arg = os.environ.get("DRUM_MACHINE_LIMIT", "")
+        cmd_parts = [".venv/bin/python", "scripts/index_drum_machines.py"]
+        if dl_arg:
+            cmd_parts.extend(["--download-dir", dl_arg])
+        if limit_arg:
+            cmd_parts.extend(["--limit", limit_arg])
+        r = _sp.run(cmd_parts)
         sys.exit(r.returncode)
 
     else:

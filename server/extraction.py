@@ -757,6 +757,42 @@ def _apply_ai_description(meta_kwargs: dict, ai: dict, ai_overrides: dict | None
         meta_kwargs[flag_name] = value
 
 
+_VOICE_PATTERNS: list[tuple[str, str]] = [
+    ("kick", "kick"), ("kik", "kick"), ("bd", "kick"), ("bassdrum", "kick"),
+    ("snare", "snare"), ("snar", "snare"), ("sn", "snare"), ("snr", "snare"),
+    ("sd", "snare"),
+    ("hihat", "hi-hat"), ("hi hat", "hi-hat"), ("hh", "hi-hat"), ("hat", "hi-hat"),
+    ("chh", "hi-hat"), ("ohh", "hi-hat"), ("hi-hat", "hi-hat"),
+    ("tom", "tom"), ("tom-tom", "tom"),
+    ("cymbal", "cymbal"), ("cym", "cymbal"), ("crash", "cymbal"), ("ride", "cymbal"),
+    ("clap", "clap"), ("clp", "clap"),
+    ("rim", "percussion"), ("rimshot", "percussion"), ("rim shot", "percussion"),
+    ("conga", "percussion"), ("bongo", "percussion"),
+    ("shaker", "percussion"), ("tamb", "percussion"), ("tambourine", "percussion"),
+    ("cowbell", "percussion"), ("cow", "percussion"),
+    ("maraca", "percussion"), ("clave", "percussion"), ("guiro", "percussion"),
+    ("triangle", "percussion"),
+    ("perc", "percussion"),
+    ("bass", "bass"),
+    ("guitar", "guitar"),
+    ("synth", "synth"), ("pad", "pad"), ("organ", "organ"),
+    ("melody", "melody"),
+    ("fx", "fx"), ("effect", "fx"),
+    ("noise", "noise"),
+    ("vocal", "vox"), ("rap", "vox"), ("sing", "vox"), ("spoken", "vox"),
+    ("vinyl", "vinyl"), ("crackle", "vinyl"),
+]
+
+
+def _detect_voice_from_filename(filename: str) -> str | None:
+    """Heuristic voice type detection from filename keywords."""
+    name = filename.lower()
+    for pattern, voice in _VOICE_PATTERNS:
+        if pattern in name:
+            return voice
+    return None
+
+
 def _run_audio_extraction(db, media_item_id: str, file_path: str, MediaAudioMeta):
     """Run all audio extraction steps."""
     meta_kwargs = {}
@@ -782,11 +818,31 @@ def _run_audio_extraction(db, media_item_id: str, file_path: str, MediaAudioMeta
         logger.error("Audio transcription failed for %s: %s", media_item_id, exc)
         _log_failure(db, media_item_id, "whisper", exc)
 
-    # Step 3: AI description + tagging from filename context
+    # Step 3: AI description + tagging from filename context.
+    # Derive context from MediaSource.source_metadata.dir when available
+    # (sample libraries store drum-machine / sample-category info there),
+    # otherwise fall back to the filesystem directory name.
     try:
-        filename = os.path.basename(file_path)
-        dir_name = os.path.basename(os.path.dirname(file_path))
         from server.ai_audio import generate_audio_ai_description
+
+        filename = os.path.basename(file_path)
+        dir_name = None
+
+        # Try to get meaningful context from the MediaSource record
+        from server.models import MediaSource as _MediaSource
+        _source = db.query(_MediaSource).filter(
+            _MediaSource.media_item_id == media_item_id,
+            _MediaSource.source_type == "sample_library",
+        ).first()
+        if _source and _source.source_metadata:
+            try:
+                _meta = json.loads(_source.source_metadata) if isinstance(_source.source_metadata, str) else _source.source_metadata
+                dir_name = _meta.get("dir") or _meta.get("machine_name")
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        if not dir_name:
+            dir_name = os.path.basename(os.path.dirname(file_path))
 
         ai = generate_audio_ai_description(filename, dir_name=dir_name)
         if ai.get("description"):
@@ -796,6 +852,13 @@ def _run_audio_extraction(db, media_item_id: str, file_path: str, MediaAudioMeta
         ai_tags = ai.get("tags", [])
         ai_voice = ai.get("voice")
         ai_instrument = ai.get("instrument")
+
+        # Deterministic fallbacks from filename + dir context
+        if not ai_voice:
+            ai_voice = _detect_voice_from_filename(filename)
+        if not ai_instrument and dir_name:
+            ai_instrument = dir_name.lower().replace(" ", "-").replace("_", "-")
+
         if ai_tags or ai_voice or ai_instrument:
             acoustic = {}
             if ai_voice:
@@ -806,6 +869,7 @@ def _run_audio_extraction(db, media_item_id: str, file_path: str, MediaAudioMeta
                 acoustic["ai_tags"] = ai_tags
             meta_kwargs["acoustic_tags"] = json.dumps(acoustic)
             # Also store as MediaTag records for filtering
+            import uuid as _uuid
             for tag in ai_tags:
                 existing_tag = (
                     db.query(MediaTag)
@@ -816,9 +880,8 @@ def _run_audio_extraction(db, media_item_id: str, file_path: str, MediaAudioMeta
                     .first()
                 )
                 if not existing_tag:
-                    import uuid
                     db.add(MediaTag(
-                        id=str(uuid.uuid4()),
+                        id=str(_uuid.uuid4()),
                         media_item_id=media_item_id,
                         tag=tag,
                     ))

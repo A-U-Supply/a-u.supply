@@ -1,17 +1,17 @@
 """Index sample library WAV files into the a-u.supply search engine.
 
 Repeatable workflow that creates MediaItem/MediaSource/MediaTag records in
-SQLite, runs the extraction pipeline for audio metadata, and syncs to
-Meilisearch (routed to the ``samples-bored`` index via source_type).
+SQLite, runs the centralized extraction pipeline for audio metadata + AI
+tagging, and syncs to Meilisearch (routed to the ``samples-bored`` index
+via source_type).
 
 Usage:
     uv run python scripts/index_samples.py <zip-path>
 
-    or to re-index with DeepSeek AI tagging for sound effects:
-    DEEPSEEK_API_KEY=sk-... uv run python scripts/index_samples.py <zip-path>
-
 Requires a running Meilisearch + env vars (MEILISEARCH_URL, etc.).
-Run from the repo root with `uv run python`.
+AI tagging runs automatically via the centralized extraction pipeline
+if DEEPSEEK_API_KEY is set.
+Run from the repo root with ``uv run python``.
 """
 
 import hashlib
@@ -36,16 +36,15 @@ if str(_REPO_ROOT) not in sys.path:
 
 SEARCH_MEDIA_DIR = os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data")
 
-from server.models import (
+from server.extraction import _run_audio_extraction  # noqa: E402
+from server.models import (  # noqa: E402
     MediaAudioMeta,
     MediaItem,
     MediaSource,
     MediaTag,
     SessionLocal,
 )
-from server.search_client import SAMPLES_INDEX, configure_indexes, sync_media_item
-
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+from server.search_client import SAMPLES_INDEX, configure_indexes, sync_media_item  # noqa: E402
 
 SOURCE_URL = "https://archive.org/details/music-2000-sample-library-44k-wav-rip"
 SOURCE_NAME = "Music 2000 Sample library 44k WAV RIP"
@@ -75,43 +74,43 @@ DIR_TAGS = {
     "pad_acoustic":          (["pad", "acoustic"], "pad"),
     "pad_hardsynth":         (["pad", "synth", "hard"], "synth"),
     "pad_softsynth":         (["pad", "synth", "soft"], "synth"),
-    "percussion_cymbal":     (["percussion", "cymbal"], "drums"),
-    "percussion_hi hat":     (["percussion", "hi-hat"], "drums"),
-    "percussion_human":      (["percussion", "human", "vocal"], "vocal"),
-    "percussion_kickdrum":   (["percussion", "kick"], "drums"),
-    "percussion_metal":      (["percussion", "metal"], "drums"),
-    "percussion_snare":      (["percussion", "snare"], "drums"),
-    "percussion_strange":    (["percussion", "experimental"], "drums"),
-    "percussion_toms":       (["percussion", "toms"], "drums"),
-    "percussion_wooden":     (["percussion", "wooden"], "drums"),
-    "percussion_world":      (["percussion", "world"], "drums"),
-    "rapping_danny":         (["rap", "vocal", "male"], "vocal"),
-    "rapping_mandy":         (["rap", "vocal", "female"], "vocal"),
-    "rapping_paul":          (["rap", "vocal", "male"], "vocal"),
-    "rapping_sean 1":        (["rap", "vocal", "male"], "vocal"),
-    "rapping_sean 2":        (["rap", "vocal", "male"], "vocal"),
-    "rapping_shena":         (["rap", "vocal", "female"], "vocal"),
-    "rapping_stepz":         (["rap", "vocal", "male"], "vocal"),
-    "rapping_steve 1":       (["rap", "vocal", "male"], "vocal"),
-    "rapping_steve 2":       (["rap", "vocal", "male"], "vocal"),
-    "rapping_steve 3":       (["rap", "vocal", "male"], "vocal"),
-    "singing_cathi 1":       (["singing", "vocal", "female"], "vocal"),
-    "singing_cathi 2":       (["singing", "vocal", "female"], "vocal"),
-    "singing_howard 1":      (["singing", "vocal", "male"], "vocal"),
-    "singing_howard 2":      (["singing", "vocal", "male"], "vocal"),
-    "singing_jackie 1":      (["singing", "vocal", "female"], "vocal"),
-    "singing_jackie 2":      (["singing", "vocal", "female"], "vocal"),
-    "singing_mandy":         (["singing", "vocal", "female"], "vocal"),
-    "singing_paul":          (["singing", "vocal", "male"], "vocal"),
-    "singing_ruby":          (["singing", "vocal", "female"], "vocal"),
-    "singing_shena 1":       (["singing", "vocal", "female"], "vocal"),
-    "singing_shena 2":       (["singing", "vocal", "female"], "vocal"),
-    "singing_spoken_laurel": (["spoken", "vocal", "female"], "vocal"),
-    "singing_spoken_ted":    (["spoken", "vocal", "male"], "vocal"),
+    "percussion_cymbal":     (["percussion", "cymbal"], "cymbal"),
+    "percussion_hi hat":     (["percussion", "hi-hat"], "hi-hat"),
+    "percussion_human":      (["percussion", "human", "vocal"], "vox"),
+    "percussion_kickdrum":   (["percussion", "kick"], "kick"),
+    "percussion_metal":      (["percussion", "metal"], "percussion"),
+    "percussion_snare":      (["percussion", "snare"], "snare"),
+    "percussion_strange":    (["percussion", "experimental"], "percussion"),
+    "percussion_toms":       (["percussion", "toms"], "tom"),
+    "percussion_wooden":     (["percussion", "wooden"], "percussion"),
+    "percussion_world":      (["percussion", "world"], "percussion"),
+    "rapping_danny":         (["rap", "vocal", "male"], "vox"),
+    "rapping_mandy":         (["rap", "vocal", "female"], "vox"),
+    "rapping_paul":          (["rap", "vocal", "male"], "vox"),
+    "rapping_sean 1":        (["rap", "vocal", "male"], "vox"),
+    "rapping_sean 2":        (["rap", "vocal", "male"], "vox"),
+    "rapping_shena":         (["rap", "vocal", "female"], "vox"),
+    "rapping_stepz":         (["rap", "vocal", "male"], "vox"),
+    "rapping_steve 1":       (["rap", "vocal", "male"], "vox"),
+    "rapping_steve 2":       (["rap", "vocal", "male"], "vox"),
+    "rapping_steve 3":       (["rap", "vocal", "male"], "vox"),
+    "singing_cathi 1":       (["singing", "vocal", "female"], "vox"),
+    "singing_cathi 2":       (["singing", "vocal", "female"], "vox"),
+    "singing_howard 1":      (["singing", "vocal", "male"], "vox"),
+    "singing_howard 2":      (["singing", "vocal", "male"], "vox"),
+    "singing_jackie 1":      (["singing", "vocal", "female"], "vox"),
+    "singing_jackie 2":      (["singing", "vocal", "female"], "vox"),
+    "singing_mandy":         (["singing", "vocal", "female"], "vox"),
+    "singing_paul":          (["singing", "vocal", "male"], "vox"),
+    "singing_ruby":          (["singing", "vocal", "female"], "vox"),
+    "singing_shena 1":       (["singing", "vocal", "female"], "vox"),
+    "singing_shena 2":       (["singing", "vocal", "female"], "vox"),
+    "singing_spoken_laurel": (["spoken", "vocal", "female"], "vox"),
+    "singing_spoken_ted":    (["spoken", "vocal", "male"], "vox"),
     "sound effect_animal":   (["sound-effect", "animal", "foley"], "fx"),
     "sound effect_musical":  (["sound-effect", "musical", "foley"], "fx"),
     "sound effect_objects":  (["sound-effect", "foley", "objects"], "fx"),
-    "vinyl_crackle":         (["vinyl", "crackle", "noise"], "fx"),
+    "vinyl_crackle":         (["vinyl", "crackle", "noise"], "vinyl"),
     "vinyl_rocking":         (["vinyl", "rocking", "effect"], "fx"),
     "vinyl_stops":           (["vinyl", "stop", "effect"], "fx"),
 }
@@ -198,12 +197,6 @@ def derive_tags(filename, dir_base_tags):
     return [t for t in tags if not (t in seen or seen.add(t))]
 
 
-def batch_tag_dir_via_deepseek(dir_name, filenames, api_key):
-    """Batch-tag all files in a directory via DeepSeek. Returns {filename: {description, tags}}."""
-    from server.ai_audio import generate_audio_ai_descriptions
-    return generate_audio_ai_descriptions(filenames, dir_name=dir_name, api_key=api_key)
-
-
 def index_samples(zip_path):
     if not os.path.exists(zip_path):
         log(f"ERROR: {zip_path} not found")
@@ -231,22 +224,6 @@ def index_samples(zip_path):
 
         wavs = sorted(Path(samples_root).rglob("*.wav"))
         log(f"Found {len(wavs)} WAV files")
-
-        # Group by directory for AI tagging
-        by_dir = {}
-        for w in wavs:
-            d = w.parent.name
-            by_dir.setdefault(d, []).append(w)
-
-        # AI tagging for ALL directories via DeepSeek
-        ai_results = {}
-        if DEEPSEEK_API_KEY:
-            for dir_name in sorted(by_dir):
-                fnames = [f"{dir_name}-{w.name}" for w in by_dir[dir_name]]
-                log(f"AI tagging {len(fnames)} files in '{dir_name}'...")
-                ai_results[dir_name] = batch_tag_dir_via_deepseek(dir_name, fnames, DEEPSEEK_API_KEY)
-        else:
-            log("No DEEPSEEK_API_KEY set, skipping AI tagging")
 
         db = SessionLocal()
         try:
@@ -286,6 +263,7 @@ def index_samples(zip_path):
                         media_type="audio",
                         file_size_bytes=file_size,
                         mime_type=mime,
+                        description=f"Music 2000 sample — {dir_name}",
                         output_index="samples-bored",
                     )
                     db.add(media_item)
@@ -311,8 +289,8 @@ def index_samples(zip_path):
                     )
                     db.add(source)
 
-                    # Derive and add tags (deduplicated)
-                    base_tags, category = DIR_TAGS.get(dir_name, ([dir_name.replace("_", " ")], "other"))
+                    # Deterministic tags only (AI enrichment runs via centralized pipeline)
+                    base_tags, _category = DIR_TAGS.get(dir_name, ([dir_name.replace("_", " ")], None))
                     derived_tags = derive_tags(filename, base_tags)
 
                     all_tags = list(dict.fromkeys(
@@ -320,43 +298,17 @@ def index_samples(zip_path):
                         + SOURCE_TOPICS
                         + [f"dir:{dir_name}"]
                     ))
-
-                    # AI tags + description (from DeepSeek, keyed by renamed filename)
-                    ai_info = ai_results.get(dir_name, {}).get(renamed, {})
-                    ai_desc = ai_info.get("description", "")
-                    ai_tag_list = ai_info.get("tags", [])
-                    ai_voice = ai_info.get("voice")
-                    ai_instrument = ai_info.get("instrument")
-
-                    desc_parts = [f"Music 2000 sample — {dir_name}"]
-                    if ai_desc:
-                        desc_parts.append(ai_desc)
-                    media_item.description = " | ".join(desc_parts)
-
-                    db.flush()
-
-                    # Run extraction pipeline for ffprobe metadata + whisper
-                    full_path = str(dest)
-                    try:
-                        meta = extract_audio_metadata(full_path)
-                        acoustic = {"voice": ai_voice, "instrument": ai_instrument}
-                        if ai_tag_list:
-                            acoustic["ai_tags"] = ai_tag_list
-                        audio_meta = MediaAudioMeta(
-                            media_item_id=media_item.id,
-                            duration_seconds=meta["duration_seconds"],
-                            sample_rate=meta["sample_rate"],
-                            channels=meta["channels"],
-                            bit_depth=meta["bit_depth"],
-                            acoustic_tags=json.dumps(acoustic),
-                        )
-                        db.add(audio_meta)
-                        db.flush()
-                    except Exception as exc:
-                        log(f"  WARNING: ffprobe failed for {renamed}: {exc}")
+                    for tag in all_tags:
+                        db.add(MediaTag(media_item_id=media_item.id, tag=tag))
 
                     db.commit()
                     new_count += 1
+
+                    # Run centralized audio extraction (ffprobe + AI tagging + MediaAudioMeta)
+                    try:
+                        _run_audio_extraction(db, media_item.id, str(dest), MediaAudioMeta)
+                    except Exception as exc:
+                        log(f"  WARNING: audio extraction failed for {renamed}: {exc}")
 
                     # Sync to Meilisearch (routes to samples-bored via source_type)
                     try:

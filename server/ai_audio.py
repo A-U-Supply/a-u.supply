@@ -82,7 +82,7 @@ def generate_audio_ai_descriptions(
             # Return partial results on failure
             for fname in batch:
                 if fname not in all_results:
-                    all_results[fname] = {"description": "", "tags": []}
+                    all_results[fname] = {"description": "", "tags": [], "voice": None, "instrument": None}
 
     return all_results
 
@@ -104,7 +104,7 @@ For each file, return:
 - description (5-15 words): what the sample sounds like
 - tags (3-6): instrument, technique, genre, mood, use
 - voice (single word): the sound type — pick from: kick, snare, hi-hat, tom, cymbal, percussion, clap, bass, guitar, synth, vox, fx, melody, pad, organ, vinyl, noise, other. Be specific.
-- instrument (single word or short phrase, or null): the specific instrument or source, e.g. tr-808, tr-909, tb-303, acoustic, electric, distorted, mandy, danny, paul, cathi, howard, ruby, shena, stepz, steve, laurel, ted, jackie, sean. null if unknown.
+- instrument (single word or short phrase, or null): the specific instrument, device, or source. For drum machines use model (e.g. tr-808, tr-909, tr-606, dmx, linndrum, mpc3000, sp1200). For synths use model (e.g. tb-303, juno-106, dx7). For guitars/bass use type+technique (e.g. acoustic, electric, distorted, slap). For vocals use artist name. null if unknown.
 
 Return ONLY a JSON array, no preamble:
 [
