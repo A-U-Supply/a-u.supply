@@ -1163,6 +1163,120 @@ def _retry_single_step(db, media_item, file_path: str, extraction_type: str):
         raise ValueError(f"Unknown extraction type: {extraction_type}")
 
 
+def _run_audio_extraction_batch(
+    db,
+    items: list[tuple[str, str, str | None]],
+    MediaAudioMeta,
+) -> None:
+    """Run audio extraction on a batch of files, grouping AI calls by context.
+
+    Args:
+        db: SQLAlchemy session.
+        items: List of (media_item_id, file_path, dir_context) tuples.
+               dir_context is the drum-machine / sample-category name, or None.
+        MediaAudioMeta: The ORM model class.
+    """
+    import uuid as _uuid
+
+    # Step 1+2: ffprobe + transcript per file (fast, local)
+    for media_item_id, file_path, _dir_ctx in items:
+        meta_kwargs: dict = {}
+        try:
+            audio_meta = extract_audio_metadata(file_path)
+            meta_kwargs.update(audio_meta)
+        except Exception as exc:
+            logger.error("Audio metadata extraction failed for %s: %s", media_item_id, exc)
+        try:
+            transcript_result = transcribe_audio(file_path)
+            if transcript_result:
+                meta_kwargs["transcript"] = transcript_result["transcript"]
+                meta_kwargs["transcript_confidence"] = transcript_result["confidence"]
+        except Exception as exc:
+            logger.error("Audio transcription failed for %s: %s", media_item_id, exc)
+        if meta_kwargs:
+            existing = db.query(MediaAudioMeta).filter(
+                MediaAudioMeta.media_item_id == media_item_id
+            ).first()
+            if existing:
+                for key, val in meta_kwargs.items():
+                    setattr(existing, key, val)
+            else:
+                db.add(MediaAudioMeta(media_item_id=media_item_id, **meta_kwargs))
+    db.commit()
+
+    # Step 3: Batch AI tagging — group by dir_context, one API call per group
+    from server.ai_audio import generate_audio_ai_descriptions
+    from server.models import MediaItem as _MI, MediaTag as _MT
+
+    by_context: dict[str, list[tuple[str, str, str]]] = {}
+    for media_item_id, file_path, dir_ctx in items:
+        ctx_key = dir_ctx or os.path.basename(os.path.dirname(file_path))
+        by_context.setdefault(ctx_key, []).append((media_item_id, file_path, ctx_key))
+
+    for dir_context, batch_items in by_context.items():
+        try:
+            fnames = [os.path.basename(fp) for _, fp, _ in batch_items]
+            ai_results = generate_audio_ai_descriptions(fnames, dir_name=dir_context)
+        except Exception as exc:
+            logger.error("Batch AI tagging failed for %s: %s", dir_context, exc)
+            ai_results = {}
+
+        for media_item_id, file_path, _ in batch_items:
+            try:
+                filename = os.path.basename(file_path)
+                ai = ai_results.get(filename, {})
+                ai_tags = ai.get("tags", [])
+                ai_voice = ai.get("voice")
+                ai_instrument = ai.get("instrument")
+
+                if not ai_voice:
+                    ai_voice = _detect_voice_from_filename(filename)
+                if not ai_instrument and dir_context:
+                    ai_instrument = dir_context.lower().replace(" ", "-").replace("_", "-")
+
+                if ai.get("description"):
+                    existing_item = db.query(_MI).filter(_MI.id == media_item_id).first()
+                    if existing_item:
+                        existing_item.description = ai["description"]
+
+                if ai_tags or ai_voice or ai_instrument:
+                    acoustic: dict = {}
+                    if ai_voice:
+                        acoustic["voice"] = ai_voice
+                    if ai_instrument:
+                        acoustic["instrument"] = ai_instrument
+                    if ai_tags:
+                        acoustic["ai_tags"] = ai_tags
+                    acoustic_json = json.dumps(acoustic)
+
+                    existing_meta = db.query(MediaAudioMeta).filter(
+                        MediaAudioMeta.media_item_id == media_item_id
+                    ).first()
+                    if existing_meta:
+                        existing_meta.acoustic_tags = acoustic_json
+                    else:
+                        db.add(MediaAudioMeta(
+                            media_item_id=media_item_id,
+                            acoustic_tags=acoustic_json,
+                        ))
+                    for tag in ai_tags:
+                        existing_tag = (
+                            db.query(_MT).filter(
+                                _MT.media_item_id == media_item_id,
+                                _MT.tag == tag,
+                            ).first()
+                        )
+                        if not existing_tag:
+                            db.add(_MT(
+                                id=str(_uuid.uuid4()),
+                                media_item_id=media_item_id,
+                                tag=tag,
+                            ))
+            except Exception as exc:
+                logger.error("Batch AI apply failed for %s: %s", media_item_id, exc)
+    db.commit()
+
+
 def _upsert_meta(db, MetaClass, media_item_id: str, updates: dict):
     """Create or update a metadata record."""
     existing = db.query(MetaClass).filter(MetaClass.media_item_id == media_item_id).first()

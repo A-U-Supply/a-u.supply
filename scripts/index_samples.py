@@ -36,7 +36,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 SEARCH_MEDIA_DIR = os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data")
 
-from server.extraction import _run_audio_extraction  # noqa: E402
+from server.extraction import _run_audio_extraction_batch  # noqa: E402
 from server.models import (  # noqa: E402
     MediaAudioMeta,
     MediaItem,
@@ -231,6 +231,7 @@ def index_samples(zip_path):
             new_count = 0
             dup_count = 0
             error_count = 0
+            batch_items: list[tuple[str, str, str]] = []
 
             for wav_path in wavs:
                 dir_name = wav_path.parent.name
@@ -241,19 +242,16 @@ def index_samples(zip_path):
                     file_hash = sha256_file(str(wav_path))
                     file_size = wav_path.stat().st_size
 
-                    # Dedup by SHA-256
                     existing = db.query(MediaItem).filter(MediaItem.sha256 == file_hash).first()
                     if existing:
                         dup_count += 1
                         continue
 
-                    # Store file in search media dir
                     dest = storage_path(renamed, file_hash)
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(str(wav_path), str(dest))
                     rel_path = str(dest.relative_to(Path(SEARCH_MEDIA_DIR)))
 
-                    # Create MediaItem
                     mime = mimetypes.guess_type(filename)[0] or "audio/wav"
                     media_item = MediaItem(
                         id=str(uuid.uuid4()),
@@ -269,7 +267,6 @@ def index_samples(zip_path):
                     db.add(media_item)
                     db.flush()
 
-                    # Create MediaSource with sample_library type → routes to samples-bored index
                     source_meta = {
                         "source_url": SOURCE_URL,
                         "source_name": SOURCE_NAME,
@@ -289,7 +286,6 @@ def index_samples(zip_path):
                     )
                     db.add(source)
 
-                    # Deterministic tags only (AI enrichment runs via centralized pipeline)
                     base_tags, _category = DIR_TAGS.get(dir_name, ([dir_name.replace("_", " ")], None))
                     derived_tags = derive_tags(filename, base_tags)
 
@@ -303,18 +299,7 @@ def index_samples(zip_path):
 
                     db.commit()
                     new_count += 1
-
-                    # Run centralized audio extraction (ffprobe + AI tagging + MediaAudioMeta)
-                    try:
-                        _run_audio_extraction(db, media_item.id, str(dest), MediaAudioMeta)
-                    except Exception as exc:
-                        log(f"  WARNING: audio extraction failed for {renamed}: {exc}")
-
-                    # Sync to Meilisearch (routes to samples-bored via source_type)
-                    try:
-                        sync_media_item(db, media_item)
-                    except Exception as exc:
-                        log(f"  WARNING: Meilisearch sync failed for {renamed}: {exc}")
+                    batch_items.append((media_item.id, str(dest), dir_name))
 
                     if new_count % 200 == 0:
                         log(f"  [{new_count}/{total}] new={new_count} dup={dup_count} err={error_count}")
@@ -323,6 +308,24 @@ def index_samples(zip_path):
                     log(f"  ERROR {renamed}: {exc}")
                     db.rollback()
                     error_count += 1
+
+            # Batch AI tagging (one API call per directory context)
+            if batch_items:
+                log(f"Running batch audio extraction on {len(batch_items)} items ...")
+                try:
+                    _run_audio_extraction_batch(db, batch_items, MediaAudioMeta)
+                except Exception as exc:
+                    log(f"  WARNING batch extraction: {exc}")
+
+            # Sync to Meilisearch
+            log(f"Syncing {len(batch_items)} items to Meilisearch ...")
+            for media_item_id, _, _ in batch_items:
+                try:
+                    item = db.query(MediaItem).filter(MediaItem.id == media_item_id).first()
+                    if item:
+                        sync_media_item(db, item)
+                except Exception as exc:
+                    log(f"  WARNING Meilisearch sync for {media_item_id}: {exc}")
 
             log(f"\nDone! New: {new_count}, Duplicates: {dup_count}, Errors: {error_count} / {total}")
 

@@ -46,7 +46,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 SEARCH_MEDIA_DIR = os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data")
 
-from server.extraction import _run_audio_extraction  # noqa: E402
+from server.extraction import _run_audio_extraction_batch  # noqa: E402
 from server.models import (  # noqa: E402
     MediaAudioMeta,
     MediaItem,
@@ -405,27 +405,25 @@ def process_drum_machine(
             stats["errors"] += 1
             return
 
+        # Pass 1: ingest all files, collect for batch extraction
+        batch_items: list[tuple[str, str, str]] = []  # (media_item_id, file_path, dir_ctx)
         for top_dir, entry, local_path in local_wavs:
             try:
                 filename = Path(entry).name
                 renamed = f"{machine_name}-{filename}"
                 file_hash = sha256_file(str(local_path))
 
-                # Dedup by SHA-256
                 existing = db.query(MediaItem).filter(MediaItem.sha256 == file_hash).first()
                 if existing:
                     stats["duplicates"] += 1
                     continue
 
                 file_size = local_path.stat().st_size
-
-                # Store file
                 dest = storage_path(renamed, file_hash)
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(str(local_path), str(dest))
                 rel_path = str(dest.relative_to(Path(SEARCH_MEDIA_DIR)))
 
-                # Create MediaItem
                 mime = mimetypes.guess_type(filename)[0] or "audio/wav"
                 media_item = MediaItem(
                     id=str(uuid.uuid4()),
@@ -441,7 +439,6 @@ def process_drum_machine(
                 db.add(media_item)
                 db.flush()
 
-                # Create MediaSource
                 source_meta = {
                     "source_url": DETAILS_URL,
                     "source_name": SOURCE_NAME,
@@ -463,35 +460,37 @@ def process_drum_machine(
                 )
                 db.add(source)
 
-                # Deterministic tags only (AI enrichment via centralized pipeline)
                 det_tags = derive_tags(filename, machine_name)
                 all_tags = list(dict.fromkeys(
-                    det_tags
-                    + SOURCE_TOPICS
-                    + [f"dir:{machine_name}"]
+                    det_tags + SOURCE_TOPICS + [f"dir:{machine_name}"]
                 ))
                 for tag in all_tags:
                     db.add(MediaTag(media_item_id=media_item.id, tag=tag))
 
                 db.commit()
                 stats["new"] += 1
-
-                # Run centralized audio extraction (ffprobe + AI tagging + MediaAudioMeta)
-                try:
-                    _run_audio_extraction(db, media_item.id, str(dest), MediaAudioMeta)
-                except Exception as exc:
-                    log(f"      WARNING audio extraction for {renamed}: {exc}")
-
-                # Sync to Meilisearch
-                try:
-                    sync_media_item(db, media_item)
-                except Exception as exc:
-                    log(f"      WARNING Meilisearch sync for {renamed}: {exc}")
+                batch_items.append((media_item.id, str(dest), machine_name))
 
             except Exception as exc:
                 log(f"    ERROR {entry}: {exc}")
                 db.rollback()
                 stats["errors"] += 1
+
+        # Pass 2: batch AI tagging for the whole drum machine (one API call)
+        if batch_items:
+            try:
+                _run_audio_extraction_batch(db, batch_items, MediaAudioMeta)
+            except Exception as exc:
+                log(f"    WARNING batch extraction for {machine_name}: {exc}")
+
+        # Pass 3: sync to Meilisearch
+        for media_item_id, _, _ in batch_items:
+            try:
+                item = db.query(MediaItem).filter(MediaItem.id == media_item_id).first()
+                if item:
+                    sync_media_item(db, item)
+            except Exception as exc:
+                log(f"    WARNING Meilisearch sync for {media_item_id}: {exc}")
 
     finally:
         shutil.rmtree(extract_dir, ignore_errors=True)
