@@ -111,6 +111,40 @@ Curated list: `kick snare hi-hat clap tom bass vocal chord melody perc fx`
 
 ---
 
+## Sample sources
+
+Litany draws from the `samples-bored` Meilisearch index. Two primary sources feed it:
+
+### #sounds-bored (primary)
+
+All audio files posted to `#sounds-bored` in Slack are automatically ingested
+into the `samples-bored` index by the Slack scraper (`server/slack_scraper.py`).
+The scraper:
+- Sets `source_type="sample_library"` and `output_index="samples-bored"`
+- Runs AI audio tagging (`server/ai_audio.py`) on every file, producing `voice`
+  (kick / snare / hi-hat / percussion / fx / vox / etc.) and `instrument` fields
+- Transcodes incompatible formats (OGG, FLAC, WMA, etc.) to MP3 via ffmpeg
+  before ingest so every file is guaranteed playable by the Web Audio API
+
+Litany voice queries like `kick`, `snare`, `hi-hat`, `fx`, `vox` match the
+`voice` field in the index, populated by AI tagging from the filename.
+
+### #sample-sale (tabled)
+
+Tabled for now. Future consideration: route audio from `#sample-sale` (particularly
+voice/melodic content) into a separate query namespace. Requires deciding how to
+handle full video files and how to scope which content is relevant.
+
+### AI tagging note
+
+The AI tagger classifies sounds from their filename alone — `sulfur_cube_hit1`
+→ `voice: "percussion"`, `sulfur_cube_squish1` → `voice: "fx"`. This works well
+for descriptively named files but is limited for files with opaque names (e.g.
+`ssstwitter.com_1776...mp4`). Future improvement: waveform-based classification
+(spectral centroid, onset detection, etc.) for more accurate tagging.
+
+---
+
 ## File layout
 
 ```

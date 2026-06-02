@@ -489,6 +489,32 @@ def _lookup_user_id_for_slack(db, slack_user_id: str | None) -> int | None:
     return row[0] if row else None
 
 
+_BROWSER_SAFE_AUDIO = {".wav", ".mp3", ".m4a", ".aac"}
+
+
+def _ensure_browser_safe_audio(src_path: Path) -> tuple[Path, str, bool]:
+    """Return (path, filename, was_transcoded) of a browser-safe audio file.
+
+    If the source extension is not in _BROWSER_SAFE_AUDIO, transcode to MP3
+    via ffmpeg so Litany's Web Audio API can decode it in all browsers.
+    """
+    ext = src_path.suffix.lower()
+    if ext in _BROWSER_SAFE_AUDIO:
+        return src_path, src_path.name, False
+    mp3_path = src_path.with_suffix(".mp3")
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", str(src_path), "-q:a", "2", str(mp3_path)],
+            capture_output=True,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        logger.warning("Could not transcode %s to MP3: %s — using original", src_path.name, exc)
+        return src_path, src_path.name, False
+    new_name = src_path.stem + ".mp3"
+    return mp3_path, new_name, True
+
+
 def _ingest_file(
     db,
     file_path: Path,
@@ -671,6 +697,7 @@ def _process_message_files(
             stats["errors"] += 1
             continue
 
+        transcoded_path: Path | None = None
         try:
             if is_zip and is_sample_library:
                 # Extract WAVs from zip and ingest each one
@@ -711,8 +738,13 @@ def _process_message_files(
                 # Regular file ingest
                 s_type = source_type if not is_sample_library else "sample_library"
                 oi = "samples-bored" if is_sample_library else None
+                ingest_path, ingest_filename = tmp_path, filename
+                if is_sample_library:
+                    ingest_path, ingest_filename, did_transcode = _ensure_browser_safe_audio(tmp_path)
+                    if did_transcode:
+                        transcoded_path = ingest_path
                 result = _ingest_file(
-                    db, tmp_path, filename,
+                    db, ingest_path, ingest_filename,
                     source_type=s_type,
                     source_channel=channel_name,
                     slack_file_id=file_id,
@@ -734,6 +766,8 @@ def _process_message_files(
         finally:
             if tmp_path.exists():
                 tmp_path.unlink()
+            if transcoded_path and transcoded_path.exists():
+                transcoded_path.unlink()
 
 
 def _process_message_urls(
