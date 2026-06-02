@@ -1184,12 +1184,11 @@ if __name__ == "__main__":
         """Run centralized audio AI tagging on all sample_library items that need it."""
         force_all = "--all" in sys.argv
 
-        from server.extraction import _run_audio_extraction
+        from server.extraction import SEARCH_MEDIA_DIR, _run_audio_extraction
         from server.models import (
             MediaAudioMeta,
             MediaItem,
             MediaSource,
-            MediaTag,
             SessionLocal as _SL,
         )
         from server.search_client import sync_media_item
