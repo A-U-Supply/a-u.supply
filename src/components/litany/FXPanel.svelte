@@ -4,9 +4,10 @@
   interface Props {
     fx: FxParams;
     onChange: (fx: FxParams) => void;
+    onBeforeDrag: () => void;
   }
 
-  let { fx, onChange }: Props = $props();
+  let { fx, onChange, onBeforeDrag }: Props = $props();
 
   function update(key: keyof FxParams, value: number | string) {
     onChange({ ...fx, [key]: value });
@@ -24,6 +25,7 @@
         max="1"
         step="0.01"
         value={fx.delayTime}
+        onpointerdown={onBeforeDrag}
         oninput={(e) =>
           update('delayTime', parseFloat((e.target as HTMLInputElement).value))}
       />
@@ -36,6 +38,7 @@
         max="0.95"
         step="0.01"
         value={fx.delayFeedback}
+        onpointerdown={onBeforeDrag}
         oninput={(e) =>
           update(
             'delayFeedback',
@@ -51,6 +54,7 @@
         max="1"
         step="0.01"
         value={fx.delayWet}
+        onpointerdown={onBeforeDrag}
         oninput={(e) =>
           update('delayWet', parseFloat((e.target as HTMLInputElement).value))}
       />
@@ -67,6 +71,7 @@
         max="1"
         step="0.01"
         value={fx.reverbWet}
+        onpointerdown={onBeforeDrag}
         oninput={(e) =>
           update('reverbWet', parseFloat((e.target as HTMLInputElement).value))}
       />
@@ -97,6 +102,7 @@
         max="20000"
         step="10"
         value={fx.filterFreq}
+        onpointerdown={onBeforeDrag}
         oninput={(e) =>
           update(
             'filterFreq',
@@ -112,6 +118,7 @@
         max="20"
         step="0.1"
         value={fx.filterQ}
+        onpointerdown={onBeforeDrag}
         oninput={(e) =>
           update('filterQ', parseFloat((e.target as HTMLInputElement).value))}
       />

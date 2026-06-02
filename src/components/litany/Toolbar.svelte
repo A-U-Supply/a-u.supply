@@ -3,8 +3,14 @@
     playing: boolean;
     poolsLoading: boolean;
     bpm: number;
+    undoCount: number;
+    redoCount: number;
+    layout: 'grid' | 'rows';
     onPlay: () => void;
     onStop: () => void;
+    onUndo: () => void;
+    onRedo: () => void;
+    onLayoutToggle: () => void;
     onBpmChange: (bpm: number) => void;
     onRandomizeSteps: () => void;
     onRandomizeQuery: () => void;
@@ -18,8 +24,14 @@
     playing,
     poolsLoading,
     bpm,
+    undoCount,
+    redoCount,
+    layout,
     onPlay,
     onStop,
+    onUndo,
+    onRedo,
+    onLayoutToggle,
     onBpmChange,
     onRandomizeSteps,
     onRandomizeQuery,
@@ -33,6 +45,14 @@
     if (e.key === 'p' && !e.metaKey && !e.ctrlKey) {
       e.preventDefault();
       playing ? onStop() : onPlay();
+    }
+    if (e.key === 'z' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+      e.preventDefault();
+      onUndo();
+    }
+    if (e.key === 'z' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+      e.preventDefault();
+      onRedo();
     }
   }
 </script>
@@ -67,6 +87,21 @@
     />
   </label>
 
+  <div class="history-group">
+    <button
+      class="brutalist-control hist-btn"
+      disabled={undoCount === 0}
+      onclick={onUndo}
+      title="Undo (⌘Z)">↩{undoCount > 0 ? ` ${undoCount}` : ''}</button
+    >
+    <button
+      class="brutalist-control hist-btn"
+      disabled={redoCount === 0}
+      onclick={onRedo}
+      title="Redo (⌘⇧Z)">↪{redoCount > 0 ? ` ${redoCount}` : ''}</button
+    >
+  </div>
+
   <div class="rnd-group">
     <button class="brutalist-control rnd-btn" onclick={onRandomizeSteps}
       >🎲 STEPS</button
@@ -86,8 +121,17 @@
     >
   </div>
 
-  <button class="brutalist-control add-btn" onclick={onAddVoice}>+ VOICE</button
-  >
+  <div class="right-group">
+    <button
+      class="brutalist-control layout-btn"
+      aria-pressed={layout === 'rows'}
+      onclick={onLayoutToggle}
+      title="Toggle layout">{layout === 'grid' ? '▦ GRID' : '≡ ROWS'}</button
+    >
+    <button class="brutalist-control add-btn" onclick={onAddVoice}
+      >+ VOICE</button
+    >
+  </div>
 </div>
 
 <style>
@@ -147,6 +191,26 @@
     text-align: center;
   }
 
+  .history-group {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .hist-btn {
+    font-size: 0.7rem;
+    padding: 3px 8px;
+    cursor: pointer;
+    min-width: 2.5rem;
+  }
+
+  .hist-btn:disabled {
+    color: #444 !important;
+    cursor: default;
+    border-color: #333 !important;
+    box-shadow: none !important;
+  }
+
   .rnd-group {
     display: flex;
     gap: 4px;
@@ -165,8 +229,25 @@
     color: #b8860b !important;
   }
 
-  .add-btn {
+  .right-group {
+    display: flex;
+    gap: 4px;
     margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .layout-btn {
+    font-size: 0.65rem;
+    padding: 3px 8px;
+    cursor: pointer;
+  }
+
+  .layout-btn[aria-pressed='true'] {
+    background: var(--color-fg) !important;
+    color: var(--color-bg) !important;
+  }
+
+  .add-btn {
     font-size: 0.7rem;
     padding: 3px 10px;
     cursor: pointer;
