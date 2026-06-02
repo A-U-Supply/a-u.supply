@@ -824,12 +824,12 @@ def _run_audio_extraction(db, media_item_id: str, file_path: str, MediaAudioMeta
     # otherwise fall back to the filesystem directory name.
     try:
         from server.ai_audio import generate_audio_ai_description
+        from server.models import MediaItem as _MediaItem, MediaSource as _MediaSource, MediaTag as _MediaTag
 
         filename = os.path.basename(file_path)
         dir_name = None
 
         # Try to get meaningful context from the MediaSource record
-        from server.models import MediaSource as _MediaSource
         _source = db.query(_MediaSource).filter(
             _MediaSource.media_item_id == media_item_id,
             _MediaSource.source_type == "sample_library",
@@ -846,7 +846,7 @@ def _run_audio_extraction(db, media_item_id: str, file_path: str, MediaAudioMeta
 
         ai = generate_audio_ai_description(filename, dir_name=dir_name)
         if ai.get("description"):
-            media_item = db.query(MediaItem).filter(MediaItem.id == media_item_id).first()
+            media_item = db.query(_MediaItem).filter(_MediaItem.id == media_item_id).first()
             if media_item:
                 media_item.description = ai["description"]
         ai_tags = ai.get("tags", [])
@@ -872,15 +872,15 @@ def _run_audio_extraction(db, media_item_id: str, file_path: str, MediaAudioMeta
             import uuid as _uuid
             for tag in ai_tags:
                 existing_tag = (
-                    db.query(MediaTag)
+                    db.query(_MediaTag)
                     .filter(
-                        MediaTag.media_item_id == media_item_id,
-                        MediaTag.tag == tag,
+                        _MediaTag.media_item_id == media_item_id,
+                        _MediaTag.tag == tag,
                     )
                     .first()
                 )
                 if not existing_tag:
-                    db.add(MediaTag(
+                    db.add(_MediaTag(
                         id=str(_uuid.uuid4()),
                         media_item_id=media_item_id,
                         tag=tag,
