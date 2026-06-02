@@ -7,9 +7,11 @@
   interface Props {
     voice: Voice;
     globalTick: number;
+    layout: 'grid' | 'rows';
     poolStatus: PoolStatus;
     currentSampleName: string;
-    onChange: (updated: Voice) => void;
+    onChange: (updated: Voice, skipHistory?: boolean) => void;
+    onBeforeDrag: () => void;
     onRandomizeSteps: () => void;
     onRandomizeQuery: () => void;
     onRemove: () => void;
@@ -20,9 +22,11 @@
   let {
     voice,
     globalTick,
+    layout,
     poolStatus,
     currentSampleName,
     onChange,
+    onBeforeDrag,
     onRandomizeSteps,
     onRandomizeQuery,
     onRemove,
@@ -64,56 +68,69 @@
   }
 </script>
 
-<div class="voice-card" class:voice-card--error={poolStatus === 'error'}>
-  <div class="card-header">
-    <input
-      class="label-input"
-      value={voice.label}
-      oninput={(e) =>
-        onChange({ ...voice, label: (e.target as HTMLInputElement).value })}
-    />
-    <div class="header-actions">
+<div
+  class="voice-card"
+  class:voice-card--error={poolStatus === 'error'}
+  class:voice-card--row={layout === 'rows'}
+>
+  <!-- Left column: label + query (fixed width in row mode) -->
+  <div class="left-col">
+    <div class="card-header">
+      <input
+        class="label-input"
+        value={voice.label}
+        oninput={(e) =>
+          onChange(
+            { ...voice, label: (e.target as HTMLInputElement).value },
+            true,
+          )}
+      />
+      {#if layout === 'grid'}
+        <div class="header-actions">
+          <button
+            class="brutalist-control icon-btn"
+            title="Randomize query"
+            onclick={onRandomizeQuery}>🎲</button
+          >
+          <button
+            class="brutalist-control icon-btn"
+            title="Remove voice"
+            onclick={onRemove}>✕</button
+          >
+        </div>
+      {/if}
+    </div>
+
+    <div class="sample-name">
+      {#if poolStatus === 'loading'}
+        <span class="status-loading">loading…</span>
+      {:else if poolStatus === 'error'}
+        <span class="status-error">no samples</span>
+      {:else}
+        <span class="name-text">{currentSampleName}</span>
+      {/if}
+    </div>
+
+    <div class="query-row">
+      <input
+        class="query-input brutalist-control"
+        value={voice.query}
+        placeholder="search…"
+        onchange={(e) =>
+          onChange({ ...voice, query: (e.target as HTMLInputElement).value })}
+      />
       <button
         class="brutalist-control icon-btn"
-        title="Randomize query"
-        onclick={onRandomizeQuery}>🎲</button
-      >
-      <button
-        class="brutalist-control icon-btn"
-        title="Remove voice"
-        onclick={onRemove}>✕</button
+        class:pin--active={voice.rotation === 'pinned'}
+        title={voice.rotation === 'pinned'
+          ? 'Unpin sample'
+          : 'Pin current sample'}
+        onclick={handlePin}>📌</button
       >
     </div>
   </div>
 
-  <div class="sample-name">
-    {#if poolStatus === 'loading'}
-      <span class="status-loading">loading…</span>
-    {:else if poolStatus === 'error'}
-      <span class="status-error">no samples</span>
-    {:else}
-      <span class="name-text">{currentSampleName}</span>
-    {/if}
-  </div>
-
-  <div class="query-row">
-    <input
-      class="query-input brutalist-control"
-      value={voice.query}
-      placeholder="search…"
-      onchange={(e) =>
-        onChange({ ...voice, query: (e.target as HTMLInputElement).value })}
-    />
-    <button
-      class="brutalist-control icon-btn"
-      class:pin--active={voice.rotation === 'pinned'}
-      title={voice.rotation === 'pinned'
-        ? 'Unpin sample'
-        : 'Pin current sample'}
-      onclick={handlePin}>📌</button
-    >
-  </div>
-
+  <!-- Centre: step grid (flex:1 in row mode) -->
   <div class="steps-wrap">
     <StepGrid
       steps={voice.steps}
@@ -123,66 +140,93 @@
     />
   </div>
 
-  <div class="controls-row">
-    <label class="vol-label">
-      <span>VOL</span>
-      <input
-        type="range"
-        min="0"
-        max="1"
-        step="0.01"
-        value={voice.volume}
-        oninput={(e) =>
+  <!-- Right column: controls -->
+  <div class="right-col">
+    <div class="controls-row">
+      <label class="vol-label">
+        <span>VOL</span>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={voice.volume}
+          onpointerdown={onBeforeDrag}
+          oninput={(e) =>
+            onChange(
+              {
+                ...voice,
+                volume: parseFloat((e.target as HTMLInputElement).value),
+              },
+              true,
+            )}
+        />
+      </label>
+      {#if layout === 'grid'}
+        <button
+          class="brutalist-control icon-btn"
+          onclick={onRandomizeSteps}
+          title="Randomize steps">🎲 STEPS</button
+        >
+      {/if}
+    </div>
+
+    <div class="meta-row">
+      <select
+        class="brutalist-control meta-select"
+        value={voice.stepCount}
+        onchange={(e) =>
+          updateStepCount(
+            parseInt((e.target as HTMLSelectElement).value) as StepCount,
+          )}
+      >
+        {#each STEP_COUNTS as n}
+          <option value={n}>{n}</option>
+        {/each}
+      </select>
+      <select
+        class="brutalist-control meta-select"
+        value={voice.rotation}
+        onchange={(e) =>
           onChange({
             ...voice,
-            volume: parseFloat((e.target as HTMLInputElement).value),
+            rotation: (e.target as HTMLSelectElement).value as Rotation,
           })}
-      />
-    </label>
-    <button
-      class="brutalist-control icon-btn"
-      onclick={onRandomizeSteps}
-      title="Randomize steps">🎲 STEPS</button
-    >
-  </div>
-
-  <div class="meta-row">
-    <select
-      class="brutalist-control meta-select"
-      value={voice.stepCount}
-      onchange={(e) =>
-        updateStepCount(
-          parseInt((e.target as HTMLSelectElement).value) as StepCount,
-        )}
-    >
-      {#each STEP_COUNTS as n}
-        <option value={n}>{n}</option>
-      {/each}
-    </select>
-    <select
-      class="brutalist-control meta-select"
-      value={voice.rotation}
-      onchange={(e) =>
-        onChange({
-          ...voice,
-          rotation: (e.target as HTMLSelectElement).value as Rotation,
-        })}
-    >
-      {#each ROTATIONS as r}
-        <option value={r.value}>{r.label}</option>
-      {/each}
-    </select>
-    <button
-      class="brutalist-control meta-btn"
-      aria-pressed={fxOpen}
-      onclick={() => (fxOpen = !fxOpen)}
-    >
-      FX {fxOpen ? '▴' : '▾'}
-    </button>
+      >
+        {#each ROTATIONS as r}
+          <option value={r.value}>{r.label}</option>
+        {/each}
+      </select>
+      <button
+        class="brutalist-control meta-btn"
+        aria-pressed={fxOpen}
+        onclick={() => (fxOpen = !fxOpen)}
+      >
+        FX {fxOpen ? '▴' : '▾'}
+      </button>
+      {#if layout === 'rows'}
+        <button
+          class="brutalist-control icon-btn"
+          title="Randomize steps"
+          onclick={onRandomizeSteps}>🎲</button
+        >
+        <button
+          class="brutalist-control icon-btn"
+          title="Remove voice"
+          onclick={onRemove}>✕</button
+        >
+      {/if}
+    </div>
   </div>
 
   {#if fxOpen}
-    <FXPanel fx={voice.fx} onChange={(fx) => onChange({ ...voice, fx })} />
+    <div class="fx-wrap">
+      <FXPanel
+        fx={voice.fx}
+        {onBeforeDrag}
+        onChange={(fx) => onChange({ ...voice, fx }, true)}
+      />
+    </div>
   {/if}
 </div>
 
@@ -197,9 +241,31 @@
     min-width: 0;
   }
 
+  /* Row layout: horizontal arrangement */
+  .voice-card--row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
   .voice-card--error {
     border-color: #4a2020;
     opacity: 0.7;
+  }
+
+  /* Left col: label + query — fixed width in row mode */
+  .left-col {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .voice-card--row .left-col {
+    width: 130px;
+    flex-shrink: 0;
   }
 
   .card-header {
@@ -273,8 +339,26 @@
     background: #2a2000 !important;
   }
 
+  /* Centre: step grid — flex:1 in row mode */
   .steps-wrap {
     min-width: 0;
+  }
+
+  .voice-card--row .steps-wrap {
+    flex: 1;
+    min-width: 200px;
+  }
+
+  /* Right col: controls */
+  .right-col {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .voice-card--row .right-col {
+    flex-shrink: 0;
   }
 
   .controls-row {
@@ -290,6 +374,10 @@
     flex: 1;
     font-size: 0.65rem;
     color: #666;
+  }
+
+  .voice-card--row .vol-label {
+    min-width: 80px;
   }
 
   .vol-label input[type='range'] {
@@ -315,5 +403,14 @@
   .meta-btn {
     flex: 1;
     cursor: pointer;
+  }
+
+  /* FX panel spans full width in row mode */
+  .fx-wrap {
+    width: 100%;
+  }
+
+  .voice-card--row .fx-wrap {
+    flex-basis: 100%;
   }
 </style>

@@ -19,6 +19,7 @@
     randomizeVoiceSteps,
     randomizeVoiceQuery,
   } from '../lib/litany/randomize.ts';
+  import type { AppState } from '../lib/litany/state.ts';
 
   // ── Serialisable state ──────────────────────────────────────────────────
   let voices = $state<Voice[]>(defaultVoices());
@@ -31,6 +32,63 @@
   let compressorThreshold = $state(-24);
   let compressorRatio = $state(4);
   let shareSuccess = $state(false);
+  let layout = $state<'grid' | 'rows'>('grid');
+
+  // ── Undo / Redo ──────────────────────────────────────────────────────────
+  let undoStack = $state<AppState[]>([]);
+  let redoStack = $state<AppState[]>([]);
+
+  function pushHistory() {
+    undoStack = [
+      ...undoStack.slice(-49),
+      { voices: $state.snapshot(voices), bpm },
+    ];
+    redoStack = [];
+  }
+
+  function restoreState(state: AppState) {
+    const currentIds = new Set(voices.map((v) => v.id));
+    const nextIds = new Set(state.voices.map((v) => v.id));
+    // Remove chains for voices that disappear
+    for (const v of voices) {
+      if (!nextIds.has(v.id)) {
+        engine?.removeVoiceChain(v.id);
+        pools.delete(v.id);
+        const info = { ...poolInfo };
+        delete info[v.id];
+        poolInfo = info;
+      }
+    }
+    // Add chains / refill pools for new or query-changed voices
+    for (const v of state.voices) {
+      const current = voices.find((c) => c.id === v.id);
+      if (!currentIds.has(v.id)) {
+        engine?.createVoiceChain(v.id);
+        fillPool(v);
+      } else if (current && current.query !== v.query) {
+        fillPool(v);
+      }
+      engine?.updateVoiceChain(v.id, v.fx, v.volume);
+    }
+    voices = state.voices;
+    bpm = state.bpm;
+  }
+
+  function undo() {
+    if (!undoStack.length) return;
+    redoStack = [...redoStack, { voices: $state.snapshot(voices), bpm }];
+    const prev = undoStack[undoStack.length - 1];
+    undoStack = undoStack.slice(0, -1);
+    restoreState(prev);
+  }
+
+  function redo() {
+    if (!redoStack.length) return;
+    undoStack = [...undoStack, { voices: $state.snapshot(voices), bpm }];
+    const next = redoStack[redoStack.length - 1];
+    redoStack = redoStack.slice(0, -1);
+    restoreState(next);
+  }
 
   // Pool reactive info (status + name) keyed by voice id
   let poolInfo = $state<Record<string, { status: PoolStatus; name: string }>>(
@@ -107,6 +165,7 @@
 
   // ── Voice management ─────────────────────────────────────────────────────
   function addVoice() {
+    pushHistory();
     const v = createVoice('VOICE', 'perc');
     voices = [...voices, v];
     if (engine) {
@@ -116,6 +175,7 @@
   }
 
   function removeVoice(id: string) {
+    pushHistory();
     voices = voices.filter((v) => v.id !== id);
     engine?.removeVoiceChain(id);
     pools.delete(id);
@@ -124,7 +184,8 @@
     poolInfo = info;
   }
 
-  function updateVoice(updated: Voice) {
+  function updateVoice(updated: Voice, skipHistory = false) {
+    if (!skipHistory) pushHistory();
     const prev = voices.find((v) => v.id === updated.id);
     voices = voices.map((v) => (v.id === updated.id ? updated : v));
     if (engine) {
@@ -138,10 +199,12 @@
 
   // ── Randomize ────────────────────────────────────────────────────────────
   function doRandomizeSteps() {
+    pushHistory();
     voices = voices.map((v) => randomizeVoiceSteps(v));
   }
 
   function doRandomizeQuery() {
+    pushHistory();
     voices = voices.map((v) => {
       const updated = randomizeVoiceQuery(v);
       if (engine) fillPool(updated);
@@ -150,10 +213,12 @@
   }
 
   function doRandomizeBpm() {
+    pushHistory();
     bpm = randomizeBpm();
   }
 
   function doRandomizeVoices() {
+    pushHistory();
     const count = Math.floor(Math.random() * 5) + 2; // 2–6 voices
     const newVoices = randomizeVoices(count);
     // Tear down old
@@ -240,7 +305,16 @@
     onPlay={play}
     onStop={stop}
     {poolsLoading}
-    onBpmChange={(v) => (bpm = v)}
+    undoCount={undoStack.length}
+    redoCount={redoStack.length}
+    {layout}
+    onUndo={undo}
+    onRedo={redo}
+    onLayoutToggle={() => (layout = layout === 'grid' ? 'rows' : 'grid')}
+    onBpmChange={(v) => {
+      pushHistory();
+      bpm = v;
+    }}
     onRandomizeSteps={doRandomizeSteps}
     onRandomizeQuery={doRandomizeQuery}
     onRandomizeBpm={doRandomizeBpm}
@@ -249,16 +323,19 @@
     onAddVoice={addVoice}
   />
 
-  <div class="voice-grid">
+  <div class="voice-grid" class:voice-grid--rows={layout === 'rows'}>
     {#each voices as voice (voice.id)}
       <VoiceCard
         {voice}
         {globalTick}
+        {layout}
         poolStatus={poolInfo[voice.id]?.status ?? 'idle'}
         currentSampleName={poolInfo[voice.id]?.name ?? ''}
         onChange={updateVoice}
+        onBeforeDrag={pushHistory}
         onRandomizeSteps={() => updateVoice(randomizeVoiceSteps(voice))}
         onRandomizeQuery={() => {
+          pushHistory();
           const updated = randomizeVoiceQuery(voice);
           if (engine) fillPool(updated);
           voices = voices.map((v) => (v.id === updated.id ? updated : v));
@@ -269,8 +346,10 @@
       />
     {/each}
 
-    <button class="brutalist-control add-card" onclick={addVoice}
-      >+ ADD VOICE</button
+    <button
+      class="brutalist-control add-card"
+      class:add-card--row={layout === 'rows'}
+      onclick={addVoice}>+ ADD VOICE</button
     >
   </div>
 
@@ -301,6 +380,11 @@
     padding: 16px 0;
   }
 
+  .voice-grid--rows {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
   .add-card {
     border: 2px dashed #333;
     background: transparent;
@@ -312,6 +396,10 @@
     justify-content: center;
     min-height: 120px;
     box-shadow: none;
+  }
+
+  .add-card--row {
+    min-height: 36px;
   }
 
   .add-card:hover {
