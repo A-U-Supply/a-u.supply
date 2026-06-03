@@ -184,15 +184,15 @@
 
   // ── Play / Stop ──────────────────────────────────────────────────────────
   function handlePlay() {
-    engine!.ctx.resume();
-    startPlaying();
+    // Must call ctx.resume() directly in the click handler for iOS Safari.
+    // store the promise so startPlaying only awaits it — no second call.
+    const p = engine!.ctx.resume();
+    startPlaying(p);
   }
 
-  async function startPlaying() {
+  async function startPlaying(resumePromise: Promise<void>) {
     try {
-      if (engine!.ctx.state !== 'running') {
-        await engine!.resume();
-      }
+      await resumePromise;
     } catch (err) {
       console.error('[litany] failed to resume AudioContext', err);
       return;
