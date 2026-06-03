@@ -1,6 +1,6 @@
 import { createVoice, defaultFx, type Voice, type StepCount } from './state.ts';
 
-const INSTRUMENT_TYPES = [
+export const INSTRUMENT_TYPES = [
   'kick',
   'snare',
   'hi-hat',
