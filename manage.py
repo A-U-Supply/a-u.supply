@@ -1412,28 +1412,29 @@ if __name__ == "__main__":
                     acoustic["ai_tags"] = entry["ai_tags"]
                 if not acoustic:
                     continue
-                acoustic_json = json.dumps(acoustic)
-                existing = _db.query(MediaAudioMeta).filter(MediaAudioMeta.media_item_id == mid).first()
-                if existing:
-                    existing.acoustic_tags = acoustic_json
-                else:
-                    _db.add(MediaAudioMeta(
-                        media_item_id=mid,
-                        duration_seconds=0,
-                        sample_rate=0,
-                        channels=0,
-                        acoustic_tags=acoustic_json,
-                    ))
-                if entry.get("description"):
-                    item = _db.query(MediaItem).filter(MediaItem.id == mid).first()
-                    if item:
-                        item.description = entry["description"]
-                for tag in entry.get("ai_tags", []):
-                    if not _db.query(MediaTag).filter(MediaTag.media_item_id == mid, MediaTag.tag == tag).first():
-                        _db.add(MediaTag(id=str(uuid.uuid4()), media_item_id=mid, tag=tag))
-                updated += 1
-                if updated % 200 == 0:
-                    log(f"  applied {updated}")
+            acoustic_json = json.dumps(acoustic)
+            existing = _db.query(MediaAudioMeta).filter(MediaAudioMeta.media_item_id == mid).first()
+            if existing:
+                existing.acoustic_tags = acoustic_json
+            else:
+                _db.add(MediaAudioMeta(
+                    media_item_id=mid,
+                    duration_seconds=0,
+                    sample_rate=0,
+                    channels=0,
+                    acoustic_tags=acoustic_json,
+                ))
+            _db.flush()
+            if entry.get("description"):
+                item = _db.query(MediaItem).filter(MediaItem.id == mid).first()
+                if item:
+                    item.description = entry["description"]
+            for tag in entry.get("ai_tags", []):
+                if not _db.query(MediaTag).filter(MediaTag.media_item_id == mid, MediaTag.tag == tag).first():
+                    _db.add(MediaTag(id=str(uuid.uuid4()), media_item_id=mid, tag=tag))
+            updated += 1
+            if updated % 200 == 0:
+                log(f"  applied {updated}")
             _db.commit()
             log(f"Applied {updated} items. Syncing Meilisearch...")
             for entry in data:
