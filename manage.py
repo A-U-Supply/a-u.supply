@@ -1390,51 +1390,55 @@ if __name__ == "__main__":
         print(json.dumps(items))
 
     elif cmd == "import-ai-tags":
-        """Apply AI tags from JSON on stdin. Each line: {"id": "...", "voice": "...", ...}"""
+        """Apply AI tags from /app/data/ai-tags.json."""
         import json, uuid
         from server.models import MediaAudioMeta, MediaItem, MediaTag, SessionLocal as _SL
         from server.search_client import sync_media_item
-        data = json.load(sys.stdin)
-        _db = _SL()
-        updated = 0
-        for entry in data:
-            mid = entry["id"]
-            acoustic = {}
-            if entry.get("voice"):
-                acoustic["voice"] = entry["voice"]
-            if entry.get("instrument"):
-                acoustic["instrument"] = entry["instrument"]
-            if entry.get("ai_tags"):
-                acoustic["ai_tags"] = entry["ai_tags"]
-            if not acoustic:
-                continue
-            acoustic_json = json.dumps(acoustic)
-            existing = _db.query(MediaAudioMeta).filter(MediaAudioMeta.media_item_id == mid).first()
-            if existing:
-                existing.acoustic_tags = acoustic_json
-            else:
-                _db.add(MediaAudioMeta(media_item_id=mid, acoustic_tags=acoustic_json))
-            if entry.get("description"):
-                item = _db.query(MediaItem).filter(MediaItem.id == mid).first()
+        filepath = os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data") + "/ai-tags.json"
+        if not os.path.exists(filepath):
+            log(f"ERROR: {filepath} not found")
+        else:
+            data = json.load(open(filepath))
+            _db = _SL()
+            updated = 0
+            for entry in data:
+                mid = entry["id"]
+                acoustic = {}
+                if entry.get("voice"):
+                    acoustic["voice"] = entry["voice"]
+                if entry.get("instrument"):
+                    acoustic["instrument"] = entry["instrument"]
+                if entry.get("ai_tags"):
+                    acoustic["ai_tags"] = entry["ai_tags"]
+                if not acoustic:
+                    continue
+                acoustic_json = json.dumps(acoustic)
+                existing = _db.query(MediaAudioMeta).filter(MediaAudioMeta.media_item_id == mid).first()
+                if existing:
+                    existing.acoustic_tags = acoustic_json
+                else:
+                    _db.add(MediaAudioMeta(media_item_id=mid, acoustic_tags=acoustic_json))
+                if entry.get("description"):
+                    item = _db.query(MediaItem).filter(MediaItem.id == mid).first()
+                    if item:
+                        item.description = entry["description"]
+                for tag in entry.get("ai_tags", []):
+                    if not _db.query(MediaTag).filter(MediaTag.media_item_id == mid, MediaTag.tag == tag).first():
+                        _db.add(MediaTag(id=str(uuid.uuid4()), media_item_id=mid, tag=tag))
+                updated += 1
+                if updated % 200 == 0:
+                    log(f"  applied {updated}")
+            _db.commit()
+            log(f"Applied {updated} items. Syncing Meilisearch...")
+            for entry in data:
+                item = _db.query(MediaItem).filter(MediaItem.id == entry["id"]).first()
                 if item:
-                    item.description = entry["description"]
-            for tag in entry.get("ai_tags", []):
-                if not _db.query(MediaTag).filter(MediaTag.media_item_id == mid, MediaTag.tag == tag).first():
-                    _db.add(MediaTag(id=str(uuid.uuid4()), media_item_id=mid, tag=tag))
-            updated += 1
-            if updated % 200 == 0:
-                log(f"  applied {updated}")
-        _db.commit()
-        log(f"Applied {updated} items. Syncing Meilisearch...")
-        for entry in data:
-            item = _db.query(MediaItem).filter(MediaItem.id == entry["id"]).first()
-            if item:
-                try:
-                    sync_media_item(_db, item)
-                except Exception:
-                    pass
-        _db.close()
-        log(f"Done. {updated} items tagged and synced.")
+                    try:
+                        sync_media_item(_db, item)
+                    except Exception:
+                        pass
+            _db.close()
+            log(f"Done. {updated} items tagged and synced.")
 
     elif cmd == "clean-drum-machine-orphans":
         from server.models import MediaItem, MediaSource, SessionLocal as _SL
