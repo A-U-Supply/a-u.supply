@@ -782,12 +782,171 @@ def backfill_ai_descriptions(
             f.write(item.id + "\n")
 
     log(f"Done! AI descriptions: {done}, Errors: {errors}")
-    if os.path.exists(_AI_DESC_CHECKPOINT_FILE):
-        os.remove(_AI_DESC_CHECKPOINT_FILE)
+    if _os.path.exists(_AI_DESC_CHECKPOINT_FILE):
+        _os.remove(_AI_DESC_CHECKPOINT_FILE)
     db.close()
 
     log("Re-indexing all items to populate AI fields in search...")
     reindex_search()
+
+
+_AUDIO_AI_CHECKPOINT = "/app/data/.audio-ai-backfill-progress"
+
+
+def backfill_audio_ai_tags(force_all: bool = False, restart: bool = False):
+    import json as _json
+    import os as _os
+    import uuid as _uuid
+
+    from server.extraction import SEARCH_MEDIA_DIR, _detect_voice_from_filename, _run_audio_extraction_batch
+    from server.ai_audio import generate_audio_ai_descriptions
+    from server.models import (
+        MediaAudioMeta,
+        MediaItem,
+        MediaSource,
+        MediaTag,
+        SessionLocal as _SL,
+    )
+    from server.search_client import sync_media_item
+
+    if restart and _os.path.exists(_AUDIO_AI_CHECKPOINT):
+        _os.remove(_AUDIO_AI_CHECKPOINT)
+        log("Checkpoint cleared (restart=True).")
+
+    _db = _SL()
+    try:
+        rows = (
+            _db.query(MediaItem.id, MediaItem.file_path, MediaSource.source_metadata)
+            .join(MediaSource, MediaSource.media_item_id == MediaItem.id)
+            .filter(MediaSource.source_type == "sample_library")
+            .all()
+        )
+    finally:
+        _db.close()
+
+    if not rows:
+        log("No sample_library items found.")
+        return
+
+    total = len(rows)
+    if not force_all:
+        _db = _SL()
+        try:
+            already = {r[0] for r in _db.query(MediaAudioMeta.media_item_id).filter(
+                MediaAudioMeta.acoustic_tags.isnot(None),
+            ).all()}
+        finally:
+            _db.close()
+        rows = [r for r in rows if r[0] not in already]
+    log(f"Found {total} total, {len(rows)} need AI tagging")
+
+    if not rows:
+        log("Nothing to do.")
+        return
+
+    done_ids: set[str] = set()
+    if _os.path.exists(_AUDIO_AI_CHECKPOINT):
+        with open(_AUDIO_AI_CHECKPOINT) as f:
+            done_ids = {line.strip() for line in f if line.strip()}
+        log(f"Checkpoint: {len(done_ids)} already done, resuming")
+
+    by_context: dict[str, list[tuple[str, str]]] = {}
+    for mid, fp, smeta in rows:
+        if mid in done_ids:
+            continue
+        ctx = "unknown"
+        if smeta:
+            try:
+                meta = _json.loads(smeta) if isinstance(smeta, str) else smeta
+                ctx = meta.get("dir") or meta.get("machine_name") or "unknown"
+            except Exception:
+                pass
+        by_context.setdefault(ctx, []).append((mid, fp))
+
+    if not by_context:
+        log("All items already done (checkpoint).")
+        return
+
+    remaining = sum(len(v) for v in by_context.values())
+    log(f"  {remaining} remaining across {len(by_context)} groups")
+
+    tagged_total = len(done_ids)
+    for ctx, items in by_context.items():
+        batch = [(mid, _os.path.join(SEARCH_MEDIA_DIR, fp), ctx) for mid, fp in items]
+        fnames = [_os.path.basename(fp) for _, fp, _ in batch]
+
+        _db = _SL()
+        try:
+            _run_audio_extraction_batch(_db, batch, MediaAudioMeta)
+        except Exception as exc:
+            log(f"  ERROR ffprobe '{ctx}': {exc}")
+            _db.rollback()
+        finally:
+            _db.close()
+
+        ai_results = {}
+        try:
+            ai_results = generate_audio_ai_descriptions(fnames, dir_name=ctx)
+        except Exception as exc:
+            log(f"  ERROR AI '{ctx}': {exc}")
+
+        _db = _SL()
+        try:
+            for mid, fp, _ in batch:
+                fn = _os.path.basename(fp)
+                ai = ai_results.get(fn, {})
+                ai_tags = ai.get("tags", [])
+                ai_voice = ai.get("voice") or _detect_voice_from_filename(fn)
+                ai_instrument = ai.get("instrument") or ctx.lower().replace(" ", "-").replace("_", "-")
+
+                if ai.get("description"):
+                    item = _db.query(MediaItem).filter(MediaItem.id == mid).first()
+                    if item:
+                        item.description = ai["description"]
+
+                if ai_tags or ai_voice or ai_instrument:
+                    acoustic = {}
+                    if ai_voice:
+                        acoustic["voice"] = ai_voice
+                    if ai_instrument:
+                        acoustic["instrument"] = ai_instrument
+                    if ai_tags:
+                        acoustic["ai_tags"] = ai_tags
+                    acoustic_json = _json.dumps(acoustic)
+                    existing = _db.query(MediaAudioMeta).filter(
+                        MediaAudioMeta.media_item_id == mid).first()
+                    if existing:
+                        existing.acoustic_tags = acoustic_json
+                    else:
+                        _db.add(MediaAudioMeta(media_item_id=mid, acoustic_tags=acoustic_json))
+                    for tag in ai_tags:
+                        if not _db.query(MediaTag).filter(
+                            MediaTag.media_item_id == mid, MediaTag.tag == tag).first():
+                            _db.add(MediaTag(id=str(_uuid.uuid4()), media_item_id=mid, tag=tag))
+
+                with open(_AUDIO_AI_CHECKPOINT, "a") as f:
+                    f.write(mid + "\n")
+
+            _db.commit()
+            tagged_total += len(items)
+            log(f"  [{tagged_total}/{remaining + len(done_ids)}] {ctx}: {len(items)} tagged ({tagged_total} total)")
+
+            for mid, _fp in items:
+                item = _db.query(MediaItem).filter(MediaItem.id == mid).first()
+                if item:
+                    try:
+                        sync_media_item(_db, item)
+                    except Exception:
+                        pass
+        except Exception as exc:
+            log(f"  ERROR apply '{ctx}': {exc}")
+            _db.rollback()
+        finally:
+            _db.close()
+
+    if _os.path.exists(_AUDIO_AI_CHECKPOINT):
+        _os.remove(_AUDIO_AI_CHECKPOINT)
+    log(f"Done. Tagged {tagged_total} / {total} total items.")
 
 
 def list_users():
@@ -1225,142 +1384,9 @@ if __name__ == "__main__":
         _db.close()
 
     elif cmd == "backfill-audio-ai-tags":
-        """Run centralized audio AI tagging on all sample_library items that need it."""
         force_all = "--all" in sys.argv
-        import json as _json
-
-        from server.extraction import SEARCH_MEDIA_DIR, _detect_voice_from_filename, _run_audio_extraction_batch
-        from server.ai_audio import generate_audio_ai_descriptions
-        from server.models import (
-            MediaAudioMeta,
-            MediaItem,
-            MediaSource,
-            MediaTag,
-            SessionLocal as _SL,
-        )
-        from server.search_client import sync_media_item
-        import uuid as _uuid
-
-        # Collect items needing tags, grouped by dir_context
-        _db = _SL()
-        try:
-            rows = (
-                _db.query(MediaItem.id, MediaItem.file_path, MediaSource.source_metadata)
-                .join(MediaSource, MediaSource.media_item_id == MediaItem.id)
-                .filter(MediaSource.source_type == "sample_library")
-                .all()
-            )
-        finally:
-            _db.close()
-
-        if not rows:
-            log("No sample_library items found.")
-        else:
-            total = len(rows)
-            log(f"Found {total} sample_library items")
-
-            if not force_all:
-                _db = _SL()
-                try:
-                    already = {r[0] for r in _db.query(MediaAudioMeta.media_item_id).filter(
-                        MediaAudioMeta.acoustic_tags.isnot(None),
-                    ).all()}
-                finally:
-                    _db.close()
-                rows = [r for r in rows if r[0] not in already]
-                log(f"  {len(rows)} need AI tagging ({total - len(rows)} already have tags)")
-
-            if not rows:
-                log("Nothing to do.")
-            else:
-                # Group by dir_context (from source_metadata)
-                by_context: dict[str, list[tuple[str, str]]] = {}
-                for mid, fp, smeta in rows:
-                    ctx = "unknown"
-                    if smeta:
-                        try:
-                            meta = _json.loads(smeta) if isinstance(smeta, str) else smeta
-                            ctx = meta.get("dir") or meta.get("machine_name") or "unknown"
-                        except Exception:
-                            pass
-                    by_context.setdefault(ctx, []).append((mid, fp))
-
-                tagged_total = 0
-                for ctx, items in by_context.items():
-                    batch = [(mid, os.path.join(SEARCH_MEDIA_DIR, fp), ctx) for mid, fp in items]
-                    fnames = [os.path.basename(fp) for _, fp, _ in batch]
-
-                    # Step 1: fast local metadata (ffprobe) — short DB session
-                    _db = _SL()
-                    try:
-                        _run_audio_extraction_batch(_db, batch, MediaAudioMeta)
-                    except Exception as exc:
-                        log(f"  ERROR ffprobe '{ctx}': {exc}")
-                        _db.rollback()
-                    finally:
-                        _db.close()
-
-                    # Step 2: AI tagging — NO DB session held during slow API
-                    ai_results = {}
-                    try:
-                        ai_results = generate_audio_ai_descriptions(fnames, dir_name=ctx)
-                    except Exception as exc:
-                        log(f"  ERROR AI '{ctx}': {exc}")
-
-                    # Step 3: store AI results — new short DB session
-                    _db = _SL()
-                    try:
-                        for mid, fp, _ in batch:
-                            fn = os.path.basename(fp)
-                            ai = ai_results.get(fn, {})
-                            ai_tags = ai.get("tags", [])
-                            ai_voice = ai.get("voice") or _detect_voice_from_filename(fn)
-                            ai_instrument = ai.get("instrument") or ctx.lower().replace(" ", "-").replace("_", "-")
-
-                            if ai.get("description"):
-                                item = _db.query(MediaItem).filter(MediaItem.id == mid).first()
-                                if item:
-                                    item.description = ai["description"]
-
-                            if ai_tags or ai_voice or ai_instrument:
-                                acoustic = {}
-                                if ai_voice:
-                                    acoustic["voice"] = ai_voice
-                                if ai_instrument:
-                                    acoustic["instrument"] = ai_instrument
-                                if ai_tags:
-                                    acoustic["ai_tags"] = ai_tags
-                                import json as _j
-                                acoustic_json = _j.dumps(acoustic)
-                                existing = _db.query(MediaAudioMeta).filter(
-                                    MediaAudioMeta.media_item_id == mid).first()
-                                if existing:
-                                    existing.acoustic_tags = acoustic_json
-                                else:
-                                    _db.add(MediaAudioMeta(media_item_id=mid, acoustic_tags=acoustic_json))
-                                for tag in ai_tags:
-                                    if not _db.query(MediaTag).filter(
-                                        MediaTag.media_item_id == mid, MediaTag.tag == tag).first():
-                                        _db.add(MediaTag(id=str(_uuid.uuid4()), media_item_id=mid, tag=tag))
-                        _db.commit()
-                        tagged_total += len(items)
-                        log(f"  [{tagged_total}/{len(rows)}] {ctx}: {len(items)} tagged")
-
-                        # Sync to Meilisearch
-                        for mid, _fp in items:
-                            item = _db.query(MediaItem).filter(MediaItem.id == mid).first()
-                            if item:
-                                try:
-                                    sync_media_item(_db, item)
-                                except Exception as exc:
-                                    log(f"  WARNING sync {item.filename}: {exc}")
-                    except Exception as exc:
-                        log(f"  ERROR apply '{ctx}': {exc}")
-                        _db.rollback()
-                    finally:
-                        _db.close()
-
-                log(f"Done. Tagged {tagged_total}/{len(rows)} items.")
+        restart = "--restart" in sys.argv
+        backfill_audio_ai_tags(force_all=force_all, restart=restart)
 
     elif cmd == "index-drum-machines":
         import subprocess as _sp
