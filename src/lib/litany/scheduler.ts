@@ -89,6 +89,8 @@ export class Scheduler {
                 when,
                 voice.envelope.attack,
                 voice.envelope.release,
+                voice.envelope.attackCurve,
+                voice.envelope.releaseCurve,
                 voice.playStyle,
               );
             }
@@ -98,7 +100,12 @@ export class Scheduler {
         (voice.playStyle === 'gate' || voice.playStyle === 'legato') &&
         prevActive
       ) {
-        this.engine.stopVoice(voice.id, when, voice.envelope.release);
+        this.engine.stopVoice(
+          voice.id,
+          when,
+          voice.envelope.release,
+          voice.envelope.releaseCurve,
+        );
       }
 
       this.previousStepActive.set(voice.id, stepActive);
