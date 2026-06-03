@@ -1,7 +1,7 @@
 import { strFromU8, strToU8, gunzipSync, gzipSync } from 'fflate';
 
 export type Rotation = 'every-hit' | 'every-bar' | 'every-4bars' | 'pinned';
-export type StepCount = 8 | 16 | 32;
+export type StepCount = number;
 
 export interface FxParams {
   delayTime: number;
