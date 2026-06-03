@@ -162,6 +162,20 @@
             )}
         />
       </label>
+      <button
+        class="brutalist-control icon-btn mute-btn"
+        class:mute-btn--active={voice.muted}
+        title="Mute"
+        onclick={() => onChange({ ...voice, muted: !voice.muted }, true)}
+        >M</button
+      >
+      <button
+        class="brutalist-control icon-btn solo-btn"
+        class:solo-btn--active={voice.soloed}
+        title="Solo"
+        onclick={() => onChange({ ...voice, soloed: !voice.soloed }, true)}
+        >S</button
+      >
       {#if layout === 'grid'}
         <button
           class="brutalist-control icon-btn"
@@ -337,6 +351,30 @@
 
   .pin--active {
     background: #2a2000 !important;
+  }
+
+  .mute-btn {
+    font-size: 0.65rem;
+    padding: 2px 5px;
+    min-width: 1.5rem;
+  }
+
+  .mute-btn--active {
+    background: #2a0000 !important;
+    border-color: #8a4040 !important;
+    color: #cc6666 !important;
+  }
+
+  .solo-btn {
+    font-size: 0.65rem;
+    padding: 2px 5px;
+    min-width: 1.5rem;
+  }
+
+  .solo-btn--active {
+    background: #1a1200 !important;
+    border-color: #b8860b !important;
+    color: #d4a017 !important;
   }
 
   /* Centre: step grid — flex:1 in row mode */
