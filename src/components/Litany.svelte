@@ -155,6 +155,13 @@
       };
   }
 
+  function previewVoice(voiceId: string) {
+    const pool = pools.get(voiceId);
+    if (!pool || pool.status !== 'ready') return;
+    const buffer = pool.previewBuffer();
+    if (buffer) engine?.previewVoice(voiceId, buffer);
+  }
+
   let poolsLoading = $derived(
     Object.values(poolInfo).some((p) => p.status === 'loading'),
   );
@@ -373,6 +380,7 @@
         onRemove={() => removeVoice(voice.id)}
         onPin={() => pinVoice(voice.id)}
         onUnpin={() => unpinVoice(voice.id)}
+        onPreview={() => previewVoice(voice.id)}
       />
     {/each}
 

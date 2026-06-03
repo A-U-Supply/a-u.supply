@@ -2,6 +2,12 @@ import { strFromU8, strToU8, gunzipSync, gzipSync } from 'fflate';
 
 export type Rotation = 'every-hit' | 'every-bar' | 'every-4bars' | 'pinned';
 export type StepCount = number;
+export type PlayStyle = 'one-shot' | 'cut' | 'gate' | 'legato';
+
+export interface EnvelopeParams {
+  attack: number;
+  release: number;
+}
 
 export interface FxParams {
   delayTime: number;
@@ -25,6 +31,8 @@ export interface Voice {
   muted: boolean;
   soloed: boolean;
   fx: FxParams;
+  envelope: EnvelopeParams;
+  playStyle: PlayStyle;
 }
 
 export interface AppState {
@@ -44,6 +52,10 @@ export function defaultFx(): FxParams {
   };
 }
 
+export function defaultEnvelope(): EnvelopeParams {
+  return { attack: 0, release: 0.05 };
+}
+
 export function createVoice(
   label: string,
   query: string,
@@ -60,6 +72,8 @@ export function createVoice(
     muted: false,
     soloed: false,
     fx: defaultFx(),
+    envelope: defaultEnvelope(),
+    playStyle: 'one-shot',
   };
 }
 
