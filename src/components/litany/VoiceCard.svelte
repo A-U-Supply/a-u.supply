@@ -211,7 +211,7 @@
         <button
           class="brutalist-control icon-btn"
           onclick={onRandomizeSteps}
-          title="Randomize steps">🎲 STEPS</button
+          title="Randomize steps">🎲</button
         >
       {/if}
     </div>

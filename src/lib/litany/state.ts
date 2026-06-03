@@ -3,10 +3,13 @@ import { strFromU8, strToU8, gunzipSync, gzipSync } from 'fflate';
 export type Rotation = 'every-hit' | 'every-bar' | 'every-4bars' | 'pinned';
 export type StepCount = number;
 export type PlayStyle = 'one-shot' | 'cut' | 'gate' | 'legato';
+export type EnvCurve = 'linear' | 'exp';
 
 export interface EnvelopeParams {
   attack: number;
   release: number;
+  attackCurve: EnvCurve;
+  releaseCurve: EnvCurve;
 }
 
 export interface FxParams {
@@ -53,7 +56,12 @@ export function defaultFx(): FxParams {
 }
 
 export function defaultEnvelope(): EnvelopeParams {
-  return { attack: 0, release: 0.05 };
+  return {
+    attack: 0,
+    release: 0.05,
+    attackCurve: 'linear',
+    releaseCurve: 'linear',
+  };
 }
 
 export function createVoice(

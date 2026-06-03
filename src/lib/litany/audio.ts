@@ -1,3 +1,5 @@
+import type { EnvCurve } from './state.ts';
+
 export interface VoiceChain {
   inputGain: GainNode;
   delayNode: DelayNode;
@@ -164,6 +166,8 @@ export class AudioEngine {
     when: number,
     attack: number,
     release: number,
+    attackCurve: EnvCurve,
+    releaseCurve: EnvCurve,
     playStyle: 'one-shot' | 'cut' | 'gate' | 'legato',
   ): void {
     const chain = this.voices.get(id);
@@ -178,16 +182,36 @@ export class AudioEngine {
     source.buffer = buffer;
 
     const envelopeGain = this.ctx.createGain();
-    envelopeGain.gain.setValueAtTime(0, when);
-    envelopeGain.gain.linearRampToValueAtTime(1, when + attack);
+    const attackEnd = when + attack;
+
+    if (attack <= 0) {
+      envelopeGain.gain.setValueAtTime(1, when);
+    } else if (attackCurve === 'exp') {
+      envelopeGain.gain.setValueAtTime(0.001, when);
+      envelopeGain.gain.exponentialRampToValueAtTime(1, attackEnd);
+    } else {
+      envelopeGain.gain.setValueAtTime(0, when);
+      envelopeGain.gain.linearRampToValueAtTime(1, attackEnd);
+    }
 
     if (playStyle === 'one-shot') {
       const releaseStart = Math.max(
         when + buffer.duration - release,
-        when + attack,
+        attackEnd,
       );
-      envelopeGain.gain.setValueAtTime(1, releaseStart);
-      envelopeGain.gain.linearRampToValueAtTime(0, when + buffer.duration);
+      if (release <= 0) {
+        envelopeGain.gain.setValueAtTime(1, releaseStart);
+        envelopeGain.gain.setValueAtTime(0, when + buffer.duration);
+      } else if (releaseCurve === 'exp') {
+        envelopeGain.gain.setValueAtTime(1, releaseStart);
+        envelopeGain.gain.exponentialRampToValueAtTime(
+          0.001,
+          when + buffer.duration,
+        );
+      } else {
+        envelopeGain.gain.setValueAtTime(1, releaseStart);
+        envelopeGain.gain.linearRampToValueAtTime(0, when + buffer.duration);
+      }
       source.start(when);
       source.stop(when + buffer.duration + 0.05);
     } else {
@@ -202,18 +226,25 @@ export class AudioEngine {
     this.activeSources.set(id, { source, envelopeGain });
   }
 
-  stopVoice(id: string, when: number, release: number): void {
+  stopVoice(id: string, when: number, release: number, releaseCurve: EnvCurve): void {
     const active = this.activeSources.get(id);
     if (!active) return;
 
     const now = Math.max(when, this.ctx.currentTime);
     active.envelopeGain.gain.cancelScheduledValues(now);
-    active.envelopeGain.gain.setValueAtTime(
-      active.envelopeGain.gain.value,
-      now,
-    );
-    active.envelopeGain.gain.linearRampToValueAtTime(0, now + release);
-    active.source.stop(now + release + 0.05);
+
+    if (release <= 0) {
+      active.envelopeGain.gain.setValueAtTime(0, now);
+      active.source.stop(now + 0.01);
+    } else if (releaseCurve === 'exp') {
+      active.envelopeGain.gain.setValueAtTime(active.envelopeGain.gain.value, now);
+      active.envelopeGain.gain.exponentialRampToValueAtTime(0.001, now + release);
+      active.source.stop(now + release + 0.05);
+    } else {
+      active.envelopeGain.gain.setValueAtTime(active.envelopeGain.gain.value, now);
+      active.envelopeGain.gain.linearRampToValueAtTime(0, now + release);
+      active.source.stop(now + release + 0.05);
+    }
   }
 
   previewVoice(id: string, buffer: AudioBuffer): void {

@@ -1,5 +1,9 @@
 <script lang="ts">
-  import type { EnvelopeParams, PlayStyle } from '../../lib/litany/state.ts';
+  import type {
+    EnvelopeParams,
+    PlayStyle,
+    EnvCurve,
+  } from '../../lib/litany/state.ts';
 
   interface Props {
     envelope: EnvelopeParams;
@@ -11,11 +15,105 @@
   let { envelope, playStyle, onChange, onPreview }: Props = $props();
 
   let autoPreview = $state(false);
-
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let svgWidth = $state(200);
 
-  function handleEnvelopeChange(key: keyof EnvelopeParams, value: number) {
-    const next = { ...envelope, [key]: value };
+  const DISPLAY_SECS = 3;
+
+  function attackPx() {
+    return (envelope.attack / DISPLAY_SECS) * svgWidth;
+  }
+
+  function releasePx() {
+    return (envelope.release / DISPLAY_SECS) * svgWidth;
+  }
+
+  function releaseStartPx() {
+    return svgWidth - releasePx();
+  }
+
+  /* ---- curve path generation ---- */
+
+  function envPath() {
+    const h = 72;
+    const ax = attackPx();
+    const rx = releaseStartPx();
+    const pts: string[] = [];
+
+    pts.push(`M 0,${h}`);
+
+    // Attack curve
+    if (envelope.attack > 0) {
+      if (envelope.attackCurve === 'exp') {
+        pts.push(`Q ${ax},${h} ${ax},0`);
+      } else {
+        pts.push(`L ${ax},0`);
+      }
+    } else {
+      pts.push(`L 0,0`);
+    }
+
+    // Sustain
+    if (rx > ax) {
+      pts.push(`L ${rx},0`);
+    }
+
+    // Release curve
+    if (envelope.release > 0) {
+      if (envelope.releaseCurve === 'exp') {
+        pts.push(`Q ${rx},${h} ${svgWidth},${h}`);
+      } else {
+        pts.push(`L ${svgWidth},${h}`);
+      }
+    } else {
+      pts.push(`L ${svgWidth},${h}`);
+    }
+
+    return pts.join(' ');
+  }
+
+  /* ---- dragging ---- */
+
+  type DragTarget = 'attack' | 'release' | null;
+
+  let dragging: DragTarget = $state(null);
+
+  function dragStart(target: DragTarget, e: MouseEvent | TouchEvent) {
+    e.preventDefault();
+    dragging = target;
+  }
+
+  function dragMove(e: MouseEvent | TouchEvent) {
+    if (!dragging) return;
+    const svg = (e.currentTarget as SVGElement).closest('svg');
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const x = ((clientX - rect.left) / rect.width) * svgWidth;
+    const t = Math.max(0, Math.min(x / svgWidth, 1)) * DISPLAY_SECS;
+
+    const next = { ...envelope };
+    if (dragging === 'attack') {
+      next.attack = Math.round(t * 100) / 100;
+    } else {
+      next.release = Math.round((DISPLAY_SECS - t) * 100) / 100;
+      if (next.release < 0) next.release = 0;
+    }
+    onChange(next, playStyle);
+    scheduleAutoPreview();
+  }
+
+  function dragEnd() {
+    dragging = null;
+  }
+
+  /* ---- controls ---- */
+
+  function handleCurveChange(
+    key: 'attackCurve' | 'releaseCurve',
+    value: string,
+  ) {
+    const next = { ...envelope, [key]: value as EnvCurve };
     onChange(next, playStyle);
     scheduleAutoPreview();
   }
@@ -32,43 +130,118 @@
   }
 </script>
 
-<div class="env-panel">
-  <div class="env-row">
-    <span class="env-label">ATTACK</span>
-    <input
-      type="range"
-      min="0"
-      max="2"
-      step="0.01"
-      value={envelope.attack}
-      oninput={(e) =>
-        handleEnvelopeChange(
-          'attack',
-          parseFloat((e.target as HTMLInputElement).value),
-        )}
-    />
-    <span class="env-val">{envelope.attack.toFixed(2)}s</span>
-  </div>
+<svelte:window
+  onmouseup={dragEnd}
+  ontouchend={dragEnd}
+  onmousemove={(e) => dragMove(e)}
+  ontouchmove={(e) => dragMove(e)}
+/>
 
-  <div class="env-row">
-    <span class="env-label">RELEASE</span>
-    <input
-      type="range"
-      min="0"
-      max="3"
-      step="0.01"
-      value={envelope.release}
-      oninput={(e) =>
-        handleEnvelopeChange(
-          'release',
-          parseFloat((e.target as HTMLInputElement).value),
-        )}
+<div class="env-panel" bind:clientWidth={svgWidth}>
+  <!-- SVG envelope display -->
+  <svg
+    class="env-svg"
+    viewBox="0 0 {svgWidth} 72"
+    preserveAspectRatio="none"
+    width="100%"
+    height="72"
+  >
+    <!-- grid lines -->
+    <line
+      x1="0"
+      y1="24"
+      x2={svgWidth}
+      y2="24"
+      stroke="var(--lit-border)"
+      stroke-width="0.5"
     />
-    <span class="env-val">{envelope.release.toFixed(2)}s</span>
-  </div>
+    <line
+      x1="0"
+      y1="48"
+      x2={svgWidth}
+      y2="48"
+      stroke="var(--lit-border)"
+      stroke-width="0.5"
+    />
 
-  <div class="env-row env-row--controls">
-    <label class="env-field">
+    <!-- envelope fill -->
+    <path d={envPath()} fill="var(--lit-accent)" fill-opacity="0.15" />
+    <!-- envelope stroke -->
+    <path
+      d={envPath()}
+      fill="none"
+      stroke="var(--lit-accent)"
+      stroke-width="1.5"
+    />
+
+    <!-- attack handle -->
+    {#if envelope.attack > 0}
+      <circle
+        cx={attackPx()}
+        cy="0"
+        r="5"
+        fill="var(--lit-bg)"
+        stroke="var(--lit-text)"
+        stroke-width="1.5"
+        class="env-handle"
+        onmousedown={(e) => dragStart('attack', e)}
+        ontouchstart={(e) => dragStart('attack', e)}
+      />
+    {/if}
+
+    <!-- release handle -->
+    {#if envelope.release > 0}
+      <circle
+        cx={releaseStartPx()}
+        cy="0"
+        r="5"
+        fill="var(--lit-bg)"
+        stroke="var(--lit-text)"
+        stroke-width="1.5"
+        class="env-handle"
+        onmousedown={(e) => dragStart('release', e)}
+        ontouchstart={(e) => dragStart('release', e)}
+      />
+    {/if}
+  </svg>
+
+  <!-- controls row -->
+  <div class="env-ctls">
+    <label class="env-ctl">
+      <span>A</span>
+      <select
+        class="brutalist-control"
+        value={envelope.attackCurve}
+        onchange={(e) =>
+          handleCurveChange(
+            'attackCurve',
+            (e.target as HTMLSelectElement).value,
+          )}
+      >
+        <option value="linear">lin</option>
+        <option value="exp">exp</option>
+      </select>
+      <span class="env-ctl-val">{envelope.attack.toFixed(2)}s</span>
+    </label>
+
+    <label class="env-ctl">
+      <span>R</span>
+      <select
+        class="brutalist-control"
+        value={envelope.releaseCurve}
+        onchange={(e) =>
+          handleCurveChange(
+            'releaseCurve',
+            (e.target as HTMLSelectElement).value,
+          )}
+      >
+        <option value="linear">lin</option>
+        <option value="exp">exp</option>
+      </select>
+      <span class="env-ctl-val">{envelope.release.toFixed(2)}s</span>
+    </label>
+
+    <label class="env-ctl">
       <span>STYLE</span>
       <select
         class="brutalist-control"
@@ -108,65 +281,59 @@
     overflow: hidden;
   }
 
-  .env-row {
+  .env-svg {
+    display: block;
+    border-radius: 2px;
+  }
+
+  .env-handle {
+    cursor: grab;
+  }
+
+  .env-handle:active {
+    cursor: grabbing;
+  }
+
+  .env-ctls {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
-  }
-
-  .env-label {
-    font-size: 0.65rem;
-    color: var(--lit-text-dim);
-    width: 3.5rem;
-    flex-shrink: 0;
-  }
-
-  .env-row input[type='range'] {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .env-val {
     font-size: 0.6rem;
-    color: var(--lit-text-faint);
-    width: 2.5rem;
-    text-align: right;
-    flex-shrink: 0;
   }
 
-  .env-row--controls {
-    justify-content: flex-start;
-  }
-
-  .env-field {
+  .env-ctl {
     display: flex;
     align-items: center;
-    gap: 4px;
-    font-size: 0.65rem;
+    gap: 3px;
     color: var(--lit-text-dim);
   }
 
-  .env-field span {
+  .env-ctl span {
     flex-shrink: 0;
-    width: 2.5rem;
   }
 
-  .env-field select {
-    padding: 1px 3px;
-    font-size: 0.65rem;
+  .env-ctl select {
+    padding: 1px 2px;
+    font-size: 0.6rem;
     background: var(--lit-cell);
     color: var(--lit-text);
+  }
+
+  .env-ctl-val {
+    width: 2.5rem;
+    text-align: right;
+    color: var(--lit-text-faint);
+    flex-shrink: 0;
   }
 
   .env-auto {
     display: flex;
     align-items: center;
     gap: 3px;
-    font-size: 0.6rem;
     color: var(--lit-text-faint);
     cursor: pointer;
-    margin-left: 8px;
+    margin-left: auto;
   }
 
   .env-auto input[type='checkbox'] {
@@ -179,8 +346,7 @@
 
   .env-preview-btn {
     padding: 2px 8px;
-    font-size: 0.65rem;
-    margin-left: auto;
+    font-size: 0.6rem;
     color: var(--lit-green);
     border-color: var(--lit-green);
     background: transparent;
@@ -193,12 +359,16 @@
   }
 
   @media (pointer: coarse) {
+    .env-handle {
+      r: 8;
+    }
+
     .env-auto input[type='checkbox'] {
       width: 16px;
       height: 16px;
     }
 
-    .env-field select {
+    .env-ctl select {
       min-height: 28px;
     }
   }
