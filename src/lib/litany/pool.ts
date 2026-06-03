@@ -125,6 +125,20 @@ export class SamplePool {
     return this.entries[this.index] ?? null;
   }
 
+  get entryNames(): string[] {
+    return this.entries
+      .filter((e): e is PoolEntry => e !== null)
+      .map((e) => e.name);
+  }
+
+  selectByName(name: string): void {
+    const i = this.entries.findIndex((e) => e?.name === name);
+    if (i !== -1) {
+      this.index = i;
+      this.pinnedEntry = this.entries[i];
+    }
+  }
+
   pin(): void {
     this.pinnedEntry = this.currentEntry();
   }
