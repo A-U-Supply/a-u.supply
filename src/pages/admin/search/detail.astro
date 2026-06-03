@@ -1072,6 +1072,21 @@ import Admin from '../../../layouts/Admin.astro';
           .filter(Boolean)
           .join(' · ');
         if (audioBits) rows.push(fieldRow('Audio', escapeHtml(audioBits)));
+
+        let acousticTags = null;
+        try {
+          if (typeof a.acoustic_tags === 'string') {
+            acousticTags = JSON.parse(a.acoustic_tags);
+          } else if (a.acoustic_tags) {
+            acousticTags = a.acoustic_tags;
+          }
+        } catch (_) {}
+        if (acousticTags?.voice) {
+          rows.push(fieldRow('Voice', escapeHtml(String(acousticTags.voice))));
+        }
+        if (acousticTags?.instrument) {
+          rows.push(fieldRow('Instrument', escapeHtml(String(acousticTags.instrument))));
+        }
       }
       if (item.video_meta?.fps) {
         rows.push(fieldRow('FPS', String(item.video_meta.fps)));
