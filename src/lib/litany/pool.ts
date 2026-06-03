@@ -51,17 +51,24 @@ export class SamplePool {
     const key = import.meta.env.VITE_AU_API_KEY as string | undefined;
     if (key) headers['Authorization'] = `Bearer ${key}`;
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
     let response: Response;
     try {
       response = await fetch(url, {
         credentials: 'include',
         redirect: 'follow',
         headers,
+        signal: controller.signal,
       });
     } catch (err) {
+      clearTimeout(timeout);
       console.error(`[litany] fetch failed for query "${query}":`, err);
       throw err;
     }
+    clearTimeout(timeout);
+
     if (!response.ok) {
       console.error(`[litany] HTTP ${response.status} for query "${query}"`);
       throw new Error(`HTTP ${response.status}`);
@@ -72,8 +79,16 @@ export class SamplePool {
     const name = nameMatch?.[1] ?? query;
 
     const arrayBuffer = await response.arrayBuffer();
-    const buffer = await this.decodeCtx.decodeAudioData(arrayBuffer);
+    const buffer = await this.decodeAudio(arrayBuffer);
     return { buffer, name };
+  }
+
+  private async decodeAudio(arrayBuffer: ArrayBuffer): Promise<AudioBuffer> {
+    try {
+      return await this.ctx.decodeAudioData(arrayBuffer);
+    } catch {
+      return await this.decodeCtx.decodeAudioData(arrayBuffer);
+    }
   }
 
   next(

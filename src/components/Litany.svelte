@@ -142,7 +142,12 @@
 
   // ── Play / Stop ──────────────────────────────────────────────────────────
   async function play() {
-    await engine!.resume();
+    try {
+      await engine!.resume();
+    } catch (err) {
+      console.error('[litany] failed to resume AudioContext', err);
+      return;
+    }
     scheduler = new Scheduler(
       engine!,
       pools,
