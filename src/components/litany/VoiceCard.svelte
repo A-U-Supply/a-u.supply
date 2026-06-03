@@ -273,8 +273,8 @@
 
 <style>
   .voice-card {
-    background: #111;
-    border: 2px solid #333;
+    background: var(--lit-panel);
+    border: 1px solid var(--lit-border);
     padding: 10px;
     display: flex;
     flex-direction: column;
@@ -282,7 +282,6 @@
     min-width: 0;
   }
 
-  /* Row layout: horizontal arrangement */
   .voice-card--row {
     flex-direction: row;
     flex-wrap: wrap;
@@ -292,11 +291,10 @@
   }
 
   .voice-card--error {
-    border-color: #4a2020;
+    border-color: var(--lit-error-border);
     opacity: 0.7;
   }
 
-  /* Left col: label + query — fixed width in row mode */
   .left-col {
     display: flex;
     flex-direction: column;
@@ -317,12 +315,12 @@
   }
 
   .label-input {
-    font-family: var(--font-mono, monospace);
+    font-family: var(--lit-font);
     font-size: 0.75rem;
-    font-weight: bold;
+    font-weight: 700;
     background: transparent;
     border: none;
-    color: #ddd;
+    color: var(--lit-text);
     outline: none;
     flex: 1;
     min-width: 0;
@@ -342,7 +340,7 @@
 
   .sample-name {
     font-size: 0.65rem;
-    color: #666;
+    color: var(--lit-text-dim);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -353,19 +351,19 @@
     width: 100%;
     font-size: 0.6rem;
     padding: 1px 3px;
-    background: #0d0d0d;
-    color: #aaa;
-    border: 1px solid #333;
+    background: var(--lit-cell);
+    color: var(--lit-text-dim);
+    border: 1px solid var(--lit-border);
     cursor: pointer;
   }
 
   .status-loading {
-    color: #555;
+    color: var(--lit-text-faint);
     font-style: italic;
   }
 
   .status-error {
-    color: #8a4040;
+    color: var(--lit-red-dim);
   }
 
   .query-row {
@@ -378,12 +376,12 @@
     min-width: 0;
     font-size: 0.75rem;
     padding: 3px 5px;
-    background: #0d0d0d;
-    color: #ccc;
+    background: var(--lit-cell);
+    color: var(--lit-text);
   }
 
   .pin--active {
-    background: #2a2000 !important;
+    background: var(--lit-pin-bg) !important;
   }
 
   .mute-btn {
@@ -393,9 +391,9 @@
   }
 
   .mute-btn--active {
-    background: #2a0000 !important;
-    border-color: #8a4040 !important;
-    color: #cc6666 !important;
+    background: var(--lit-mute-bg) !important;
+    border-color: var(--lit-red-dim) !important;
+    color: var(--lit-mute-text) !important;
   }
 
   .solo-btn {
@@ -405,12 +403,11 @@
   }
 
   .solo-btn--active {
-    background: #1a1200 !important;
-    border-color: #b8860b !important;
-    color: #d4a017 !important;
+    background: var(--lit-solo-bg) !important;
+    border-color: var(--lit-solo-border) !important;
+    color: var(--lit-solo-text) !important;
   }
 
-  /* Centre: step grid — flex:1 in row mode */
   .steps-wrap {
     min-width: 0;
   }
@@ -420,7 +417,6 @@
     min-width: 200px;
   }
 
-  /* Right col: controls */
   .right-col {
     display: flex;
     flex-direction: column;
@@ -444,7 +440,7 @@
     gap: 4px;
     flex: 1;
     font-size: 0.65rem;
-    color: #666;
+    color: var(--lit-text-dim);
   }
 
   .voice-card--row .vol-label {
@@ -453,7 +449,7 @@
 
   .vol-label input[type='range'] {
     flex: 1;
-    accent-color: #b8860b;
+    accent-color: var(--lit-accent);
     cursor: pointer;
   }
 
@@ -467,8 +463,8 @@
   .meta-btn {
     font-size: 0.65rem;
     padding: 2px 4px;
-    background: #0d0d0d;
-    color: #aaa;
+    background: var(--lit-cell);
+    color: var(--lit-text-dim);
   }
 
   .meta-btn {
@@ -476,7 +472,6 @@
     cursor: pointer;
   }
 
-  /* FX panel spans full width in row mode */
   .fx-wrap {
     width: 100%;
   }

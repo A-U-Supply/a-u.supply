@@ -140,15 +140,15 @@
     align-items: center;
     gap: 10px;
     padding: 10px 0 12px;
-    border-bottom: 2px solid #333;
+    border-bottom: 1px solid var(--lit-border);
     flex-wrap: wrap;
   }
 
   .app-title {
-    font-size: 1rem;
-    font-weight: bold;
+    font-size: 0.95rem;
+    font-weight: 700;
     letter-spacing: 0.15em;
-    color: #ddd;
+    color: var(--lit-text);
     flex-shrink: 0;
   }
 
@@ -164,12 +164,12 @@
   }
 
   .transport-btn--playing {
-    background: #1a1a0a !important;
-    color: #b8860b !important;
+    background: var(--lit-playing-bg) !important;
+    color: var(--lit-accent) !important;
   }
 
   .transport-btn--loading {
-    color: #555 !important;
+    color: var(--lit-text-faint) !important;
     cursor: wait !important;
   }
 
@@ -178,7 +178,7 @@
     align-items: center;
     gap: 5px;
     font-size: 0.7rem;
-    color: #888;
+    color: var(--lit-text-dim);
     flex-shrink: 0;
   }
 
@@ -186,8 +186,8 @@
     width: 4rem;
     padding: 3px 5px;
     font-size: 0.8rem;
-    background: #0d0d0d;
-    color: #ccc;
+    background: var(--lit-cell);
+    color: var(--lit-text);
     text-align: center;
   }
 
@@ -205,9 +205,9 @@
   }
 
   .hist-btn:disabled {
-    color: #444 !important;
+    color: var(--lit-text-faint) !important;
     cursor: default;
-    border-color: #333 !important;
+    border-color: var(--lit-border) !important;
     box-shadow: none !important;
   }
 
@@ -224,9 +224,9 @@
   }
 
   .rnd-btn--all {
-    background: #1a1200 !important;
-    border-color: #b8860b !important;
-    color: #b8860b !important;
+    background: var(--lit-solo-bg) !important;
+    border-color: var(--lit-accent) !important;
+    color: var(--lit-accent) !important;
   }
 
   .right-group {
@@ -243,8 +243,9 @@
   }
 
   .layout-btn[aria-pressed='true'] {
-    background: var(--color-fg) !important;
-    color: var(--color-bg) !important;
+    background: var(--lit-accent) !important;
+    color: var(--lit-bg) !important;
+    border-color: var(--lit-accent) !important;
   }
 
   .add-btn {
