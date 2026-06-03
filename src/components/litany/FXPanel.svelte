@@ -133,6 +133,7 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+    overflow: hidden;
   }
 
   .fx-row {
@@ -170,8 +171,7 @@
 
   .fx-field input[type='range'] {
     flex: 1;
-    accent-color: var(--lit-accent);
-    cursor: pointer;
+    min-width: 0;
   }
 
   .fx-field select {

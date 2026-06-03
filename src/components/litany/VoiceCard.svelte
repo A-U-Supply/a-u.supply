@@ -280,6 +280,7 @@
     flex-direction: column;
     gap: 8px;
     min-width: 0;
+    overflow: hidden;
   }
 
   .voice-card--row {
@@ -449,8 +450,7 @@
 
   .vol-label input[type='range'] {
     flex: 1;
-    accent-color: var(--lit-accent);
-    cursor: pointer;
+    min-width: 0;
   }
 
   .meta-row {
