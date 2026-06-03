@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Voice, StepCount, Rotation } from '../../lib/litany/state.ts';
   import type { PoolStatus } from '../../lib/litany/pool.ts';
+  import { INSTRUMENT_TYPES } from '../../lib/litany/randomize.ts';
   import StepGrid from './StepGrid.svelte';
   import FXPanel from './FXPanel.svelte';
 
@@ -116,9 +117,15 @@
         class="query-input brutalist-control"
         value={voice.query}
         placeholder="search…"
+        list="voice-queries-{voice.id}"
         onchange={(e) =>
           onChange({ ...voice, query: (e.target as HTMLInputElement).value })}
       />
+      <datalist id="voice-queries-{voice.id}">
+        {#each INSTRUMENT_TYPES as t}
+          <option value={t} />
+        {/each}
+      </datalist>
       <button
         class="brutalist-control icon-btn"
         class:pin--active={voice.rotation === 'pinned'}
