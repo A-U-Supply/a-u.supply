@@ -92,6 +92,7 @@ export class Scheduler {
                 voice.envelope.attackCurve,
                 voice.envelope.releaseCurve,
                 voice.playStyle,
+                voice.pitch,
               );
             }
           }

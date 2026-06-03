@@ -169,6 +169,7 @@ export class AudioEngine {
     attackCurve: EnvCurve,
     releaseCurve: EnvCurve,
     playStyle: 'one-shot' | 'cut' | 'gate' | 'legato',
+    pitch: number,
   ): void {
     const chain = this.voices.get(id);
     if (!chain) return;
@@ -180,6 +181,7 @@ export class AudioEngine {
 
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
+    source.playbackRate.value = 2 ** (pitch / 12);
 
     const envelopeGain = this.ctx.createGain();
     const attackEnd = when + attack;
@@ -195,25 +197,21 @@ export class AudioEngine {
     }
 
     if (playStyle === 'one-shot') {
-      const releaseStart = Math.max(
-        when + buffer.duration - release,
-        attackEnd,
-      );
+      const rate = source.playbackRate.value;
+      const dur = buffer.duration / rate;
+      const releaseStart = Math.max(when + dur - release, attackEnd);
       if (release <= 0) {
         envelopeGain.gain.setValueAtTime(1, releaseStart);
-        envelopeGain.gain.setValueAtTime(0, when + buffer.duration);
+        envelopeGain.gain.setValueAtTime(0, when + dur);
       } else if (releaseCurve === 'exp') {
         envelopeGain.gain.setValueAtTime(1, releaseStart);
-        envelopeGain.gain.exponentialRampToValueAtTime(
-          0.001,
-          when + buffer.duration,
-        );
+        envelopeGain.gain.exponentialRampToValueAtTime(0.001, when + dur);
       } else {
         envelopeGain.gain.setValueAtTime(1, releaseStart);
-        envelopeGain.gain.linearRampToValueAtTime(0, when + buffer.duration);
+        envelopeGain.gain.linearRampToValueAtTime(0, when + dur);
       }
       source.start(when);
-      source.stop(when + buffer.duration + 0.05);
+      source.stop(when + dur + 0.05);
     } else {
       source.start(when);
     }

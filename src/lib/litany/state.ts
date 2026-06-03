@@ -38,6 +38,7 @@ export interface Voice {
   rotation: Rotation;
   pinnedUrl?: string;
   volume: number;
+  pitch: number;
   muted: boolean;
   soloed: boolean;
   fx: FxParams;
@@ -115,6 +116,7 @@ export function createVoice(
     stepCount,
     rotation: 'every-hit',
     volume: 0.8,
+    pitch: 0,
     muted: false,
     soloed: false,
     fx: defaultFx(),

@@ -256,6 +256,25 @@
             )}
         />
       </label>
+      <label class="vol-label">
+        <span>PIT</span>
+        <input
+          type="range"
+          min="-12"
+          max="12"
+          step="1"
+          value={voice.pitch}
+          onpointerdown={onBeforeDrag}
+          oninput={(e) =>
+            onChange(
+              {
+                ...voice,
+                pitch: parseInt((e.target as HTMLInputElement).value) || 0,
+              },
+              true,
+            )}
+        />
+      </label>
       <button
         class="brutalist-control icon-btn mute-btn"
         class:mute-btn--active={voice.muted}
