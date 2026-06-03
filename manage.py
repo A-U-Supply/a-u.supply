@@ -1361,6 +1361,81 @@ if __name__ == "__main__":
         _db.close()
         log(f"Deleted {deleted} duplicate MediaSource rows")
 
+    elif cmd == "export-untagged-audio":
+        """Export JSON of untagged sample_library items for offline AI tagging."""
+        import json
+        from server.models import MediaAudioMeta, MediaItem, MediaSource, SessionLocal as _SL
+        _db = _SL()
+        rows = _db.query(
+            MediaItem.id, MediaItem.file_path, MediaSource.source_metadata
+        ).join(MediaSource, MediaSource.media_item_id == MediaItem.id).filter(
+            MediaSource.source_type == "sample_library"
+        ).all()
+        already = {r[0] for r in _db.query(MediaAudioMeta.media_item_id).filter(
+            MediaAudioMeta.acoustic_tags.isnot(None)).all()}
+        _db.close()
+        items = []
+        for mid, fp, smeta in rows:
+            if mid in already:
+                continue
+            ctx = "unknown"
+            if smeta:
+                try:
+                    meta = json.loads(smeta) if isinstance(smeta, str) else smeta
+                    ctx = meta.get("dir") or meta.get("machine_name") or "unknown"
+                except Exception:
+                    pass
+            fn = fp.rsplit("/", 1)[-1] if fp else ""
+            items.append({"id": mid, "filename": fn, "ctx": ctx})
+        print(json.dumps(items))
+
+    elif cmd == "import-ai-tags":
+        """Apply AI tags from JSON on stdin. Each line: {"id": "...", "voice": "...", ...}"""
+        import json, uuid
+        from server.models import MediaAudioMeta, MediaItem, MediaTag, SessionLocal as _SL
+        from server.search_client import sync_media_item
+        data = json.load(sys.stdin)
+        _db = _SL()
+        updated = 0
+        for entry in data:
+            mid = entry["id"]
+            acoustic = {}
+            if entry.get("voice"):
+                acoustic["voice"] = entry["voice"]
+            if entry.get("instrument"):
+                acoustic["instrument"] = entry["instrument"]
+            if entry.get("ai_tags"):
+                acoustic["ai_tags"] = entry["ai_tags"]
+            if not acoustic:
+                continue
+            acoustic_json = json.dumps(acoustic)
+            existing = _db.query(MediaAudioMeta).filter(MediaAudioMeta.media_item_id == mid).first()
+            if existing:
+                existing.acoustic_tags = acoustic_json
+            else:
+                _db.add(MediaAudioMeta(media_item_id=mid, acoustic_tags=acoustic_json))
+            if entry.get("description"):
+                item = _db.query(MediaItem).filter(MediaItem.id == mid).first()
+                if item:
+                    item.description = entry["description"]
+            for tag in entry.get("ai_tags", []):
+                if not _db.query(MediaTag).filter(MediaTag.media_item_id == mid, MediaTag.tag == tag).first():
+                    _db.add(MediaTag(id=str(uuid.uuid4()), media_item_id=mid, tag=tag))
+            updated += 1
+            if updated % 200 == 0:
+                log(f"  applied {updated}")
+        _db.commit()
+        log(f"Applied {updated} items. Syncing Meilisearch...")
+        for entry in data:
+            item = _db.query(MediaItem).filter(MediaItem.id == entry["id"]).first()
+            if item:
+                try:
+                    sync_media_item(_db, item)
+                except Exception:
+                    pass
+        _db.close()
+        log(f"Done. {updated} items tagged and synced.")
+
     elif cmd == "clean-drum-machine-orphans":
         from server.models import MediaItem, MediaSource, SessionLocal as _SL
         _db = _SL()
