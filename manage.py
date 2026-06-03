@@ -1229,14 +1229,17 @@ if __name__ == "__main__":
         force_all = "--all" in sys.argv
         import json as _json
 
-        from server.extraction import SEARCH_MEDIA_DIR, _run_audio_extraction_batch
+        from server.extraction import SEARCH_MEDIA_DIR, _detect_voice_from_filename, _run_audio_extraction_batch
+        from server.ai_audio import generate_audio_ai_descriptions
         from server.models import (
             MediaAudioMeta,
             MediaItem,
             MediaSource,
+            MediaTag,
             SessionLocal as _SL,
         )
         from server.search_client import sync_media_item
+        import uuid as _uuid
 
         # Collect items needing tags, grouped by dir_context
         _db = _SL()
@@ -1284,11 +1287,64 @@ if __name__ == "__main__":
 
                 tagged_total = 0
                 for ctx, items in by_context.items():
+                    batch = [(mid, os.path.join(SEARCH_MEDIA_DIR, fp), ctx) for mid, fp in items]
+                    fnames = [os.path.basename(fp) for _, fp, _ in batch]
+
+                    # Step 1: fast local metadata (ffprobe) — short DB session
                     _db = _SL()
                     try:
-                        batch = [(mid, os.path.join(SEARCH_MEDIA_DIR, fp), ctx) for mid, fp in items]
                         _run_audio_extraction_batch(_db, batch, MediaAudioMeta)
+                    except Exception as exc:
+                        log(f"  ERROR ffprobe '{ctx}': {exc}")
+                        _db.rollback()
+                    finally:
+                        _db.close()
+
+                    # Step 2: AI tagging — NO DB session held during slow API
+                    ai_results = {}
+                    try:
+                        ai_results = generate_audio_ai_descriptions(fnames, dir_name=ctx)
+                    except Exception as exc:
+                        log(f"  ERROR AI '{ctx}': {exc}")
+
+                    # Step 3: store AI results — new short DB session
+                    _db = _SL()
+                    try:
+                        for mid, fp, _ in batch:
+                            fn = os.path.basename(fp)
+                            ai = ai_results.get(fn, {})
+                            ai_tags = ai.get("tags", [])
+                            ai_voice = ai.get("voice") or _detect_voice_from_filename(fn)
+                            ai_instrument = ai.get("instrument") or ctx.lower().replace(" ", "-").replace("_", "-")
+
+                            if ai.get("description"):
+                                item = _db.query(MediaItem).filter(MediaItem.id == mid).first()
+                                if item:
+                                    item.description = ai["description"]
+
+                            if ai_tags or ai_voice or ai_instrument:
+                                acoustic = {}
+                                if ai_voice:
+                                    acoustic["voice"] = ai_voice
+                                if ai_instrument:
+                                    acoustic["instrument"] = ai_instrument
+                                if ai_tags:
+                                    acoustic["ai_tags"] = ai_tags
+                                import json as _j
+                                acoustic_json = _j.dumps(acoustic)
+                                existing = _db.query(MediaAudioMeta).filter(
+                                    MediaAudioMeta.media_item_id == mid).first()
+                                if existing:
+                                    existing.acoustic_tags = acoustic_json
+                                else:
+                                    _db.add(MediaAudioMeta(media_item_id=mid, acoustic_tags=acoustic_json))
+                                for tag in ai_tags:
+                                    if not _db.query(MediaTag).filter(
+                                        MediaTag.media_item_id == mid, MediaTag.tag == tag).first():
+                                        _db.add(MediaTag(id=str(_uuid.uuid4()), media_item_id=mid, tag=tag))
+                        _db.commit()
                         tagged_total += len(items)
+                        log(f"  [{tagged_total}/{len(rows)}] {ctx}: {len(items)} tagged")
 
                         # Sync to Meilisearch
                         for mid, _fp in items:
@@ -1298,10 +1354,8 @@ if __name__ == "__main__":
                                     sync_media_item(_db, item)
                                 except Exception as exc:
                                     log(f"  WARNING sync {item.filename}: {exc}")
-
-                        log(f"  [{tagged_total}/{len(rows)}] {ctx}: {len(items)} tagged")
                     except Exception as exc:
-                        log(f"  ERROR group '{ctx}': {exc}")
+                        log(f"  ERROR apply '{ctx}': {exc}")
                         _db.rollback()
                     finally:
                         _db.close()
