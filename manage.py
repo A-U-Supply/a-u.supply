@@ -798,7 +798,7 @@ def backfill_audio_ai_tags(force_all: bool = False, restart: bool = False):
     import os as _os
     import uuid as _uuid
 
-    from server.extraction import SEARCH_MEDIA_DIR, _detect_voice_from_filename, _run_audio_extraction_batch
+    from server.extraction import SEARCH_MEDIA_DIR, _detect_voice_from_filename
     from server.ai_audio import generate_audio_ai_descriptions
     from server.models import (
         MediaAudioMeta,
@@ -874,15 +874,6 @@ def backfill_audio_ai_tags(force_all: bool = False, restart: bool = False):
     for ctx, items in by_context.items():
         batch = [(mid, _os.path.join(SEARCH_MEDIA_DIR, fp), ctx) for mid, fp in items]
         fnames = [_os.path.basename(fp) for _, fp, _ in batch]
-
-        _db = _SL()
-        try:
-            _run_audio_extraction_batch(_db, batch, MediaAudioMeta)
-        except Exception as exc:
-            log(f"  ERROR ffprobe '{ctx}': {exc}")
-            _db.rollback()
-        finally:
-            _db.close()
 
         ai_results = {}
         try:
