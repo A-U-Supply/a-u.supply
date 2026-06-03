@@ -13,12 +13,18 @@ export interface VoiceChain {
   convolverConnected: boolean;
 }
 
+interface ActiveSource {
+  source: AudioBufferSourceNode;
+  envelopeGain: GainNode;
+}
+
 export class AudioEngine {
   ctx: AudioContext;
   masterGain: GainNode;
   compressor: DynamicsCompressorNode;
   private ir: AudioBuffer | null = null;
   private voices = new Map<string, VoiceChain>();
+  private activeSources = new Map<string, ActiveSource>();
 
   constructor() {
     this.ctx = new AudioContext();
@@ -56,7 +62,6 @@ export class AudioEngine {
 
     const inputGain = c.createGain();
 
-    // Delay section
     const delayNode = c.createDelay(2.0);
     const delayFeedbackGain = c.createGain();
     const delayDryGain = c.createGain();
@@ -75,7 +80,6 @@ export class AudioEngine {
     delayDryGain.connect(delaySum);
     delayWetGain.connect(delaySum);
 
-    // Reverb section (delay → reverb)
     const convolverNode = c.createConvolver();
     convolverNode.buffer = ir;
     const reverbDryGain = c.createGain();
@@ -86,11 +90,9 @@ export class AudioEngine {
     reverbWetGain.gain.value = 0;
 
     delaySum.connect(reverbDryGain);
-    // convolverNode not connected yet (reverbWet starts at 0)
     reverbDryGain.connect(reverbSum);
     reverbWetGain.connect(reverbSum);
 
-    // Filter
     const filterNode = c.createBiquadFilter();
     filterNode.type = 'lowpass';
     filterNode.frequency.value = 20000;
@@ -143,7 +145,6 @@ export class AudioEngine {
     chain.filterNode.frequency.value = fx.filterFreq;
     chain.filterNode.Q.value = fx.filterQ;
 
-    // Connect/disconnect convolver based on wet value
     if (fx.reverbWet > 0 && !chain.convolverConnected) {
       chain.delaySum.connect(chain.convolverNode);
       chain.convolverNode.connect(chain.reverbWetGain);
@@ -157,17 +158,100 @@ export class AudioEngine {
     chain.reverbDryGain.gain.value = 1 - fx.reverbWet;
   }
 
-  playBuffer(id: string, buffer: AudioBuffer, when: number): void {
+  playVoice(
+    id: string,
+    buffer: AudioBuffer,
+    when: number,
+    attack: number,
+    release: number,
+    playStyle: 'one-shot' | 'cut' | 'gate' | 'legato',
+  ): void {
     const chain = this.voices.get(id);
     if (!chain) return;
+
+    const prev = this.activeSources.get(id);
+    if (playStyle === 'cut' && prev) {
+      prev.source.stop(when);
+    }
+
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
-    source.connect(chain.inputGain);
-    source.onended = () => source.disconnect();
-    source.start(when);
+
+    const envelopeGain = this.ctx.createGain();
+    envelopeGain.gain.setValueAtTime(0, when);
+    envelopeGain.gain.linearRampToValueAtTime(1, when + attack);
+
+    if (playStyle === 'one-shot') {
+      const releaseStart = Math.max(
+        when + buffer.duration - release,
+        when + attack,
+      );
+      envelopeGain.gain.setValueAtTime(1, releaseStart);
+      envelopeGain.gain.linearRampToValueAtTime(0, when + buffer.duration);
+      source.start(when);
+      source.stop(when + buffer.duration + 0.05);
+    } else {
+      source.start(when);
+    }
+
+    source.connect(envelopeGain);
+    envelopeGain.connect(chain.inputGain);
+
+    source.onended = () => this.cleanupSource(id);
+
+    this.activeSources.set(id, { source, envelopeGain });
+  }
+
+  stopVoice(id: string, when: number, release: number): void {
+    const active = this.activeSources.get(id);
+    if (!active) return;
+
+    const now = Math.max(when, this.ctx.currentTime);
+    active.envelopeGain.gain.cancelScheduledValues(now);
+    active.envelopeGain.gain.setValueAtTime(
+      active.envelopeGain.gain.value,
+      now,
+    );
+    active.envelopeGain.gain.linearRampToValueAtTime(0, now + release);
+    active.source.stop(now + release + 0.05);
+  }
+
+  previewVoice(id: string, buffer: AudioBuffer): void {
+    const chain = this.voices.get(id);
+    if (!chain) return;
+
+    const source = this.ctx.createBufferSource();
+    source.buffer = buffer;
+
+    const previewGain = this.ctx.createGain();
+    previewGain.gain.value = 0.6;
+
+    source.connect(previewGain);
+    previewGain.connect(chain.inputGain);
+
+    source.start();
+    source.onended = () => {
+      source.disconnect();
+      previewGain.disconnect();
+    };
+  }
+
+  private cleanupSource(id: string): void {
+    const active = this.activeSources.get(id);
+    if (active) {
+      active.source.disconnect();
+      active.envelopeGain.disconnect();
+      this.activeSources.delete(id);
+    }
   }
 
   removeVoiceChain(id: string): void {
+    const active = this.activeSources.get(id);
+    if (active) {
+      active.source.disconnect();
+      active.envelopeGain.disconnect();
+      this.activeSources.delete(id);
+    }
     const chain = this.voices.get(id);
     if (!chain) return;
     chain.filterNode.disconnect();
@@ -179,6 +263,11 @@ export class AudioEngine {
 
   destroy(): void {
     this.ctx.removeEventListener('statechange', this.onStateChange);
+    this.activeSources.forEach((active) => {
+      active.source.disconnect();
+      active.envelopeGain.disconnect();
+    });
+    this.activeSources.clear();
     this.voices.forEach((_, id) => this.removeVoiceChain(id));
     this.ctx.close();
   }

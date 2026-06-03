@@ -139,6 +139,10 @@ export class SamplePool {
     }
   }
 
+  previewBuffer(): AudioBuffer | null {
+    return this.pinnedEntry?.buffer ?? this.currentEntry()?.buffer ?? null;
+  }
+
   pin(): void {
     this.pinnedEntry = this.currentEntry();
   }

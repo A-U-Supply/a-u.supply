@@ -4,6 +4,7 @@
   import { INSTRUMENT_TYPES } from '../../lib/litany/randomize.ts';
   import StepGrid from './StepGrid.svelte';
   import FXPanel from './FXPanel.svelte';
+  import EnvPanel from './EnvPanel.svelte';
 
   interface Props {
     voice: Voice;
@@ -21,6 +22,7 @@
     onRemove: () => void;
     onPin: () => void;
     onUnpin: () => void;
+    onPreview: () => void;
   }
 
   let {
@@ -39,9 +41,11 @@
     onRemove,
     onPin,
     onUnpin,
+    onPreview,
   }: Props = $props();
 
   let fxOpen = $state(false);
+  let envOpen = $state(false);
 
   const STEP_COUNTS: StepCount[] = Array.from({ length: 32 }, (_, i) => i + 1);
   const ROTATIONS: { value: Rotation; label: string }[] = [
@@ -245,6 +249,13 @@
       >
         FX {fxOpen ? '▴' : '▾'}
       </button>
+      <button
+        class="brutalist-control meta-btn"
+        aria-pressed={envOpen}
+        onclick={() => (envOpen = !envOpen)}
+      >
+        ENV {envOpen ? '▴' : '▾'}
+      </button>
       {#if layout === 'rows'}
         <button
           class="brutalist-control icon-btn"
@@ -266,6 +277,18 @@
         fx={voice.fx}
         {onBeforeDrag}
         onChange={(fx) => onChange({ ...voice, fx }, true)}
+      />
+    </div>
+  {/if}
+
+  {#if envOpen}
+    <div class="fx-wrap">
+      <EnvPanel
+        envelope={voice.envelope}
+        playStyle={voice.playStyle}
+        onChange={(env, style) =>
+          onChange({ ...voice, envelope: env, playStyle: style }, true)}
+        {onPreview}
       />
     </div>
   {/if}
