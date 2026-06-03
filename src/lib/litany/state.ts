@@ -11,6 +11,12 @@ export interface EuclideanParams {
   offset: number;
 }
 
+export interface StepOverride {
+  probability?: number; // 0-100
+  pitch?: number;
+  volume?: number;
+}
+
 export interface EnvelopeParams {
   attack: number;
   release: number;
@@ -44,6 +50,7 @@ export interface Voice {
   envelope: EnvelopeParams;
   playStyle: PlayStyle;
   euclidean: EuclideanParams;
+  stepOverrides: (StepOverride | null)[];
 }
 
 export interface AppState {
@@ -121,6 +128,7 @@ export function createVoice(
     envelope: defaultEnvelope(),
     playStyle: 'one-shot',
     euclidean: defaultEuclidean(),
+    stepOverrides: [],
   };
 }
 

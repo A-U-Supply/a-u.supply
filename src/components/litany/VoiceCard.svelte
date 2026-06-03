@@ -46,6 +46,24 @@
 
   let fxOpen = $state(false);
   let envOpen = $state(false);
+  let probOpen = $state(false);
+
+  const PROB_CYCLE = [null, 100, 75, 50, 25, 0];
+
+  function cycleProbability(i: number) {
+    const overrides = [...(voice.stepOverrides || [])];
+    const cur = overrides[i]?.probability;
+    const idx = PROB_CYCLE.indexOf(cur ?? null);
+    const next = PROB_CYCLE[(idx + 1) % PROB_CYCLE.length];
+    if (next == null) {
+      overrides[i] = overrides[i]
+        ? { ...overrides[i], probability: undefined }
+        : null;
+    } else {
+      overrides[i] = { ...(overrides[i] || {}), probability: next };
+    }
+    onChange({ ...voice, stepOverrides: overrides }, true);
+  }
 
   const STEP_COUNTS: StepCount[] = Array.from({ length: 32 }, (_, i) => i + 1);
   const ROTATIONS: { value: Rotation; label: string }[] = [
@@ -225,6 +243,9 @@
       stepCount={voice.stepCount}
       {globalTick}
       onToggle={toggleStep}
+      probMode={probOpen}
+      overrides={voice.stepOverrides}
+      onProbCycle={cycleProbability}
     />
   </div>
 
@@ -327,6 +348,14 @@
           <option value={r.value}>{r.label}</option>
         {/each}
       </select>
+      <button
+        class="brutalist-control meta-btn"
+        aria-pressed={probOpen}
+        title={probOpen ? 'Exit probability mode' : 'Step probability'}
+        onclick={() => (probOpen = !probOpen)}
+      >
+        PROB
+      </button>
       <button
         class="brutalist-control meta-btn"
         aria-pressed={fxOpen}
