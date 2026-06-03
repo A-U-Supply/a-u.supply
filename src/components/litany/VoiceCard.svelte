@@ -1,10 +1,5 @@
 <script lang="ts">
-  import type {
-    Voice,
-    StepCount,
-    Rotation,
-    PatternMode,
-  } from '../../lib/litany/state.ts';
+  import type { Voice, StepCount, Rotation } from '../../lib/litany/state.ts';
   import type { PoolStatus } from '../../lib/litany/pool.ts';
   import { INSTRUMENT_TYPES } from '../../lib/litany/randomize.ts';
   import StepGrid from './StepGrid.svelte';
@@ -65,10 +60,6 @@
       .fill(false)
       .map((_, i) => voice.steps[i] ?? false);
     onChange({ ...voice, stepCount: count, steps });
-  }
-
-  function setPatternMode(mode: PatternMode) {
-    onChange({ ...voice, patternMode: mode });
   }
 
   function updateEuclidean(key: string, value: number) {
@@ -179,63 +170,61 @@
 
   <!-- Centre: step grid (flex:1 in row mode) -->
   <div class="steps-wrap">
-    {#if voice.patternMode === 'euclidean'}
-      <div class="euclid-ctls">
-        <label class="euclid-field">
-          <span>P</span>
-          <input
-            type="range"
-            min="1"
-            max={voice.euclidean.length}
-            value={voice.euclidean.pulses}
-            onpointerdown={onBeforeDrag}
-            oninput={(e) =>
-              updateEuclidean(
-                'pulses',
-                parseInt((e.target as HTMLInputElement).value) || 1,
-              )}
-          />
-          <span class="euclid-val">{voice.euclidean.pulses}</span>
-        </label>
-        <label class="euclid-field">
-          <span>L</span>
-          <input
-            type="range"
-            min="1"
-            max="32"
-            value={voice.euclidean.length}
-            onpointerdown={onBeforeDrag}
-            oninput={(e) =>
-              updateEuclidean(
-                'length',
-                parseInt((e.target as HTMLInputElement).value) || 16,
-              )}
-          />
-          <span class="euclid-val">{voice.euclidean.length}</span>
-        </label>
-        <label class="euclid-field">
-          <span>R</span>
-          <input
-            type="range"
-            min="0"
-            max={voice.euclidean.length - 1}
-            value={voice.euclidean.offset}
-            onpointerdown={onBeforeDrag}
-            oninput={(e) =>
-              updateEuclidean(
-                'offset',
-                parseInt((e.target as HTMLInputElement).value) || 0,
-              )}
-          />
-          <span class="euclid-val">{voice.euclidean.offset}</span>
-        </label>
-      </div>
-    {/if}
+    <div class="euclid-ctls">
+      <label class="euclid-field">
+        <span>P</span>
+        <input
+          type="range"
+          min="1"
+          max={voice.euclidean.length}
+          value={voice.euclidean.pulses}
+          onpointerdown={onBeforeDrag}
+          oninput={(e) =>
+            updateEuclidean(
+              'pulses',
+              parseInt((e.target as HTMLInputElement).value) || 1,
+            )}
+        />
+        <span class="euclid-val">{voice.euclidean.pulses}</span>
+      </label>
+      <label class="euclid-field">
+        <span>L</span>
+        <input
+          type="range"
+          min="1"
+          max="32"
+          value={voice.euclidean.length}
+          onpointerdown={onBeforeDrag}
+          oninput={(e) =>
+            updateEuclidean(
+              'length',
+              parseInt((e.target as HTMLInputElement).value) || 16,
+            )}
+        />
+        <span class="euclid-val">{voice.euclidean.length}</span>
+      </label>
+      <label class="euclid-field">
+        <span>R</span>
+        <input
+          type="range"
+          min="0"
+          max={voice.euclidean.length - 1}
+          value={voice.euclidean.offset}
+          onpointerdown={onBeforeDrag}
+          oninput={(e) =>
+            updateEuclidean(
+              'offset',
+              parseInt((e.target as HTMLInputElement).value) || 0,
+            )}
+        />
+        <span class="euclid-val">{voice.euclidean.offset}</span>
+      </label>
+    </div>
     <StepGrid
       steps={voice.steps}
       stepCount={voice.stepCount}
       {globalTick}
-      onToggle={voice.patternMode === 'steps' ? toggleStep : () => {}}
+      onToggle={toggleStep}
     />
   </div>
 
@@ -338,14 +327,6 @@
           <option value={r.value}>{r.label}</option>
         {/each}
       </select>
-      <button
-        class="brutalist-control meta-btn"
-        aria-pressed={voice.patternMode === 'euclidean'}
-        onclick={() =>
-          setPatternMode(voice.patternMode === 'steps' ? 'euclidean' : 'steps')}
-      >
-        {voice.patternMode === 'steps' ? 'STEP' : 'EUCL'}
-      </button>
       <button
         class="brutalist-control meta-btn"
         aria-pressed={fxOpen}

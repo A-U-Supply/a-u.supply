@@ -89,12 +89,8 @@ import '../../../styles/atelier/litany.css';
         <h3>Euclidean rhythms</h3>
         <p>
           Euclidean rhythms are a mathematical way to distribute pulses evenly
-          across a pattern. Instead of manually clicking steps, you set three
-          parameters and the algorithm generates the pattern for you.
-        </p>
-        <p>
-          Click the <strong>STEP</strong> button in the meta row to switch to
-          <strong>EUCL</strong> mode. You&rsquo;ll see three sliders:
+          across a pattern. Three sliders above the step grid let you dial in
+          patterns without clicking individual steps:
         </p>
         <ul>
           <li>
@@ -102,17 +98,20 @@ import '../../../styles/atelier/litany.css';
             1 and <strong>L</strong>.
           </li>
           <li>
-            <strong>L</strong> (length) &mdash; the total number of steps in the pattern,
-            1&ndash;32. This replaces the step count.
+            <strong>L</strong> (length) &mdash; the total number of steps, 1&ndash;32.
+            Changing this also updates the step count.
           </li>
           <li>
             <strong>R</strong> (rotation/offset) &mdash; shifts the pattern left by
-            this many steps. Useful for finding the groove position.
+            this many steps.
           </li>
         </ul>
         <p>
-          The generated pattern appears as a read-only step grid below the
-          sliders. Switch back to <strong>STEP</strong> mode to edit manually.
+          Drag a slider to generate a new pattern. The step grid updates
+          instantly. You can still click individual step cells to tweak the
+          pattern manually &mdash; your edits stay until you touch a euclidean
+          slider again. It&rsquo;s a pattern generator, not a mode &mdash; both
+          tools work together.
         </p>
         <p>
           <strong>Common Euclidean patterns:</strong>
@@ -355,6 +354,15 @@ import '../../../styles/atelier/litany.css';
             settings, euclidean parameters) so the recipient opens your exact groove.
           </li>
         </ul>
+
+        <h3>Toolbar buttons</h3>
+        <p>
+          The toolbar has randomize buttons for steps, queries, BPM, and voices.
+          The <strong>&#127922; ALL</strong> button randomizes BPM + all voices at
+          once. The <strong>&#128165; CHAOS</strong> button (red explosion) randomizes
+          <em>every parameter</em> — patterns, FX, envelopes, pitch, play styles,
+          rotation, euclidean settings, and BPM. Use it for instant creative destruction.
+        </p>
       </div>
     </details>
 
@@ -363,9 +371,22 @@ import '../../../styles/atelier/litany.css';
       <div class="litany-docs-body">
         <table>
           <tr><th>Key</th><th>Action</th></tr>
-          <tr><td><code>P</code></td><td>Play / stop</td></tr>
+          <tr
+            ><td><code>P</code> / <code>Space</code></td><td>Play / stop</td
+            ></tr
+          >
           <tr><td><code>&#8984;Z</code></td><td>Undo (last 50 actions)</td></tr>
           <tr><td><code>&#8984;&#8679;Z</code></td><td>Redo</td></tr>
+          <tr
+            ><td><code>&uarr;</code> / <code>&darr;</code></td><td
+              >BPM &plusmn;1</td
+            ></tr
+          >
+          <tr
+            ><td><code>&rarr;</code> / <code>&larr;</code></td><td
+              >BPM &plusmn;5</td
+            ></tr
+          >
         </table>
       </div>
     </details>

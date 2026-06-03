@@ -4,7 +4,6 @@ export type Rotation = 'every-hit' | 'every-bar' | 'every-4bars' | 'pinned';
 export type StepCount = number;
 export type PlayStyle = 'one-shot' | 'cut' | 'gate' | 'legato';
 export type EnvCurve = 'linear' | 'exp';
-export type PatternMode = 'steps' | 'euclidean';
 
 export interface EuclideanParams {
   pulses: number;
@@ -44,7 +43,6 @@ export interface Voice {
   fx: FxParams;
   envelope: EnvelopeParams;
   playStyle: PlayStyle;
-  patternMode: PatternMode;
   euclidean: EuclideanParams;
 }
 
@@ -122,7 +120,6 @@ export function createVoice(
     fx: defaultFx(),
     envelope: defaultEnvelope(),
     playStyle: 'one-shot',
-    patternMode: 'steps',
     euclidean: defaultEuclidean(),
   };
 }
