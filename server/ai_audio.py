@@ -23,7 +23,7 @@ DEEPSEEK_MODEL = "deepseek-v4-flash"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_TIMEOUT = 90
 
-BATCH_SIZE = 40
+BATCH_SIZE = 20
 
 
 def generate_audio_ai_description(
@@ -116,7 +116,7 @@ Return ONLY a JSON array, no preamble:
         "model": DEEPSEEK_MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.2,
-        "max_tokens": 8192,
+        "max_tokens": 16384,
     }
 
     try:
