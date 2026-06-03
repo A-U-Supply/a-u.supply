@@ -36,7 +36,7 @@
 
   let fxOpen = $state(false);
 
-  const STEP_COUNTS: StepCount[] = [8, 16, 32];
+  const STEP_COUNTS: StepCount[] = Array.from({ length: 32 }, (_, i) => i + 1);
   const ROTATIONS: { value: Rotation; label: string }[] = [
     { value: 'every-hit', label: '/HIT' },
     { value: 'every-bar', label: '/BAR' },
