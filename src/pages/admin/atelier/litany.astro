@@ -140,6 +140,74 @@ import '../../../styles/atelier/litany.css';
     </details>
 
     <details>
+      <summary>Per-step parameters</summary>
+      <div class="litany-docs-body">
+        <p>
+          Each step can have its own overrides — pitch, volume, probability, and
+          trigger conditions. The meta-row has three toggles for per-step work: <strong
+            >SEL</strong
+          >, <strong>PROB</strong>, and
+          <strong>AUTO</strong>.
+        </p>
+
+        <h3>SEL — Step select (p-locks)</h3>
+        <p>
+          Click <strong>SEL</strong> to enter select mode. Click a step to select
+          it — VOL and PIT now edit that step&rsquo;s values. Labels turn blue. Steps
+          with overrides get a blue corner dot. The override bar shows <strong
+            >× CLR</strong
+          > (clear),
+          <strong>COND</strong> (trigger condition), and
+          <strong>MACRO</strong> (preset bundles).
+        </p>
+
+        <h3>PROB — Step probability</h3>
+        <p>
+          Click <strong>PROB</strong> for probability mode. Each cell shows a fill
+          bar. Click to cycle: 100% → 75% → 50% → 25% → 0% → clear.
+        </p>
+
+        <h3>AUTO — Automation lanes</h3>
+        <p>
+          Click <strong>AUTO</strong> to see a heat map. Toggle
+          <strong>PITCH</strong> (color: blue low, red high) or
+          <strong>VOL</strong> (brightness) with the second button.
+        </p>
+
+        <h3>Trigger conditions</h3>
+        <table>
+          <tr><th>Cond</th><th>Fires on</th></tr>
+          <tr><td><code>1:2</code></td><td>Every other loop</td></tr>
+          <tr><td><code>1:4</code></td><td>Every 4th loop</td></tr>
+          <tr><td><code>1:8</code></td><td>Every 8th loop</td></tr>
+          <tr><td><code>2:2</code></td><td>Skip first, play second</td></tr>
+          <tr><td><code>3:4</code></td><td>3rd of every 4 loops</td></tr>
+          <tr><td><code>4:4</code></td><td>4th of every 4 loops</td></tr>
+          <tr><td><code>PRE</code></td><td>Only if previous step fired</td></tr>
+          <tr
+            ><td><code>NOT&nbsp;PRE</code></td><td
+              >Only if previous step didn&rsquo;t fire</td
+            ></tr
+          >
+        </table>
+
+        <h3>Macros</h3>
+        <table>
+          <tr><th>Macro</th><th>Effect</th></tr>
+          <tr><td><code>accent</code></td><td>Full volume, pitch +1</td></tr>
+          <tr
+            ><td><code>ghost</code></td><td>30% vol, 30% chance — ghost note</td
+            ></tr
+          >
+          <tr><td><code>soft</code></td><td>50% volume</td></tr>
+          <tr><td><code>hi</code></td><td>Pitch +4, 90% vol</td></tr>
+          <tr><td><code>lo</code></td><td>Pitch -5, 90% vol</td></tr>
+          <tr><td><code>x</code></td><td>Pitch +7, 50% chance</td></tr>
+        </table>
+      </div>
+    </details>
+
+    <details>
       <summary>Play styles</summary>
       <div class="litany-docs-body">
         <p>

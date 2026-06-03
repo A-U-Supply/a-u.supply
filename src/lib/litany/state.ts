@@ -11,11 +11,41 @@ export interface EuclideanParams {
   offset: number;
 }
 
+export type TrigCondition =
+  | '1:1'
+  | '1:2'
+  | '1:4'
+  | '1:8'
+  | '2:2'
+  | '3:4'
+  | '4:4'
+  | 'PRE'
+  | 'NOT_PRE'
+  | 'FILL';
+
 export interface StepOverride {
-  probability?: number; // 0-100
+  probability?: number;
   pitch?: number;
   volume?: number;
+  condition?: TrigCondition;
 }
+
+export interface MacroDef {
+  name: string;
+  pitch?: number;
+  volume?: number;
+  probability?: number;
+}
+
+export const MACROS: MacroDef[] = [
+  { name: '—' },
+  { name: 'accent', volume: 1.0, pitch: 1 },
+  { name: 'ghost', volume: 0.3, probability: 30 },
+  { name: 'soft', volume: 0.5 },
+  { name: 'hi', pitch: 4, volume: 0.9 },
+  { name: 'lo', pitch: -5, volume: 0.9 },
+  { name: 'x', probability: 50, pitch: 7 },
+];
 
 export interface EnvelopeParams {
   attack: number;
