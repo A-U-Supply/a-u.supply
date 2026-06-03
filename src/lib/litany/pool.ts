@@ -11,6 +11,7 @@ interface PoolEntry {
 
 export class SamplePool {
   private ctx: AudioContext;
+  private decodeCtx: OfflineAudioContext;
   private entries: (PoolEntry | null)[] = [];
   private index = 0;
   private pinnedEntry: PoolEntry | null = null;
@@ -21,6 +22,7 @@ export class SamplePool {
 
   constructor(ctx: AudioContext) {
     this.ctx = ctx;
+    this.decodeCtx = new OfflineAudioContext(1, 2, ctx.sampleRate);
   }
 
   async fill(query: string, onUpdate?: () => void): Promise<void> {
@@ -70,7 +72,7 @@ export class SamplePool {
     const name = nameMatch?.[1] ?? query;
 
     const arrayBuffer = await response.arrayBuffer();
-    const buffer = await this.ctx.decodeAudioData(arrayBuffer);
+    const buffer = await this.decodeCtx.decodeAudioData(arrayBuffer);
     return { buffer, name };
   }
 

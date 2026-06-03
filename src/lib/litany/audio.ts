@@ -30,16 +30,25 @@ export class AudioEngine {
     this.compressor.release.value = 0.25;
     this.masterGain.connect(this.compressor);
     this.compressor.connect(this.ctx.destination);
+    this.ctx.addEventListener('statechange', this.onStateChange);
   }
 
   async resume(): Promise<void> {
-    if (this.ctx.state === 'suspended') await this.ctx.resume();
+    if (this.ctx.state !== 'running' && this.ctx.state !== 'closed') {
+      await this.ctx.resume();
+    }
   }
 
   getIR(): AudioBuffer {
     if (!this.ir) this.ir = buildIR(this.ctx);
     return this.ir;
   }
+
+  private onStateChange = (): void => {
+    if (this.ctx.state === 'interrupted') {
+      this.ctx.resume().catch(() => {});
+    }
+  };
 
   createVoiceChain(id: string): VoiceChain {
     const c = this.ctx;
@@ -154,6 +163,7 @@ export class AudioEngine {
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(chain.inputGain);
+    source.onended = () => source.disconnect();
     source.start(when);
   }
 
@@ -168,6 +178,7 @@ export class AudioEngine {
   }
 
   destroy(): void {
+    this.ctx.removeEventListener('statechange', this.onStateChange);
     this.voices.forEach((_, id) => this.removeVoiceChain(id));
     this.ctx.close();
   }
@@ -175,7 +186,7 @@ export class AudioEngine {
 
 function buildIR(ctx: AudioContext): AudioBuffer {
   const sampleRate = ctx.sampleRate;
-  const length = Math.floor(sampleRate * 0.5);
+  const length = Math.floor(sampleRate * 0.2);
   const ir = ctx.createBuffer(2, length, sampleRate);
   for (let ch = 0; ch < 2; ch++) {
     const data = ir.getChannelData(ch);
