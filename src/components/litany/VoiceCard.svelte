@@ -11,10 +11,13 @@
     layout: 'grid' | 'rows';
     poolStatus: PoolStatus;
     currentSampleName: string;
+    poolEntryNames: string[];
     onChange: (updated: Voice, skipHistory?: boolean) => void;
     onBeforeDrag: () => void;
     onRandomizeSteps: () => void;
     onRandomizeQuery: () => void;
+    onReRoll: () => void;
+    onSelectSample: (name: string) => void;
     onRemove: () => void;
     onPin: () => void;
     onUnpin: () => void;
@@ -26,10 +29,13 @@
     layout,
     poolStatus,
     currentSampleName,
+    poolEntryNames,
     onChange,
     onBeforeDrag,
     onRandomizeSteps,
     onRandomizeQuery,
+    onReRoll,
+    onSelectSample,
     onRemove,
     onPin,
     onUnpin,
@@ -108,7 +114,16 @@
       {:else if poolStatus === 'error'}
         <span class="status-error">no samples</span>
       {:else}
-        <span class="name-text">{currentSampleName}</span>
+        <select
+          class="brutalist-control sample-select"
+          value={currentSampleName}
+          onchange={(e) =>
+            onSelectSample((e.target as HTMLSelectElement).value)}
+        >
+          {#each poolEntryNames as name}
+            <option value={name}>{name}</option>
+          {/each}
+        </select>
       {/if}
     </div>
 
@@ -126,6 +141,11 @@
           <option value={t} />
         {/each}
       </datalist>
+      <button
+        class="brutalist-control icon-btn"
+        title="Re-roll samples with same search"
+        onclick={onReRoll}>↻</button
+      >
       <button
         class="brutalist-control icon-btn"
         class:pin--active={voice.rotation === 'pinned'}
@@ -329,6 +349,16 @@
     min-height: 1em;
   }
 
+  .sample-select {
+    width: 100%;
+    font-size: 0.6rem;
+    padding: 1px 3px;
+    background: #0d0d0d;
+    color: #aaa;
+    border: 1px solid #333;
+    cursor: pointer;
+  }
+
   .status-loading {
     color: #555;
     font-style: italic;
@@ -336,10 +366,6 @@
 
   .status-error {
     color: #8a4040;
-  }
-
-  .name-text {
-    color: #666;
   }
 
   .query-row {

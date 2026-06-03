@@ -90,10 +90,10 @@
     restoreState(next);
   }
 
-  // Pool reactive info (status + name) keyed by voice id
-  let poolInfo = $state<Record<string, { status: PoolStatus; name: string }>>(
-    {},
-  );
+  // Pool reactive info (status + name + entryNames) keyed by voice id
+  let poolInfo = $state<
+    Record<string, { status: PoolStatus; name: string; entryNames: string[] }>
+  >({});
 
   // Non-reactive runtime objects
   let engine: AudioEngine | null = null;
@@ -130,10 +130,29 @@
       pool = new SamplePool(engine!.ctx);
       pools.set(voice.id, pool);
     }
-    poolInfo[voice.id] = { status: 'loading', name: '' };
+    poolInfo[voice.id] = { status: 'loading', name: '', entryNames: [] };
     pool.fill(voice.query, () => {
-      poolInfo[voice.id] = { status: pool!.status, name: pool!.currentName };
+      poolInfo[voice.id] = {
+        status: pool!.status,
+        name: pool!.currentName,
+        entryNames: pool!.entryNames,
+      };
     });
+  }
+
+  function reRollPool(voice: Voice) {
+    fillPool(voice);
+  }
+
+  function selectSample(voiceId: string, name: string) {
+    pools.get(voiceId)?.selectByName(name);
+    const info = poolInfo[voiceId];
+    if (info)
+      poolInfo[voiceId] = {
+        ...info,
+        name,
+        entryNames: pools.get(voiceId)!.entryNames,
+      };
   }
 
   let poolsLoading = $derived(
@@ -232,10 +251,13 @@
       pools.delete(v.id);
     }
     voices = newVoices;
-    const info: Record<string, { status: PoolStatus; name: string }> = {};
+    const info: Record<
+      string,
+      { status: PoolStatus; name: string; entryNames: string[] }
+    > = {};
     for (const v of newVoices) {
       engine!.createVoiceChain(v.id);
-      info[v.id] = { status: 'loading', name: '' };
+      info[v.id] = { status: 'loading', name: '', entryNames: [] };
       fillPool(v);
     }
     poolInfo = info;
@@ -336,6 +358,7 @@
         {layout}
         poolStatus={poolInfo[voice.id]?.status ?? 'idle'}
         currentSampleName={poolInfo[voice.id]?.name ?? ''}
+        poolEntryNames={poolInfo[voice.id]?.entryNames ?? []}
         onChange={updateVoice}
         onBeforeDrag={pushHistory}
         onRandomizeSteps={() => updateVoice(randomizeVoiceSteps(voice))}
@@ -345,6 +368,8 @@
           if (engine) fillPool(updated);
           voices = voices.map((v) => (v.id === updated.id ? updated : v));
         }}
+        onReRoll={() => reRollPool(voice)}
+        onSelectSample={(name: string) => selectSample(voice.id, name)}
         onRemove={() => removeVoice(voice.id)}
         onPin={() => pinVoice(voice.id)}
         onUnpin={() => unpinVoice(voice.id)}
