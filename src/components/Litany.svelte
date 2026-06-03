@@ -183,9 +183,16 @@
   );
 
   // ── Play / Stop ──────────────────────────────────────────────────────────
-  async function play() {
+  function handlePlay() {
+    engine!.ctx.resume();
+    startPlaying();
+  }
+
+  async function startPlaying() {
     try {
-      await engine!.resume();
+      if (engine!.ctx.state !== 'running') {
+        await engine!.resume();
+      }
     } catch (err) {
       console.error('[litany] failed to resume AudioContext', err);
       return;
@@ -423,7 +430,7 @@
   <Toolbar
     {playing}
     {bpm}
-    onPlay={play}
+    onPlay={handlePlay}
     onStop={stop}
     {poolsLoading}
     undoCount={undoStack.length}
