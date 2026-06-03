@@ -160,7 +160,18 @@
     const pool = pools.get(voiceId);
     if (!pool || pool.status !== 'ready') return;
     const buffer = pool.previewBuffer();
-    if (buffer) engine?.previewVoice(voiceId, buffer);
+    if (!buffer) return;
+    const voice = voices.find((v) => v.id === voiceId);
+    if (!voice) return;
+    engine?.previewVoice(
+      voiceId,
+      buffer,
+      voice.envelope.attack,
+      voice.envelope.release,
+      voice.envelope.attackCurve,
+      voice.envelope.releaseCurve,
+      voice.pitch,
+    );
   }
 
   let poolsLoading = $derived(

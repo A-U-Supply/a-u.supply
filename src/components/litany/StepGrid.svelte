@@ -18,6 +18,7 @@
       class:step--on={active}
       class:step--playing={i === activeStep}
       aria-pressed={active}
+      aria-label="Step {i + 1}: {active ? 'on' : 'off'}"
       onclick={() => onToggle(i)}
     ></button>
   {/each}
