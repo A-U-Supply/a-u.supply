@@ -96,8 +96,9 @@ export class SamplePool {
     isBarStart: boolean,
     is4BarStart: boolean,
   ): AudioBuffer | null {
-    if (rotation === 'pinned') {
-      return this.pinnedEntry?.buffer ?? this.currentEntry()?.buffer ?? null;
+    if (this.pinnedEntry) {
+      this.currentName = this.pinnedEntry.name;
+      return this.pinnedEntry.buffer;
     }
 
     if (this.entries.length === 0) return null;

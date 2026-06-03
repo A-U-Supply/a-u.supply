@@ -42,6 +42,8 @@
   }: Props = $props();
 
   function handleKey(e: KeyboardEvent) {
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
     if (e.key === 'p' && !e.metaKey && !e.ctrlKey) {
       e.preventDefault();
       playing ? onStop() : onPlay();

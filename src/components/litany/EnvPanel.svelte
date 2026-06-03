@@ -280,6 +280,7 @@
   .env-svg {
     display: block;
     border-radius: 2px;
+    touch-action: none;
   }
 
   .env-handle {

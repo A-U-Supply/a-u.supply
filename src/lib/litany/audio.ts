@@ -259,23 +259,57 @@ export class AudioEngine {
     }
   }
 
-  previewVoice(id: string, buffer: AudioBuffer): void {
+  previewVoice(
+    id: string,
+    buffer: AudioBuffer,
+    attack: number,
+    release: number,
+    attackCurve: EnvCurve,
+    releaseCurve: EnvCurve,
+    pitch: number,
+  ): void {
     const chain = this.voices.get(id);
     if (!chain) return;
 
+    const now = this.ctx.currentTime;
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
+    source.playbackRate.value = 2 ** (pitch / 12);
+    const rate = source.playbackRate.value;
+    const dur = buffer.duration / rate;
 
-    const previewGain = this.ctx.createGain();
-    previewGain.gain.value = 0.6;
+    const envelopeGain = this.ctx.createGain();
+    const attackEnd = now + attack;
 
-    source.connect(previewGain);
-    previewGain.connect(chain.inputGain);
+    if (attack <= 0) {
+      envelopeGain.gain.setValueAtTime(0.6, now);
+    } else if (attackCurve === 'exp') {
+      envelopeGain.gain.setValueAtTime(0.001, now);
+      envelopeGain.gain.exponentialRampToValueAtTime(0.6, attackEnd);
+    } else {
+      envelopeGain.gain.setValueAtTime(0, now);
+      envelopeGain.gain.linearRampToValueAtTime(0.6, attackEnd);
+    }
+
+    if (release > 0) {
+      const releaseStart = Math.max(now + dur - release, attackEnd);
+      if (releaseCurve === 'exp') {
+        envelopeGain.gain.setValueAtTime(0.6, releaseStart);
+        envelopeGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      } else {
+        envelopeGain.gain.setValueAtTime(0.6, releaseStart);
+        envelopeGain.gain.linearRampToValueAtTime(0, now + dur);
+      }
+    }
+
+    source.connect(envelopeGain);
+    envelopeGain.connect(chain.inputGain);
 
     source.start();
+    source.stop(now + dur + 0.05);
     source.onended = () => {
       source.disconnect();
-      previewGain.disconnect();
+      envelopeGain.disconnect();
     };
   }
 

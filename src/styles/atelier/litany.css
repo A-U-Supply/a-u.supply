@@ -73,6 +73,12 @@
     border-color 0.15s ease,
     color 0.15s ease;
   user-select: none;
+  outline: none;
+}
+
+.litany .brutalist-control:focus-visible {
+  outline: 2px solid var(--lit-accent);
+  outline-offset: 1px;
 }
 
 .litany .brutalist-control:hover {
@@ -105,8 +111,9 @@
     min-width: 32px;
   }
 
-  .litany .label-input {
-    font-size: 16px !important; /* prevent iOS zoom on focus */
+  .litany input:not([type='range']),
+  .litany select {
+    font-size: 16px !important;
   }
 }
 

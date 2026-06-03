@@ -73,7 +73,7 @@
 
   function updateEuclidean(key: string, value: number) {
     const euclidean = { ...voice.euclidean, [key]: value };
-    onChange({ ...voice, euclidean });
+    onChange({ ...voice, euclidean }, true);
   }
 
   function toggleStep(i: number) {
@@ -115,11 +115,13 @@
           <button
             class="brutalist-control icon-btn"
             title="Randomize query"
+            aria-label="Randomize instrument type"
             onclick={onRandomizeQuery}>🎲</button
           >
           <button
             class="brutalist-control icon-btn"
             title="Remove voice"
+            aria-label="Remove voice"
             onclick={onRemove}>✕</button
           >
         </div>
@@ -281,6 +283,8 @@
       <button
         class="brutalist-control icon-btn mute-btn"
         class:mute-btn--active={voice.muted}
+        aria-pressed={voice.muted}
+        aria-label="Mute voice"
         title="Mute"
         onclick={() => onChange({ ...voice, muted: !voice.muted }, true)}
         >M</button
@@ -288,6 +292,8 @@
       <button
         class="brutalist-control icon-btn solo-btn"
         class:solo-btn--active={voice.soloed}
+        aria-pressed={voice.soloed}
+        aria-label="Solo voice"
         title="Solo"
         onclick={() => onChange({ ...voice, soloed: !voice.soloed }, true)}
         >S</button
@@ -317,11 +323,16 @@
       <select
         class="brutalist-control meta-select"
         value={voice.rotation}
-        onchange={(e) =>
-          onChange({
-            ...voice,
-            rotation: (e.target as HTMLSelectElement).value as Rotation,
-          })}
+        onchange={(e) => {
+          const val = (e.target as HTMLSelectElement).value as Rotation;
+          if (val === 'pinned') {
+            onPin();
+            onChange({ ...voice, rotation: 'pinned' });
+          } else {
+            if (voice.rotation === 'pinned') onUnpin();
+            onChange({ ...voice, rotation: val });
+          }
+        }}
       >
         {#each ROTATIONS as r}
           <option value={r.value}>{r.label}</option>
@@ -536,6 +547,7 @@
 
   .euclid-ctls {
     display: flex;
+    flex-direction: column;
     gap: 3px;
     margin-bottom: 4px;
   }
@@ -543,13 +555,12 @@
   .euclid-field {
     display: flex;
     align-items: center;
-    gap: 2px;
-    flex: 1;
-    font-size: 0.6rem;
+    gap: 4px;
+    font-size: 0.65rem;
     color: var(--lit-text-dim);
   }
 
-  .euclid-field span {
+  .euclid-field span:first-child {
     flex-shrink: 0;
     width: 0.8rem;
   }
@@ -560,7 +571,7 @@
   }
 
   .euclid-val {
-    width: 1.2rem;
+    width: 1.6rem;
     text-align: right;
     color: var(--lit-text-faint);
   }
