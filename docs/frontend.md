@@ -48,6 +48,16 @@ When integrating a new bits-ui primitive, slap `class="brutalist-control"` on th
 - **Modifier-click (Cmd / Ctrl / Shift) = multi-select.** Standard everywhere lists are selectable (workspace, search, Stacks).
 - **Chunky controls.** 2px borders + drop shadow on anything the user clicks. No flat / hover-only buttons in the admin.
 
+### Atelier tool themes
+
+Atelier tools can override the brutalist look with their own scoped theme. The pattern: a CSS file under `src/styles/atelier/<tool>.css` that:
+
+1. Defines tool-specific custom properties inside the tool's root class scope
+2. Overrides `.brutalist-control` within that scope (thinner borders, no shadows, custom transitions)
+3. Components reference `var(--tool-xxx)` instead of hardcoded hex colors
+
+See [`atelier.md`](atelier.md) for the per-tool theme files and body background colours. Litany (`src/styles/atelier/litany.css`) is the reference implementation — a dark mpump-style groovebox theme with layered backgrounds, 1px borders, monospace fonts, and color-coded UI states.
+
 ## Layouts
 
 | File                      | Used by              | What it provides                                                                        |

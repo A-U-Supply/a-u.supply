@@ -30,7 +30,7 @@ Spectral audio editor. Two entry points: drop an audio file (MP3 / WAV / OGG / F
 
 ### Litany — `/admin/atelier/litany`
 
-Sample step sequencer. Voices are configured by search query (e.g. `kick`, `snare`, `vocal chop`) and pull random samples from the sounds-bored index, rotating through them on a configurable schedule (every hit, every bar, every 4 bars, or pinned to one sample). A 16-step grid (configurable per voice: 8 / 16 / 32) controls which beats each voice fires on — different step counts enable polyrhythm. Per-voice FX chain: delay → reverb → filter. Full app state (voices, patterns, FX, BPM) is gzip+base64 encoded in the URL hash for sharing. Source: `src/components/Litany.svelte` + `src/components/litany/` + `src/lib/litany/`. Design doc: [`plans/2026-05-29-sequencer.md`](plans/2026-05-29-sequencer.md).
+Sample step sequencer. Voices pull random samples from the sounds-bored index by search query, rotating on a configurable schedule. Per-voice step grid (1–32 steps), FX chain (delay → reverb → filter). Full app state is gzip+base64 encoded in the URL hash for sharing. Source: `src/components/Litany.svelte` + `src/components/litany/` + `src/lib/litany/`. Design doc: [`plans/2026-05-29-sequencer.md`](plans/2026-05-29-sequencer.md). Theme: `src/styles/atelier/litany.css` (overrides the admin's brutalist design system within `.litany` scope — dark groovebox aesthetic with CSS custom properties).
 
 ### Spectralize — deprecated
 
@@ -38,7 +38,9 @@ Folded into Photism (2026-05-18). The page at `/admin/atelier/spectralize` now s
 
 ## Page-level theming
 
-Each Atelier page paints the document body its own background colour via JS in `src/layouts/Admin.astro` (look for `applyPageBackground` near the bottom). Punctum uses deep amber `#221c00`; Photism uses `#1a1200`. Add a new page, add its background there.
+Each Atelier page paints the document body its own background colour via JS in `src/layouts/Admin.astro` (look for `applyPageBackground` near the bottom). Punctum uses deep amber `#221c00`; Photism uses `#1a1200`; Litany uses near-black `#0a0e0f`. Add a new page, add its background there.
+
+Litany also loads `src/styles/atelier/litany.css`, which defines a dark groovebox theme scoped to `.litany`. It overrides the global `.brutalist-control` class with thin 1px borders, no shadows, and smooth transitions, and provides CSS custom properties (`--lit-bg`, `--lit-panel`, `--lit-accent`, `--lit-text`, etc.) that Litany's Svelte components reference in their scoped `<style>` blocks. New Atelier tools that want a non-brutalist look should follow the same pattern.
 
 ## Conventions to keep
 

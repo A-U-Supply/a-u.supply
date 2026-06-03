@@ -27,40 +27,42 @@
   .step-grid {
     display: grid;
     grid-template-columns: repeat(var(--cols), 1fr);
-    gap: 3px;
+    gap: 2px;
   }
 
   .step {
     aspect-ratio: 1;
     min-width: 0;
     padding: 0;
-    background: transparent;
-    border: 1px solid #444;
+    background: var(--lit-step-off-bg);
+    border: 1px solid var(--lit-step-off-border);
     box-shadow: none;
     cursor: pointer;
-    transition: background 0.05s;
+    transition:
+      background 0.08s,
+      border-color 0.08s;
   }
 
   .step:hover {
-    border-color: #888;
+    border-color: var(--lit-step-off-border-hover);
     box-shadow: none;
   }
 
   .step--on {
-    background: #b8860b;
-    border-color: #b8860b;
+    background: var(--lit-step-on-bg);
+    border-color: var(--lit-step-on-bg);
   }
 
   .step--on:hover {
-    background: #d4a017;
+    background: var(--lit-step-on-hover);
   }
 
   .step--playing {
-    outline: 1px solid #888;
+    outline: 2px solid var(--lit-step-playing-outline);
     outline-offset: 1px;
   }
 
   .step--on.step--playing {
-    background: #e0a020;
+    background: var(--lit-step-on-playing);
   }
 </style>

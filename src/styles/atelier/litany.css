@@ -1,0 +1,137 @@
+/*
+ * Litany theme — mpump-inspired groovebox design
+ *
+ * Overrides the global brutalist design system within .litany scope.
+ * Components reference these custom properties in their scoped styles.
+ * See docs/atelier.md and docs/frontend.md for design conventions.
+ */
+
+.litany {
+  /* ── Core palette (mpump-inspired dark theme) ────────────────────────── */
+  --lit-bg: #0a0e0f;
+  --lit-panel: #111518;
+  --lit-cell: #181d21;
+  --lit-border: #262c30;
+  --lit-border-hover: #3a4248;
+
+  --lit-text: #d0d4d8;
+  --lit-text-dim: #7d8590;
+  --lit-text-faint: #5a6270;
+
+  --lit-accent: #e6a817;
+  --lit-accent-hover: #f0b820;
+  --lit-accent-bright: #f5c842;
+
+  --lit-green: #3fb950;
+  --lit-red: #e05555;
+  --lit-red-dim: #8a4040;
+  --lit-blue: #58a6ff;
+  --lit-orange: #f0883e;
+
+  --lit-font:
+    'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', 'Courier New',
+    monospace;
+
+  /* ── Semantic aliases for specific UI states ─────────────────────────── */
+  --lit-step-off-bg: transparent;
+  --lit-step-on-bg: var(--lit-accent);
+  --lit-step-on-hover: var(--lit-accent-hover);
+  --lit-step-on-playing: var(--lit-accent-bright);
+  --lit-step-off-border: var(--lit-border-hover);
+  --lit-step-off-border-hover: var(--lit-text-dim);
+  --lit-step-playing-outline: var(--lit-green);
+
+  --lit-playing-bg: #0a1500;
+  --lit-mute-bg: #150000;
+  --lit-mute-text: var(--lit-red);
+  --lit-solo-bg: #150d00;
+  --lit-solo-border: var(--lit-accent);
+  --lit-solo-text: var(--lit-accent);
+  --lit-pin-bg: #151000;
+  --lit-error-border: #4a2020;
+
+  /* ── Inherit for Svelte scoped-styles to pick up ────────────────────── */
+  color: var(--lit-text);
+  font-family: var(--lit-font);
+  font-size: 13px;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Override brutalist-control within litany ──────────────────────────── */
+.litany .brutalist-control {
+  border: 1px solid var(--lit-border);
+  background: var(--lit-cell);
+  color: var(--lit-text);
+  font-family: var(--lit-font);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  box-shadow: none;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+  user-select: none;
+}
+
+.litany .brutalist-control:hover {
+  border-color: var(--lit-border-hover);
+  transform: none;
+  box-shadow: none;
+}
+
+.litany .brutalist-control:active {
+  transform: scale(0.96);
+  box-shadow: none;
+}
+
+.litany .brutalist-control[aria-pressed='true'],
+.litany .brutalist-control[data-state='open'],
+.litany .brutalist-control[data-selected='true'] {
+  background: var(--lit-accent);
+  color: var(--lit-bg);
+  border-color: var(--lit-accent);
+}
+
+/* ── Mobile touch targets ──────────────────────────────────────────────── */
+@media (pointer: coarse) {
+  .litany input[type='range'] {
+    min-height: 24px;
+  }
+
+  .litany .brutalist-control {
+    min-height: 32px;
+    min-width: 32px;
+  }
+
+  .litany .label-input {
+    font-size: 16px !important; /* prevent iOS zoom on focus */
+  }
+}
+
+/* ── Range slider styling ──────────────────────────────────────────────── */
+.litany input[type='range'] {
+  accent-color: var(--lit-accent);
+}
+
+.litany input[type='range']::-webkit-slider-thumb {
+  cursor: pointer;
+}
+
+.litany input[type='range']::-moz-range-thumb {
+  border: none;
+  cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  .litany input[type='range']::-webkit-slider-thumb {
+    width: 18px;
+    height: 18px;
+  }
+
+  .litany input[type='range']::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+  }
+}

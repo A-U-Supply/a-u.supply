@@ -399,14 +399,14 @@
   .litany {
     padding: 16px;
     min-height: 100vh;
-    color: #ccc;
-    font-family: var(--font-mono, 'Courier New', monospace);
+    color: var(--lit-text);
+    font-family: var(--lit-font);
   }
 
   .voice-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 10px;
+    gap: 8px;
     padding: 16px 0;
   }
 
@@ -416,15 +416,15 @@
   }
 
   .add-card {
-    border: 2px dashed #333;
+    border: 1px dashed var(--lit-border-hover);
     background: transparent;
-    color: #555;
+    color: var(--lit-text-faint);
     font-size: 0.75rem;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 120px;
+    min-height: 100px;
     box-shadow: none;
   }
 
@@ -433,8 +433,8 @@
   }
 
   .add-card:hover {
-    border-color: #666;
-    color: #888;
+    border-color: var(--lit-text-dim);
+    color: var(--lit-text-dim);
     box-shadow: none;
   }
 </style>

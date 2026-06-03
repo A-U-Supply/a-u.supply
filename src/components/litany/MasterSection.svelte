@@ -87,14 +87,14 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    border-top: 2px solid #333;
-    padding: 10px 0 6px;
+    border-top: 1px solid var(--lit-border);
+    padding: 12px 0 6px;
     flex-wrap: wrap;
   }
 
   .master-label {
     font-size: 0.7rem;
-    color: #666;
+    color: var(--lit-text-dim);
     letter-spacing: 0.1em;
     flex-shrink: 0;
   }
@@ -104,7 +104,7 @@
     align-items: center;
     gap: 5px;
     font-size: 0.65rem;
-    color: #888;
+    color: var(--lit-text-dim);
     flex: 1;
     min-width: 120px;
   }
@@ -116,14 +116,14 @@
 
   .master-control input[type='range'] {
     flex: 1;
-    accent-color: #b8860b;
+    accent-color: var(--lit-accent);
     cursor: pointer;
   }
 
   .val {
     width: 3rem;
     text-align: right;
-    color: #555;
+    color: var(--lit-text-faint);
   }
 
   .comp-btn,

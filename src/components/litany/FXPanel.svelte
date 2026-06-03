@@ -128,7 +128,7 @@
 
 <style>
   .fx-panel {
-    border-top: 1px solid #333;
+    border-top: 1px solid var(--lit-border);
     padding: 8px 0 4px;
     display: flex;
     flex-direction: column;
@@ -144,7 +144,7 @@
 
   .fx-label {
     font-size: 0.65rem;
-    color: #666;
+    color: var(--lit-text-dim);
     width: 3rem;
     flex-shrink: 0;
   }
@@ -154,7 +154,7 @@
     align-items: center;
     gap: 4px;
     font-size: 0.65rem;
-    color: #888;
+    color: var(--lit-text-dim);
     flex: 1;
     min-width: 80px;
   }
@@ -170,14 +170,14 @@
 
   .fx-field input[type='range'] {
     flex: 1;
-    accent-color: #b8860b;
+    accent-color: var(--lit-accent);
     cursor: pointer;
   }
 
   .fx-field select {
     padding: 1px 3px;
     font-size: 0.65rem;
-    background: #111;
-    color: #ccc;
+    background: var(--lit-panel);
+    color: var(--lit-text);
   }
 </style>
