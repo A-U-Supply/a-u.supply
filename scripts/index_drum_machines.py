@@ -46,7 +46,6 @@ if str(_REPO_ROOT) not in sys.path:
 
 SEARCH_MEDIA_DIR = os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data")
 
-from server.extraction import _run_audio_extraction_batch  # noqa: E402
 from server.models import (  # noqa: E402
     MediaAudioMeta,
     MediaItem,
@@ -476,14 +475,10 @@ def process_drum_machine(
                 db.rollback()
                 stats["errors"] += 1
 
-        # Pass 2: batch AI tagging for the whole drum machine (one API call)
-        if batch_items:
-            try:
-                _run_audio_extraction_batch(db, batch_items, MediaAudioMeta)
-            except Exception as exc:
-                log(f"    WARNING batch extraction for {machine_name}: {exc}")
+        # AI tagging runs separately via manage.py backfill-audio-ai-tags
+        # (avoids holding DB session during slow API calls)
 
-        # Pass 3: sync to Meilisearch
+        # Sync to Meilisearch
         for media_item_id, _, _ in batch_items:
             try:
                 item = db.query(MediaItem).filter(MediaItem.id == media_item_id).first()
