@@ -1423,15 +1423,10 @@ if __name__ == "__main__":
                     _db.execute(text(
                         "UPDATE media_items SET description = :desc WHERE id = :mid"
                     ), {"mid": mid, "desc": entry["description"]})
-                for tag in entry.get("ai_tags", []):
-                    _db.execute(text(
-                        "INSERT OR IGNORE INTO media_tags (id, media_item_id, tag) "
-                        "VALUES (:tid, :mid, :tag)"
-                    ), {"tid": str(uuid.uuid4()), "mid": mid, "tag": tag})
                 updated += 1
-                if updated % 500 == 0:
+                if updated % 1000 == 0:
                     _db.commit()
-                    log(f"  applied {updated}")
+                    log(f"  applied {updated}/{len(data)}")
             _db.commit()
             log(f"Applied {updated} items. Syncing Meilisearch...")
             for entry in data:
