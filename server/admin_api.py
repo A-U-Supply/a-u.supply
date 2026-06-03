@@ -321,3 +321,49 @@ def get_altar(
             "cover_url": f"/api/media/{item.id}/thumbnail",
         }
     }
+
+
+@router.post("/import-ai-tags", summary="Import offline AI tag results")
+def import_ai_tags(
+    payload: list[dict],
+    _auth=Depends(require_scope("admin")),
+):
+    """Accept AI tag results from offline processing and apply to the DB."""
+    import json, os, uuid
+    from server.models import MediaAudioMeta, MediaItem, MediaTag, SessionLocal
+    from server.search_client import sync_media_item
+
+    SEARCH_MEDIA_DIR = os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data")
+    filepath = os.path.join(SEARCH_MEDIA_DIR, "ai-tags.json")
+    with open(filepath, "w") as f:
+        json.dump(payload, f)
+
+    db = SessionLocal()
+    updated = 0
+    for entry in payload:
+        mid = entry.get("id", "")
+        acoustic = {}
+        if entry.get("voice"):
+            acoustic["voice"] = entry["voice"]
+        if entry.get("instrument"):
+            acoustic["instrument"] = entry["instrument"]
+        if entry.get("ai_tags"):
+            acoustic["ai_tags"] = entry["ai_tags"]
+        if not acoustic:
+            continue
+        existing = db.query(MediaAudioMeta).filter(MediaAudioMeta.media_item_id == mid).first()
+        if existing:
+            existing.acoustic_tags = json.dumps(acoustic)
+        else:
+            db.add(MediaAudioMeta(media_item_id=mid, acoustic_tags=json.dumps(acoustic)))
+        if entry.get("description"):
+            item = db.query(MediaItem).filter(MediaItem.id == mid).first()
+            if item:
+                item.description = entry["description"]
+        for tag in entry.get("ai_tags", []):
+            if not db.query(MediaTag).filter(MediaTag.media_item_id == mid, MediaTag.tag == tag).first():
+                db.add(MediaTag(id=str(uuid.uuid4()), media_item_id=mid, tag=tag))
+        updated += 1
+    db.commit()
+    db.close()
+    return {"status": "ok", "updated": updated}
