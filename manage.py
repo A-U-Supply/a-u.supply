@@ -1208,63 +1208,61 @@ if __name__ == "__main__":
 
         if not rows:
             log("No sample_library items found.")
-            return
+        else:
+            total = len(rows)
+            log(f"Found {total} sample_library items")
 
-        total = len(rows)
-        log(f"Found {total} sample_library items")
-
-        if not force_all:
-            _db = _SL()
-            try:
-                already = {r[0] for r in _db.query(MediaAudioMeta.media_item_id).filter(
-                    MediaAudioMeta.acoustic_tags.isnot(None),
-                ).all()}
-            finally:
-                _db.close()
-            rows = [r for r in rows if r[0] not in already]
-            log(f"  {len(rows)} need AI tagging ({total - len(rows)} already have tags)")
-
-        if not rows:
-            log("Nothing to do.")
-            return
-
-        # Group by dir_context (from source_metadata)
-        by_context: dict[str, list[tuple[str, str]]] = {}
-        for mid, fp, smeta in rows:
-            ctx = "unknown"
-            if smeta:
+            if not force_all:
+                _db = _SL()
                 try:
-                    meta = _json.loads(smeta) if isinstance(smeta, str) else smeta
-                    ctx = meta.get("dir") or meta.get("machine_name") or "unknown"
-                except Exception:
-                    pass
-            by_context.setdefault(ctx, []).append((mid, fp))
+                    already = {r[0] for r in _db.query(MediaAudioMeta.media_item_id).filter(
+                        MediaAudioMeta.acoustic_tags.isnot(None),
+                    ).all()}
+                finally:
+                    _db.close()
+                rows = [r for r in rows if r[0] not in already]
+                log(f"  {len(rows)} need AI tagging ({total - len(rows)} already have tags)")
 
-        tagged_total = 0
-        for ctx, items in by_context.items():
-            _db = _SL()
-            try:
-                batch = [(mid, os.path.join(SEARCH_MEDIA_DIR, fp), ctx) for mid, fp in items]
-                _run_audio_extraction_batch(_db, batch, MediaAudioMeta)
-                tagged_total += len(items)
-
-                # Sync to Meilisearch
-                for mid, _fp in items:
-                    item = _db.query(MediaItem).filter(MediaItem.id == mid).first()
-                    if item:
+            if not rows:
+                log("Nothing to do.")
+            else:
+                # Group by dir_context (from source_metadata)
+                by_context: dict[str, list[tuple[str, str]]] = {}
+                for mid, fp, smeta in rows:
+                    ctx = "unknown"
+                    if smeta:
                         try:
-                            sync_media_item(_db, item)
-                        except Exception as exc:
-                            log(f"  WARNING sync {item.filename}: {exc}")
+                            meta = _json.loads(smeta) if isinstance(smeta, str) else smeta
+                            ctx = meta.get("dir") or meta.get("machine_name") or "unknown"
+                        except Exception:
+                            pass
+                    by_context.setdefault(ctx, []).append((mid, fp))
 
-                log(f"  [{tagged_total}/{len(rows)}] {ctx}: {len(items)} tagged")
-            except Exception as exc:
-                log(f"  ERROR group '{ctx}': {exc}")
-                _db.rollback()
-            finally:
-                _db.close()
+                tagged_total = 0
+                for ctx, items in by_context.items():
+                    _db = _SL()
+                    try:
+                        batch = [(mid, os.path.join(SEARCH_MEDIA_DIR, fp), ctx) for mid, fp in items]
+                        _run_audio_extraction_batch(_db, batch, MediaAudioMeta)
+                        tagged_total += len(items)
 
-        log(f"Done. Tagged {tagged_total}/{len(rows)} items.")
+                        # Sync to Meilisearch
+                        for mid, _fp in items:
+                            item = _db.query(MediaItem).filter(MediaItem.id == mid).first()
+                            if item:
+                                try:
+                                    sync_media_item(_db, item)
+                                except Exception as exc:
+                                    log(f"  WARNING sync {item.filename}: {exc}")
+
+                        log(f"  [{tagged_total}/{len(rows)}] {ctx}: {len(items)} tagged")
+                    except Exception as exc:
+                        log(f"  ERROR group '{ctx}': {exc}")
+                        _db.rollback()
+                    finally:
+                        _db.close()
+
+                log(f"Done. Tagged {tagged_total}/{len(rows)} items.")
 
     elif cmd == "index-drum-machines":
         import subprocess as _sp
