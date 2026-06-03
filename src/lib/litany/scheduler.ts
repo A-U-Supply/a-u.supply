@@ -17,6 +17,8 @@ export class Scheduler {
   private voiceTicks = new Map<string, number>();
   private voiceBarCounts = new Map<string, number>();
   private previousStepActive = new Map<string, boolean>();
+  private previousStepTrig = new Map<string, boolean>();
+  private loopCount = new Map<string, number>();
   private intervalId: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -39,6 +41,8 @@ export class Scheduler {
     this.voiceTicks.clear();
     this.voiceBarCounts.clear();
     this.previousStepActive.clear();
+    this.previousStepTrig.clear();
+    this.loopCount.clear();
     this.intervalId = setInterval(() => this.schedule(), LOOKAHEAD_MS);
   }
 
@@ -74,41 +78,100 @@ export class Scheduler {
 
       const stepActive = voice.steps[voiceTick] ?? false;
       const prevActive = this.previousStepActive.get(voice.id) ?? false;
+      const loop = this.loopCount.get(voice.id) ?? 0;
 
+      let stepShouldFire = stepActive;
       if (stepActive) {
         const override = voice.stepOverrides[voiceTick];
-        if (override?.probability != null) {
-          if (Math.random() * 100 >= override.probability) {
-            this.previousStepActive.set(voice.id, false);
-            const nextTick = (voiceTick + 1) % voice.stepCount;
-            this.voiceTicks.set(voice.id, nextTick);
-            if (nextTick === 0) this.voiceBarCounts.set(voice.id, barCount + 1);
-            continue;
+        const cond = override?.condition;
+        if (cond) {
+          stepShouldFire = false;
+          switch (cond) {
+            case '1:1':
+              stepShouldFire = true;
+              break;
+            case '1:2':
+              stepShouldFire = loop % 2 === 0;
+              break;
+            case '1:4':
+              stepShouldFire = loop % 4 === 0;
+              break;
+            case '1:8':
+              stepShouldFire = loop % 8 === 0;
+              break;
+            case '2:2':
+              stepShouldFire = loop % 2 === 1;
+              break;
+            case '3:4':
+              stepShouldFire = loop % 4 === 2;
+              break;
+            case '4:4':
+              stepShouldFire = loop % 4 === 3;
+              break;
+            case 'PRE':
+              stepShouldFire = this.previousStepTrig.get(voice.id) ?? false;
+              break;
+            case 'NOT_PRE':
+              stepShouldFire = !(this.previousStepTrig.get(voice.id) ?? false);
+              break;
+            case 'FILL':
+              stepShouldFire = false; // TODO: global fill trigger
+              break;
           }
         }
 
-        const pool = this.pools.get(voice.id);
-        if (pool && pool.status === 'ready') {
-          const shouldTrigger = voice.playStyle !== 'legato' || !prevActive;
+        if (!stepShouldFire) {
+          this.previousStepActive.set(voice.id, false);
+          this.previousStepTrig.set(voice.id, false);
+          const nextTick = (voiceTick + 1) % voice.stepCount;
+          this.voiceTicks.set(voice.id, nextTick);
+          if (nextTick === 0) this.loopCount.set(voice.id, loop + 1);
+          if (nextTick === 0) this.voiceBarCounts.set(voice.id, barCount + 1);
+          continue;
+        }
+      }
 
-          if (shouldTrigger) {
-            const buffer = pool.next(voice.rotation, isBarStart, is4BarStart);
-            if (buffer) {
-              const pitch = override?.pitch ?? voice.pitch;
-              this.engine.playVoice(
-                voice.id,
-                buffer,
-                when,
-                voice.envelope.attack,
-                voice.envelope.release,
-                voice.envelope.attackCurve,
-                voice.envelope.releaseCurve,
-                voice.playStyle,
-                pitch,
-              );
+      if (stepShouldFire) {
+        const override = voice.stepOverrides[voiceTick];
+        let triggered = false;
+        if (override?.probability != null) {
+          if (Math.random() * 100 >= override.probability) {
+            triggered = false;
+          } else {
+            triggered = true;
+          }
+        } else {
+          triggered = true;
+        }
+
+        if (triggered) {
+          const pool = this.pools.get(voice.id);
+          if (pool && pool.status === 'ready') {
+            const shouldTrigger =
+              voice.playStyle !== 'legato' ||
+              !(this.previousStepTrig.get(voice.id) ?? false);
+
+            if (shouldTrigger) {
+              const buffer = pool.next(voice.rotation, isBarStart, is4BarStart);
+              if (buffer) {
+                const pitch = override?.pitch ?? voice.pitch;
+                this.engine.playVoice(
+                  voice.id,
+                  buffer,
+                  when,
+                  voice.envelope.attack,
+                  voice.envelope.release,
+                  voice.envelope.attackCurve,
+                  voice.envelope.releaseCurve,
+                  voice.playStyle,
+                  pitch,
+                );
+              }
             }
           }
         }
+
+        this.previousStepTrig.set(voice.id, triggered);
       } else if (
         (voice.playStyle === 'gate' || voice.playStyle === 'legato') &&
         prevActive
@@ -127,6 +190,7 @@ export class Scheduler {
       this.voiceTicks.set(voice.id, nextTick);
 
       if (nextTick === 0) {
+        this.loopCount.set(voice.id, (this.loopCount.get(voice.id) ?? 0) + 1);
         this.voiceBarCounts.set(voice.id, barCount + 1);
       }
     }

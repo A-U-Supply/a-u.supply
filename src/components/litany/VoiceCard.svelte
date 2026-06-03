@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Voice, StepCount, Rotation } from '../../lib/litany/state.ts';
+  import { MACROS } from '../../lib/litany/state.ts';
   import type { PoolStatus } from '../../lib/litany/pool.ts';
   import { INSTRUMENT_TYPES } from '../../lib/litany/randomize.ts';
   import StepGrid from './StepGrid.svelte';
@@ -47,8 +48,38 @@
   let fxOpen = $state(false);
   let envOpen = $state(false);
   let probOpen = $state(false);
+  let selOpen = $state(false);
+  let autoOpen = $state(false);
+  let autoParam = $state<'pitch' | 'volume'>('pitch');
+  let selectedStep = $state<number | null>(null);
 
   const PROB_CYCLE = [null, 100, 75, 50, 25, 0];
+
+  function selectStep(i: number) {
+    selectedStep = i;
+  }
+
+  function updateStepOverride(key: string, value: number) {
+    if (selectedStep == null) return;
+    const overrides = [...(voice.stepOverrides || [])];
+    overrides[selectedStep] = {
+      ...(overrides[selectedStep] || {}),
+      [key]: value,
+    };
+    onChange({ ...voice, stepOverrides: overrides }, true);
+  }
+
+  function clearStepOverrides() {
+    if (selectedStep == null) return;
+    const overrides = [...(voice.stepOverrides || [])];
+    overrides[selectedStep] = null;
+    onChange({ ...voice, stepOverrides: overrides }, true);
+  }
+
+  function getStepOverride(key: string): number | undefined {
+    if (selectedStep == null) return undefined;
+    return (voice.stepOverrides?.[selectedStep] as any)?.[key];
+  }
 
   function cycleProbability(i: number) {
     const overrides = [...(voice.stepOverrides || [])];
@@ -246,49 +277,71 @@
       probMode={probOpen}
       overrides={voice.stepOverrides}
       onProbCycle={cycleProbability}
+      selectMode={selOpen}
+      {selectedStep}
+      onSelect={selectStep}
+      autoMode={autoOpen}
+      {autoParam}
     />
   </div>
 
   <!-- Right column: controls -->
   <div class="right-col">
     <div class="controls-row">
-      <label class="vol-label">
+      <label
+        class="vol-label"
+        class:vol-label--override={selOpen && selectedStep != null}
+      >
         <span>VOL</span>
         <input
           type="range"
           min="0"
           max="1"
           step="0.01"
-          value={voice.volume}
+          value={selOpen && selectedStep != null
+            ? (getStepOverride('volume') ?? voice.volume)
+            : voice.volume}
           onpointerdown={onBeforeDrag}
-          oninput={(e) =>
-            onChange(
-              {
-                ...voice,
-                volume: parseFloat((e.target as HTMLInputElement).value),
-              },
-              true,
-            )}
+          oninput={(e) => {
+            const v = parseFloat((e.target as HTMLInputElement).value);
+            if (selOpen && selectedStep != null) {
+              updateStepOverride('volume', v);
+            } else {
+              onChange({ ...voice, volume: v }, true);
+            }
+          }}
         />
       </label>
-      <label class="vol-label">
+      <label
+        class="vol-label"
+        class:vol-label--override={selOpen && selectedStep != null}
+      >
         <span>PIT</span>
         <input
           type="range"
           min="-12"
           max="12"
           step="1"
-          value={voice.pitch}
+          value={selOpen && selectedStep != null
+            ? (getStepOverride('pitch') ?? voice.pitch)
+            : voice.pitch}
           onpointerdown={onBeforeDrag}
-          oninput={(e) =>
-            onChange(
-              {
-                ...voice,
-                pitch: parseInt((e.target as HTMLInputElement).value) || 0,
-              },
-              true,
-            )}
+          oninput={(e) => {
+            const v = parseInt((e.target as HTMLInputElement).value) || 0;
+            if (selOpen && selectedStep != null) {
+              updateStepOverride('pitch', v);
+            } else {
+              onChange({ ...voice, pitch: v }, true);
+            }
+          }}
         />
+        {#if selOpen && selectedStep != null && getStepOverride('pitch') != null}
+          <button
+            class="override-clear"
+            title="Clear pitch override"
+            onclick={clearStepOverrides}>×</button
+          >
+        {/if}
       </label>
       <button
         class="brutalist-control icon-btn mute-btn"
@@ -316,6 +369,89 @@
         >
       {/if}
     </div>
+
+    {#if selOpen && selectedStep != null}
+      {@const ov = voice.stepOverrides?.[selectedStep] ?? null}
+      <div class="override-bar">
+        <button
+          class="brutalist-control meta-btn"
+          title="Clear all overrides for this step"
+          onclick={clearStepOverrides}>× CLR</button
+        >
+        <label class="cond-label">
+          COND
+          <button
+            class="brutalist-control rnd-btn"
+            onclick={() => {
+              const conditions: (string | null)[] = [
+                null,
+                '1:1',
+                '1:2',
+                '1:4',
+                '1:8',
+                '2:2',
+                '3:4',
+                '4:4',
+                'PRE',
+                'NOT_PRE',
+              ];
+              const overrides = [...(voice.stepOverrides || [])];
+              const cur = conditions.indexOf(
+                overrides[selectedStep!]?.condition ?? null,
+              );
+              const next = conditions[(cur + 1) % conditions.length];
+              overrides[selectedStep!] = next
+                ? {
+                    ...(overrides[selectedStep!] || {}),
+                    condition: next as any,
+                  }
+                : overrides[selectedStep!]
+                  ? { ...overrides[selectedStep!], condition: undefined }
+                  : null;
+              onChange({ ...voice, stepOverrides: overrides }, true);
+            }}>{ov?.condition ?? '—'}</button
+          >
+        </label>
+        <label class="cond-label">
+          MACRO
+          <button
+            class="brutalist-control rnd-btn"
+            onclick={() => {
+              const overrides = [...(voice.stepOverrides || [])];
+              const curName =
+                overrides[selectedStep!]?.pitch != null ||
+                overrides[selectedStep!]?.volume != null
+                  ? null
+                  : null;
+              const curIdx = MACROS.findIndex((m) => {
+                const ov = overrides[selectedStep!];
+                return ov && m.pitch === ov.pitch && m.volume === ov.volume;
+              });
+              const nextIdx = (curIdx + 1) % MACROS.length;
+              const m = MACROS[nextIdx];
+              if (m.name === '—') {
+                overrides[selectedStep!] = null;
+              } else {
+                overrides[selectedStep!] = {
+                  ...(overrides[selectedStep!] || {}),
+                  pitch: m.pitch,
+                  volume: m.volume,
+                  probability: m.probability,
+                };
+              }
+              onChange({ ...voice, stepOverrides: overrides }, true);
+            }}
+            >{(() => {
+              const ov = voice.stepOverrides?.[selectedStep!];
+              const match = MACROS.find(
+                (m) => m.pitch === ov?.pitch && m.volume === ov?.volume,
+              );
+              return match?.name ?? '—';
+            })()}</button
+          >
+        </label>
+      </div>
+    {/if}
 
     <div class="meta-row">
       <select
@@ -356,6 +492,34 @@
       >
         PROB
       </button>
+      <button
+        class="brutalist-control meta-btn"
+        aria-pressed={selOpen}
+        title={selOpen ? 'Exit select mode' : 'Step select (p-locks)'}
+        onclick={() => {
+          selOpen = !selOpen;
+          selectedStep = null;
+        }}
+      >
+        SEL
+      </button>
+      <button
+        class="brutalist-control meta-btn"
+        aria-pressed={autoOpen}
+        title={autoOpen ? 'Exit automation view' : 'Show automation lanes'}
+        onclick={() => (autoOpen = !autoOpen)}
+      >
+        AUTO
+      </button>
+      {#if autoOpen}
+        <button
+          class="brutalist-control meta-btn"
+          onclick={() =>
+            (autoParam = autoParam === 'pitch' ? 'volume' : 'pitch')}
+        >
+          {autoParam.toUpperCase()}
+        </button>
+      {/if}
       <button
         class="brutalist-control meta-btn"
         aria-pressed={fxOpen}
@@ -619,6 +783,47 @@
   .vol-label input[type='range'] {
     flex: 1;
     min-width: 0;
+  }
+
+  .vol-label--override {
+    color: var(--lit-blue);
+  }
+
+  .override-clear {
+    background: none;
+    border: none;
+    color: var(--lit-text-faint);
+    cursor: pointer;
+    font-size: 0.65rem;
+    padding: 0 2px;
+    line-height: 1;
+  }
+
+  .override-clear:hover {
+    color: var(--lit-red);
+  }
+
+  .override-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.6rem;
+    color: var(--lit-text-dim);
+  }
+
+  .cond-label {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.6rem;
+    color: var(--lit-text-dim);
+  }
+
+  .cond-label button {
+    padding: 1px 4px;
+    font-size: 0.6rem;
+    color: var(--lit-blue);
+    min-width: 2.5rem;
   }
 
   .meta-row {

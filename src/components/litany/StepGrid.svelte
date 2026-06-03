@@ -9,6 +9,11 @@
     probMode?: boolean;
     overrides?: (StepOverride | null)[];
     onProbCycle?: (index: number) => void;
+    selectMode?: boolean;
+    selectedStep?: number | null;
+    onSelect?: (index: number) => void;
+    autoMode?: boolean;
+    autoParam?: 'pitch' | 'volume';
   }
 
   let {
@@ -19,6 +24,11 @@
     probMode = false,
     overrides = [],
     onProbCycle,
+    selectMode = false,
+    selectedStep = null,
+    onSelect,
+    autoMode = false,
+    autoParam = 'pitch',
   }: Props = $props();
 
   let activeStep = $derived(globalTick >= 0 ? globalTick % stepCount : -1);
@@ -26,7 +36,9 @@
   const PROB_VALUES = [null, 100, 75, 50, 25, 0];
 
   function handleClick(i: number) {
-    if (probMode && onProbCycle) {
+    if (selectMode && onSelect) {
+      onSelect(i);
+    } else if (probMode && onProbCycle) {
       onProbCycle(i);
     } else {
       onToggle(i);
@@ -38,12 +50,31 @@
   {#each steps as active, i}
     {@const ov = overrides[i] ?? null}
     {@const prob = ov?.probability}
+    {@const autoVal =
+      autoMode && autoParam === 'pitch'
+        ? (ov?.pitch ?? 0)
+        : autoMode && autoParam === 'volume'
+          ? (ov?.volume ?? 0.8)
+          : null}
     <button
       class="step brutalist-control"
       class:step--on={active}
       class:step--playing={i === activeStep}
       class:step--prob={probMode}
-      style={prob != null && prob < 100 ? `--prob-fill: ${prob}%` : ''}
+      class:step--selected={selectMode && i === selectedStep}
+      class:step--has-override={ov != null && Object.keys(ov).length > 0}
+      class:step--auto={autoMode}
+      style={[
+        prob != null && prob < 100 ? `--prob-fill: ${prob}%` : '',
+        autoMode && autoParam === 'pitch' && autoVal != null
+          ? `--auto-hue: ${((autoVal as number) + 12) * 10}`
+          : '',
+        autoMode && autoParam === 'volume' && autoVal != null
+          ? `--auto-opacity: ${(autoVal as number).toFixed(2)}`
+          : '',
+      ]
+        .filter(Boolean)
+        .join('; ')}
       aria-pressed={active}
       aria-label={probMode
         ? `Step ${i + 1}: ${active ? 'on' : 'off'}, probability ${prob ?? 100}%`
@@ -118,5 +149,32 @@
 
   .step--prob[style='']::after {
     display: none;
+  }
+
+  .step--selected {
+    outline: 2px solid var(--lit-text);
+    outline-offset: 1px;
+    z-index: 1;
+  }
+
+  .step--has-override::before {
+    content: '';
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    width: 4px;
+    height: 4px;
+    background: var(--lit-blue);
+    pointer-events: none;
+  }
+
+  .step--auto.step--on {
+    background: hsl(var(--auto-hue, 40), 80%, 50%);
+    border-color: hsl(var(--auto-hue, 40), 80%, 50%);
+  }
+
+  .step--auto:not(.step--on) {
+    background: hsl(var(--auto-hue, 40), 30%, 15%);
+    border-color: hsl(var(--auto-hue, 40), 30%, 30%);
   }
 </style>
