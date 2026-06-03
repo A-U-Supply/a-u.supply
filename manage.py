@@ -1417,7 +1417,13 @@ if __name__ == "__main__":
                 if existing:
                     existing.acoustic_tags = acoustic_json
                 else:
-                    _db.add(MediaAudioMeta(media_item_id=mid, acoustic_tags=acoustic_json))
+                    _db.add(MediaAudioMeta(
+                        media_item_id=mid,
+                        duration_seconds=0,
+                        sample_rate=0,
+                        channels=0,
+                        acoustic_tags=acoustic_json,
+                    ))
                 if entry.get("description"):
                     item = _db.query(MediaItem).filter(MediaItem.id == mid).first()
                     if item:

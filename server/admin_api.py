@@ -355,7 +355,13 @@ def import_ai_tags(
         if existing:
             existing.acoustic_tags = json.dumps(acoustic)
         else:
-            db.add(MediaAudioMeta(media_item_id=mid, acoustic_tags=json.dumps(acoustic)))
+            db.add(MediaAudioMeta(
+                media_item_id=mid,
+                duration_seconds=0,
+                sample_rate=0,
+                channels=0,
+                acoustic_tags=json.dumps(acoustic),
+            ))
         if entry.get("description"):
             item = db.query(MediaItem).filter(MediaItem.id == mid).first()
             if item:
