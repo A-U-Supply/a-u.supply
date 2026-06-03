@@ -22,7 +22,7 @@ export class SamplePool {
 
   constructor(ctx: AudioContext) {
     this.ctx = ctx;
-    this.decodeCtx = new OfflineAudioContext(1, 2, ctx.sampleRate);
+    this.decodeCtx = new OfflineAudioContext(1, 256, ctx.sampleRate);
   }
 
   async fill(query: string, onUpdate?: () => void): Promise<void> {
@@ -85,9 +85,9 @@ export class SamplePool {
 
   private async decodeAudio(arrayBuffer: ArrayBuffer): Promise<AudioBuffer> {
     try {
-      return await this.ctx.decodeAudioData(arrayBuffer);
-    } catch {
       return await this.decodeCtx.decodeAudioData(arrayBuffer);
+    } catch {
+      return await this.ctx.decodeAudioData(arrayBuffer);
     }
   }
 
