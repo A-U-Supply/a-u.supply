@@ -416,7 +416,6 @@
 <style>
   .litany {
     padding: 16px;
-    min-height: 100vh;
     color: var(--lit-text);
     font-family: var(--lit-font);
   }

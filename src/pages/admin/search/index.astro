@@ -2393,9 +2393,14 @@ import SearchFilterBar from '../../../components/SearchFilterBar.svelte';
       // Belt-and-suspenders: if URL has output_index param, always send it.
       // The filter bar's data-filters may be stale during initial mount.
       try {
-        const urlParam = new URLSearchParams(window.location.search).get('output_index');
+        const urlParam = new URLSearchParams(window.location.search).get(
+          'output_index',
+        );
         if (urlParam) {
-          body.filters.output_index = urlParam.split(',').map((s: string) => s.trim()).filter(Boolean);
+          body.filters.output_index = urlParam
+            .split(',')
+            .map((s: string) => s.trim())
+            .filter(Boolean);
         }
       } catch {}
       if (filters.colorGroups.length)

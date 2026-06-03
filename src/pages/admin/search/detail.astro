@@ -1085,7 +1085,9 @@ import Admin from '../../../layouts/Admin.astro';
           rows.push(fieldRow('Voice', escapeHtml(String(acousticTags.voice))));
         }
         if (acousticTags?.instrument) {
-          rows.push(fieldRow('Instrument', escapeHtml(String(acousticTags.instrument))));
+          rows.push(
+            fieldRow('Instrument', escapeHtml(String(acousticTags.instrument))),
+          );
         }
       }
       if (item.video_meta?.fps) {

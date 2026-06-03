@@ -676,9 +676,21 @@ import Admin from '../../layouts/Admin.astro';
     // ───────── Mute sources ─────────
     const muteList = document.getElementById('mute-list')!;
     const ALL_SOURCES = [
-      { key: 'fold_inbox', label: 'Fold Inbox', desc: 'replies and @-mentions' },
-      { key: 'fold_community', label: 'Fold Community', desc: 'posts and comments in subscribed communities' },
-      { key: 'fold_thread', label: 'Fold Thread', desc: 'comments on watched threads' },
+      {
+        key: 'fold_inbox',
+        label: 'Fold Inbox',
+        desc: 'replies and @-mentions',
+      },
+      {
+        key: 'fold_community',
+        label: 'Fold Community',
+        desc: 'posts and comments in subscribed communities',
+      },
+      {
+        key: 'fold_thread',
+        label: 'Fold Thread',
+        desc: 'comments on watched threads',
+      },
       { key: 'acclaim', label: 'Acclaim', desc: 'votes on your uploads' },
       { key: 'fallen', label: 'Fallen', desc: 'extraction failures' },
       { key: 'midden', label: 'Midden', desc: 'discarded items' },
@@ -688,7 +700,9 @@ import Admin from '../../layouts/Admin.astro';
 
     async function loadMuted() {
       try {
-        const res = await fetch('/api/admin/notifications/muted', { credentials: 'include' });
+        const res = await fetch('/api/admin/notifications/muted', {
+          credentials: 'include',
+        });
         if (!res.ok) throw new Error('muted');
         const data = await res.json();
         mutedSet = new Set(data.muted || []);
@@ -700,7 +714,7 @@ import Admin from '../../layouts/Admin.astro';
 
     async function toggleMute(source: string) {
       const newMuted = mutedSet.has(source)
-        ? [...mutedSet].filter(s => s !== source)
+        ? [...mutedSet].filter((s) => s !== source)
         : [...mutedSet, source];
       try {
         const res = await fetch('/api/admin/notifications/muted', {
@@ -718,7 +732,7 @@ import Admin from '../../layouts/Admin.astro';
     }
 
     function renderMuted() {
-      muteList.innerHTML = ALL_SOURCES.map(s => {
+      muteList.innerHTML = ALL_SOURCES.map((s) => {
         const muted = mutedSet.has(s.key);
         return `
           <div class="mute-row">
@@ -734,7 +748,9 @@ import Admin from '../../layouts/Admin.astro';
     }
 
     muteList.addEventListener('click', async (e) => {
-      const btn = (e.target as HTMLElement).closest('[data-mute]') as HTMLButtonElement | null;
+      const btn = (e.target as HTMLElement).closest(
+        '[data-mute]',
+      ) as HTMLButtonElement | null;
       if (btn) {
         btn.disabled = true;
         await toggleMute(btn.dataset.mute!);
@@ -902,8 +918,11 @@ import Admin from '../../layouts/Admin.astro';
       if (muteC) {
         muteC.disabled = true;
         const cid = Number(muteC.dataset.muteCommunity);
-        const c = mySubs.communities.find(c => c.lemmy_community_id === cid);
-        if (!c) { muteC.disabled = false; return; }
+        const c = mySubs.communities.find((c) => c.lemmy_community_id === cid);
+        if (!c) {
+          muteC.disabled = false;
+          return;
+        }
         const newMuted = !c.muted;
         try {
           const res = await fetch('/api/admin/fold/communities/muted', {

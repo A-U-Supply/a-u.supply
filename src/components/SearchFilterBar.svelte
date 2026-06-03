@@ -648,7 +648,11 @@
   {#if !hide.includes('voice')}
     <div class="fg">
       <label class="fg__label">Voice</label>
-      <select class="fb-select fb-select--native" bind:value={filters.voice} aria-label="Voice type">
+      <select
+        class="fb-select fb-select--native"
+        bind:value={filters.voice}
+        aria-label="Voice type"
+      >
         <option value="">Any</option>
         <option value="kick">Kick</option>
         <option value="snare">Snare</option>
@@ -675,7 +679,11 @@
   {#if !hide.includes('instrument')}
     <div class="fg">
       <label class="fg__label">Instrument</label>
-      <select class="fb-select fb-select--native" bind:value={filters.instrument} aria-label="Instrument">
+      <select
+        class="fb-select fb-select--native"
+        bind:value={filters.instrument}
+        aria-label="Instrument"
+      >
         <option value="">Any</option>
         <option value="tr-808">TR-808</option>
         <option value="tr-909">TR-909</option>

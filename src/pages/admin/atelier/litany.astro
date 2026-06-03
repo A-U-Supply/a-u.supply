@@ -24,22 +24,49 @@ import '../../../styles/atelier/litany.css';
       <summary>Voices &amp; samples</summary>
       <div class="litany-docs-body">
         <p>
-          Each <strong>voice</strong> is an instrument track. It has a search query
-          (e.g. <code>kick</code>, <code>snare</code>, <code>vocal</code>) that
-          pulls random samples from the catalog. The voice loads 8 random
-          matches into a <strong>pool</strong> and rotates through them.
+          A <strong>voice</strong> is a single instrument track. Each voice has a
+          <strong>search query</strong> that pulls random samples from the catalog.
+          The voice loads 8 random matches into a <strong>sample pool</strong> and
+          rotates through them as the pattern plays.
+        </p>
+
+        <h3>Searching for sounds</h3>
+        <p>
+          Type a query into the search field (e.g. <code>kick</code>,
+          <code>snare</code>, <code>808</code>, <code>vocal chop</code>). The
+          field has an autocomplete with common instrument types. Press Enter or
+          click away to trigger a search — the pool will reload with 8 random
+          matches.
         </p>
         <p>
-          The <strong>sample picker</strong> dropdown shows all 8 pool entries — pick
-          one to pin it. The <strong>re-roll</strong> button (<code
-            >&#8633;</code
-          >) refreshes the pool with the same search query so you get new random
-          samples without changing the instrument type. The <strong>dice</strong
-          > (<code>&#127922;</code>) picks a random instrument type.
+          The <strong>re-roll</strong> button (<code>&#8633;</code>) refills the
+          pool with the <em>same</em> query — you get different random samples without
+          changing instrument type. The
+          <strong>dice</strong> button (<code>&#127922;</code>) on the voice
+          header picks a random instrument type (kick, snare, hi-hat, etc.).
         </p>
+
+        <h3>Sample picker</h3>
         <p>
-          The <strong>pin</strong> (<code>&#128204;</code>) locks the current
-          sample so it never changes, even when the pool rotates.
+          The dropdown above the search field shows all 8 samples in the pool by
+          filename. Selecting one <strong>pins</strong> it — the voice will always
+          play that sample regardless of rotation settings.
+        </p>
+
+        <h3>Pin, mute, and solo</h3>
+        <p>
+          <strong>Pin</strong> (<code>&#128204;</code>) locks the current sample
+          so it never changes. <strong>M</strong> silences the voice.
+          <strong>S</strong> solos it — all other voices are muted. Multiple voices
+          can be soloed simultaneously.
+        </p>
+
+        <h3>Volume &amp; pitch</h3>
+        <p>
+          <strong>VOL</strong> controls the voice&rsquo;s output level (0&ndash;100%).
+          <strong>PIT</strong> shifts the sample pitch &plusmn;12 semitones (one octave
+          up or down). Pitch changes affect both tuning and duration — higher = faster,
+          lower = slower. This is the same mechanism used in classic drum machines.
         </p>
       </div>
     </details>
@@ -48,32 +75,68 @@ import '../../../styles/atelier/litany.css';
       <summary>Step sequencer</summary>
       <div class="litany-docs-body">
         <p>
-          The <strong>step grid</strong> controls which beats each voice fires on.
-          Click a cell to toggle it — gold means the voice will trigger on that step.
-          The number of steps is configurable per voice (1&ndash;32) via the dropdown.
-          Different step counts across voices enable polyrhythm.
+          The <strong>step grid</strong> is a row of cells — one per beat. Gold cells
+          fire the voice on that beat; dark cells are silent. Click any cell to toggle
+          it.
         </p>
         <p>
-          <strong>Euclidean rhythms</strong> are an alternative to manual step programming.
-          Click the
-          <strong>STEP</strong> button in the controls row to switch to
-          <strong>EUCL</strong> mode. You set:
+          The <strong>step count</strong> dropdown (default 16) sets how many steps
+          are in the loop. Every voice can have a different step count. Different
+          lengths across voices create polyrhythms — a 16-step kick against a 12-step
+          hi-hat will phase in and out.
+        </p>
+
+        <h3>Euclidean rhythms</h3>
+        <p>
+          Euclidean rhythms are a mathematical way to distribute pulses evenly
+          across a pattern. Instead of manually clicking steps, you set three
+          parameters and the algorithm generates the pattern for you.
+        </p>
+        <p>
+          Click the <strong>STEP</strong> button in the meta row to switch to
+          <strong>EUCL</strong> mode. You&rsquo;ll see three sliders:
         </p>
         <ul>
           <li>
-            <strong>P</strong> (pulses) &mdash; how many hits to distribute
+            <strong>P</strong> (pulses) &mdash; how many hits to place. Must be between
+            1 and <strong>L</strong>.
           </li>
           <li>
-            <strong>L</strong> (length) &mdash; pattern length (1&ndash;32)
+            <strong>L</strong> (length) &mdash; the total number of steps in the pattern,
+            1&ndash;32. This replaces the step count.
           </li>
-          <li><strong>R</strong> (offset) &mdash; rotate the pattern</li>
+          <li>
+            <strong>R</strong> (rotation/offset) &mdash; shifts the pattern left by
+            this many steps. Useful for finding the groove position.
+          </li>
         </ul>
         <p>
-          The algorithm distributes pulses as evenly as possible. E(3,8) gives
-          you the classic tresillo; E(5,16) gives a bossa nova pattern. The
-          generated pattern is shown as a read-only step grid below the
-          controls. Switch back to <strong>STEP</strong> mode to edit manually.
+          The generated pattern appears as a read-only step grid below the
+          sliders. Switch back to <strong>STEP</strong> mode to edit manually.
         </p>
+        <p>
+          <strong>Common Euclidean patterns:</strong>
+        </p>
+        <table>
+          <tr><th>P,L</th><th>Name / feel</th></tr>
+          <tr
+            ><td>3,8</td><td
+              >Tresillo — the backbone of Latin and Middle Eastern music</td
+            ></tr
+          >
+          <tr
+            ><td>4,16</td><td>Four-on-the-floor — kick drum in house/techno</td
+            ></tr
+          >
+          <tr><td>5,16</td><td>Bossa nova / clave</td></tr>
+          <tr><td>7,16</td><td>Complex Afro-Cuban bell pattern</td></tr>
+          <tr><td>5,8</td><td>Cinquillo</td></tr>
+          <tr
+            ><td>2,3</td><td
+              >Hemiola — two against three. Try R=1 or R=2 for variation</td
+            ></tr
+          >
+        </table>
       </div>
     </details>
 
@@ -81,37 +144,50 @@ import '../../../styles/atelier/litany.css';
       <summary>Play styles</summary>
       <div class="litany-docs-body">
         <p>
-          Each voice has a <strong>play style</strong> that controls how samples behave
-          when triggered. Open the
-          <strong>ENV</strong> panel to change it.
+          Each voice has a <strong>play style</strong> that controls how samples are
+          triggered and stopped. Open the
+          <strong>ENV</strong> panel and use the
+          <strong>STYLE</strong> dropdown to change it.
         </p>
         <table>
-          <tr><th>Style</th><th>Behavior</th></tr>
-          <tr
-            ><td><code>one-shot</code></td><td
-              >Sample plays to completion. Polyphonic &mdash; overlapping
-              triggers are allowed.</td
-            ></tr
-          >
-          <tr
-            ><td><code>cut</code></td><td
-              >Each new step cuts off the previous one. Monophonic &mdash; like
-              a hi-hat choke.</td
-            ></tr
-          >
-          <tr
-            ><td><code>gate</code></td><td
-              >Sample stops when the step becomes inactive (playhead moves past
-              it). Release envelope is applied.</td
-            ></tr
-          >
-          <tr
-            ><td><code>legato</code></td><td
-              >Like gate, but consecutive active steps don&rsquo;t re-trigger
-              &mdash; the sample continues through. Only re-triggers when coming
-              from an empty step.</td
-            ></tr
-          >
+          <tr><th>Style</th><th>What it does</th><th>Use for</th></tr>
+          <tr>
+            <td><code>one-shot</code></td>
+            <td
+              >Sample plays to completion each time a step fires. Multiple
+              overlapping triggers are allowed (polyphonic).</td
+            >
+            <td>Kicks, snares, one-shot FX</td>
+          </tr>
+          <tr>
+            <td><code>cut</code></td>
+            <td
+              >Each new step <strong>immediately stops</strong> the previous one.
+              Only one trigger plays at a time (monophonic). No release ramp on choke.</td
+            >
+            <td>Hi-hats (open hat cut by closed hat), any monophonic line</td>
+          </tr>
+          <tr>
+            <td><code>gate</code></td>
+            <td
+              >Sample plays while a step is active and <strong
+                >stops with the release envelope</strong
+              > when the step becomes inactive. Each step re-triggers the sample.</td
+            >
+            <td
+              >Percussive sounds that shouldn&rsquo;t ring out, rhythmic gating</td
+            >
+          </tr>
+          <tr>
+            <td><code>legato</code></td>
+            <td
+              >Like gate, but if consecutive steps are active the sample <strong
+                >continues without re-triggering</strong
+              >. Only re-triggers when coming from an empty step. Releases when
+              the last active step ends.</td
+            >
+            <td>Sustained sounds, synth lines, vocal phrases</td>
+          </tr>
         </table>
       </div>
     </details>
@@ -120,43 +196,100 @@ import '../../../styles/atelier/litany.css';
       <summary>Envelope</summary>
       <div class="litany-docs-body">
         <p>
-          The <strong>ENV</strong> panel has an interactive envelope display. Drag
-          the <strong>attack</strong> handle (left circle) to set fade-in time, and
-          the <strong>release</strong> handle (right circle) to set fade-out time.
-          The curve fill shows the shape in real time.
+          The <strong>ENV</strong> panel controls how each trigger fades in and out.
+          It has an interactive visual envelope display.
         </p>
         <p>
-          Each phase has a <strong>curve type</strong> dropdown:
+          <strong>Drag the handles</strong> on the envelope curve:
         </p>
         <ul>
-          <li><strong>lin</strong> &mdash; linear ramp (straight)</li>
-          <li><strong>exp</strong> &mdash; exponential curve (eased)</li>
+          <li>
+            <strong>Left handle</strong> (attack) — how long the sample takes to fade
+            in from silence. 0s = instant. Max = 2 seconds.
+          </li>
+          <li>
+            <strong>Right handle</strong> (release) — how long the sample takes to
+            fade out. 0s = instant cut. Max = 3 seconds.
+          </li>
         </ul>
         <p>
-          The <strong>preview</strong> button (<code>&#9654;</code>) plays the
-          current sample through the voice chain so you can hear the envelope.
-          Enable <strong>auto</strong> to preview automatically when you adjust parameters.
+          The area between the handles is the sustain portion — the sample plays
+          at full volume here. For <code>one-shot</code> samples, the envelope is
+          applied as a fade-in/fade-out over the full sample duration. For <code
+            >gate</code
+          > and <code>legato</code>, the release happens when a step becomes
+          inactive.
+        </p>
+
+        <h3>Curve shaping</h3>
+        <p>
+          Each phase has a <strong>lin/exp</strong> dropdown:
+        </p>
+        <ul>
+          <li>
+            <strong>lin</strong> (linear) — a straight ramp from 0 to 1 (attack) or
+            1 to 0 (release).
+          </li>
+          <li>
+            <strong>exp</strong> (exponential) — an eased curve. On attack it starts
+            slow then accelerates. On release it drops faster at first then tails
+            off.
+          </li>
+        </ul>
+
+        <h3>Preview</h3>
+        <p>
+          The <strong>&#9654; preview button</strong> plays the current pinned/active
+          sample with the envelope applied so you can hear your settings. Enable <strong
+            >auto</strong
+          > to trigger a preview automatically when you adjust parameters (with a
+          short debounce so you don&rsquo;t get rapid-fire playback while dragging).
         </p>
       </div>
     </details>
 
     <details>
-      <summary>FX</summary>
+      <summary>Effects (FX)</summary>
       <div class="litany-docs-body">
         <p>
-          Each voice has a per-voice effects chain: <strong>delay</strong>
-          &rarr; <strong>reverb</strong> &rarr; <strong>filter</strong>. Open
-          the <strong>FX</strong> panel to adjust.
+          Each voice has a per-voice effects chain in this order:
+          <strong>delay &rarr; reverb &rarr; filter</strong>. Open the
+          <strong>FX</strong> panel to adjust. All effects are applied to the voice
+          only — the master section has global controls.
         </p>
+
+        <h3>Delay</h3>
         <ul>
-          <li><strong>Delay</strong> &mdash; time, feedback, wet/dry mix</li>
+          <li><strong>TIME</strong> — delay interval, 10ms to 1 second</li>
           <li>
-            <strong>Reverb</strong> &mdash; wet/dry mix (convolution with a synthetic
-            IR)
+            <strong>FB</strong> (feedback) — how much of the delayed signal feeds
+            back in, 0&ndash;95%. Higher = more echoes
           </li>
           <li>
-            <strong>Filter</strong> &mdash; lowpass, highpass, bandpass, notch with
-            frequency and Q
+            <strong>WET</strong> — dry/wet balance. 0 = no delay, 1 = full wet
+          </li>
+        </ul>
+
+        <h3>Reverb</h3>
+        <ul>
+          <li>
+            <strong>WET</strong> — dry/wet balance. Uses a synthetic impulse response
+            for a small-room sound. 0 = dry, 1 = full reverb
+          </li>
+        </ul>
+
+        <h3>Filter</h3>
+        <ul>
+          <li>
+            <strong>TYPE</strong> — lowpass (LP), highpass (HP), bandpass (BP), or
+            notch
+          </li>
+          <li>
+            <strong>FREQ</strong> — cutoff/center frequency, 80Hz to 20kHz
+          </li>
+          <li>
+            <strong>Q</strong> — resonance. Higher = sharper peak around the cutoff
+            frequency, 0.1&ndash;20
           </li>
         </ul>
       </div>
@@ -166,49 +299,243 @@ import '../../../styles/atelier/litany.css';
       <summary>Sample rotation</summary>
       <div class="litany-docs-body">
         <p>
-          The <strong>rotation</strong> dropdown controls how often the pool advances
-          to the next sample:
+          Each voice pre-loads 8 random samples in its pool. The
+          <strong>rotation</strong> dropdown controls how often the pool advances
+          to the next sample.
         </p>
         <table>
-          <tr><th>Setting</th><th>Behavior</th></tr>
-          <tr
-            ><td><code>/HIT</code></td><td
-              >New sample every time a step fires</td
-            ></tr
-          >
-          <tr
-            ><td><code>/BAR</code></td><td
-              >New sample at the start of each loop cycle</td
-            ></tr
-          >
-          <tr><td><code>/4BR</code></td><td>New sample every 4 bars</td></tr>
-          <tr
-            ><td><code>PIN</code></td><td
-              >Always plays the pinned sample &mdash; never rotates</td
-            ></tr
-          >
+          <tr><th>Setting</th><th>Advances</th><th>Best for</th></tr>
+          <tr>
+            <td><code>/HIT</code></td>
+            <td>Every time a step fires</td>
+            <td>Maximum variation — different sample each hit</td>
+          </tr>
+          <tr>
+            <td><code>/BAR</code></td>
+            <td>At the start of each bar (step 0)</td>
+            <td>Changes each loop — controlled variety</td>
+          </tr>
+          <tr>
+            <td><code>/4BR</code></td>
+            <td>Every 4 bars</td>
+            <td>Long-form consistency, then a new sample for variation</td>
+          </tr>
+          <tr>
+            <td><code>PIN</code></td>
+            <td>Never — always plays the pinned sample</td>
+            <td>You picked a specific sample you want to keep</td>
+          </tr>
         </table>
+        <p>
+          The <strong>sample picker dropdown</strong> shows all 8 pool entries. Picking
+          one is equivalent to pinning it. Use the re-roll button to get a fresh set
+          of 8 random samples if you don&rsquo;t like the current batch.
+        </p>
       </div>
     </details>
 
     <details>
-      <summary>Sharing &amp; shortcuts</summary>
+      <summary>Master section</summary>
       <div class="litany-docs-body">
         <p>
-          The entire state (voices, patterns, FX, BPM) is compressed and stored
-          in the URL hash. Click <strong>SHARE</strong> in the master section to copy
-          the link.
+          The <strong>MASTER</strong> bar at the bottom has global controls that affect
+          the entire mix.
         </p>
-        <p><strong>Keyboard:</strong></p>
         <ul>
-          <li><strong>P</strong> &mdash; play / stop</li>
-          <li><strong>&#8984;Z</strong> &mdash; undo</li>
-          <li><strong>&#8984;&#8679;Z</strong> &mdash; redo</li>
+          <li><strong>VOL</strong> — master output level</li>
+          <li>
+            <strong>COMP</strong> — compressor with adjustable
+            <strong>THR</strong> (threshold, -60 to 0dB) and
+            <strong>RATIO</strong> (1:1 to 20:1). Collapses dynamics to make the groove
+            punchier.
+          </li>
+          <li>
+            <strong>&#128279; SHARE</strong> — copies a URL to your clipboard. The
+            URL encodes the entire app state (voices, patterns, FX, BPM, envelope
+            settings, euclidean parameters) so the recipient opens your exact groove.
+          </li>
         </ul>
+      </div>
+    </details>
+
+    <details>
+      <summary>Keyboard shortcuts</summary>
+      <div class="litany-docs-body">
+        <table>
+          <tr><th>Key</th><th>Action</th></tr>
+          <tr><td><code>P</code></td><td>Play / stop</td></tr>
+          <tr><td><code>&#8984;Z</code></td><td>Undo (last 50 actions)</td></tr>
+          <tr><td><code>&#8984;&#8679;Z</code></td><td>Redo</td></tr>
+        </table>
       </div>
     </details>
   </div>
 </Admin>
+
+<details>
+  <summary>Step sequencer</summary>
+  <div class="litany-docs-body">
+    <p>
+      The <strong>step grid</strong> controls which beats each voice fires on. Click
+      a cell to toggle it — gold means the voice will trigger on that step. The number
+      of steps is configurable per voice (1&ndash;32) via the dropdown. Different
+      step counts across voices enable polyrhythm.
+    </p>
+    <p>
+      <strong>Euclidean rhythms</strong> are an alternative to manual step programming.
+      Click the
+      <strong>STEP</strong> button in the controls row to switch to
+      <strong>EUCL</strong> mode. You set:
+    </p>
+    <ul>
+      <li>
+        <strong>P</strong> (pulses) &mdash; how many hits to distribute
+      </li>
+      <li>
+        <strong>L</strong> (length) &mdash; pattern length (1&ndash;32)
+      </li>
+      <li><strong>R</strong> (offset) &mdash; rotate the pattern</li>
+    </ul>
+    <p>
+      The algorithm distributes pulses as evenly as possible. E(3,8) gives you
+      the classic tresillo; E(5,16) gives a bossa nova pattern. The generated
+      pattern is shown as a read-only step grid below the controls. Switch back
+      to <strong>STEP</strong> mode to edit manually.
+    </p>
+  </div>
+</details>
+
+<details>
+  <summary>Play styles</summary>
+  <div class="litany-docs-body">
+    <p>
+      Each voice has a <strong>play style</strong> that controls how samples behave
+      when triggered. Open the
+      <strong>ENV</strong> panel to change it.
+    </p>
+    <table>
+      <tr><th>Style</th><th>Behavior</th></tr>
+      <tr
+        ><td><code>one-shot</code></td><td
+          >Sample plays to completion. Polyphonic &mdash; overlapping triggers
+          are allowed.</td
+        ></tr
+      >
+      <tr
+        ><td><code>cut</code></td><td
+          >Each new step cuts off the previous one. Monophonic &mdash; like a
+          hi-hat choke.</td
+        ></tr
+      >
+      <tr
+        ><td><code>gate</code></td><td
+          >Sample stops when the step becomes inactive (playhead moves past it).
+          Release envelope is applied.</td
+        ></tr
+      >
+      <tr
+        ><td><code>legato</code></td><td
+          >Like gate, but consecutive active steps don&rsquo;t re-trigger
+          &mdash; the sample continues through. Only re-triggers when coming
+          from an empty step.</td
+        ></tr
+      >
+    </table>
+  </div>
+</details>
+
+<details>
+  <summary>Envelope</summary>
+  <div class="litany-docs-body">
+    <p>
+      The <strong>ENV</strong> panel has an interactive envelope display. Drag the
+      <strong>attack</strong> handle (left circle) to set fade-in time, and the <strong
+        >release</strong
+      > handle (right circle) to set fade-out time. The curve fill shows the shape
+      in real time.
+    </p>
+    <p>
+      Each phase has a <strong>curve type</strong> dropdown:
+    </p>
+    <ul>
+      <li><strong>lin</strong> &mdash; linear ramp (straight)</li>
+      <li><strong>exp</strong> &mdash; exponential curve (eased)</li>
+    </ul>
+    <p>
+      The <strong>preview</strong> button (<code>&#9654;</code>) plays the
+      current sample through the voice chain so you can hear the envelope.
+      Enable <strong>auto</strong> to preview automatically when you adjust parameters.
+    </p>
+  </div>
+</details>
+
+<details>
+  <summary>FX</summary>
+  <div class="litany-docs-body">
+    <p>
+      Each voice has a per-voice effects chain: <strong>delay</strong>
+      &rarr; <strong>reverb</strong> &rarr; <strong>filter</strong>. Open the <strong
+        >FX</strong
+      > panel to adjust.
+    </p>
+    <ul>
+      <li><strong>Delay</strong> &mdash; time, feedback, wet/dry mix</li>
+      <li>
+        <strong>Reverb</strong> &mdash; wet/dry mix (convolution with a synthetic
+        IR)
+      </li>
+      <li>
+        <strong>Filter</strong> &mdash; lowpass, highpass, bandpass, notch with frequency
+        and Q
+      </li>
+    </ul>
+  </div>
+</details>
+
+<details>
+  <summary>Sample rotation</summary>
+  <div class="litany-docs-body">
+    <p>
+      The <strong>rotation</strong> dropdown controls how often the pool advances
+      to the next sample:
+    </p>
+    <table>
+      <tr><th>Setting</th><th>Behavior</th></tr>
+      <tr
+        ><td><code>/HIT</code></td><td>New sample every time a step fires</td
+        ></tr
+      >
+      <tr
+        ><td><code>/BAR</code></td><td
+          >New sample at the start of each loop cycle</td
+        ></tr
+      >
+      <tr><td><code>/4BR</code></td><td>New sample every 4 bars</td></tr>
+      <tr
+        ><td><code>PIN</code></td><td
+          >Always plays the pinned sample &mdash; never rotates</td
+        ></tr
+      >
+    </table>
+  </div>
+</details>
+
+<details>
+  <summary>Sharing &amp; shortcuts</summary>
+  <div class="litany-docs-body">
+    <p>
+      The entire state (voices, patterns, FX, BPM) is compressed and stored in
+      the URL hash. Click <strong>SHARE</strong> in the master section to copy the
+      link.
+    </p>
+    <p><strong>Keyboard:</strong></p>
+    <ul>
+      <li><strong>P</strong> &mdash; play / stop</li>
+      <li><strong>&#8984;Z</strong> &mdash; undo</li>
+      <li><strong>&#8984;&#8679;Z</strong> &mdash; redo</li>
+    </ul>
+  </div>
+</details>
 
 <style is:global>
   .litany-docs-overview {
@@ -300,5 +627,12 @@ import '../../../styles/atelier/litany.css';
     color: var(--lit-text, #d0d4d8);
     font-weight: 600;
     width: 20%;
+  }
+
+  .litany-docs-body h3 {
+    color: var(--lit-text, #d0d4d8);
+    font-size: 0.72rem;
+    font-weight: 600;
+    margin: 12px 0 4px;
   }
 </style>
