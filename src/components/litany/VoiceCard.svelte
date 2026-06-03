@@ -182,47 +182,50 @@
         <label class="euclid-field">
           <span>P</span>
           <input
-            type="number"
-            class="brutalist-control euclid-input"
+            type="range"
             min="1"
             max={voice.euclidean.length}
             value={voice.euclidean.pulses}
-            onchange={(e) =>
+            onpointerdown={onBeforeDrag}
+            oninput={(e) =>
               updateEuclidean(
                 'pulses',
                 parseInt((e.target as HTMLInputElement).value) || 1,
               )}
           />
+          <span class="euclid-val">{voice.euclidean.pulses}</span>
         </label>
         <label class="euclid-field">
           <span>L</span>
           <input
-            type="number"
-            class="brutalist-control euclid-input"
+            type="range"
             min="1"
             max="32"
             value={voice.euclidean.length}
-            onchange={(e) =>
+            onpointerdown={onBeforeDrag}
+            oninput={(e) =>
               updateEuclidean(
                 'length',
                 parseInt((e.target as HTMLInputElement).value) || 16,
               )}
           />
+          <span class="euclid-val">{voice.euclidean.length}</span>
         </label>
         <label class="euclid-field">
           <span>R</span>
           <input
-            type="number"
-            class="brutalist-control euclid-input"
+            type="range"
             min="0"
             max={voice.euclidean.length - 1}
             value={voice.euclidean.offset}
-            onchange={(e) =>
+            onpointerdown={onBeforeDrag}
+            oninput={(e) =>
               updateEuclidean(
                 'offset',
                 parseInt((e.target as HTMLInputElement).value) || 0,
               )}
           />
+          <span class="euclid-val">{voice.euclidean.offset}</span>
         </label>
       </div>
     {/if}
@@ -551,12 +554,15 @@
     width: 0.8rem;
   }
 
-  .euclid-input {
+  .euclid-field input[type='range'] {
     flex: 1;
     min-width: 0;
-    padding: 1px 2px;
-    font-size: 0.6rem;
-    text-align: center;
+  }
+
+  .euclid-val {
+    width: 1.2rem;
+    text-align: right;
+    color: var(--lit-text-faint);
   }
 
   .right-col {
