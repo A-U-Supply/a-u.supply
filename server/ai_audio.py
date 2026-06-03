@@ -116,7 +116,7 @@ Return ONLY a JSON array, no preamble:
         "model": DEEPSEEK_MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.2,
-        "max_tokens": 3000,
+        "max_tokens": 8192,
     }
 
     try:
