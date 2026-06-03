@@ -90,6 +90,7 @@
     border-top: 1px solid var(--lit-border);
     padding: 12px 0 6px;
     flex-wrap: wrap;
+    overflow: hidden;
   }
 
   .master-label {
@@ -116,8 +117,7 @@
 
   .master-control input[type='range'] {
     flex: 1;
-    accent-color: var(--lit-accent);
-    cursor: pointer;
+    min-width: 0;
   }
 
   .val {

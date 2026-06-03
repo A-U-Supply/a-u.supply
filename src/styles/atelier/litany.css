@@ -97,7 +97,7 @@
 /* ── Mobile touch targets ──────────────────────────────────────────────── */
 @media (pointer: coarse) {
   .litany input[type='range'] {
-    min-height: 24px;
+    min-height: 32px;
   }
 
   .litany .brutalist-control {
@@ -111,23 +111,104 @@
 }
 
 /* ── Range slider styling ──────────────────────────────────────────────── */
+
+/* Reset native appearance so pseudo-elements take over */
 .litany input[type='range'] {
-  accent-color: var(--lit-accent);
+  accent-color: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  vertical-align: middle;
+  outline: none;
+  cursor: pointer;
 }
 
+/* ---- Track ---- */
+
+.litany input[type='range']::-webkit-slider-runnable-track {
+  height: 3px;
+  background: var(--lit-border-hover);
+  border-radius: 2px;
+  border: none;
+}
+
+.litany input[type='range']::-moz-range-track {
+  height: 3px;
+  background: var(--lit-border-hover);
+  border-radius: 2px;
+  border: none;
+}
+
+/* Progress fill (Firefox only — WebKit needs JS) */
+.litany input[type='range']::-moz-range-progress {
+  height: 3px;
+  background: var(--lit-accent);
+  border-radius: 2px;
+}
+
+/* ---- Thumb ---- */
+
 .litany input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--lit-text);
+  border: none;
+  margin-top: -3.5px;
   cursor: pointer;
+  transition:
+    background 0.1s,
+    transform 0.1s;
+}
+
+.litany input[type='range']::-webkit-slider-thumb:hover {
+  background: var(--lit-accent);
 }
 
 .litany input[type='range']::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--lit-text);
   border: none;
   cursor: pointer;
+  transition:
+    background 0.1s,
+    transform 0.1s;
 }
 
+.litany input[type='range']::-moz-range-thumb:hover {
+  background: var(--lit-accent);
+}
+
+/* ---- Mobile thumbs ---- */
+
 @media (pointer: coarse) {
+  .litany input[type='range'] {
+    height: 32px;
+  }
+
+  .litany input[type='range']::-webkit-slider-runnable-track {
+    height: 4px;
+  }
+
+  .litany input[type='range']::-moz-range-track {
+    height: 4px;
+  }
+
+  .litany input[type='range']::-moz-range-progress {
+    height: 4px;
+  }
+
   .litany input[type='range']::-webkit-slider-thumb {
     width: 18px;
     height: 18px;
+    margin-top: -7px;
   }
 
   .litany input[type='range']::-moz-range-thumb {
