@@ -1167,6 +1167,50 @@ if __name__ == "__main__":
         r = _sp.run([".venv/bin/python", "scripts/index_samples.py", zip_path])
         sys.exit(r.returncode)
 
+    elif cmd == "audit-samples":
+        from sqlalchemy import func
+        from server.models import MediaItem, MediaSource, MediaAudioMeta, SessionLocal as _SL
+        _db = _SL()
+        total_srcs = _db.query(func.count(MediaSource.id)).filter(
+            MediaSource.source_type == "sample_library").scalar() or 0
+        unique_items = _db.query(func.count(func.distinct(MediaSource.media_item_id))).filter(
+            MediaSource.source_type == "sample_library").scalar() or 0
+        dupe_sources = _db.query(
+            MediaSource.media_item_id, func.count(MediaSource.id).label("c")
+        ).filter(MediaSource.source_type == "sample_library").group_by(
+            MediaSource.media_item_id).having(func.count(MediaSource.id) > 1).count()
+        with_tags = _db.query(func.count(MediaAudioMeta.media_item_id)).filter(
+            MediaAudioMeta.acoustic_tags.isnot(None),
+            MediaAudioMeta.media_item_id.in_(
+                _db.query(MediaSource.media_item_id).filter(
+                    MediaSource.source_type == "sample_library")
+            )
+        ).scalar() or 0
+        _db.close()
+        log(f"sample_library sources: {total_srcs} rows, {unique_items} unique items, {dupe_sources} items with multiple sources")
+        log(f"have acoustic_tags: {with_tags} / {unique_items}")
+
+    elif cmd == "dedup-sample-sources":
+        from sqlalchemy import func
+        from server.models import MediaItem, MediaSource, SessionLocal as _SL
+        _db = _SL()
+        dupe_rows = _db.query(
+            MediaSource.media_item_id, func.count(MediaSource.id).label("c"),
+            func.min(MediaSource.id).label("keep_id")
+        ).filter(MediaSource.source_type == "sample_library").group_by(
+            MediaSource.media_item_id).having(func.count(MediaSource.id) > 1).all()
+        deleted = 0
+        for mid, cnt, keep_id in dupe_rows:
+            _db.query(MediaSource).filter(
+                MediaSource.source_type == "sample_library",
+                MediaSource.media_item_id == mid,
+                MediaSource.id != keep_id,
+            ).delete(synchronize_session=False)
+            deleted += cnt - 1
+        _db.commit()
+        _db.close()
+        log(f"Deleted {deleted} duplicate MediaSource rows")
+
     elif cmd == "clean-drum-machine-orphans":
         from server.models import MediaItem, MediaSource, SessionLocal as _SL
         _db = _SL()
