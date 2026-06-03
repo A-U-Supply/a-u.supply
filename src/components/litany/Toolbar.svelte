@@ -17,6 +17,7 @@
     onRandomizeBpm: () => void;
     onRandomizeVoices: () => void;
     onRandomizeAll: () => void;
+    onChaos: () => void;
     onAddVoice: () => void;
   }
 
@@ -38,13 +39,14 @@
     onRandomizeBpm,
     onRandomizeVoices,
     onRandomizeAll,
+    onChaos,
     onAddVoice,
   }: Props = $props();
 
   function handleKey(e: KeyboardEvent) {
     const tag = (e.target as HTMLElement).tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-    if (e.key === 'p' && !e.metaKey && !e.ctrlKey) {
+    if ((e.key === 'p' || e.key === ' ') && !e.metaKey && !e.ctrlKey) {
       e.preventDefault();
       playing ? onStop() : onPlay();
     }
@@ -55,6 +57,22 @@
     if (e.key === 'z' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
       e.preventDefault();
       onRedo();
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      onBpmChange(Math.min(bpm + 1, 240));
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      onBpmChange(Math.max(bpm - 1, 40));
+    }
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      onBpmChange(Math.min(bpm + 5, 240));
+    }
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      onBpmChange(Math.max(bpm - 5, 40));
     }
   }
 </script>
@@ -120,6 +138,9 @@
     <button
       class="brutalist-control rnd-btn rnd-btn--all"
       onclick={onRandomizeAll}>🎲 ALL</button
+    >
+    <button class="brutalist-control rnd-btn rnd-btn--chaos" onclick={onChaos}
+      >💥</button
     >
   </div>
 
@@ -229,6 +250,19 @@
     background: var(--lit-solo-bg) !important;
     border-color: var(--lit-accent) !important;
     color: var(--lit-accent) !important;
+  }
+
+  .rnd-btn--chaos {
+    background: transparent !important;
+    border-color: var(--lit-red) !important;
+    color: var(--lit-red) !important;
+    font-size: 0.8rem;
+    padding: 2px 6px;
+  }
+
+  .rnd-btn--chaos:hover {
+    background: var(--lit-red) !important;
+    color: var(--lit-bg) !important;
   }
 
   .right-group {

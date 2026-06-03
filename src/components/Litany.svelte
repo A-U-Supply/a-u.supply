@@ -12,7 +12,11 @@
     encodeState,
     decodeState,
     bjorklund,
+    defaultFx,
+    defaultEnvelope,
     type Voice,
+    type PlayStyle,
+    type Rotation,
   } from '../lib/litany/state.ts';
   import {
     randomizeBpm,
@@ -230,7 +234,13 @@
   function updateVoice(updated: Voice, skipHistory = false) {
     if (!skipHistory) pushHistory();
 
-    if (updated.patternMode === 'euclidean') {
+    const prev = voices.find((v) => v.id === updated.id);
+    if (
+      prev &&
+      (prev.euclidean.pulses !== updated.euclidean.pulses ||
+        prev.euclidean.length !== updated.euclidean.length ||
+        prev.euclidean.offset !== updated.euclidean.offset)
+    ) {
       const { pulses, length, offset } = updated.euclidean;
       updated = {
         ...updated,
@@ -239,7 +249,6 @@
       };
     }
 
-    const prev = voices.find((v) => v.id === updated.id);
     voices = voices.map((v) => (v.id === updated.id ? updated : v));
     if (engine) {
       engine.updateVoiceChain(updated.id, updated.fx, updated.volume);
@@ -294,6 +303,68 @@
   function doRandomizeAll() {
     doRandomizeBpm();
     doRandomizeVoices();
+  }
+
+  function doChaos() {
+    pushHistory();
+    bpm = randomizeBpm();
+    const rotations: Rotation[] = [
+      'every-hit',
+      'every-bar',
+      'every-4bars',
+      'pinned',
+    ];
+    const styles: PlayStyle[] = ['one-shot', 'cut', 'gate', 'legato'];
+    const curves: ('linear' | 'exp')[] = ['linear', 'exp'];
+    const filterTypes: BiquadFilterType[] = [
+      'lowpass',
+      'highpass',
+      'bandpass',
+      'notch',
+    ];
+    const pick = <T,>(arr: T[]): T =>
+      arr[Math.floor(Math.random() * arr.length)];
+
+    voices = voices.map((v) => {
+      const fx = defaultFx();
+      fx.delayTime = Math.round(Math.random() * 100) / 100;
+      fx.delayFeedback = Math.round(Math.random() * 95) / 100;
+      fx.delayWet = Math.round(Math.random() * 100) / 100;
+      fx.reverbWet = Math.round(Math.random() * 100) / 100;
+      fx.filterFreq =
+        Math.random() < 0.5 ? 20000 : Math.round(80 + Math.random() * 19920);
+      fx.filterQ = Math.round(Math.random() * 20 * 10) / 10;
+      fx.filterType = pick(filterTypes);
+
+      const env = defaultEnvelope();
+      env.attack = Math.round(Math.random() * 200) / 100;
+      env.release = Math.round(Math.random() * 300) / 100;
+      env.attackCurve = pick(curves);
+      env.releaseCurve = pick(curves);
+
+      const len = 4 + Math.floor(Math.random() * 13);
+      const pulses = 1 + Math.floor(Math.random() * len);
+      return {
+        ...v,
+        steps: bjorklund(pulses, len, Math.floor(Math.random() * len)),
+        stepCount: len,
+        rotation: pick(rotations),
+        volume: Math.round((0.3 + Math.random() * 0.7) * 100) / 100,
+        pitch: Math.floor(Math.random() * 13) - 6,
+        fx,
+        envelope: env,
+        playStyle: pick(styles),
+        euclidean: {
+          pulses,
+          length: len,
+          offset: Math.floor(Math.random() * len),
+        },
+      };
+    });
+
+    for (const v of voices) {
+      engine?.updateVoiceChain(v.id, v.fx, v.volume);
+    }
   }
 
   // ── Pin / Unpin ──────────────────────────────────────────────────────────
@@ -375,6 +446,7 @@
     onRandomizeBpm={doRandomizeBpm}
     onRandomizeVoices={doRandomizeVoices}
     onRandomizeAll={doRandomizeAll}
+    onChaos={doChaos}
     onAddVoice={addVoice}
   />
 
