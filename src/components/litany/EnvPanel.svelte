@@ -17,6 +17,7 @@
   let autoPreview = $state(false);
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let svgWidth = $state(200);
+  let svgEl: SVGSVGElement | undefined = $state();
 
   const DISPLAY_SECS = 3;
 
@@ -84,10 +85,8 @@
   }
 
   function dragMove(e: MouseEvent | TouchEvent) {
-    if (!dragging) return;
-    const svg = (e.currentTarget as SVGElement).closest('svg');
-    if (!svg) return;
-    const rect = svg.getBoundingClientRect();
+    if (!dragging || !svgEl) return;
+    const rect = svgEl.getBoundingClientRect();
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const x = ((clientX - rect.left) / rect.width) * svgWidth;
     const t = Math.max(0, Math.min(x / svgWidth, 1)) * DISPLAY_SECS;
@@ -145,6 +144,7 @@
     preserveAspectRatio="none"
     width="100%"
     height="72"
+    bind:this={svgEl}
   >
     <!-- grid lines -->
     <line
@@ -175,34 +175,30 @@
     />
 
     <!-- attack handle -->
-    {#if envelope.attack > 0}
-      <circle
-        cx={attackPx()}
-        cy="0"
-        r="5"
-        fill="var(--lit-bg)"
-        stroke="var(--lit-text)"
-        stroke-width="1.5"
-        class="env-handle"
-        onmousedown={(e) => dragStart('attack', e)}
-        ontouchstart={(e) => dragStart('attack', e)}
-      />
-    {/if}
+    <circle
+      cx={attackPx()}
+      cy="0"
+      r="5"
+      fill="var(--lit-bg)"
+      stroke="var(--lit-text)"
+      stroke-width="1.5"
+      class="env-handle"
+      onmousedown={(e) => dragStart('attack', e)}
+      ontouchstart={(e) => dragStart('attack', e)}
+    />
 
     <!-- release handle -->
-    {#if envelope.release > 0}
-      <circle
-        cx={releaseStartPx()}
-        cy="0"
-        r="5"
-        fill="var(--lit-bg)"
-        stroke="var(--lit-text)"
-        stroke-width="1.5"
-        class="env-handle"
-        onmousedown={(e) => dragStart('release', e)}
-        ontouchstart={(e) => dragStart('release', e)}
-      />
-    {/if}
+    <circle
+      cx={releaseStartPx()}
+      cy="0"
+      r="5"
+      fill="var(--lit-bg)"
+      stroke="var(--lit-text)"
+      stroke-width="1.5"
+      class="env-handle"
+      onmousedown={(e) => dragStart('release', e)}
+      ontouchstart={(e) => dragStart('release', e)}
+    />
   </svg>
 
   <!-- controls row -->
