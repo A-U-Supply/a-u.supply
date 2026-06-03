@@ -7,9 +7,9 @@ The Midden, and The Canon.
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
@@ -325,7 +325,7 @@ def get_altar(
 
 @router.post("/import-ai-tags", summary="Import offline AI tag results")
 def import_ai_tags(
-    payload: list[dict],
+    payload: Any = Body(...),
     _auth=Depends(require_scope("admin")),
 ):
     """Accept AI tag results from offline processing and apply to the DB."""
