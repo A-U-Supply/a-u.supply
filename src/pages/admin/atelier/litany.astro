@@ -5,5 +5,300 @@ import '../../../styles/atelier/litany.css';
 ---
 
 <Admin title="Litany" current="litany">
+  <div class="litany-docs-overview">
+    <p>
+      <strong>Litany</strong> is a sample step sequencer. You search for sounds, build
+      patterns on a step grid, and shape them with envelopes and effects. Everything
+      is encoded in the URL — share the link to send the groove.
+    </p>
+    <p class="litany-docs-quick">
+      <span>Add a voice</span> &rarr; <span>search for a sample</span> &rarr;
+      <span>toggle steps</span> &rarr; <span>hit play</span>
+    </p>
+  </div>
+
   <Litany client:only="svelte" />
+
+  <div class="litany-docs">
+    <details>
+      <summary>Voices &amp; samples</summary>
+      <div class="litany-docs-body">
+        <p>
+          Each <strong>voice</strong> is an instrument track. It has a search query
+          (e.g. <code>kick</code>, <code>snare</code>, <code>vocal</code>) that
+          pulls random samples from the catalog. The voice loads 8 random
+          matches into a <strong>pool</strong> and rotates through them.
+        </p>
+        <p>
+          The <strong>sample picker</strong> dropdown shows all 8 pool entries — pick
+          one to pin it. The <strong>re-roll</strong> button (<code
+            >&#8633;</code
+          >) refreshes the pool with the same search query so you get new random
+          samples without changing the instrument type. The <strong>dice</strong
+          > (<code>&#127922;</code>) picks a random instrument type.
+        </p>
+        <p>
+          The <strong>pin</strong> (<code>&#128204;</code>) locks the current
+          sample so it never changes, even when the pool rotates.
+        </p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Step sequencer</summary>
+      <div class="litany-docs-body">
+        <p>
+          The <strong>step grid</strong> controls which beats each voice fires on.
+          Click a cell to toggle it — gold means the voice will trigger on that step.
+          The number of steps is configurable per voice (1&ndash;32) via the dropdown.
+          Different step counts across voices enable polyrhythm.
+        </p>
+        <p>
+          <strong>Euclidean rhythms</strong> are an alternative to manual step programming.
+          Click the
+          <strong>STEP</strong> button in the controls row to switch to
+          <strong>EUCL</strong> mode. You set:
+        </p>
+        <ul>
+          <li>
+            <strong>P</strong> (pulses) &mdash; how many hits to distribute
+          </li>
+          <li>
+            <strong>L</strong> (length) &mdash; pattern length (1&ndash;32)
+          </li>
+          <li><strong>R</strong> (offset) &mdash; rotate the pattern</li>
+        </ul>
+        <p>
+          The algorithm distributes pulses as evenly as possible. E(3,8) gives
+          you the classic tresillo; E(5,16) gives a bossa nova pattern. The
+          generated pattern is shown as a read-only step grid below the
+          controls. Switch back to <strong>STEP</strong> mode to edit manually.
+        </p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Play styles</summary>
+      <div class="litany-docs-body">
+        <p>
+          Each voice has a <strong>play style</strong> that controls how samples behave
+          when triggered. Open the
+          <strong>ENV</strong> panel to change it.
+        </p>
+        <table>
+          <tr><th>Style</th><th>Behavior</th></tr>
+          <tr
+            ><td><code>one-shot</code></td><td
+              >Sample plays to completion. Polyphonic &mdash; overlapping
+              triggers are allowed.</td
+            ></tr
+          >
+          <tr
+            ><td><code>cut</code></td><td
+              >Each new step cuts off the previous one. Monophonic &mdash; like
+              a hi-hat choke.</td
+            ></tr
+          >
+          <tr
+            ><td><code>gate</code></td><td
+              >Sample stops when the step becomes inactive (playhead moves past
+              it). Release envelope is applied.</td
+            ></tr
+          >
+          <tr
+            ><td><code>legato</code></td><td
+              >Like gate, but consecutive active steps don&rsquo;t re-trigger
+              &mdash; the sample continues through. Only re-triggers when coming
+              from an empty step.</td
+            ></tr
+          >
+        </table>
+      </div>
+    </details>
+
+    <details>
+      <summary>Envelope</summary>
+      <div class="litany-docs-body">
+        <p>
+          The <strong>ENV</strong> panel has an interactive envelope display. Drag
+          the <strong>attack</strong> handle (left circle) to set fade-in time, and
+          the <strong>release</strong> handle (right circle) to set fade-out time.
+          The curve fill shows the shape in real time.
+        </p>
+        <p>
+          Each phase has a <strong>curve type</strong> dropdown:
+        </p>
+        <ul>
+          <li><strong>lin</strong> &mdash; linear ramp (straight)</li>
+          <li><strong>exp</strong> &mdash; exponential curve (eased)</li>
+        </ul>
+        <p>
+          The <strong>preview</strong> button (<code>&#9654;</code>) plays the
+          current sample through the voice chain so you can hear the envelope.
+          Enable <strong>auto</strong> to preview automatically when you adjust parameters.
+        </p>
+      </div>
+    </details>
+
+    <details>
+      <summary>FX</summary>
+      <div class="litany-docs-body">
+        <p>
+          Each voice has a per-voice effects chain: <strong>delay</strong>
+          &rarr; <strong>reverb</strong> &rarr; <strong>filter</strong>. Open
+          the <strong>FX</strong> panel to adjust.
+        </p>
+        <ul>
+          <li><strong>Delay</strong> &mdash; time, feedback, wet/dry mix</li>
+          <li>
+            <strong>Reverb</strong> &mdash; wet/dry mix (convolution with a synthetic
+            IR)
+          </li>
+          <li>
+            <strong>Filter</strong> &mdash; lowpass, highpass, bandpass, notch with
+            frequency and Q
+          </li>
+        </ul>
+      </div>
+    </details>
+
+    <details>
+      <summary>Sample rotation</summary>
+      <div class="litany-docs-body">
+        <p>
+          The <strong>rotation</strong> dropdown controls how often the pool advances
+          to the next sample:
+        </p>
+        <table>
+          <tr><th>Setting</th><th>Behavior</th></tr>
+          <tr
+            ><td><code>/HIT</code></td><td
+              >New sample every time a step fires</td
+            ></tr
+          >
+          <tr
+            ><td><code>/BAR</code></td><td
+              >New sample at the start of each loop cycle</td
+            ></tr
+          >
+          <tr><td><code>/4BR</code></td><td>New sample every 4 bars</td></tr>
+          <tr
+            ><td><code>PIN</code></td><td
+              >Always plays the pinned sample &mdash; never rotates</td
+            ></tr
+          >
+        </table>
+      </div>
+    </details>
+
+    <details>
+      <summary>Sharing &amp; shortcuts</summary>
+      <div class="litany-docs-body">
+        <p>
+          The entire state (voices, patterns, FX, BPM) is compressed and stored
+          in the URL hash. Click <strong>SHARE</strong> in the master section to copy
+          the link.
+        </p>
+        <p><strong>Keyboard:</strong></p>
+        <ul>
+          <li><strong>P</strong> &mdash; play / stop</li>
+          <li><strong>&#8984;Z</strong> &mdash; undo</li>
+          <li><strong>&#8984;&#8679;Z</strong> &mdash; redo</li>
+        </ul>
+      </div>
+    </details>
+  </div>
 </Admin>
+
+<style is:global>
+  .litany-docs-overview {
+    padding: 12px 16px 0;
+    color: var(--lit-text-dim, #7d8590);
+    font-size: 0.8rem;
+    line-height: 1.6;
+  }
+
+  .litany-docs-overview strong {
+    color: var(--lit-text, #d0d4d8);
+  }
+
+  .litany-docs-quick {
+    margin-top: 6px;
+    font-size: 0.7rem;
+    color: var(--lit-text-faint, #5a6270);
+  }
+
+  .litany-docs-quick span {
+    color: var(--lit-accent, #e6a817);
+  }
+
+  .litany-docs {
+    padding: 8px 16px 24px;
+    font-size: 0.75rem;
+    line-height: 1.6;
+    color: var(--lit-text-dim, #7d8590);
+  }
+
+  .litany-docs details {
+    margin-top: 8px;
+  }
+
+  .litany-docs summary {
+    cursor: pointer;
+    color: var(--lit-text, #d0d4d8);
+    font-weight: 600;
+    font-size: 0.78rem;
+    padding: 4px 0;
+    user-select: none;
+  }
+
+  .litany-docs summary:hover {
+    color: var(--lit-accent, #e6a817);
+  }
+
+  .litany-docs-body {
+    padding: 6px 0 4px 8px;
+    border-left: 1px solid var(--lit-border, #262c30);
+    margin-left: 4px;
+  }
+
+  .litany-docs-body p {
+    margin: 6px 0;
+  }
+
+  .litany-docs-body ul {
+    margin: 4px 0;
+    padding-left: 16px;
+  }
+
+  .litany-docs-body li {
+    margin: 3px 0;
+  }
+
+  .litany-docs-body code {
+    background: var(--lit-cell, #181d21);
+    padding: 1px 4px;
+    font-size: 0.7rem;
+  }
+
+  .litany-docs-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 0.7rem;
+  }
+
+  .litany-docs-body th,
+  .litany-docs-body td {
+    text-align: left;
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--lit-border, #262c30);
+    vertical-align: top;
+  }
+
+  .litany-docs-body th {
+    color: var(--lit-text, #d0d4d8);
+    font-weight: 600;
+    width: 20%;
+  }
+</style>
