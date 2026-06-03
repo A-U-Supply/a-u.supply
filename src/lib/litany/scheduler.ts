@@ -76,6 +76,17 @@ export class Scheduler {
       const prevActive = this.previousStepActive.get(voice.id) ?? false;
 
       if (stepActive) {
+        const override = voice.stepOverrides[voiceTick];
+        if (override?.probability != null) {
+          if (Math.random() * 100 >= override.probability) {
+            this.previousStepActive.set(voice.id, false);
+            const nextTick = (voiceTick + 1) % voice.stepCount;
+            this.voiceTicks.set(voice.id, nextTick);
+            if (nextTick === 0) this.voiceBarCounts.set(voice.id, barCount + 1);
+            continue;
+          }
+        }
+
         const pool = this.pools.get(voice.id);
         if (pool && pool.status === 'ready') {
           const shouldTrigger = voice.playStyle !== 'legato' || !prevActive;
@@ -83,6 +94,7 @@ export class Scheduler {
           if (shouldTrigger) {
             const buffer = pool.next(voice.rotation, isBarStart, is4BarStart);
             if (buffer) {
+              const pitch = override?.pitch ?? voice.pitch;
               this.engine.playVoice(
                 voice.id,
                 buffer,
@@ -92,7 +104,7 @@ export class Scheduler {
                 voice.envelope.attackCurve,
                 voice.envelope.releaseCurve,
                 voice.playStyle,
-                voice.pitch,
+                pitch,
               );
             }
           }

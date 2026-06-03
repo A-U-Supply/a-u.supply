@@ -315,7 +315,6 @@
       'pinned',
     ];
     const styles: PlayStyle[] = ['one-shot', 'cut', 'gate', 'legato'];
-    const curves: ('linear' | 'exp')[] = ['linear', 'exp'];
     const filterTypes: BiquadFilterType[] = [
       'lowpass',
       'highpass',
@@ -337,10 +336,6 @@
       fx.filterType = pick(filterTypes);
 
       const env = defaultEnvelope();
-      env.attack = Math.round(Math.random() * 200) / 100;
-      env.release = Math.round(Math.random() * 300) / 100;
-      env.attackCurve = pick(curves);
-      env.releaseCurve = pick(curves);
 
       const len = 4 + Math.floor(Math.random() * 13);
       const pulses = 1 + Math.floor(Math.random() * len);
