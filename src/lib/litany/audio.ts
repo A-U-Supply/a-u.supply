@@ -226,7 +226,12 @@ export class AudioEngine {
     this.activeSources.set(id, { source, envelopeGain });
   }
 
-  stopVoice(id: string, when: number, release: number, releaseCurve: EnvCurve): void {
+  stopVoice(
+    id: string,
+    when: number,
+    release: number,
+    releaseCurve: EnvCurve,
+  ): void {
     const active = this.activeSources.get(id);
     if (!active) return;
 
@@ -237,11 +242,20 @@ export class AudioEngine {
       active.envelopeGain.gain.setValueAtTime(0, now);
       active.source.stop(now + 0.01);
     } else if (releaseCurve === 'exp') {
-      active.envelopeGain.gain.setValueAtTime(active.envelopeGain.gain.value, now);
-      active.envelopeGain.gain.exponentialRampToValueAtTime(0.001, now + release);
+      active.envelopeGain.gain.setValueAtTime(
+        active.envelopeGain.gain.value,
+        now,
+      );
+      active.envelopeGain.gain.exponentialRampToValueAtTime(
+        0.001,
+        now + release,
+      );
       active.source.stop(now + release + 0.05);
     } else {
-      active.envelopeGain.gain.setValueAtTime(active.envelopeGain.gain.value, now);
+      active.envelopeGain.gain.setValueAtTime(
+        active.envelopeGain.gain.value,
+        now,
+      );
       active.envelopeGain.gain.linearRampToValueAtTime(0, now + release);
       active.source.stop(now + release + 0.05);
     }

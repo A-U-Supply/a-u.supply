@@ -1,5 +1,10 @@
 <script lang="ts">
-  import type { Voice, StepCount, Rotation } from '../../lib/litany/state.ts';
+  import type {
+    Voice,
+    StepCount,
+    Rotation,
+    PatternMode,
+  } from '../../lib/litany/state.ts';
   import type { PoolStatus } from '../../lib/litany/pool.ts';
   import { INSTRUMENT_TYPES } from '../../lib/litany/randomize.ts';
   import StepGrid from './StepGrid.svelte';
@@ -60,6 +65,15 @@
       .fill(false)
       .map((_, i) => voice.steps[i] ?? false);
     onChange({ ...voice, stepCount: count, steps });
+  }
+
+  function setPatternMode(mode: PatternMode) {
+    onChange({ ...voice, patternMode: mode });
+  }
+
+  function updateEuclidean(key: string, value: number) {
+    const euclidean = { ...voice.euclidean, [key]: value };
+    onChange({ ...voice, euclidean });
   }
 
   function toggleStep(i: number) {
@@ -163,11 +177,60 @@
 
   <!-- Centre: step grid (flex:1 in row mode) -->
   <div class="steps-wrap">
+    {#if voice.patternMode === 'euclidean'}
+      <div class="euclid-ctls">
+        <label class="euclid-field">
+          <span>P</span>
+          <input
+            type="number"
+            class="brutalist-control euclid-input"
+            min="1"
+            max={voice.euclidean.length}
+            value={voice.euclidean.pulses}
+            onchange={(e) =>
+              updateEuclidean(
+                'pulses',
+                parseInt((e.target as HTMLInputElement).value) || 1,
+              )}
+          />
+        </label>
+        <label class="euclid-field">
+          <span>L</span>
+          <input
+            type="number"
+            class="brutalist-control euclid-input"
+            min="1"
+            max="32"
+            value={voice.euclidean.length}
+            onchange={(e) =>
+              updateEuclidean(
+                'length',
+                parseInt((e.target as HTMLInputElement).value) || 16,
+              )}
+          />
+        </label>
+        <label class="euclid-field">
+          <span>R</span>
+          <input
+            type="number"
+            class="brutalist-control euclid-input"
+            min="0"
+            max={voice.euclidean.length - 1}
+            value={voice.euclidean.offset}
+            onchange={(e) =>
+              updateEuclidean(
+                'offset',
+                parseInt((e.target as HTMLInputElement).value) || 0,
+              )}
+          />
+        </label>
+      </div>
+    {/if}
     <StepGrid
       steps={voice.steps}
       stepCount={voice.stepCount}
       {globalTick}
-      onToggle={toggleStep}
+      onToggle={voice.patternMode === 'steps' ? toggleStep : () => {}}
     />
   </div>
 
@@ -242,6 +305,14 @@
           <option value={r.value}>{r.label}</option>
         {/each}
       </select>
+      <button
+        class="brutalist-control meta-btn"
+        aria-pressed={voice.patternMode === 'euclidean'}
+        onclick={() =>
+          setPatternMode(voice.patternMode === 'steps' ? 'euclidean' : 'steps')}
+      >
+        {voice.patternMode === 'steps' ? 'STEP' : 'EUCL'}
+      </button>
       <button
         class="brutalist-control meta-btn"
         aria-pressed={fxOpen}
@@ -439,6 +510,34 @@
   .voice-card--row .steps-wrap {
     flex: 1;
     min-width: 200px;
+  }
+
+  .euclid-ctls {
+    display: flex;
+    gap: 3px;
+    margin-bottom: 4px;
+  }
+
+  .euclid-field {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: 1;
+    font-size: 0.6rem;
+    color: var(--lit-text-dim);
+  }
+
+  .euclid-field span {
+    flex-shrink: 0;
+    width: 0.8rem;
+  }
+
+  .euclid-input {
+    flex: 1;
+    min-width: 0;
+    padding: 1px 2px;
+    font-size: 0.6rem;
+    text-align: center;
   }
 
   .right-col {

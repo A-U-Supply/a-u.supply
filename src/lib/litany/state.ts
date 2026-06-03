@@ -4,6 +4,13 @@ export type Rotation = 'every-hit' | 'every-bar' | 'every-4bars' | 'pinned';
 export type StepCount = number;
 export type PlayStyle = 'one-shot' | 'cut' | 'gate' | 'legato';
 export type EnvCurve = 'linear' | 'exp';
+export type PatternMode = 'steps' | 'euclidean';
+
+export interface EuclideanParams {
+  pulses: number;
+  length: number;
+  offset: number;
+}
 
 export interface EnvelopeParams {
   attack: number;
@@ -36,6 +43,8 @@ export interface Voice {
   fx: FxParams;
   envelope: EnvelopeParams;
   playStyle: PlayStyle;
+  patternMode: PatternMode;
+  euclidean: EuclideanParams;
 }
 
 export interface AppState {
@@ -64,6 +73,61 @@ export function defaultEnvelope(): EnvelopeParams {
   };
 }
 
+export function defaultEuclidean(): EuclideanParams {
+  return { pulses: 4, length: 16, offset: 0 };
+}
+
+export function bjorklund(
+  pulses: number,
+  length: number,
+  offset: number = 0,
+): boolean[] {
+  if (pulses <= 0) return Array(length).fill(false);
+  if (pulses >= length) return Array(length).fill(true);
+
+  let pattern: boolean[] = [];
+  let counts: number[] = [];
+  let remainders: boolean[] = [];
+
+  for (let i = 0; i < length; i++) {
+    pattern.push(i < pulses);
+  }
+
+  while (true) {
+    let count = 0;
+    let i = 0;
+    while (i < pattern.length && pattern[i] === pattern[0]) {
+      count++;
+      i++;
+    }
+    if (i >= pattern.length) break;
+
+    let j = pattern.length - 1;
+    while (j >= i && pattern[j] === pattern[pattern.length - 1]) {
+      j--;
+    }
+    j++;
+    const remainder = pattern.slice(j);
+    const main = pattern.slice(0, j);
+
+    const merged: boolean[] = [];
+    let mi = 0;
+    let ri = 0;
+    while (mi < main.length || ri < remainder.length) {
+      if (mi < main.length) merged.push(main[mi++]);
+      if (ri < remainder.length) merged.push(remainder[ri++]);
+    }
+    pattern = merged;
+  }
+
+  if (offset) {
+    const rotated = pattern.slice(offset % length);
+    rotated.push(...pattern.slice(0, offset % length));
+    return rotated;
+  }
+  return pattern;
+}
+
 export function createVoice(
   label: string,
   query: string,
@@ -82,6 +146,8 @@ export function createVoice(
     fx: defaultFx(),
     envelope: defaultEnvelope(),
     playStyle: 'one-shot',
+    patternMode: 'steps',
+    euclidean: defaultEuclidean(),
   };
 }
 

@@ -11,6 +11,7 @@
     createVoice,
     encodeState,
     decodeState,
+    bjorklund,
     type Voice,
   } from '../lib/litany/state.ts';
   import {
@@ -217,11 +218,20 @@
 
   function updateVoice(updated: Voice, skipHistory = false) {
     if (!skipHistory) pushHistory();
+
+    if (updated.patternMode === 'euclidean') {
+      const { pulses, length, offset } = updated.euclidean;
+      updated = {
+        ...updated,
+        steps: bjorklund(pulses, length, offset),
+        stepCount: length,
+      };
+    }
+
     const prev = voices.find((v) => v.id === updated.id);
     voices = voices.map((v) => (v.id === updated.id ? updated : v));
     if (engine) {
       engine.updateVoiceChain(updated.id, updated.fx, updated.volume);
-      // Refill pool if query changed
       if (prev && prev.query !== updated.query) {
         fillPool(updated);
       }
