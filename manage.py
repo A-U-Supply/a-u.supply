@@ -1266,13 +1266,11 @@ if __name__ == "__main__":
 
     elif cmd == "index-drum-machines":
         import subprocess as _sp
-        dl_arg = os.environ.get("DRUM_MACHINE_DOWNLOAD_DIR", "")
-        limit_arg = os.environ.get("DRUM_MACHINE_LIMIT", "")
-        cmd_parts = [".venv/bin/python", "scripts/index_drum_machines.py"]
-        if dl_arg:
-            cmd_parts.extend(["--download-dir", dl_arg])
-        if limit_arg:
-            cmd_parts.extend(["--limit", limit_arg])
+        dl_dir = os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data")
+        cmd_parts = [".venv/bin/python", "scripts/index_drum_machines.py",
+                     "--download-dir", os.path.join(dl_dir, "drum-machine-zips")]
+        if os.environ.get("DRUM_MACHINE_LIMIT"):
+            cmd_parts.extend(["--limit", os.environ["DRUM_MACHINE_LIMIT"]])
         r = _sp.run(cmd_parts)
         sys.exit(r.returncode)
 
