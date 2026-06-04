@@ -4,6 +4,7 @@
   import VoiceCard from './litany-exp/VoiceCard.svelte';
   import MasterSection from './litany-exp/MasterSection.svelte';
   import SampleSearchModal from './litany-exp/SampleSearchModal.svelte';
+  import ViMode from './litany-exp/ViMode.svelte';
   import { AudioEngine } from '../lib/litany-exp/audio.ts';
   import { Scheduler } from '../lib/litany-exp/scheduler.ts';
   import { SamplePool, type PoolStatus } from '../lib/litany-exp/pool.ts';
@@ -50,6 +51,57 @@
 
   let sampleSearchOpen = $state(false);
   let searchTargetVoiceId = $state('');
+
+  let viMode = $state(false);
+  let viSubmode = $state<'normal' | 'euclid' | 'pool'>('normal');
+  let viVoiceIdx = $state(0);
+  let viStepCursor = $state<number | null>(null);
+  let viPoolCursor = $state(0);
+  let viPending = $state<string | null>(null);
+
+  const CADENCE_CYCLE: Cadence[] = [
+    'hit',
+    'bar',
+    '2bar',
+    '3bar',
+    '4bar',
+    '5bar',
+    '6bar',
+    '7bar',
+    '8bar',
+    '16bar',
+  ];
+
+  function toggleVi() {
+    viMode = !viMode;
+    viSubmode = 'normal';
+    viStepCursor = null;
+    viPoolCursor = 0;
+    viPending = null;
+    try {
+      localStorage.setItem('litany-vi', String(viMode));
+    } catch {}
+  }
+
+  function viClampVoiceIdx() {
+    if (viVoiceIdx >= voices.length)
+      viVoiceIdx = Math.max(0, voices.length - 1);
+  }
+
+  function viCurrentVoice(): Voice | undefined {
+    return voices[viVoiceIdx];
+  }
+
+  function viVoiceId(): string | undefined {
+    return viCurrentVoice()?.id;
+  }
+
+  const viVoicesById = $derived(
+    voices.reduce<Record<string, number>>((acc, v, i) => {
+      acc[v.id] = i;
+      return acc;
+    }, {}),
+  );
 
   let undoStack = $state<AppState[]>([]);
   let redoStack = $state<AppState[]>([]);
@@ -465,7 +517,413 @@
     });
   }
 
+  // ── Vi-mode keyboard handler ─────────────────────────────────────────
+
+  function viKeydown(e: KeyboardEvent) {
+    if (!viMode) return;
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    const key = e.key;
+    const shift = e.shiftKey;
+    const ctrl = e.ctrlKey || e.metaKey;
+
+    if (viSubmode === 'euclid') {
+      viEuclidKey(key, shift);
+      return;
+    }
+    if (viSubmode === 'pool') {
+      viPoolKey(key);
+      return;
+    }
+
+    // Normal mode
+    e.preventDefault();
+
+    // Pending (dd, gg)
+    if (viPending) {
+      if (viPending === 'd' && key === 'd') {
+        viDeleteVoice();
+        viPending = null;
+        return;
+      }
+      if (viPending === 'g' && key === 'g') {
+        viVoiceIdx = 0;
+        viPending = null;
+        return;
+      }
+      viPending = null;
+    }
+
+    if (key === 'd') {
+      viPending = 'd';
+      return;
+    }
+    if (key === 'g') {
+      viPending = 'g';
+      return;
+    }
+    if (key === 'Escape') {
+      viStepCursor = null;
+      viPending = null;
+      return;
+    }
+    if (ctrl && key === 'r') {
+      redo();
+      return;
+    }
+
+    if (key === 'j') {
+      viVoiceIdx = Math.min(viVoiceIdx + 1, voices.length - 1);
+      viStepCursor = null;
+      return;
+    }
+    if (key === 'k') {
+      viVoiceIdx = Math.max(viVoiceIdx - 1, 0);
+      viStepCursor = null;
+      return;
+    }
+    if (shift && key === 'H') {
+      viVoiceIdx = 0;
+      viStepCursor = null;
+      return;
+    }
+    if (shift && key === 'L') {
+      viVoiceIdx = voices.length - 1;
+      viStepCursor = null;
+      return;
+    }
+    if (key === 'h') {
+      viStepLeft();
+      return;
+    }
+    if (key === 'l') {
+      viStepRight();
+      return;
+    }
+    if (key === '0') {
+      viStepCursor = 0;
+      return;
+    }
+    if (shift && key === '4') {
+      viStepToLast();
+      return;
+    }
+
+    if (key >= '1' && key <= '9') {
+      const idx = parseInt(key) - 1;
+      if (idx < voices.length) {
+        viVoiceIdx = idx;
+        viStepCursor = null;
+      }
+      return;
+    }
+
+    const voice = viCurrentVoice();
+    if (!voice) return;
+
+    if (key === 'i') {
+      viToggleStep();
+      return;
+    }
+    if (key === 'x') {
+      viClearStep();
+      return;
+    }
+    if (key === '%') {
+      viCycleProbability();
+      return;
+    }
+    if (key === 'm') {
+      updateVoice({ ...voice, muted: !voice.muted }, true);
+      return;
+    }
+    if (key === 'z') {
+      updateVoice({ ...voice, soloed: !voice.soloed }, true);
+      return;
+    }
+    if (key === 'r') {
+      reRollPool(voice);
+      return;
+    }
+    if (key === 'o') {
+      pushHistory();
+      viAddVoice(shift);
+      return;
+    }
+    if (key === 'c') {
+      viCycleCadence(1);
+      return;
+    }
+    if (key === 'C') {
+      viCycleCadence(-1);
+      return;
+    }
+    if (key === 'y') {
+      updateVoice({
+        ...voice,
+        pickMode: voice.pickMode === 'seq' ? 'rnd' : 'seq',
+      });
+      return;
+    }
+    if (key === '-') {
+      viAdjustVolume(-0.05);
+      return;
+    }
+    if (key === '=') {
+      viAdjustVolume(0.05);
+      return;
+    }
+    if (key === '_') {
+      viAdjustPitch(-1);
+      return;
+    }
+    if (key === '+') {
+      viAdjustPitch(1);
+      return;
+    }
+    if (key === 'w') {
+      viStepCursor = null;
+      return;
+    }
+    if (key === 'f') {
+      viStepCursor = null;
+      return;
+    }
+    if (key === 'v') {
+      viStepCursor = null;
+      return;
+    }
+    if (key === 'p') {
+      viEnterPool();
+      return;
+    }
+    if (key === 'e') {
+      viSubmode = 'euclid';
+      viStepCursor = null;
+      return;
+    }
+    if (key === 'u') {
+      undo();
+      return;
+    }
+    if (key === '[') {
+      bpm = Math.max(bpm - 1, 40);
+      return;
+    }
+    if (key === ']') {
+      bpm = Math.min(bpm + 1, 240);
+      return;
+    }
+    if (shift && key === '{') {
+      bpm = Math.max(bpm - 5, 40);
+      return;
+    }
+    if (shift && key === '}') {
+      bpm = Math.min(bpm + 5, 240);
+      return;
+    }
+  }
+
+  function viStepLeft() {
+    const v = viCurrentVoice();
+    if (v) {
+      if (viStepCursor === null) viStepCursor = 0;
+      else if (viStepCursor > 0) viStepCursor--;
+    }
+  }
+
+  function viStepRight() {
+    const v = viCurrentVoice();
+    if (v) {
+      if (viStepCursor === null) viStepCursor = 0;
+      else if (viStepCursor < v.stepCount - 1) viStepCursor++;
+    }
+  }
+
+  function viStepToLast() {
+    const v = viCurrentVoice();
+    if (v) viStepCursor = v.stepCount - 1;
+  }
+
+  function viToggleStep() {
+    const v = viCurrentVoice();
+    if (!v || viStepCursor === null) return;
+    const steps = [...v.steps];
+    steps[viStepCursor] = !steps[viStepCursor];
+    updateVoice({ ...v, steps });
+  }
+
+  function viClearStep() {
+    const v = viCurrentVoice();
+    if (!v || viStepCursor === null) return;
+    const steps = [...v.steps];
+    steps[viStepCursor] = false;
+    updateVoice({ ...v, steps });
+  }
+
+  function viCycleProbability() {
+    const v = viCurrentVoice();
+    if (!v || viStepCursor === null) return;
+    const overrides = [...(v.stepOverrides || [])];
+    const probCycle = [null, 100, 75, 50, 25, 0];
+    const cur = overrides[viStepCursor]?.probability ?? null;
+    const idx = probCycle.indexOf(cur);
+    const next = probCycle[(idx + 1) % probCycle.length];
+    if (next == null) {
+      overrides[viStepCursor] = overrides[viStepCursor]
+        ? { ...overrides[viStepCursor], probability: undefined }
+        : null;
+    } else {
+      overrides[viStepCursor] = {
+        ...(overrides[viStepCursor] || {}),
+        probability: next,
+      };
+    }
+    updateVoice({ ...v, stepOverrides: overrides }, true);
+  }
+
+  function viDeleteVoice() {
+    const v = viCurrentVoice();
+    if (!v) return;
+    pushHistory();
+    removeVoice(v.id);
+    viClampVoiceIdx();
+  }
+
+  function viAddVoice(above: boolean) {
+    const v = createVoice('VOICE', 'perc');
+    const insertAt = above ? viVoiceIdx : viVoiceIdx + 1;
+    const next = [...voices];
+    next.splice(insertAt, 0, v);
+    voices = next;
+    viVoiceIdx = Math.min(insertAt, voices.length - 1);
+    if (engine) {
+      engine.createVoiceChain(v.id);
+      fillPool(v);
+    }
+  }
+
+  function viCycleCadence(dir: number) {
+    const v = viCurrentVoice();
+    if (!v) return;
+    const idx = CADENCE_CYCLE.indexOf(v.cadence);
+    const next = (idx + dir + CADENCE_CYCLE.length) % CADENCE_CYCLE.length;
+    updateVoice({ ...v, cadence: CADENCE_CYCLE[next] });
+  }
+
+  function viAdjustVolume(delta: number) {
+    const v = viCurrentVoice();
+    if (!v) return;
+    const vol =
+      Math.round(
+        (Math.max(0, Math.min(1, v.volume + delta)) + Number.EPSILON) * 100,
+      ) / 100;
+    updateVoice({ ...v, volume: vol }, true);
+  }
+
+  function viAdjustPitch(delta: number) {
+    const v = viCurrentVoice();
+    if (!v) return;
+    const pitch = Math.max(-12, Math.min(12, v.pitch + delta));
+    updateVoice({ ...v, pitch }, true);
+  }
+
+  function viEnterPool() {
+    viStepCursor = null;
+    const v = viCurrentVoice();
+    if (!v) return;
+    const info = poolInfo[v.id];
+    if (!info || info.entryCount === 0) return;
+    viSubmode = 'pool';
+    viPoolCursor = info.activeIndex;
+  }
+
+  function viEuclidKey(key: string, shift: boolean) {
+    if (key === 'Escape' || key === 'Enter') {
+      viSubmode = 'normal';
+      return;
+    }
+    const v = viCurrentVoice();
+    if (!v) return;
+    const e = { ...v.euclidean };
+    let changed = false;
+
+    if (key === 'k') {
+      e.pulses = Math.min(e.length, e.pulses + 1);
+      changed = true;
+    }
+    if (key === 'j') {
+      e.pulses = Math.max(1, e.pulses - 1);
+      changed = true;
+    }
+    if (key === 'l') {
+      e.length = Math.min(32, e.length + 1);
+      e.pulses = Math.min(e.pulses, e.length);
+      changed = true;
+    }
+    if (key === 'h') {
+      e.length = Math.max(1, e.length - 1);
+      e.pulses = Math.min(e.pulses, e.length);
+      changed = true;
+    }
+    if (key === ',') {
+      e.offset = (e.offset + 1) % (e.length || 1);
+      changed = true;
+    }
+    if (key === '.') {
+      e.offset = (e.offset - 1 + (e.length || 1)) % (e.length || 1);
+      changed = true;
+    }
+
+    if (changed) updateVoice({ ...v, euclidean: e }, true);
+  }
+
+  function viPoolKey(key: string) {
+    if (key === 'Escape') {
+      viSubmode = 'normal';
+      return;
+    }
+    const v = viCurrentVoice();
+    if (!v) return;
+    const info = poolInfo[v.id];
+    if (!info) return;
+
+    if (key === 'j' || key === 'l') {
+      viPoolCursor = (viPoolCursor + 1) % Math.max(1, info.entryCount);
+    }
+    if (key === 'k' || key === 'h') {
+      viPoolCursor =
+        (viPoolCursor - 1 + info.entryCount) % Math.max(1, info.entryCount);
+    }
+    if (key === ' ') {
+      e.preventDefault();
+      togglePoolPin(v.id, viPoolCursor);
+    }
+    if (key === 'Enter') {
+      previewVoice(v.id, viPoolCursor);
+    }
+    if (key === 'x') {
+      removePoolEntry(v.id, viPoolCursor);
+      viPoolCursor = Math.min(
+        viPoolCursor,
+        Math.max(0, (poolInfo[v.id]?.entryCount ?? 1) - 1),
+      );
+    }
+    if (key === '/') {
+      openSearchForVoice(v.id);
+    }
+    if (key === 'r') {
+      fetchMorePool(v.id, 4);
+    }
+  }
+
+  // ── End vi-mode handler ──────────────────────────────────────────────
+
   onMount(() => {
+    try {
+      viMode = localStorage.getItem('litany-vi') === 'true';
+    } catch {}
     if (window.location.hash) {
       try {
         const saved = decodeState(window.location.hash.slice(1));
@@ -484,6 +942,8 @@
   });
 </script>
 
+<svelte:window onkeydown={viKeydown} />
+
 <div class="litany-exp">
   <Toolbar
     {playing}
@@ -494,6 +954,7 @@
     undoCount={undoStack.length}
     redoCount={redoStack.length}
     {layout}
+    {viMode}
     onUndo={undo}
     onRedo={redo}
     onLayoutToggle={() => (layout = layout === 'grid' ? 'rows' : 'grid')}
@@ -508,15 +969,18 @@
     onRandomizeAll={doRandomizeAll}
     onChaos={doChaos}
     onAddVoice={addVoice}
+    onViToggle={toggleVi}
   />
 
   <div class="voice-grid" class:voice-grid--rows={layout === 'rows'}>
-    {#each voices as voice (voice.id)}
+    {#each voices as voice, i}
       {@const info = poolInfo[voice.id]}
       <VoiceCard
         {voice}
         {globalTick}
         {layout}
+        viActive={viMode && i === viVoiceIdx}
+        viStepCursor={viMode && i === viVoiceIdx ? viStepCursor : null}
         poolStatus={info?.status ?? 'idle'}
         currentSampleName={info?.currentName ?? ''}
         activeEntryIndex={info?.activeIndex ?? 0}
@@ -550,6 +1014,13 @@
       class:add-card--row={layout === 'rows'}
       onclick={addVoice}>+ ADD VOICE</button
     >
+    {#if viMode}
+      <ViMode
+        submode={viSubmode}
+        voiceIndex={viVoiceIdx}
+        voiceCount={voices.length}
+      />
+    {/if}
   </div>
 
   <MasterSection
