@@ -21,6 +21,7 @@
   <div class="vimode-voice">voice {voiceIndex + 1}/{voiceCount}</div>
   <div class="vimode-keys">
     {#if submode === 'normal'}
+      <div class="vimode-row"><kbd>Space</kbd><kbd>P</kbd> play/stop</div>
       <div class="vimode-row"><kbd>j</kbd><kbd>k</kbd> voice</div>
       <div class="vimode-row"><kbd>h</kbd><kbd>l</kbd> step</div>
       <div class="vimode-row"><kbd>i</kbd> toggle <kbd>x</kbd> clear</div>
@@ -40,13 +41,15 @@
       <div class="vimode-row"><kbd>[</kbd><kbd>]</kbd> bpm</div>
       <div class="vimode-row"><kbd>u</kbd> undo <kbd>^R</kbd> redo</div>
     {:else if submode === 'euclid'}
+      <div class="vimode-row"><kbd>Space</kbd><kbd>P</kbd> play/stop</div>
       <div class="vimode-row"><kbd>k</kbd><kbd>j</kbd> pulses</div>
       <div class="vimode-row"><kbd>l</kbd><kbd>h</kbd> length</div>
       <div class="vimode-row"><kbd>.</kbd><kbd>,</kbd> offset</div>
       <div class="vimode-row"><kbd>Esc</kbd> back</div>
     {:else if submode === 'pool'}
+      <div class="vimode-row"><kbd>Space</kbd><kbd>P</kbd> play/stop</div>
       <div class="vimode-row"><kbd>j</kbd><kbd>k</kbd> entry</div>
-      <div class="vimode-row"><kbd>Space</kbd> lock</div>
+      <div class="vimode-row"><kbd>l</kbd> lock</div>
       <div class="vimode-row"><kbd>Enter</kbd> preview</div>
       <div class="vimode-row"><kbd>x</kbd> remove</div>
       <div class="vimode-row"><kbd>/</kbd> search</div>
