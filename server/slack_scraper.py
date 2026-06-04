@@ -1037,14 +1037,7 @@ def _run_scrape(channels: dict[str, str], incremental: bool = False) -> dict:
         # it doesn't block new scrapes from starting.
         # Guard: don't stack multiple post-scrape threads (each holds a
         # SessionLocal connection; concurrent runs exhaust QueuePool).
-        with _post_extraction_lock:
-            if _post_extraction_running:
-                logger.info("Post-scrape extraction already running, skipping")
-            else:
-                _post_extraction_running = True
-                with _status_lock:
-                    _scrape_status["current_channel"] = "_extraction"
-                threading.Thread(target=_wrap_post_scrape_extraction, daemon=True).start()
+        _start_post_scrape_extraction()
 
     finally:
         with _status_lock:
@@ -1053,6 +1046,19 @@ def _run_scrape(channels: dict[str, str], incremental: bool = False) -> dict:
             _scrape_status["last_result"] = results
 
     return results
+
+
+def _start_post_scrape_extraction():
+    """Spawn post-scrape extraction if not already running."""
+    global _post_extraction_running
+    with _post_extraction_lock:
+        if _post_extraction_running:
+            logger.info("Post-scrape extraction already running, skipping")
+            return
+        _post_extraction_running = True
+    with _status_lock:
+        _scrape_status["current_channel"] = "_extraction"
+    threading.Thread(target=_wrap_post_scrape_extraction, daemon=True).start()
 
 
 def _wrap_post_scrape_extraction():
