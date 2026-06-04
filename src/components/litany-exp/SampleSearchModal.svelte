@@ -32,6 +32,7 @@
   let audioCtx: AudioContext | null = null;
   let searching = $state(false);
   let searchTimeout: ReturnType<typeof setTimeout> | null = null;
+  let adding = $state(false);
 
   function getAudioCtx(): AudioContext {
     if (!audioCtx) audioCtx = new AudioContext();
@@ -160,12 +161,14 @@
   }
 
   function addSelected() {
-    if (selectedIds.size === 0) return;
+    if (selectedIds.size === 0 || adding) return;
+    adding = true;
     const selected = hits
       .filter((h) => selectedIds.has(h.id))
       .map((h) => ({ id: h.id, filename: h.filename }));
     onAdd(selected);
     selectedIds = new Set();
+    adding = false;
   }
 
   function handleKeydown(e: KeyboardEvent) {

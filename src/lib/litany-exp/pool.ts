@@ -109,26 +109,6 @@ export class SamplePool {
     onUpdate?.();
   }
 
-  addFromPreview(buffer: AudioBuffer, name: string, mediaId?: string): boolean {
-    if (this.entries.length >= MAX_POOL_SIZE) return false;
-
-    const existingIds = new Set(
-      this.entries
-        .filter(Boolean)
-        .map((e) => e!.mediaId)
-        .filter(Boolean),
-    );
-    if (mediaId && existingIds.has(mediaId)) return false;
-
-    this.entries.push({
-      buffer,
-      name,
-      mediaId,
-      source: 'manual',
-    });
-    return true;
-  }
-
   next(
     rotation: Rotation,
     pinnedRotation: PinnedRotation | undefined,
@@ -249,9 +229,7 @@ export class SamplePool {
     if (this.index >= this.entries.length) {
       this.index = this.entries.length > 0 ? 0 : 0;
     }
-    if (this.pinnedCursor >= newPinned.size && newPinned.size > 0) {
-      this.pinnedCursor = 0;
-    }
+    this.pinnedCursor = 0;
   }
 
   moveEntry(fromIndex: number, toIndex: number): void {
@@ -288,6 +266,7 @@ export class SamplePool {
     }
     this.pinnedIndexes = newPinned;
     this.pins = this.getPinnedNames();
+    this.pinnedCursor = 0;
   }
 
   repinFromNames(names: string[]): void {
