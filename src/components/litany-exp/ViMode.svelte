@@ -1,6 +1,6 @@
 <script lang="ts">
   interface Props {
-    submode: 'normal' | 'euclid' | 'pool';
+    submode: 'normal' | 'euclid' | 'pool' | 'fx' | 'env';
     voiceIndex: number;
     voiceCount: number;
   }
@@ -12,7 +12,11 @@
       ? 'NORMAL'
       : submode === 'euclid'
         ? 'EUCLIDEAN'
-        : 'POOL',
+        : submode === 'pool'
+          ? 'POOL'
+          : submode === 'fx'
+            ? 'FX'
+            : 'ENV',
   );
 </script>
 
@@ -54,6 +58,25 @@
       <div class="vimode-row"><kbd>x</kbd> remove</div>
       <div class="vimode-row"><kbd>/</kbd> search</div>
       <div class="vimode-row"><kbd>r</kbd> +4 more</div>
+      <div class="vimode-row"><kbd>Esc</kbd> back</div>
+    {/if}
+    {#if submode === 'fx'}
+      <div class="vimode-row"><kbd>Space</kbd><kbd>P</kbd> play/stop</div>
+      <div class="vimode-row"><kbd>j</kbd><kbd>k</kbd> delay time</div>
+      <div class="vimode-row"><kbd>h</kbd><kbd>l</kbd> feedback</div>
+      <div class="vimode-row"><kbd>-</kbd><kbd>=</kbd> delay wet</div>
+      <div class="vimode-row"><kbd>_</kbd><kbd>+</kbd> reverb wet</div>
+      <div class="vimode-row"><kbd>J</kbd><kbd>K</kbd> filter freq</div>
+      <div class="vimode-row"><kbd>H</kbd><kbd>L</kbd> filter Q</div>
+      <div class="vimode-row"><kbd>c</kbd> filter type</div>
+      <div class="vimode-row"><kbd>Esc</kbd> back</div>
+    {/if}
+    {#if submode === 'env'}
+      <div class="vimode-row"><kbd>Space</kbd><kbd>P</kbd> play/stop</div>
+      <div class="vimode-row"><kbd>j</kbd><kbd>k</kbd> attack</div>
+      <div class="vimode-row"><kbd>l</kbd><kbd>h</kbd> release</div>
+      <div class="vimode-row"><kbd>c</kbd> atk curve</div>
+      <div class="vimode-row"><kbd>C</kbd> rel curve</div>
       <div class="vimode-row"><kbd>Esc</kbd> back</div>
     {/if}
   </div>

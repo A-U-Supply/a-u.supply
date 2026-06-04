@@ -53,7 +53,7 @@
   let searchTargetVoiceId = $state('');
 
   let viMode = $state(false);
-  let viSubmode = $state<'normal' | 'euclid' | 'pool'>('normal');
+  let viSubmode = $state<'normal' | 'euclid' | 'pool' | 'fx' | 'env'>('normal');
   let viVoiceIdx = $state(0);
   let viStepCursor = $state<number | null>(null);
   let viPoolCursor = $state(0);
@@ -108,9 +108,6 @@
 
   $effect(() => {
     void viVoiceIdx;
-    viPanelPool = false;
-    viPanelFx = false;
-    viPanelEnv = false;
     viStepCursor = null;
   });
 
@@ -539,6 +536,15 @@
     const shift = e.shiftKey;
     const ctrl = e.ctrlKey || e.metaKey;
 
+    // Let Ctrl/Cmd combos pass through to browser (cmd-f, cmd-c, etc.)
+    if (ctrl) {
+      if (key === 'r') {
+        e.preventDefault();
+        redo();
+      }
+      return;
+    }
+
     // Global: play/stop — Space and Shift+P always work
     if (key === ' ' || key === 'P') {
       e.preventDefault();
@@ -552,6 +558,14 @@
     }
     if (viSubmode === 'pool') {
       viPoolKey(key);
+      return;
+    }
+    if (viSubmode === 'fx') {
+      viFxKey(key);
+      return;
+    }
+    if (viSubmode === 'env') {
+      viEnvKey(key);
       return;
     }
 
@@ -584,9 +598,6 @@
     if (key === 'Escape') {
       viStepCursor = null;
       viPending = null;
-      viPanelPool = false;
-      viPanelFx = false;
-      viPanelEnv = false;
       return;
     }
     if (ctrl && key === 'r') {
@@ -709,18 +720,43 @@
       return;
     }
     if (key === 'f') {
-      viPanelFx = !viPanelFx;
+      viSubmode = 'fx';
+      viPanelFx = true;
       viStepCursor = null;
       return;
     }
     if (key === 'v') {
-      viPanelEnv = !viPanelEnv;
+      viSubmode = 'env';
+      viPanelEnv = true;
       viStepCursor = null;
       return;
     }
     if (key === 'p') {
       viPanelPool = true;
+      viPanelFx = false;
+      viPanelEnv = false;
       viEnterPool();
+      return;
+    }
+    if (key === 'e') {
+      viSubmode = 'euclid';
+      viStepCursor = null;
+      return;
+    }
+    if (key === 'f') {
+      viSubmode = 'fx';
+      viPanelFx = true;
+      viPanelPool = false;
+      viPanelEnv = false;
+      viStepCursor = null;
+      return;
+    }
+    if (key === 'v') {
+      viSubmode = 'env';
+      viPanelEnv = true;
+      viPanelPool = false;
+      viPanelFx = false;
+      viStepCursor = null;
       return;
     }
     if (key === 'e') {
@@ -922,10 +958,6 @@
       viPoolCursor =
         (viPoolCursor - 1 + info.entryCount) % Math.max(1, info.entryCount);
     }
-    if (key === 'k' || key === 'h') {
-      viPoolCursor =
-        (viPoolCursor - 1 + info.entryCount) % Math.max(1, info.entryCount);
-    }
     if (key === 'l') {
       togglePoolPin(v.id, viPoolCursor);
     }
@@ -945,6 +977,147 @@
     if (key === 'r') {
       fetchMorePool(v.id, 4);
     }
+  }
+
+  function viFxKey(key: string) {
+    if (key === 'Escape') {
+      viSubmode = 'normal';
+      return;
+    }
+    const v = viCurrentVoice();
+    if (!v) return;
+    const fx = { ...v.fx };
+    let changed = false;
+
+    if (key === 'j') {
+      fx.delayTime =
+        Math.round((Math.min(1, fx.delayTime + 0.05) + Number.EPSILON) * 100) /
+        100;
+      changed = true;
+    }
+    if (key === 'k') {
+      fx.delayTime =
+        Math.round(
+          (Math.max(0.01, fx.delayTime - 0.05) + Number.EPSILON) * 100,
+        ) / 100;
+      changed = true;
+    }
+    if (key === 'h') {
+      fx.delayFeedback =
+        Math.round(
+          (Math.min(0.95, fx.delayFeedback + 0.05) + Number.EPSILON) * 100,
+        ) / 100;
+      changed = true;
+    }
+    if (key === 'l') {
+      fx.delayFeedback =
+        Math.round(
+          (Math.max(0, fx.delayFeedback - 0.05) + Number.EPSILON) * 100,
+        ) / 100;
+      changed = true;
+    }
+    if (key === '-') {
+      fx.delayWet =
+        Math.round((Math.min(1, fx.delayWet + 0.05) + Number.EPSILON) * 100) /
+        100;
+      changed = true;
+    }
+    if (key === '=') {
+      fx.delayWet =
+        Math.round((Math.max(0, fx.delayWet - 0.05) + Number.EPSILON) * 100) /
+        100;
+      changed = true;
+    }
+    if (key === '_') {
+      fx.reverbWet =
+        Math.round((Math.min(1, fx.reverbWet + 0.05) + Number.EPSILON) * 100) /
+        100;
+      changed = true;
+    }
+    if (key === '+') {
+      fx.reverbWet =
+        Math.round((Math.max(0, fx.reverbWet - 0.05) + Number.EPSILON) * 100) /
+        100;
+      changed = true;
+    }
+    if (key === 'J') {
+      fx.filterFreq = Math.min(20000, fx.filterFreq + 500);
+      changed = true;
+    }
+    if (key === 'K') {
+      fx.filterFreq = Math.max(80, fx.filterFreq - 500);
+      changed = true;
+    }
+    if (key === 'H') {
+      fx.filterQ =
+        Math.round((Math.min(20, fx.filterQ + 0.5) + Number.EPSILON) * 10) / 10;
+      changed = true;
+    }
+    if (key === 'L') {
+      fx.filterQ =
+        Math.round((Math.max(0.1, fx.filterQ - 0.5) + Number.EPSILON) * 10) /
+        10;
+      changed = true;
+    }
+    if (key === 'c') {
+      const types: BiquadFilterType[] = [
+        'lowpass',
+        'highpass',
+        'bandpass',
+        'notch',
+      ];
+      const idx = types.indexOf(fx.filterType);
+      fx.filterType = types[(idx + 1) % types.length];
+      changed = true;
+    }
+
+    if (changed) updateVoice({ ...v, fx }, true);
+  }
+
+  function viEnvKey(key: string) {
+    if (key === 'Escape') {
+      viSubmode = 'normal';
+      return;
+    }
+    const v = viCurrentVoice();
+    if (!v) return;
+    const env = { ...v.envelope };
+    let changed = false;
+
+    if (key === 'j') {
+      env.attack =
+        Math.round((Math.min(2, env.attack + 0.05) + Number.EPSILON) * 100) /
+        100;
+      changed = true;
+    }
+    if (key === 'k') {
+      env.attack =
+        Math.round((Math.max(0, env.attack - 0.05) + Number.EPSILON) * 100) /
+        100;
+      changed = true;
+    }
+    if (key === 'l') {
+      env.release =
+        Math.round((Math.min(3, env.release + 0.05) + Number.EPSILON) * 100) /
+        100;
+      changed = true;
+    }
+    if (key === 'h') {
+      env.release =
+        Math.round((Math.max(0, env.release - 0.05) + Number.EPSILON) * 100) /
+        100;
+      changed = true;
+    }
+    if (key === 'c') {
+      env.attackCurve = env.attackCurve === 'linear' ? 'exp' : 'linear';
+      changed = true;
+    }
+    if (key === 'C') {
+      env.releaseCurve = env.releaseCurve === 'linear' ? 'exp' : 'linear';
+      changed = true;
+    }
+
+    if (changed) updateVoice({ ...v, envelope: env }, true);
   }
 
   // ── End vi-mode handler ──────────────────────────────────────────────
@@ -1013,6 +1186,9 @@
         viPoolOpen={viMode && i === viVoiceIdx && viPanelPool}
         viFxOpen={viMode && i === viVoiceIdx && viPanelFx}
         viEnvOpen={viMode && i === viVoiceIdx && viPanelEnv}
+        viPoolCursor={viMode && i === viVoiceIdx && viSubmode === 'pool'
+          ? viPoolCursor
+          : -1}
         poolStatus={info?.status ?? 'idle'}
         currentSampleName={info?.currentName ?? ''}
         activeEntryIndex={info?.activeIndex ?? 0}
