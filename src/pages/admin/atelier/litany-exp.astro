@@ -22,6 +22,16 @@ import '../../../styles/atelier/litany-exp.css';
   <LitanyExp client:only="svelte" />
 
   <div class="litany-docs">
+    <div class="litany-docs-header">
+      <p class="litany-docs-blurb">
+        Reference docs — all controls, features, and keyboard shortcuts.
+      </p>
+      <button
+        class="brutalist-control litany-docs-toggle"
+        id="docs-toggle"
+        type="button">Expand all</button
+      >
+    </div>
     <details>
       <summary>Voices &amp; samples</summary>
       <div class="litany-docs-body">
@@ -477,6 +487,18 @@ import '../../../styles/atelier/litany-exp.css';
       </div>
     </details>
   </div>
+
+  <script>
+    const toggle = document.getElementById('docs-toggle');
+    const details = document.querySelectorAll('.litany-docs details');
+    if (toggle) {
+      toggle.addEventListener('click', () => {
+        const allOpen = [...details].every((d) => d.open);
+        details.forEach((d) => (d.open = !allOpen));
+        toggle.textContent = allOpen ? 'Expand all' : 'Collapse all';
+      });
+    }
+  </script>
 </Admin>
 <style is:global>
   .litany-docs-overview {
@@ -505,6 +527,35 @@ import '../../../styles/atelier/litany-exp.css';
     font-size: 0.75rem;
     line-height: 1.6;
     color: var(--lit-text-dim, #7d8590);
+  }
+
+  .litany-docs-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--lit-border, #262c30);
+  }
+
+  .litany-docs-blurb {
+    margin: 0;
+    font-size: 0.7rem;
+    color: var(--lit-text-faint, #5a6270);
+  }
+
+  .litany-docs-toggle {
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    background: var(--lit-cell);
+    color: var(--lit-text-dim);
+    border: 1px solid var(--lit-border);
+    cursor: pointer;
+  }
+
+  .litany-docs-toggle:hover {
+    border-color: var(--lit-border-hover);
+    color: var(--lit-text);
   }
 
   .litany-docs details {
