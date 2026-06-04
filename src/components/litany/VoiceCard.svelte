@@ -581,7 +581,6 @@
     flex-direction: column;
     gap: 8px;
     min-width: 0;
-    overflow: hidden;
   }
 
   .voice-card--row {
@@ -755,16 +754,19 @@
     flex-direction: column;
     gap: 6px;
     min-width: 0;
+    overflow: visible;
   }
 
   .voice-card--row .right-col {
     flex-shrink: 0;
+    min-width: 260px;
   }
 
   .controls-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    flex-wrap: wrap;
   }
 
   .vol-label {
@@ -830,6 +832,7 @@
     display: flex;
     gap: 4px;
     align-items: center;
+    flex-wrap: wrap;
   }
 
   .meta-select,
@@ -838,6 +841,7 @@
     padding: 2px 4px;
     background: var(--lit-cell);
     color: var(--lit-text-dim);
+    white-space: nowrap;
   }
 
   .meta-btn {
@@ -847,6 +851,7 @@
 
   .fx-wrap {
     width: 100%;
+    min-width: 0;
   }
 
   .voice-card--row .fx-wrap {

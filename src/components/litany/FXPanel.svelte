@@ -133,7 +133,6 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    overflow: hidden;
   }
 
   .fx-row {
@@ -156,12 +155,12 @@
     gap: 4px;
     font-size: 0.65rem;
     color: var(--lit-text-dim);
-    flex: 1;
+    flex: 1 1 80px;
     min-width: 80px;
   }
 
   .fx-field--wide {
-    flex: 2;
+    flex: 2 1 100px;
   }
 
   .fx-field span {

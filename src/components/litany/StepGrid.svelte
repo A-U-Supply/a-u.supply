@@ -89,6 +89,7 @@
     display: grid;
     grid-template-columns: repeat(var(--cols), 1fr);
     gap: 2px;
+    min-width: 0;
   }
 
   .step {
