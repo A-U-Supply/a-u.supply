@@ -326,7 +326,7 @@ import Admin from '../../../layouts/Admin.astro';
         <input class="name-input" id="name-input" type="text" value="${escapeHtml(p.name)}" />
         <input class="slug-input" id="slug-input" type="text" value="${escapeHtml(p.slug || '')}" title="URL slug" />
         <select class="kind-select" id="kind-select">
-          ${['album', 'video', 'zine', 'other']
+          ${['album', 'video', 'zine', 'session', 'other']
             .map(
               (k) =>
                 `<option value="${k}" ${k === p.kind ? 'selected' : ''}>${k}</option>`,

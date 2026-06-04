@@ -74,6 +74,7 @@ def _slot_label_default(kind: str, position: int) -> str:
         "album": f"Track {position}",
         "video": f"Scene {position}",
         "zine": f"Spread {position}",
+        "session": f"Cut {position}",
     }.get(kind, f"Part {position}")
 
 
@@ -205,7 +206,7 @@ def _pin_map_for_slot(db: Session, slot_id: str) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 
-VALID_KINDS = {"album", "video", "zine", "other"}
+VALID_KINDS = {"album", "video", "zine", "session", "other"}
 VALID_PROJECT_STATUSES = {"forming", "developing", "fixing", "abandoned"}
 VALID_SLOT_STATUSES = {"forming", "developing", "fixed"}
 VALID_PIN_TYPES = {"image", "audio", "video", "session"}

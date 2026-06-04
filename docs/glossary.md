@@ -36,7 +36,7 @@ The `current=` slug is what `<Admin current="…">` expects in each page's front
 |------|------------|
 | **Emulsion** | Fourth Meilisearch index, parallel to `images` / `audio` / `video`. Holds admin-uploaded media that isn't tied to a release — the pre-release WIP pool. Source: [`plans/2026-05-15-latents.md`](plans/2026-05-15-latents.md). |
 | **Stacks** | (a) The sidebar entry that opens the search UI. (b) The global private Lemmy community that hosts media-item-anchored discussion threads across all search indices. |
-| **Latent** | A single in-progress work inside the Latents section — album, video, zine, anything. Subdivided into ordered **slots** (Track N / Scene N / Spread N / Part N) plus loose files, named documents, and threaded discussion. |
+| **Latent** | A single in-progress work inside the Latents section — album, video, zine, session, anything. Subdivided into ordered **slots** (Track N / Scene N / Spread N / Cut N / Part N) plus loose files, named documents, and threaded discussion. |
 | **fold** | The private Lemmy instance at `fold.a-u.supply` that backs Latents discussion and the `stacks` community. Federation is disabled; communities are local-only. |
 | **Altar of the Day** | A daily-rotating featured media item shown on the Auspices dashboard. Backed by `GET /api/admin/altar`. |
 | **Supply-side** | The Slack channel where deploy and activity notifications go (`#supply-side`, ID `C0AUNJ6BMJT`). See [`plans/2026-04-24-slack-activity-log.md`](plans/2026-04-24-slack-activity-log.md). |
