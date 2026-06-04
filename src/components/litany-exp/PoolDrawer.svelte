@@ -13,6 +13,7 @@
     onMoveEntry: (fromIndex: number, toIndex: number) => void;
     onOpenSearch: () => void;
     onFetchMore: () => void;
+    selectedIndex: number;
   }
 
   let {
@@ -27,6 +28,7 @@
     onMoveEntry,
     onOpenSearch,
     onFetchMore,
+    selectedIndex = -1,
   }: Props = $props();
 
   const MAX_POOL_SIZE = 16;
@@ -86,6 +88,7 @@
           <div
             class="pool-chip"
             class:pool-chip--active={i === activeEntryIndex}
+            class:pool-chip--selected={i === selectedIndex}
             class:pool-chip--dragging={dragFrom === i}
             class:pool-chip--drover={dragOver === i}
             class:pool-chip--pinned={entry.pinned}
@@ -213,6 +216,12 @@
   .pool-chip--pinned {
     border-color: var(--lit-accent);
     background: #1a1600;
+  }
+
+  .pool-chip--selected {
+    border-color: var(--lit-blue);
+    border-style: dashed;
+    background: #0a1220;
   }
 
   .pool-chip--dragging {

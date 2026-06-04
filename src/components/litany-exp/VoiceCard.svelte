@@ -41,6 +41,7 @@
     viPoolOpen: boolean;
     viFxOpen: boolean;
     viEnvOpen: boolean;
+    viPoolCursor: number;
   }
 
   let {
@@ -71,6 +72,7 @@
     viPoolOpen = false,
     viFxOpen = false,
     viEnvOpen = false,
+    viPoolCursor = 0,
   }: Props = $props();
 
   let fxOpen = $state(false);
@@ -600,6 +602,7 @@
         {poolEntryCount}
         {poolPinnedCount}
         {poolStatus}
+        selectedIndex={viPoolCursor}
         {onPreviewEntry}
         {onTogglePin}
         {onRemoveEntry}
