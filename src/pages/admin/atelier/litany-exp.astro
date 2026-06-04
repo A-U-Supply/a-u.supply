@@ -406,10 +406,11 @@ import '../../../styles/atelier/litany-exp.css';
         <h3>Pin = lock for re-roll</h3>
         <p>
           Each pool entry has a lock toggle (<code>&#128274;</code>) in the POOL
-          drawer. Locked entries are <strong>preserved when you re-roll</strong> —
-          the pool fetches new random samples from the query to fill around them back
-          up to 8. Remove entries you don&rsquo;t want; the rotation operates on the
-          whole pool uniformly.
+          drawer. <strong>Locked entries are the only ones that play</strong> —
+          the rotation cycles through the locked set exclusively. Locked entries
+          are also <strong>preserved when you re-roll</strong> — the pool fetches
+          new random samples from the query to fill around them back up to 8.
+          Unlock everything to play from the full pool again.
         </p>
         <p>
           Open the <strong>POOL drawer</strong> to see and manage all entries. Drag

@@ -32,6 +32,7 @@ export class SamplePool {
   private index = 0;
   pinnedIndexes: Set<number> = new Set();
   pins: string[] = [];
+  private lockedCursor = 0;
   private barCount = 0;
   private lastQuery = '';
 
@@ -134,6 +135,23 @@ export class SamplePool {
     isBarStart: boolean,
     barCount: number,
   ): AudioBuffer | null {
+    const lockedIndices = Array.from(this.pinnedIndexes).sort((a, b) => a - b);
+
+    if (lockedIndices.length > 0) {
+      const mod = CADENCE_MOD[cadence] ?? 0;
+      const shouldAdvance =
+        cadence === 'hit' || (isBarStart && mod > 0 && barCount % mod === 0);
+
+      if (shouldAdvance) {
+        if (pickMode === 'seq') this.advanceLockedCursor(lockedIndices);
+        else this.randomLockedIndex(lockedIndices);
+      }
+
+      const entry = this.entries[lockedIndices[this.lockedCursor]];
+      if (entry) this.currentName = entry.name;
+      return entry?.buffer ?? null;
+    }
+
     if (this.entries.length === 0) return null;
 
     const mod = CADENCE_MOD[cadence] ?? 0;
@@ -166,6 +184,16 @@ export class SamplePool {
     this.index = valid[Math.floor(Math.random() * valid.length)];
   }
 
+  private advanceLockedCursor(lockedIndices: number[]): void {
+    if (lockedIndices.length === 0) return;
+    this.lockedCursor = (this.lockedCursor + 1) % lockedIndices.length;
+  }
+
+  private randomLockedIndex(lockedIndices: number[]): void {
+    if (lockedIndices.length === 0) return;
+    this.lockedCursor = Math.floor(Math.random() * lockedIndices.length);
+  }
+
   private currentEntry(): PoolEntry | null {
     return this.entries[this.index] ?? null;
   }
@@ -173,6 +201,11 @@ export class SamplePool {
   previewBuffer(index?: number): AudioBuffer | null {
     if (index != null) {
       return this.entries[index]?.buffer ?? null;
+    }
+
+    const lockedIndices = Array.from(this.pinnedIndexes).sort((a, b) => a - b);
+    if (lockedIndices.length > 0 && this.lockedCursor < lockedIndices.length) {
+      return this.entries[lockedIndices[this.lockedCursor]]?.buffer ?? null;
     }
     return this.currentEntry()?.buffer ?? null;
   }
@@ -188,10 +221,12 @@ export class SamplePool {
     if (this.pinnedIndexes.has(index)) {
       this.pinnedIndexes.delete(index);
       this.pins = this.pins.filter((n) => n !== this.entries[index]!.name);
+      this.lockedCursor = 0;
       return false;
     } else {
       this.pinnedIndexes.add(index);
       this.pins.push(this.entries[index]!.name);
+      this.lockedCursor = 0;
       return true;
     }
   }
@@ -203,6 +238,10 @@ export class SamplePool {
   }
 
   getActiveIndex(): number {
+    const lockedIndices = Array.from(this.pinnedIndexes).sort((a, b) => a - b);
+    if (lockedIndices.length > 0 && this.lockedCursor < lockedIndices.length) {
+      return lockedIndices[this.lockedCursor];
+    }
     return this.index;
   }
 
@@ -223,6 +262,7 @@ export class SamplePool {
     if (this.index >= this.entries.length) {
       this.index = this.entries.length > 0 ? 0 : 0;
     }
+    this.lockedCursor = 0;
   }
 
   moveEntry(fromIndex: number, toIndex: number): void {
@@ -259,11 +299,13 @@ export class SamplePool {
     }
     this.pinnedIndexes = newPinned;
     this.pins = this.getPinnedNames();
+    this.lockedCursor = 0;
   }
 
   repinFromNames(names: string[]): void {
     this.pinnedIndexes = new Set();
     this.pins = [];
+    this.lockedCursor = 0;
     for (const name of names) {
       const idx = this.entries.findIndex((e) => e?.name === name);
       if (idx !== -1) {

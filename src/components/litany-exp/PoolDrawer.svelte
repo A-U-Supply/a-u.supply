@@ -211,7 +211,8 @@
   }
 
   .pool-chip--pinned {
-    border-color: #3a3500;
+    border-color: var(--lit-accent);
+    background: #1a1600;
   }
 
   .pool-chip--dragging {
@@ -259,6 +260,7 @@
 
   .chip-pin--on {
     color: var(--lit-accent);
+    text-shadow: 0 0 4px rgba(230, 168, 23, 0.4);
   }
 
   .chip-remove:hover {
