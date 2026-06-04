@@ -7,7 +7,6 @@
   import { AudioEngine } from '../lib/litany-exp/audio.ts';
   import { Scheduler } from '../lib/litany-exp/scheduler.ts';
   import { SamplePool, type PoolStatus } from '../lib/litany-exp/pool.ts';
-  import type { PoolEntry } from '../lib/litany-exp/pool.ts';
   import {
     defaultVoices,
     createVoice,
@@ -210,7 +209,6 @@
     if (!pool) return;
     pool.removeEntry(index);
     syncVoicePins(voiceId);
-    poolInfo[voiceId] = buildPoolInfo(pool);
   }
 
   function movePoolEntry(voiceId: string, fromIndex: number, toIndex: number) {
