@@ -90,7 +90,6 @@
     border-top: 1px solid var(--lit-border);
     padding: 12px 0 6px;
     flex-wrap: wrap;
-    overflow: hidden;
   }
 
   .master-label {
@@ -107,7 +106,7 @@
     font-size: 0.65rem;
     color: var(--lit-text-dim);
     flex: 1;
-    min-width: 120px;
+    min-width: 100px;
   }
 
   .master-control span {

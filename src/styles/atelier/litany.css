@@ -32,6 +32,9 @@
     'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', 'Courier New',
     monospace;
 
+  --lit-track: #2a3036;
+  --lit-track-progress: var(--lit-accent);
+
   /* ── Semantic aliases for specific UI states ─────────────────────────── */
   --lit-step-off-bg: transparent;
   --lit-step-on-bg: var(--lit-accent);
@@ -51,6 +54,7 @@
   --lit-error-border: #4a2020;
 
   /* ── Inherit for Svelte scoped-styles to pick up ────────────────────── */
+  background-color: var(--lit-bg);
   color: var(--lit-text);
   font-family: var(--lit-font);
   font-size: 13px;
@@ -117,11 +121,10 @@
   }
 }
 
-/* ── Range slider styling ──────────────────────────────────────────────── */
+/* ── Range slider styling — mpump-inspired slim groovebox design ──────── */
 
-/* Reset native appearance so pseudo-elements take over */
 .litany input[type='range'] {
-  accent-color: transparent;
+  accent-color: var(--lit-accent);
   appearance: none;
   -webkit-appearance: none;
   background: transparent;
@@ -133,67 +136,84 @@
   cursor: pointer;
 }
 
-/* ---- Track ---- */
+/* ---- Track (subtle groove line) ---- */
 
 .litany input[type='range']::-webkit-slider-runnable-track {
-  height: 3px;
-  background: var(--lit-border-hover);
-  border-radius: 2px;
+  height: 2px;
+  background: var(--lit-track);
+  border-radius: 1px;
   border: none;
 }
 
 .litany input[type='range']::-moz-range-track {
-  height: 3px;
-  background: var(--lit-border-hover);
-  border-radius: 2px;
+  height: 2px;
+  background: var(--lit-track);
+  border-radius: 1px;
   border: none;
 }
 
-/* Progress fill (Firefox only — WebKit needs JS) */
 .litany input[type='range']::-moz-range-progress {
-  height: 3px;
-  background: var(--lit-accent);
-  border-radius: 2px;
+  height: 2px;
+  background: var(--lit-track-progress);
+  border-radius: 1px;
 }
 
-/* ---- Thumb ---- */
+/* ---- Thumb (tiny amber dot, mpump-style) ---- */
 
 .litany input[type='range']::-webkit-slider-thumb {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--lit-text);
-  border: none;
-  margin-top: -3.5px;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  background: var(--lit-accent) !important;
+  border: none !important;
+  margin-top: -3px;
   cursor: pointer;
+  box-shadow: 0 0 4px rgba(230, 168, 23, 0.3);
   transition:
     background 0.1s,
+    box-shadow 0.1s,
     transform 0.1s;
 }
 
 .litany input[type='range']::-webkit-slider-thumb:hover {
-  background: var(--lit-accent);
+  background: var(--lit-accent-hover) !important;
+  box-shadow: 0 0 8px rgba(230, 168, 23, 0.5);
+  transform: scale(1.15);
+}
+
+.litany input[type='range']::-webkit-slider-thumb:active {
+  background: var(--lit-accent-bright) !important;
+  box-shadow: 0 0 12px rgba(230, 168, 23, 0.7);
+  transform: scale(1.3);
 }
 
 .litany input[type='range']::-moz-range-thumb {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--lit-text);
-  border: none;
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  background: var(--lit-accent) !important;
+  border: none !important;
   cursor: pointer;
+  box-shadow: 0 0 4px rgba(230, 168, 23, 0.3);
   transition:
     background 0.1s,
+    box-shadow 0.1s,
     transform 0.1s;
 }
 
 .litany input[type='range']::-moz-range-thumb:hover {
-  background: var(--lit-accent);
+  background: var(--lit-accent-hover) !important;
+  box-shadow: 0 0 8px rgba(230, 168, 23, 0.5);
 }
 
-/* ---- Mobile thumbs ---- */
+.litany input[type='range']::-moz-range-thumb:active {
+  background: var(--lit-accent-bright) !important;
+  box-shadow: 0 0 12px rgba(230, 168, 23, 0.7);
+}
+
+/* ---- Mobile / touch targets ---- */
 
 @media (pointer: coarse) {
   .litany input[type='range'] {
@@ -201,25 +221,25 @@
   }
 
   .litany input[type='range']::-webkit-slider-runnable-track {
-    height: 4px;
+    height: 3px;
   }
 
   .litany input[type='range']::-moz-range-track {
-    height: 4px;
+    height: 3px;
   }
 
   .litany input[type='range']::-moz-range-progress {
-    height: 4px;
+    height: 3px;
   }
 
   .litany input[type='range']::-webkit-slider-thumb {
-    width: 18px;
-    height: 18px;
-    margin-top: -7px;
+    width: 20px !important;
+    height: 20px !important;
+    margin-top: -8.5px;
   }
 
   .litany input[type='range']::-moz-range-thumb {
-    width: 18px;
-    height: 18px;
+    width: 20px !important;
+    height: 20px !important;
   }
 }
