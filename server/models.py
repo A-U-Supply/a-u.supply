@@ -22,7 +22,13 @@ from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker
 
 DATABASE_URL = "sqlite:///data/au.db"
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    pool_size=10,
+    max_overflow=20,
+    pool_timeout=30,
+)
 
 
 @event.listens_for(engine, "connect")
@@ -513,7 +519,7 @@ class Project(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     slug = Column(String, unique=True, nullable=False, index=True)
     name = Column(String, nullable=False)
-    kind = Column(String, nullable=False, default="other")  # album | video | zine | other
+    kind = Column(String, nullable=False, default="other")  # album | video | zine | session | other
     status = Column(String, nullable=False, default="forming")  # forming | developing | fixing | abandoned
     description = Column(String, nullable=True)        # markdown, longer-form than the name
     metadata_json = Column(String, nullable=True)      # JSON dict of arbitrary {key: value}
