@@ -292,4 +292,19 @@
     opacity: 0.4;
     cursor: not-allowed;
   }
+
+  @media (pointer: coarse) {
+    .chip-btn {
+      min-width: 28px;
+      min-height: 28px;
+      font-size: 0.7rem;
+      padding: 2px 4px;
+    }
+
+    .chip-drag {
+      min-width: 28px;
+      min-height: 28px;
+      font-size: 0.7rem;
+    }
+  }
 </style>

@@ -5,9 +5,10 @@
     onClose: () => void;
     onAdd: (hits: { id: string; filename: string }[]) => void;
     poolEntryCount: number;
+    audioContext?: AudioContext;
   }
 
-  let { onClose, onAdd, poolEntryCount }: Props = $props();
+  let { onClose, onAdd, poolEntryCount, audioContext }: Props = $props();
 
   const MAX_POOL_SIZE = 16;
   const maxAddable = $derived(MAX_POOL_SIZE - poolEntryCount);
@@ -29,14 +30,16 @@
   let error = $state('');
   let selectedIds = $state<Set<string>>(new Set());
   let previewAudio: AudioBufferSourceNode | null = null;
-  let audioCtx: AudioContext | null = null;
+  let previewCtx: AudioContext | null = null;
+  const previewCache = new Map<string, AudioBuffer>();
   let searching = $state(false);
   let searchTimeout: ReturnType<typeof setTimeout> | null = null;
   let adding = $state(false);
 
-  function getAudioCtx(): AudioContext {
-    if (!audioCtx) audioCtx = new AudioContext();
-    return audioCtx;
+  function getPreviewCtx(): AudioContext {
+    if (previewCtx) return previewCtx;
+    previewCtx = audioContext ?? new AudioContext();
+    return previewCtx;
   }
 
   function stopPreview() {
@@ -52,7 +55,19 @@
   async function previewSample(id: string) {
     stopPreview();
 
-    const ctx = getAudioCtx();
+    const cached = previewCache.get(id);
+    if (cached) {
+      const ctx = getPreviewCtx();
+      if (ctx.state === 'suspended') await ctx.resume();
+      const source = ctx.createBufferSource();
+      source.buffer = cached;
+      source.connect(ctx.destination);
+      source.start();
+      previewAudio = source;
+      return;
+    }
+
+    const ctx = getPreviewCtx();
     if (ctx.state === 'suspended') await ctx.resume();
 
     const headers: Record<string, string> = {};
@@ -84,6 +99,7 @@
     source.connect(ctx.destination);
     source.start();
     previewAudio = source;
+    previewCache.set(id, audioBuffer);
   }
 
   function toggleSelected(id: string) {
@@ -180,9 +196,10 @@
 
   onDestroy(() => {
     stopPreview();
-    if (audioCtx) {
-      audioCtx.close().catch(() => {});
-      audioCtx = null;
+    previewCache.clear();
+    if (previewCtx && !audioContext) {
+      previewCtx.close().catch(() => {});
+      previewCtx = null;
     }
     if (searchTimeout) clearTimeout(searchTimeout);
   });

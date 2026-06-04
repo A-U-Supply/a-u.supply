@@ -566,6 +566,7 @@
       poolEntryCount={searchTargetVoiceId
         ? (poolInfo[searchTargetVoiceId]?.entryCount ?? 0)
         : 0}
+      audioContext={engine?.ctx}
     />
   {/if}
 </div>
