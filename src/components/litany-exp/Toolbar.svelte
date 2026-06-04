@@ -6,6 +6,7 @@
     undoCount: number;
     redoCount: number;
     layout: 'grid' | 'rows';
+    viMode: boolean;
     onPlay: () => void;
     onStop: () => void;
     onUndo: () => void;
@@ -19,6 +20,7 @@
     onRandomizeAll: () => void;
     onChaos: () => void;
     onAddVoice: () => void;
+    onViToggle: () => void;
   }
 
   let {
@@ -28,6 +30,7 @@
     undoCount,
     redoCount,
     layout,
+    viMode,
     onPlay,
     onStop,
     onUndo,
@@ -41,9 +44,11 @@
     onRandomizeAll,
     onChaos,
     onAddVoice,
+    onViToggle,
   }: Props = $props();
 
   function handleKey(e: KeyboardEvent) {
+    if (viMode) return;
     const tag = (e.target as HTMLElement).tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
     if ((e.key === 'p' || e.key === ' ') && !e.metaKey && !e.ctrlKey) {
@@ -145,6 +150,12 @@
   </div>
 
   <div class="right-group">
+    <button
+      class="brutalist-control vi-btn"
+      aria-pressed={viMode}
+      onclick={onViToggle}
+      title="Toggle vi mode">VI</button
+    >
     <button
       class="brutalist-control layout-btn"
       aria-pressed={layout === 'rows'}
@@ -288,5 +299,19 @@
     font-size: 0.7rem;
     padding: 3px 10px;
     cursor: pointer;
+  }
+
+  .vi-btn {
+    font-size: 0.65rem;
+    padding: 3px 8px;
+    cursor: pointer;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  .vi-btn[aria-pressed='true'] {
+    background: var(--lit-accent) !important;
+    color: var(--lit-bg) !important;
+    border-color: var(--lit-accent) !important;
   }
 </style>

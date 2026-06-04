@@ -36,6 +36,8 @@
     onMoveEntry: (fromIndex: number, toIndex: number) => void;
     onOpenSearch: () => void;
     onFetchMore: () => void;
+    viActive: boolean;
+    viStepCursor: number | null;
   }
 
   let {
@@ -61,6 +63,8 @@
     onMoveEntry,
     onOpenSearch,
     onFetchMore,
+    viActive,
+    viStepCursor,
   }: Props = $props();
 
   let fxOpen = $state(false);
@@ -71,6 +75,13 @@
   let autoOpen = $state(false);
   let autoParam = $state<'pitch' | 'volume'>('pitch');
   let selectedStep = $state<number | null>(null);
+
+  $effect(() => {
+    if (viStepCursor !== null) {
+      selOpen = true;
+      selectedStep = viStepCursor;
+    }
+  });
 
   const PROB_CYCLE = [null, 100, 75, 50, 25, 0];
 
@@ -156,6 +167,7 @@
   class="voice-card"
   class:voice-card--error={poolStatus === 'error'}
   class:voice-card--row={layout === 'rows'}
+  class:voice-card--vi-active={viActive}
 >
   <div class="left-col">
     <div class="card-header">
@@ -625,6 +637,11 @@
   .voice-card--error {
     border-color: var(--lit-error-border);
     opacity: 0.7;
+  }
+
+  .voice-card--vi-active {
+    border-left: 3px solid var(--lit-accent);
+    padding-left: 8px;
   }
 
   .left-col {

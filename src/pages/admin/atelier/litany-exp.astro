@@ -406,11 +406,11 @@ import '../../../styles/atelier/litany-exp.css';
         <h3>Pin = lock for re-roll</h3>
         <p>
           Each pool entry has a lock toggle (<code>&#128274;</code>) in the POOL
-          drawer. <strong>Locked entries are the only ones that play</strong> —
-          the rotation cycles through the locked set exclusively. Locked entries
-          are also <strong>preserved when you re-roll</strong> — the pool fetches
-          new random samples from the query to fill around them back up to 8.
-          Unlock everything to play from the full pool again.
+          drawer. <strong>Locked entries are the only ones that play</strong> — the
+          rotation cycles through the locked set exclusively. Locked entries are also
+          <strong>preserved when you re-roll</strong> — the pool fetches new random
+          samples from the query to fill around them back up to 8. Unlock everything
+          to play from the full pool again.
         </p>
         <p>
           Open the <strong>POOL drawer</strong> to see and manage all entries. Drag
@@ -457,6 +457,12 @@ import '../../../styles/atelier/litany-exp.css';
     <details>
       <summary>Keyboard shortcuts</summary>
       <div class="litany-docs-body">
+        <p>
+          Toggle the <strong>VI</strong> button in the toolbar for vi-mode — vim-style
+          keyboard control with voice navigation, step editing, pool management, and
+          a floating HUD showing current bindings.
+        </p>
+        <h3>Standard shortcuts</h3>
         <table>
           <tr><th>Key</th><th>Action</th></tr>
           <tr
@@ -476,6 +482,48 @@ import '../../../styles/atelier/litany-exp.css';
             ></tr
           >
         </table>
+        <h3>Vi-mode (press VI toggle in toolbar)</h3>
+        <p>
+          <strong>Normal mode:</strong>
+          <code>j/k</code> voice,
+          <code>h/l</code> step cursor,
+          <code>i</code> toggle,
+          <code>x</code> clear,
+          <code>%</code> prob,
+          <code>c/C</code> cadence,
+          <code>y</code> pick mode,
+          <code>-/=</code> vol,
+          <code>_/+</code> pitch,
+          <code>m</code> mute,
+          <code>z</code> solo,
+          <code>r</code> re-roll,
+          <code>o/O</code> add voice,
+          <code>dd</code> delete,
+          <code>1-9</code> jump,
+          <code>w</code> pool drawer,
+          <code>f</code> fx,
+          <code>v</code> env,
+          <code>e</code> euclidean,
+          <code>p</code> pool mode,
+          <code>[/]</code> bpm±1,
+          <code>{{}}{{}}</code> bpm±5,
+          <code>u</code> undo,
+          <code>^R</code> redo.
+        </p>
+        <p>
+          <strong>Euclidean submode</strong> (<code>e</code>):
+          <code>k/j</code> pulses,
+          <code>l/h</code> length,
+          <code>./,</code> offset.
+          <strong>Pool submode</strong> (<code>p</code>):
+          <code>j/k</code> entry,
+          <code>Space</code> lock,
+          <code>Enter</code> preview,
+          <code>x</code> remove,
+          <code>/</code> search,
+          <code>r</code> +4.
+          <code>Esc</code> exits any submode.
+        </p>
       </div>
     </details>
   </div>
