@@ -74,18 +74,15 @@ import '../../../styles/atelier/litany-exp.css';
           the current query.
         </p>
 
-        <h3>Pin, mute, and solo</h3>
+        <h3>Lock, mute, and solo</h3>
         <p>
-          Each pool entry has its own <strong>pin</strong> toggle (<code
-            >&#128204;</code
-          >). When one or more entries are pinned, the voice plays only from the
-          pinned set. A second rotation dropdown (<code>PIN/HT</code>, <code
-            >PIN/BR</code
-          >,
-          <code>PIN/4B</code>, <code>FIX</code>) controls the cadence for the
-          pinned subset. <strong>M</strong> silences the voice. <strong
-            >S</strong
-          > solos it — all other voices are muted.
+          Each pool entry has a <strong>lock</strong> toggle (<code
+            >&#128274;</code
+          >). Locked entries survive re-rolls — the pool fills new random
+          samples around them. Unlock or remove entries you&rsquo;re done with. <strong
+            >M</strong
+          > silences the voice. <strong>S</strong> solos it — all other voices are
+          muted.
         </p>
 
         <h3>Volume &amp; pitch</h3>
@@ -392,37 +389,31 @@ import '../../../styles/atelier/litany-exp.css';
     <details>
       <summary>Sample rotation</summary>
       <div class="litany-docs-body">
+        <p>Rotation is split into two controls in the meta-row:</p>
+        <ul>
+          <li>
+            <strong>Cadence</strong> — how often to switch samples.
+            <code>HIT</code> changes every trigger, <code>BAR</code> at the start
+            of each bar, <code>2B</code> every 2 bars, through
+            <code>16B</code> every 16 bars.
+          </li>
+          <li>
+            <strong>Pick mode</strong> — how the next sample is chosen.
+            <code>SEQ</code> cycles through the pool in order,
+            <code>RND</code> picks a random pool entry each time.
+          </li>
+        </ul>
+        <h3>Pin = lock for re-roll</h3>
         <p>
-          Each voice pre-loads 8 random samples in its pool (expandable to 16
-          via search or "add more"). The <strong>rotation</strong> dropdown controls
-          how often the pool advances to the next sample.
-        </p>
-        <table>
-          <tr><th>Setting</th><th>Advances</th><th>Best for</th></tr>
-          <tr>
-            <td><code>/HIT</code></td>
-            <td>Every time a step fires</td>
-            <td>Maximum variation — different sample each hit</td>
-          </tr>
-          <tr>
-            <td><code>/BAR</code></td>
-            <td>At the start of each bar (step 0)</td>
-            <td>Changes each loop — controlled variety</td>
-          </tr>
-          <tr>
-            <td><code>/4BR</code></td>
-            <td>Every 4 bars</td>
-            <td>Long-form consistency, then a new sample for variation</td>
-          </tr>
-        </table>
-        <p>
-          <strong>Pinned rotation</strong> — when one or more entries are pinned,
-          a second dropdown appears controlling how the pinned subset cycles.
-          <code>FIX</code> plays a single pinned entry forever (the old PIN behaviour).
+          Each pool entry has a lock toggle (<code>&#128274;</code>) in the POOL
+          drawer. Locked entries are <strong>preserved when you re-roll</strong> —
+          the pool fetches new random samples from the query to fill around them back
+          up to 8. Remove entries you don&rsquo;t want; the rotation operates on the
+          whole pool uniformly.
         </p>
         <p>
           Open the <strong>POOL drawer</strong> to see and manage all entries. Drag
-          to reorder, click to preview, pin individual entries, or remove them. Use
+          to reorder, click to preview, lock individual entries, or remove them. Use
           <strong>+ Search</strong> to browse the full samples-bored catalog and add
           specific sounds to the pool.
         </p>

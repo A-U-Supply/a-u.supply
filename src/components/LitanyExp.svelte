@@ -17,8 +17,8 @@
     defaultEnvelope,
     type Voice,
     type PlayStyle,
-    type Rotation,
-    type PinnedRotation,
+    type Cadence,
+    type PickMode,
   } from '../lib/litany-exp/state.ts';
   import {
     randomizeBpm,
@@ -379,13 +379,19 @@
   function doChaos() {
     pushHistory();
     bpm = randomizeBpm();
-    const rotations: Rotation[] = ['every-hit', 'every-bar', 'every-4bars'];
-    const pinnedRotations: PinnedRotation[] = [
-      'every-hit',
-      'every-bar',
-      'every-4bars',
-      'fixed',
+    const cadences: Cadence[] = [
+      'hit',
+      'bar',
+      '2bar',
+      '3bar',
+      '4bar',
+      '5bar',
+      '6bar',
+      '7bar',
+      '8bar',
+      '16bar',
     ];
+    const pickModes: PickMode[] = ['seq', 'rnd'];
     const styles: PlayStyle[] = ['one-shot', 'cut', 'gate', 'legato'];
     const filterTypes: BiquadFilterType[] = [
       'lowpass',
@@ -415,8 +421,8 @@
         ...v,
         steps: bjorklund(pulses, len, Math.floor(Math.random() * len)),
         stepCount: len,
-        rotation: pick(rotations),
-        pinnedRotation: pick(pinnedRotations),
+        cadence: pick(cadences),
+        pickMode: pick(pickModes),
         volume: Math.round((0.3 + Math.random() * 0.7) * 100) / 100,
         pitch: Math.floor(Math.random() * 13) - 6,
         fx,

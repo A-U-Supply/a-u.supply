@@ -1,4 +1,4 @@
-import type { Rotation, PinnedRotation } from './state.ts';
+import type { Cadence, PickMode } from './state.ts';
 
 const INITIAL_POOL_SIZE = 8;
 const MAX_POOL_SIZE = 16;
@@ -12,6 +12,19 @@ export interface PoolEntry {
   source: 'query' | 'manual';
 }
 
+const CADENCE_MOD: Record<string, number> = {
+  hit: 0,
+  bar: 1,
+  '2bar': 2,
+  '3bar': 3,
+  '4bar': 4,
+  '5bar': 5,
+  '6bar': 6,
+  '7bar': 7,
+  '8bar': 8,
+  '16bar': 16,
+};
+
 export class SamplePool {
   private ctx: AudioContext;
   private decodeCtx: OfflineAudioContext;
@@ -19,7 +32,6 @@ export class SamplePool {
   private index = 0;
   pinnedIndexes: Set<number> = new Set();
   pins: string[] = [];
-  private pinnedCursor = 0;
   private barCount = 0;
   private lastQuery = '';
 
@@ -37,19 +49,26 @@ export class SamplePool {
     pinnedNames?: string[],
   ): Promise<void> {
     this.status = 'loading';
+    this.lastQuery = query;
+
+    const kept = this.entries.filter(
+      (e, i) => this.pinnedIndexes.has(i) && e !== null,
+    ) as PoolEntry[];
+
     this.entries = [];
     this.pinnedIndexes = new Set();
     this.pins = [];
-    this.lastQuery = query;
     onUpdate?.();
 
+    const need = Math.max(0, INITIAL_POOL_SIZE - kept.length);
     const results = await Promise.allSettled(
-      Array.from({ length: INITIAL_POOL_SIZE }, () => this.fetchOne(query)),
+      Array.from({ length: need }, () => this.fetchOne(query)),
     );
 
-    this.entries = results.map((r) =>
-      r.status === 'fulfilled' ? r.value : null,
-    );
+    this.entries = [
+      ...kept,
+      ...results.map((r) => (r.status === 'fulfilled' ? r.value : null)),
+    ];
     this.index = 0;
 
     if (pinnedNames && pinnedNames.length > 0) {
@@ -110,41 +129,24 @@ export class SamplePool {
   }
 
   next(
-    rotation: Rotation,
-    pinnedRotation: PinnedRotation | undefined,
+    cadence: Cadence,
+    pickMode: PickMode,
     isBarStart: boolean,
-    is4BarStart: boolean,
+    barCount: number,
   ): AudioBuffer | null {
-    const pinnedIndices = Array.from(this.pinnedIndexes).sort((a, b) => a - b);
-
-    if (pinnedIndices.length > 0 && pinnedRotation) {
-      if (pinnedRotation === 'fixed') {
-        const entry = this.entries[pinnedIndices[this.pinnedCursor]];
-        if (entry) this.currentName = entry.name;
-        return entry?.buffer ?? null;
-      }
-
-      const shouldAdvance =
-        pinnedRotation === 'every-hit' ||
-        (pinnedRotation === 'every-bar' && isBarStart) ||
-        (pinnedRotation === 'every-4bars' && is4BarStart);
-
-      const entry = this.entries[pinnedIndices[this.pinnedCursor]];
-      if (entry) this.currentName = entry.name;
-      if (shouldAdvance) this.advancePinnedCursor(pinnedIndices);
-      return entry?.buffer ?? null;
-    }
-
     if (this.entries.length === 0) return null;
 
+    const mod = CADENCE_MOD[cadence] ?? 0;
     const shouldAdvance =
-      rotation === 'every-hit' ||
-      (rotation === 'every-bar' && isBarStart) ||
-      (rotation === 'every-4bars' && is4BarStart);
+      cadence === 'hit' || (isBarStart && mod > 0 && barCount % mod === 0);
+
+    if (shouldAdvance) {
+      if (pickMode === 'seq') this.advanceIndex();
+      else this.randomIndex();
+    }
 
     const entry = this.currentEntry();
     if (entry) this.currentName = entry.name;
-    if (shouldAdvance) this.advanceIndex();
     return entry?.buffer ?? null;
   }
 
@@ -155,9 +157,13 @@ export class SamplePool {
     }
   }
 
-  private advancePinnedCursor(pinnedIndices: number[]): void {
-    if (pinnedIndices.length === 0) return;
-    this.pinnedCursor = (this.pinnedCursor + 1) % pinnedIndices.length;
+  private randomIndex(): void {
+    const valid = this.entries.reduce<number[]>((acc, e, i) => {
+      if (e !== null) acc.push(i);
+      return acc;
+    }, []);
+    if (valid.length === 0) return;
+    this.index = valid[Math.floor(Math.random() * valid.length)];
   }
 
   private currentEntry(): PoolEntry | null {
@@ -167,11 +173,6 @@ export class SamplePool {
   previewBuffer(index?: number): AudioBuffer | null {
     if (index != null) {
       return this.entries[index]?.buffer ?? null;
-    }
-
-    const pinnedIndices = Array.from(this.pinnedIndexes);
-    if (pinnedIndices.length > 0) {
-      return this.entries[pinnedIndices[this.pinnedCursor]]?.buffer ?? null;
     }
     return this.currentEntry()?.buffer ?? null;
   }
@@ -187,9 +188,6 @@ export class SamplePool {
     if (this.pinnedIndexes.has(index)) {
       this.pinnedIndexes.delete(index);
       this.pins = this.pins.filter((n) => n !== this.entries[index]!.name);
-      if (this.pinnedCursor >= this.pinnedIndexes.size) {
-        this.pinnedCursor = 0;
-      }
       return false;
     } else {
       this.pinnedIndexes.add(index);
@@ -205,10 +203,6 @@ export class SamplePool {
   }
 
   getActiveIndex(): number {
-    const pinnedIndices = Array.from(this.pinnedIndexes).sort((a, b) => a - b);
-    if (pinnedIndices.length > 0 && this.pinnedCursor < pinnedIndices.length) {
-      return pinnedIndices[this.pinnedCursor];
-    }
     return this.index;
   }
 
@@ -229,7 +223,6 @@ export class SamplePool {
     if (this.index >= this.entries.length) {
       this.index = this.entries.length > 0 ? 0 : 0;
     }
-    this.pinnedCursor = 0;
   }
 
   moveEntry(fromIndex: number, toIndex: number): void {
@@ -266,13 +259,11 @@ export class SamplePool {
     }
     this.pinnedIndexes = newPinned;
     this.pins = this.getPinnedNames();
-    this.pinnedCursor = 0;
   }
 
   repinFromNames(names: string[]): void {
     this.pinnedIndexes = new Set();
     this.pins = [];
-    this.pinnedCursor = 0;
     for (const name of names) {
       const idx = this.entries.findIndex((e) => e?.name === name);
       if (idx !== -1) {
