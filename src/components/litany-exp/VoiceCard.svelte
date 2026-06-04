@@ -38,6 +38,9 @@
     onFetchMore: () => void;
     viActive: boolean;
     viStepCursor: number | null;
+    viPoolOpen: boolean;
+    viFxOpen: boolean;
+    viEnvOpen: boolean;
   }
 
   let {
@@ -65,6 +68,9 @@
     onFetchMore,
     viActive,
     viStepCursor,
+    viPoolOpen = false,
+    viFxOpen = false,
+    viEnvOpen = false,
   }: Props = $props();
 
   let fxOpen = $state(false);
@@ -81,6 +87,18 @@
       selOpen = true;
       selectedStep = viStepCursor;
     }
+  });
+
+  $effect(() => {
+    poolOpen = viPoolOpen;
+  });
+
+  $effect(() => {
+    fxOpen = viFxOpen;
+  });
+
+  $effect(() => {
+    envOpen = viEnvOpen;
   });
 
   const PROB_CYCLE = [null, 100, 75, 50, 25, 0];

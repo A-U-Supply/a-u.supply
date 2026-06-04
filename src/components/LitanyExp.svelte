@@ -58,6 +58,9 @@
   let viStepCursor = $state<number | null>(null);
   let viPoolCursor = $state(0);
   let viPending = $state<string | null>(null);
+  let viPanelPool = $state(false);
+  let viPanelFx = $state(false);
+  let viPanelEnv = $state(false);
 
   const CADENCE_CYCLE: Cadence[] = [
     'hit',
@@ -102,6 +105,14 @@
       return acc;
     }, {}),
   );
+
+  $effect(() => {
+    void viVoiceIdx;
+    viPanelPool = false;
+    viPanelFx = false;
+    viPanelEnv = false;
+    viStepCursor = null;
+  });
 
   let undoStack = $state<AppState[]>([]);
   let redoStack = $state<AppState[]>([]);
@@ -573,6 +584,9 @@
     if (key === 'Escape') {
       viStepCursor = null;
       viPending = null;
+      viPanelPool = false;
+      viPanelFx = false;
+      viPanelEnv = false;
       return;
     }
     if (ctrl && key === 'r') {
@@ -690,18 +704,22 @@
       return;
     }
     if (key === 'w') {
+      viPanelPool = !viPanelPool;
       viStepCursor = null;
       return;
     }
     if (key === 'f') {
+      viPanelFx = !viPanelFx;
       viStepCursor = null;
       return;
     }
     if (key === 'v') {
+      viPanelEnv = !viPanelEnv;
       viStepCursor = null;
       return;
     }
     if (key === 'p') {
+      viPanelPool = true;
       viEnterPool();
       return;
     }
@@ -889,6 +907,7 @@
   function viPoolKey(key: string) {
     if (key === 'Escape') {
       viSubmode = 'normal';
+      viPanelPool = false;
       return;
     }
     const v = viCurrentVoice();
@@ -991,6 +1010,9 @@
         {layout}
         viActive={viMode && i === viVoiceIdx}
         viStepCursor={viMode && i === viVoiceIdx ? viStepCursor : null}
+        viPoolOpen={viMode && i === viVoiceIdx && viPanelPool}
+        viFxOpen={viMode && i === viVoiceIdx && viPanelFx}
+        viEnvOpen={viMode && i === viVoiceIdx && viPanelEnv}
         poolStatus={info?.status ?? 'idle'}
         currentSampleName={info?.currentName ?? ''}
         activeEntryIndex={info?.activeIndex ?? 0}
