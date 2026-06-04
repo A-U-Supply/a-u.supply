@@ -2,8 +2,8 @@
   import type {
     Voice,
     StepCount,
-    Rotation,
-    PinnedRotation,
+    Cadence,
+    PickMode,
   } from '../../lib/litany-exp/state.ts';
   import { MACROS } from '../../lib/litany-exp/state.ts';
   import type { PoolStatus } from '../../lib/litany-exp/pool.ts';
@@ -116,16 +116,21 @@
   }
 
   const STEP_COUNTS: StepCount[] = Array.from({ length: 32 }, (_, i) => i + 1);
-  const ROTATIONS: { value: Rotation; label: string }[] = [
-    { value: 'every-hit', label: '/HIT' },
-    { value: 'every-bar', label: '/BAR' },
-    { value: 'every-4bars', label: '/4BR' },
+  const CADENCES: { value: Cadence; label: string }[] = [
+    { value: 'hit', label: 'HIT' },
+    { value: 'bar', label: 'BAR' },
+    { value: '2bar', label: '2B' },
+    { value: '3bar', label: '3B' },
+    { value: '4bar', label: '4B' },
+    { value: '5bar', label: '5B' },
+    { value: '6bar', label: '6B' },
+    { value: '7bar', label: '7B' },
+    { value: '8bar', label: '8B' },
+    { value: '16bar', label: '16B' },
   ];
-  const PINNED_ROTATIONS: { value: PinnedRotation; label: string }[] = [
-    { value: 'every-hit', label: 'PIN/HT' },
-    { value: 'every-bar', label: 'PIN/BR' },
-    { value: 'every-4bars', label: 'PIN/4B' },
-    { value: 'fixed', label: 'FIX' },
+  const PICK_MODES: { value: PickMode; label: string }[] = [
+    { value: 'seq', label: 'SEQ' },
+    { value: 'rnd', label: 'RND' },
   ];
 
   function updateStepCount(count: StepCount) {
@@ -459,33 +464,30 @@
       </select>
       <select
         class="brutalist-control meta-select"
-        value={voice.rotation}
+        value={voice.cadence}
         onchange={(e) =>
           onChange({
             ...voice,
-            rotation: (e.target as HTMLSelectElement).value as Rotation,
+            cadence: (e.target as HTMLSelectElement).value as Cadence,
           })}
       >
-        {#each ROTATIONS as r}
-          <option value={r.value}>{r.label}</option>
+        {#each CADENCES as c}
+          <option value={c.value}>{c.label}</option>
         {/each}
       </select>
-      {#if poolPinnedCount > 0}
-        <select
-          class="brutalist-control meta-select"
-          value={voice.pinnedRotation}
-          onchange={(e) =>
-            onChange({
-              ...voice,
-              pinnedRotation: (e.target as HTMLSelectElement)
-                .value as PinnedRotation,
-            })}
-        >
-          {#each PINNED_ROTATIONS as r}
-            <option value={r.value}>{r.label}</option>
-          {/each}
-        </select>
-      {/if}
+      <select
+        class="brutalist-control meta-select"
+        value={voice.pickMode}
+        onchange={(e) =>
+          onChange({
+            ...voice,
+            pickMode: (e.target as HTMLSelectElement).value as PickMode,
+          })}
+      >
+        {#each PICK_MODES as m}
+          <option value={m.value}>{m.label}</option>
+        {/each}
+      </select>
       <button
         class="brutalist-control meta-btn"
         aria-pressed={poolOpen}

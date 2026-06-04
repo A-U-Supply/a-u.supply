@@ -111,11 +111,13 @@
             <button
               class="chip-btn chip-pin"
               class:chip-pin--on={entry.pinned}
-              title={entry.pinned ? 'Unpin sample' : 'Pin sample'}
+              title={entry.pinned
+                ? 'Unlock sample'
+                : 'Lock sample (preserved on re-roll)'}
               onclick={(e) => {
                 e.stopPropagation();
                 onTogglePin(i);
-              }}>&#128204;</button
+              }}>&#128274;</button
             >
             <button
               class="chip-btn chip-remove"

@@ -74,7 +74,6 @@ export class Scheduler {
       const voiceTick = this.voiceTicks.get(voice.id) ?? 0;
       const isBarStart = voiceTick === 0;
       const barCount = this.voiceBarCounts.get(voice.id) ?? 0;
-      const is4BarStart = isBarStart && barCount % 4 === 0;
 
       const stepActive = voice.steps[voiceTick] ?? false;
       const prevActive = this.previousStepActive.get(voice.id) ?? false;
@@ -153,10 +152,10 @@ export class Scheduler {
 
             if (shouldTrigger) {
               const buffer = pool.next(
-                voice.rotation,
-                voice.pinnedRotation,
+                voice.cadence,
+                voice.pickMode,
                 isBarStart,
-                is4BarStart,
+                barCount,
               );
               if (buffer) {
                 const pitch = override?.pitch ?? voice.pitch;

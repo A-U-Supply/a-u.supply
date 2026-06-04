@@ -1,11 +1,17 @@
 import { strFromU8, strToU8, gunzipSync, gzipSync } from 'fflate';
 
-export type Rotation = 'every-hit' | 'every-bar' | 'every-4bars';
-export type PinnedRotation =
-  | 'every-hit'
-  | 'every-bar'
-  | 'every-4bars'
-  | 'fixed';
+export type Cadence =
+  | 'hit'
+  | 'bar'
+  | '2bar'
+  | '3bar'
+  | '4bar'
+  | '5bar'
+  | '6bar'
+  | '7bar'
+  | '8bar'
+  | '16bar';
+export type PickMode = 'seq' | 'rnd';
 export type StepCount = number;
 export type PlayStyle = 'one-shot' | 'cut' | 'gate' | 'legato';
 export type EnvCurve = 'linear' | 'exp';
@@ -75,8 +81,8 @@ export interface Voice {
   query: string;
   steps: boolean[];
   stepCount: StepCount;
-  rotation: Rotation;
-  pinnedRotation: PinnedRotation;
+  cadence: Cadence;
+  pickMode: PickMode;
   pinned: string[];
   volume: number;
   pitch: number;
@@ -155,8 +161,8 @@ export function createVoice(
     query,
     steps: Array(stepCount).fill(false),
     stepCount,
-    rotation: 'every-hit',
-    pinnedRotation: 'every-hit',
+    cadence: 'hit',
+    pickMode: 'seq',
     pinned: [],
     volume: 0.8,
     pitch: 0,
