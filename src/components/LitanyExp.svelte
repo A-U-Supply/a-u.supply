@@ -528,6 +528,13 @@
     const shift = e.shiftKey;
     const ctrl = e.ctrlKey || e.metaKey;
 
+    // Global: play/stop — Space and Shift+P always work
+    if (key === ' ' || key === 'P') {
+      e.preventDefault();
+      playing ? stop() : handlePlay();
+      return;
+    }
+
     if (viSubmode === 'euclid') {
       viEuclidKey(key, shift);
       return;
@@ -889,15 +896,18 @@
     const info = poolInfo[v.id];
     if (!info) return;
 
-    if (key === 'j' || key === 'l') {
+    if (key === 'j') {
       viPoolCursor = (viPoolCursor + 1) % Math.max(1, info.entryCount);
+    }
+    if (key === 'k') {
+      viPoolCursor =
+        (viPoolCursor - 1 + info.entryCount) % Math.max(1, info.entryCount);
     }
     if (key === 'k' || key === 'h') {
       viPoolCursor =
         (viPoolCursor - 1 + info.entryCount) % Math.max(1, info.entryCount);
     }
-    if (key === ' ') {
-      e.preventDefault();
+    if (key === 'l') {
       togglePoolPin(v.id, viPoolCursor);
     }
     if (key === 'Enter') {
