@@ -242,6 +242,13 @@ const { title, current } = Astro.props;
               aria-current={current === 'litany' ? 'page' : undefined}>Litany</a
             >
           </li>
+          <li>
+            <a
+              href="/admin/atelier/litany-exp"
+              aria-current={current === 'litany-exp' ? 'page' : undefined}
+              >Litany-exp</a
+            >
+          </li>
         </ul>
 
         <div class="sidebar__section">
@@ -395,6 +402,8 @@ const { title, current } = Astro.props;
     } else if (window.location.pathname === '/admin/atelier/photism') {
       document.body.style.background = '#1a1200';
     } else if (window.location.pathname === '/admin/atelier/litany') {
+      document.body.style.background = '#0a0e0f';
+    } else if (window.location.pathname === '/admin/atelier/litany-exp') {
       document.body.style.background = '#0a0e0f';
     } else {
       document.body.style.removeProperty('background');

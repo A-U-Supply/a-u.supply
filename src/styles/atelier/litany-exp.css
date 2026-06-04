@@ -1,0 +1,245 @@
+/*
+ * Litany theme — mpump-inspired groovebox design
+ *
+ * Overrides the global brutalist design system within .litany-exp scope.
+ * Components reference these custom properties in their scoped styles.
+ * See docs/atelier.md and docs/frontend.md for design conventions.
+ */
+
+.litany-exp {
+  /* ── Core palette (mpump-inspired dark theme) ────────────────────────── */
+  --lit-bg: #0a0e0f;
+  --lit-panel: #111518;
+  --lit-cell: #181d21;
+  --lit-border: #262c30;
+  --lit-border-hover: #3a4248;
+
+  --lit-text: #d0d4d8;
+  --lit-text-dim: #7d8590;
+  --lit-text-faint: #5a6270;
+
+  --lit-accent: #e6a817;
+  --lit-accent-hover: #f0b820;
+  --lit-accent-bright: #f5c842;
+
+  --lit-green: #3fb950;
+  --lit-red: #e05555;
+  --lit-red-dim: #8a4040;
+  --lit-blue: #58a6ff;
+  --lit-orange: #f0883e;
+
+  --lit-font:
+    'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', 'Courier New',
+    monospace;
+
+  --lit-track: #2a3036;
+  --lit-track-progress: var(--lit-accent);
+
+  /* ── Semantic aliases for specific UI states ─────────────────────────── */
+  --lit-step-off-bg: transparent;
+  --lit-step-on-bg: var(--lit-accent);
+  --lit-step-on-hover: var(--lit-accent-hover);
+  --lit-step-on-playing: var(--lit-accent-bright);
+  --lit-step-off-border: var(--lit-border-hover);
+  --lit-step-off-border-hover: var(--lit-text-dim);
+  --lit-step-playing-outline: var(--lit-green);
+
+  --lit-playing-bg: #0a1500;
+  --lit-mute-bg: #150000;
+  --lit-mute-text: var(--lit-red);
+  --lit-solo-bg: #150d00;
+  --lit-solo-border: var(--lit-accent);
+  --lit-solo-text: var(--lit-accent);
+  --lit-pin-bg: #151000;
+  --lit-error-border: #4a2020;
+
+  /* ── Inherit for Svelte scoped-styles to pick up ────────────────────── */
+  background-color: var(--lit-bg);
+  color: var(--lit-text);
+  font-family: var(--lit-font);
+  font-size: 13px;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Override brutalist-control within litany ──────────────────────────── */
+.litany-exp .brutalist-control {
+  border: 1px solid var(--lit-border);
+  background: var(--lit-cell);
+  color: var(--lit-text);
+  font-family: var(--lit-font);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  box-shadow: none;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+  user-select: none;
+  outline: none;
+}
+
+.litany-exp .brutalist-control:focus-visible {
+  outline: 2px solid var(--lit-accent);
+  outline-offset: 1px;
+}
+
+.litany-exp .brutalist-control:hover {
+  border-color: var(--lit-border-hover);
+  transform: none;
+  box-shadow: none;
+}
+
+.litany-exp .brutalist-control:active {
+  transform: scale(0.96);
+  box-shadow: none;
+}
+
+.litany-exp .brutalist-control[aria-pressed='true'],
+.litany-exp .brutalist-control[data-state='open'],
+.litany-exp .brutalist-control[data-selected='true'] {
+  background: var(--lit-accent);
+  color: var(--lit-bg);
+  border-color: var(--lit-accent);
+}
+
+/* ── Mobile touch targets ──────────────────────────────────────────────── */
+@media (pointer: coarse) {
+  .litany-exp input[type='range'] {
+    min-height: 32px;
+  }
+
+  .litany-exp .brutalist-control {
+    min-height: 32px;
+    min-width: 32px;
+  }
+
+  .litany-exp input:not([type='range']),
+  .litany-exp select {
+    font-size: 16px !important;
+  }
+}
+
+/* ── Range slider styling — mpump-inspired slim groovebox design ──────── */
+
+.litany-exp input[type='range'] {
+  accent-color: var(--lit-accent);
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  vertical-align: middle;
+  outline: none;
+  cursor: pointer;
+}
+
+/* ---- Track (subtle groove line) ---- */
+
+.litany-exp input[type='range']::-webkit-slider-runnable-track {
+  height: 2px;
+  background: var(--lit-track);
+  border-radius: 1px;
+  border: none;
+}
+
+.litany-exp input[type='range']::-moz-range-track {
+  height: 2px;
+  background: var(--lit-track);
+  border-radius: 1px;
+  border: none;
+}
+
+.litany-exp input[type='range']::-moz-range-progress {
+  height: 2px;
+  background: var(--lit-track-progress);
+  border-radius: 1px;
+}
+
+/* ---- Thumb (tiny amber dot, mpump-style) ---- */
+
+.litany-exp input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  background: var(--lit-accent) !important;
+  border: none !important;
+  margin-top: -3px;
+  cursor: pointer;
+  box-shadow: 0 0 4px rgba(230, 168, 23, 0.3);
+  transition:
+    background 0.1s,
+    box-shadow 0.1s,
+    transform 0.1s;
+}
+
+.litany-exp input[type='range']::-webkit-slider-thumb:hover {
+  background: var(--lit-accent-hover) !important;
+  box-shadow: 0 0 8px rgba(230, 168, 23, 0.5);
+  transform: scale(1.15);
+}
+
+.litany-exp input[type='range']::-webkit-slider-thumb:active {
+  background: var(--lit-accent-bright) !important;
+  box-shadow: 0 0 12px rgba(230, 168, 23, 0.7);
+  transform: scale(1.3);
+}
+
+.litany-exp input[type='range']::-moz-range-thumb {
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  background: var(--lit-accent) !important;
+  border: none !important;
+  cursor: pointer;
+  box-shadow: 0 0 4px rgba(230, 168, 23, 0.3);
+  transition:
+    background 0.1s,
+    box-shadow 0.1s,
+    transform 0.1s;
+}
+
+.litany-exp input[type='range']::-moz-range-thumb:hover {
+  background: var(--lit-accent-hover) !important;
+  box-shadow: 0 0 8px rgba(230, 168, 23, 0.5);
+}
+
+.litany-exp input[type='range']::-moz-range-thumb:active {
+  background: var(--lit-accent-bright) !important;
+  box-shadow: 0 0 12px rgba(230, 168, 23, 0.7);
+}
+
+/* ---- Mobile / touch targets ---- */
+
+@media (pointer: coarse) {
+  .litany-exp input[type='range'] {
+    height: 32px;
+  }
+
+  .litany-exp input[type='range']::-webkit-slider-runnable-track {
+    height: 3px;
+  }
+
+  .litany-exp input[type='range']::-moz-range-track {
+    height: 3px;
+  }
+
+  .litany-exp input[type='range']::-moz-range-progress {
+    height: 3px;
+  }
+
+  .litany-exp input[type='range']::-webkit-slider-thumb {
+    width: 20px !important;
+    height: 20px !important;
+    margin-top: -8.5px;
+  }
+
+  .litany-exp input[type='range']::-moz-range-thumb {
+    width: 20px !important;
+    height: 20px !important;
+  }
+}
