@@ -35,9 +35,9 @@ export async function searchInputs(query: string): Promise<SearchHit[]> {
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({
       query,
+      media_types: ['audio', 'video'],
       filters: {
         output_index: [INPUTS_INDEX],
-        media_type: ['audio', 'video'],
       },
       page: 1,
       per_page: 40,
