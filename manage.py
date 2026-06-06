@@ -1461,31 +1461,29 @@ if __name__ == "__main__":
 
     elif cmd == "jobs-list":
         from server.models import Job
-        _db = _SL()
-        rows = _db.query(Job).filter(Job.status.in_(["pending", "running"])).order_by(Job.created_at.desc()).all()
+        rows = SessionLocal().query(Job).filter(Job.status.in_(["pending", "running"])).order_by(Job.created_at.desc()).all()
         if not rows:
             print("No pending/running jobs.")
         for j in rows:
             print(f"{j.id}  {j.app_name:20s}  {j.status:8s}  {j.created_at}")
-        _db.close()
 
     elif cmd == "jobs-kick":
         from server.models import Job
-        _db = _SL()
+        db = SessionLocal()
         if len(sys.argv) > 2:
             job_id = sys.argv[2]
-            j = _db.query(Job).filter(Job.id == job_id).first()
+            j = db.query(Job).filter(Job.id == job_id).first()
             if j:
                 j.status = "pending"
-                _db.commit()
+                db.commit()
                 print(f"Kicked {job_id} back to pending.")
             else:
                 print(f"Job {job_id} not found.")
         else:
-            n = _db.query(Job).filter(Job.status == "running").update({"status": "pending"})
-            _db.commit()
+            n = db.query(Job).filter(Job.status == "running").update({"status": "pending"})
+            db.commit()
             print(f"Kicked {n} stuck running job(s) back to pending.")
-        _db.close()
+        db.close()
 
     elif cmd == "index-drum-machines":
         import subprocess as _sp
