@@ -23,6 +23,8 @@
     type Hit,
     type Slot,
   } from '../lib/ossuary/carve.ts';
+  import { renderHit } from '../lib/ossuary/render.ts';
+  import HitEditor from './ossuary/HitEditor.svelte';
 
   // ── Source picker state ───────────────────────────────────────────────────
   let query = $state('');
@@ -47,6 +49,10 @@
   let sensitivity = $state(0.5);
   let zoom = $state(1);
   let hits = $state<Hit[]>([]);
+  let selectedHitId = $state<string | null>(null);
+  const selectedHit = $derived(
+    hits.find((h) => h.id === selectedHitId) ?? null,
+  );
 
   // ── Audition ────────────────────────────────────────────────────────────--
   let ctx: AudioContext | null = null;
@@ -184,14 +190,25 @@
   const playFull = (key: string, buffer: AudioBuffer | null) =>
     toggleRange(key, buffer, 0, buffer ? buffer.duration : 0);
 
-  const playHit = (h: Hit) =>
-    wetBuffer &&
-    toggleRange(
-      `hit:${h.id}`,
+  // Audition the *edited* hit: render its FX/envelope/trim offline, then play.
+  async function auditionHit(h: Hit) {
+    const key = `hit:${h.id}`;
+    if (playingKey === key) {
+      stop();
+      return;
+    }
+    if (!wetBuffer) return;
+    const c = audioCtx();
+    if (c.state === 'suspended') await c.resume();
+    const rendered = await renderHit(
       wetBuffer,
-      h.start / wetBuffer.sampleRate,
-      (h.end - h.start) / wetBuffer.sampleRate,
+      h.start,
+      h.end,
+      $state.snapshot(h.edit),
     );
+    if (destroyed) return;
+    toggleRange(key, rendered, 0, rendered.duration);
+  }
 
   function stop() {
     if (preview) {
@@ -260,9 +277,14 @@
 
   const drawWet = () => drawWaveform(wetCanvas, wetBuffer, hits);
 
-  // Redraw the carve view whenever the buffer, hits, or zoom change.
+  // Redraw the carve view whenever the buffer, hits (incl. trims/slots), zoom,
+  // or playing state change.
   $effect(() => {
-    void hits;
+    for (const h of hits) {
+      void h.start;
+      void h.end;
+      void h.slot;
+    }
     void zoom;
     void wetBuffer;
     void playingKey;
@@ -579,15 +601,25 @@
                     <div
                       class="oss-hit"
                       class:is-playing={playingKey === `hit:${h.id}`}
+                      class:is-selected={selectedHitId === h.id}
                     >
                       <button
                         class="oss-hit__play"
-                        onclick={() => playHit(h)}
-                        title="Audition"
+                        onclick={() => auditionHit(h)}
+                        title="Audition (edited)"
                       >
                         {playingKey === `hit:${h.id}` ? '■' : '▶'}
                       </button>
-                      <span class="oss-hit__name">{slot} {idx + 1}</span>
+                      <button
+                        class="oss-hit__name"
+                        onclick={() =>
+                          (selectedHitId =
+                            selectedHitId === h.id ? null : h.id)}
+                        title="Edit this hit"
+                      >
+                        {slot}
+                        {idx + 1}
+                      </button>
                       <select
                         class="oss-hit__slot"
                         value={h.slot}
@@ -618,6 +650,24 @@
             <p class="oss-empty">
               No hits found. Nudge sensitivity up and re-carve.
             </p>
+          {/if}
+
+          {#if selectedHit && wetBuffer}
+            <div class="oss-editor-wrap">
+              <div class="oss-editor__head">
+                <span>Editing <strong>{selectedHit.slot}</strong></span>
+                <button
+                  class="oss-editor__close"
+                  onclick={() => (selectedHitId = null)}>close ✕</button
+                >
+              </div>
+              <HitEditor
+                hit={selectedHit}
+                buffer={wetBuffer}
+                playing={playingKey === `hit:${selectedHit.id}`}
+                onAudition={() => auditionHit(selectedHit)}
+              />
+            </div>
           {/if}
         </div>
       {/if}

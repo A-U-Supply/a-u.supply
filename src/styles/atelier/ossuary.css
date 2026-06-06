@@ -399,6 +399,122 @@
 
 .oss-hit__name {
   color: var(--oss-text-dim);
+  background: none;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.oss-hit__name:hover {
+  color: var(--oss-bone);
+  text-decoration: underline;
+}
+
+.oss-hit.is-selected {
+  outline: 1px solid var(--oss-accent);
+  outline-offset: -1px;
+}
+
+/* ── Hit editor ────────────────────────────────────────────────────────────- */
+.oss-editor-wrap {
+  border: 1px solid var(--oss-accent);
+  background: var(--oss-panel);
+}
+
+.oss-editor__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.45rem 0.7rem;
+  border-bottom: 1px solid var(--oss-border);
+  font-size: 0.76rem;
+  color: var(--oss-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.oss-editor__head strong {
+  color: var(--oss-accent);
+}
+
+.oss-editor__close {
+  background: none;
+  border: 1px solid var(--oss-border);
+  color: var(--oss-text-dim);
+  font: inherit;
+  cursor: pointer;
+  padding: 0.1rem 0.5rem;
+}
+
+.oss-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.7rem;
+}
+
+.oss-editor__wave {
+  position: relative;
+  height: 110px;
+  border: 1px solid var(--oss-border);
+  background: var(--oss-bg);
+  touch-action: none;
+}
+
+.oss-editor__wave canvas {
+  display: block;
+  width: 100%;
+  height: 110px;
+}
+
+.oss-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  margin: 0;
+  padding: 0;
+  transform: translateX(-50%);
+  background: var(--oss-accent);
+  opacity: 0.55;
+  border: none;
+  cursor: ew-resize;
+}
+
+.oss-handle:hover {
+  opacity: 0.9;
+}
+
+.oss-handle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--oss-bg);
+  transform: translateX(-50%);
+}
+
+.oss-editor__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.oss-editor__group {
+  border-top: 1px solid var(--oss-border);
+  padding-top: 0.6rem;
+}
+
+.oss-editor__group-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--oss-text-faint);
+  margin-bottom: 0.5rem;
 }
 
 .oss-hit__slot {

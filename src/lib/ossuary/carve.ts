@@ -6,6 +6,8 @@
 // user reassigns/drops in the UI afterwards. Slots are just searchable tags
 // (Litany's vocab) — there is no "complete kit" requirement.
 
+import { defaultEdit, type HitEdit } from './render.ts';
+
 export const SLOTS = ['kick', 'snare', 'hi-hat', 'perc'] as const;
 export type Slot = (typeof SLOTS)[number];
 
@@ -22,6 +24,7 @@ export interface Hit {
   start: number;
   end: number;
   slot: Slot;
+  edit: HitEdit;
 }
 
 const HOP = 256;
@@ -148,6 +151,7 @@ export function carve(buffer: AudioBuffer, sensitivity = 0.5): Hit[] {
       start,
       end,
       slot: classifySlot(data, start, end, sr),
+      edit: defaultEdit(),
     });
   }
   return hits;
