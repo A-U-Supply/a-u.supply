@@ -1274,6 +1274,7 @@ async def upload_media(
     slot_id: str = Form("", description="If set with project_id, the item also attaches to this slot inside the Latent."),
     force_session: str = Form("", description="If 'true', treat the file as a `session` media type (DAW/NLE project file)."),
     tool: str = Form("", description="For session uploads, the tool that produced the file (e.g. 'logic', 'ableton')."),
+    source_type: str = Form("manual_upload", description="Source type for the upload. Use `sample_library` for sample-library uploads (e.g. Ossuary)."),
     _auth=Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
@@ -1323,7 +1324,7 @@ async def upload_media(
         # Add a new source pointing to the existing item
         source = MediaSource(
             media_item_id=existing.id,
-            source_type="manual_upload",
+            source_type=source_type,
         )
         db.add(source)
         if output_index and not existing.output_index:
@@ -1387,7 +1388,7 @@ async def upload_media(
     # Create source
     source = MediaSource(
         media_item_id=item_id,
-        source_type="manual_upload",
+        source_type=source_type,
     )
     db.add(source)
 
