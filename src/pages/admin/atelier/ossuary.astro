@@ -1,0 +1,23 @@
+---
+import Admin from '../../../layouts/Admin.astro';
+import Ossuary from '../../../components/Ossuary.svelte';
+import '../../../styles/atelier/ossuary.css';
+---
+
+<Admin title="Ossuary" current="ossuary">
+  <div class="ossuary-docs-overview">
+    <p>
+      <strong>Ossuary</strong> is a sound-design workstation. You feed a clip to a
+      RAVE "brain" that has only ever heard one kind of sound, carve the result into
+      weird one-shots, shape each hit, and index them into the sample library. Litany
+      (and any other search client) plays them later.
+    </p>
+    <p class="ossuary-docs-quick">
+      <span>pick a clip</span> &rarr; <span>interpret</span> &rarr;
+      <span>carve hits</span> &rarr; <span>shape</span> &rarr;
+      <span>index to library</span>
+    </p>
+  </div>
+
+  <Ossuary client:only="svelte" />
+</Admin>
