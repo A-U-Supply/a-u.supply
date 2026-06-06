@@ -6,7 +6,7 @@
 
 const SAMPLES_INDEX = 'samples-bored';
 
-function authHeaders(): Record<string, string> {
+export function authHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
   const key = import.meta.env.VITE_AU_API_KEY as string | undefined;
   if (key) headers['Authorization'] = `Bearer ${key}`;
@@ -64,25 +64,18 @@ export async function fetchClipById(
   return { name, sourceId: id, buffer };
 }
 
-/** Pull one random matching clip straight from /api/serve (no id). */
+/**
+ * Pull one random matching clip. Goes through search (not /api/serve) so the
+ * clip carries its media-item id — the interpreter needs an id to submit a job.
+ */
 export async function fetchRandomClip(
   query: string,
   ctx: AudioContext,
 ): Promise<LoadedClip> {
-  const url = `/api/serve?output_index=${SAMPLES_INDEX}&query=${encodeURIComponent(
-    query,
-  )}&sort=random`;
-  const res = await fetch(url, {
-    credentials: 'include',
-    redirect: 'follow',
-    headers: authHeaders(),
-  });
-  if (!res.ok) throw new Error(`random pull failed: HTTP ${res.status}`);
-  const disposition = res.headers.get('content-disposition') ?? '';
-  const name =
-    (disposition.match(/filename="([^"]+)"/)?.[1] ?? query) || 'random';
-  const buffer = await decode(await res.arrayBuffer(), ctx);
-  return { name, sourceId: null, buffer };
+  const hits = await searchSamples(query);
+  if (!hits.length) throw new Error('no samples matched');
+  const hit = hits[Math.floor(Math.random() * hits.length)];
+  return fetchClipById(hit.id, hit.filename, ctx);
 }
 
 /** Decode an uploaded local file. */
