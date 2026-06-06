@@ -1467,6 +1467,16 @@ if __name__ == "__main__":
         for j in rows:
             print(f"{j.id}  {j.app_name:20s}  {j.status:8s}  {j.created_at}")
 
+    elif cmd == "inputs-count":
+        from server.models import MediaItem
+        db = SessionLocal()
+        for t in ["audio", "video", "image"]:
+            n = db.query(MediaItem).filter(
+                MediaItem.output_index.is_(None), MediaItem.media_type == t
+            ).count()
+            print(f"  {t}: {n}")
+        db.close()
+
     elif cmd == "jobs-kick":
         from server.models import Job
         db = SessionLocal()
