@@ -25,6 +25,7 @@ The naming system blends ecclesiastical, scientific-warehouse, and photographic-
 | **The Atelier** | browser-side creative tools | Punctum | `punctum` | Multi-bot image atelier (`/admin/atelier/punctum`). See [`atelier.md`](atelier.md). |
 |  |  | Photism | `photism` | Audio → image spectral editor (`/admin/atelier/photism`) |
 |  |  | Litany | `litany` | Sample sequencer — voices fired from the sounds-bored index in step-pattern loops (`/admin/atelier/litany`). See [`plans/2026-05-29-sequencer.md`](plans/2026-05-29-sequencer.md). |
+|  |  | Ossuary | `ossuary` | Sound-design workstation — feed a clip to a RAVE brain, carve the result into one-shots, shape them, index into samples-bored (`/admin/atelier/ossuary`). See [`plans/2026-06-06-ossuary.md`](plans/2026-06-06-ossuary.md). |
 | **The Sacristy** | keys, settings | Keys | `api-keys` | API key generation + revocation (`/admin/api-keys`) |
 |  |  | Settings | `settings` | User management, integrations, site settings (`/admin/settings`) |
 

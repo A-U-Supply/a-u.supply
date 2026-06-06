@@ -249,6 +249,13 @@ const { title, current } = Astro.props;
               >Litany-exp</a
             >
           </li>
+          <li>
+            <a
+              href="/admin/atelier/ossuary"
+              aria-current={current === 'ossuary' ? 'page' : undefined}
+              >Ossuary</a
+            >
+          </li>
         </ul>
 
         <div class="sidebar__section">
@@ -405,6 +412,8 @@ const { title, current } = Astro.props;
       document.body.style.background = '#0a0e0f';
     } else if (window.location.pathname === '/admin/atelier/litany-exp') {
       document.body.style.background = '#0a0e0f';
+    } else if (window.location.pathname === '/admin/atelier/ossuary') {
+      document.body.style.background = '#1c1c1c';
     } else {
       document.body.style.removeProperty('background');
     }

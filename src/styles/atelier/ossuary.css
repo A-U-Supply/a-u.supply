@@ -1,0 +1,186 @@
+/*
+ * Ossuary theme — charcoal sound-design workstation.
+ *
+ * Overrides the global brutalist design system within .ossuary scope.
+ * See docs/atelier.md, docs/frontend.md, and docs/plans/2026-06-06-ossuary.md.
+ */
+
+.ossuary {
+  /* ── Core palette (charcoal) ─────────────────────────────────────────── */
+  --oss-bg: #1c1c1c;
+  --oss-panel: #232323;
+  --oss-cell: #2a2a2a;
+  --oss-border: #383838;
+  --oss-border-hover: #4a4a4a;
+
+  --oss-text: #d6d2cb;
+  --oss-text-dim: #8b867d;
+  --oss-text-faint: #635f58;
+
+  /* bone / aged-relic accents */
+  --oss-accent: #c9a227;
+  --oss-bone: #e7e0cf;
+  --oss-red: #c0504d;
+
+  --oss-font:
+    'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', 'Courier New',
+    monospace;
+
+  color: var(--oss-text);
+  font-family: var(--oss-font);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.ossuary-docs-overview {
+  max-width: 1100px;
+  margin: 0 auto 1rem;
+  color: #b8b3aa;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.ossuary-docs-quick {
+  color: #8b867d;
+  font-size: 0.8rem;
+}
+
+.ossuary-docs-quick span {
+  color: #c9a227;
+}
+
+/* ── Panels ──────────────────────────────────────────────────────────────── */
+.oss-panel {
+  background: var(--oss-panel);
+  border: 1px solid var(--oss-border);
+}
+
+.oss-panel__head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--oss-border);
+}
+
+.oss-panel__head h2 {
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--oss-bone);
+}
+
+.oss-hint {
+  font-size: 0.72rem;
+  color: var(--oss-text-faint);
+}
+
+/* ── Source picker ─────────────────────────────────────────────────────────- */
+.oss-source__controls {
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.oss-search {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.oss-search__input {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.oss-upload {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.oss-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--oss-border);
+}
+
+.oss-result {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--oss-cell);
+  border: none;
+  border-bottom: 1px solid var(--oss-border);
+  color: var(--oss-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.oss-result:hover {
+  background: var(--oss-border);
+}
+
+.oss-result:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.oss-result.is-active {
+  outline: 1px solid var(--oss-accent);
+  outline-offset: -1px;
+}
+
+.oss-result__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oss-result__dur {
+  color: var(--oss-text-dim);
+  flex: 0 0 auto;
+}
+
+.oss-error {
+  margin: 0;
+  color: var(--oss-red);
+  font-size: 0.8rem;
+}
+
+/* ── Clip preview ──────────────────────────────────────────────────────────- */
+.oss-waveform {
+  padding: 0.5rem;
+}
+
+.oss-waveform canvas {
+  display: block;
+  width: 100%;
+  height: 160px;
+  background: var(--oss-bg);
+  border: 1px solid var(--oss-border);
+}
+
+.oss-preview__actions {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0 0.85rem 0.85rem;
+}
+
+.oss-empty {
+  padding: 2rem 0.85rem;
+  color: var(--oss-text-faint);
+  font-size: 0.82rem;
+  text-align: center;
+}
