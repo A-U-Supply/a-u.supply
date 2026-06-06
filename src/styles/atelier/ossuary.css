@@ -355,8 +355,85 @@
   border-bottom: 1px solid var(--oss-border);
 }
 
+.oss-slot__name {
+  flex: 1;
+}
+
+.oss-slot__loop {
+  background: none;
+  border: 1px solid var(--oss-border);
+  color: var(--oss-text-dim);
+  font: inherit;
+  cursor: pointer;
+  padding: 0 0.4rem;
+  line-height: 1.5;
+}
+
+.oss-slot__loop:hover {
+  color: var(--oss-bone);
+  border-color: var(--oss-border-hover);
+}
+
+.oss-slot__loop.is-active {
+  color: var(--oss-bg);
+  background: var(--slot-color, var(--oss-accent));
+  border-color: var(--slot-color, var(--oss-accent));
+}
+
 .oss-slot__count {
   color: var(--oss-text-faint);
+  min-width: 1.2em;
+  text-align: right;
+}
+
+/* ── Audition loop ─────────────────────────────────────────────────────────- */
+.oss-loop {
+  border: 1px solid var(--oss-border-hover);
+  background: var(--oss-panel);
+  padding: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.oss-loop__head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.oss-loop__title {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--oss-text-dim);
+}
+
+.oss-loop__title strong {
+  color: var(--oss-accent);
+}
+
+.oss-loop__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.oss-loop__step {
+  width: 12px;
+  height: 12px;
+  background: var(--oss-cell);
+  border: 1px solid var(--oss-border);
+}
+
+.oss-loop__step.on {
+  background: var(--oss-accent);
+  border-color: var(--oss-accent);
+}
+
+.oss-loop__step.cur {
+  outline: 1px solid var(--oss-bone);
+  outline-offset: 1px;
 }
 
 .oss-hit {

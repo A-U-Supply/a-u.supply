@@ -24,6 +24,7 @@
     type Slot,
   } from '../lib/ossuary/carve.ts';
   import { renderHit } from '../lib/ossuary/render.ts';
+  import { AuditionLoop } from '../lib/ossuary/loop.ts';
   import HitEditor from './ossuary/HitEditor.svelte';
 
   // ── Source picker state ───────────────────────────────────────────────────
@@ -53,6 +54,96 @@
   const selectedHit = $derived(
     hits.find((h) => h.id === selectedHitId) ?? null,
   );
+
+  // ── Audition loop (one slot, minimal — Litany owns real sequencing) ────────
+  let loop: AuditionLoop | null = null;
+  let loopSlot = $state<Slot | null>(null);
+  let looping = $state(false);
+  let loopBpm = $state(120);
+  let loopRate = $state(8);
+  let loopLength = $state(16);
+  let loopProb = $state(100);
+  let plrTouched = $state(false); // onset-seeded default until the user engages PLR
+  let loopPattern = $state<boolean[]>([]);
+  let loopStep = $state(-1);
+
+  const stepDurSec = () => (60 / loopBpm) * (4 / loopRate);
+
+  function rebuildPattern() {
+    if (!loopSlot || !wetBuffer) {
+      loopPattern = [];
+    } else if (plrTouched) {
+      loopPattern = Array.from(
+        { length: loopLength },
+        () => Math.random() * 100 < loopProb,
+      );
+    } else {
+      // Invisible default: seed steps from this slot's onset timing. Diagnostic
+      // — it shows the rhythm the brain actually found. No UI, no toggle.
+      const sr = wetBuffer.sampleRate;
+      const dur = stepDurSec();
+      const pat = new Array(loopLength).fill(false);
+      for (const h of hitsInSlot(loopSlot)) {
+        pat[Math.round(h.start / sr / dur) % loopLength] = true;
+      }
+      loopPattern = pat;
+    }
+    if (loop) loop.pattern = loopPattern;
+  }
+
+  async function renderSlotBuffers(slot: Slot): Promise<AudioBuffer[]> {
+    if (!wetBuffer) return [];
+    return Promise.all(
+      hitsInSlot(slot).map((h) =>
+        renderHit(wetBuffer!, h.start, h.end, $state.snapshot(h.edit)),
+      ),
+    );
+  }
+
+  async function startLoop(slot: Slot) {
+    if (!wetBuffer) return;
+    const c = audioCtx();
+    if (c.state === 'suspended') await c.resume();
+    stopLoop();
+    loopSlot = slot;
+    plrTouched = false;
+    if (!loop) {
+      loop = new AuditionLoop(c);
+      loop.onStep = (i) => (loopStep = i);
+    }
+    loop.buffers = await renderSlotBuffers(slot);
+    if (destroyed) return;
+    loop.bpm = loopBpm;
+    loop.rate = loopRate;
+    rebuildPattern();
+    loop.start();
+    looping = true;
+  }
+
+  function stopLoop() {
+    loop?.stop();
+    looping = false;
+    loopStep = -1;
+  }
+
+  const toggleLoop = (slot: Slot) =>
+    looping && loopSlot === slot ? stopLoop() : startLoop(slot);
+
+  // Loop-control handlers. BPM/Rate/Length re-seed the onset default; only
+  // Probability flips to generated PLR.
+  function onLoopBpm() {
+    if (loop) loop.bpm = loopBpm;
+    if (!plrTouched) rebuildPattern();
+  }
+  function onLoopRate() {
+    if (loop) loop.rate = loopRate;
+    if (!plrTouched) rebuildPattern();
+  }
+  const onLoopLength = () => rebuildPattern();
+  function onLoopProb() {
+    plrTouched = true;
+    rebuildPattern();
+  }
 
   // ── Audition ────────────────────────────────────────────────────────────--
   let ctx: AudioContext | null = null;
@@ -311,6 +402,7 @@
   onDestroy(() => {
     destroyed = true;
     stop();
+    loop?.stop();
     resizeObserver?.disconnect();
     ctx?.close();
   });
@@ -595,7 +687,18 @@
                   style={`--slot-color:${SLOT_COLOR[slot]}`}
                 >
                   <div class="oss-slot__head">
-                    {slot}<span class="oss-slot__count">{slotHits.length}</span>
+                    <span class="oss-slot__name">{slot}</span>
+                    {#if slotHits.length}
+                      <button
+                        class="oss-slot__loop"
+                        class:is-active={looping && loopSlot === slot}
+                        onclick={() => toggleLoop(slot)}
+                        title="Audition loop for this slot"
+                      >
+                        {looping && loopSlot === slot ? '◼' : '↻'}
+                      </button>
+                    {/if}
+                    <span class="oss-slot__count">{slotHits.length}</span>
                   </div>
                   {#each slotHits as h, idx (h.id)}
                     <div
@@ -667,6 +770,74 @@
                 playing={playingKey === `hit:${selectedHit.id}`}
                 onAudition={() => auditionHit(selectedHit)}
               />
+            </div>
+          {/if}
+
+          {#if looping && loopSlot}
+            <div class="oss-loop">
+              <div class="oss-loop__head">
+                <button class="brutalist-control" onclick={stopLoop}
+                  >◼ Stop</button
+                >
+                <span class="oss-loop__title"
+                  >loop · <strong>{loopSlot}</strong></span
+                >
+              </div>
+              <div class="oss-loop__steps">
+                {#each loopPattern as on, i}
+                  <span
+                    class="oss-loop__step"
+                    class:on
+                    class:cur={i === loopStep}
+                  ></span>
+                {/each}
+              </div>
+              <div class="oss-knobs">
+                <label class="oss-knob">
+                  <span>BPM <em>{loopBpm}</em></span>
+                  <input
+                    type="range"
+                    min="60"
+                    max="200"
+                    step="1"
+                    bind:value={loopBpm}
+                    oninput={onLoopBpm}
+                  />
+                </label>
+                <label class="oss-knob">
+                  <span>Rate <em>1/{loopRate}</em></span>
+                  <input
+                    type="range"
+                    min="2"
+                    max="16"
+                    step="2"
+                    bind:value={loopRate}
+                    oninput={onLoopRate}
+                  />
+                </label>
+                <label class="oss-knob">
+                  <span>Length <em>{loopLength}</em></span>
+                  <input
+                    type="range"
+                    min="4"
+                    max="32"
+                    step="1"
+                    bind:value={loopLength}
+                    oninput={onLoopLength}
+                  />
+                </label>
+                <label class="oss-knob">
+                  <span>Probability <em>{loopProb}%</em></span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    bind:value={loopProb}
+                    oninput={onLoopProb}
+                  />
+                </label>
+              </div>
             </div>
           {/if}
         </div>
