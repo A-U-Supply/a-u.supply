@@ -518,9 +518,9 @@
         <input
           class="brutalist-control oss-search__input"
           type="search"
-          placeholder="search samples-bored…"
+          placeholder="search inputs…"
           bind:value={query}
-          aria-label="Search the sample library"
+          aria-label="Search input library"
         />
         <button class="brutalist-control" type="submit" disabled={searching}>
           {searching ? '…' : 'Search'}

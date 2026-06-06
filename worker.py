@@ -127,8 +127,15 @@ def _prepare_input(job: Job, manifest: dict, db: Session) -> Path:
             logger.warning("File %s not found for item %s, skipping", src, mid)
             continue
 
-        dest = input_dir / item.filename
-        # Handle duplicate filenames
+        # Determine destination filename
+        if item.media_type == "video":
+            dest_name = f"{Path(item.filename).stem}.wav"
+            effective_type = "audio"
+        else:
+            dest_name = item.filename
+            effective_type = item.media_type
+
+        dest = input_dir / dest_name
         if dest.exists():
             stem = dest.stem
             suffix = dest.suffix
@@ -137,10 +144,35 @@ def _prepare_input(job: Job, manifest: dict, db: Session) -> Path:
                 dest = input_dir / f"{stem}_{counter}{suffix}"
                 counter += 1
 
-        shutil.copy2(src, dest)
+        if item.media_type == "video":
+            try:
+                subprocess.run(
+                    ["ffmpeg", "-y", "-i", str(src), "-vn",
+                     "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2",
+                     str(dest)],
+                    check=True, capture_output=True, text=True,
+                )
+            except subprocess.CalledProcessError as exc:
+                logger.warning(
+                    "Audio extraction failed for %s (%s): %s",
+                    item.filename, mid, exc.stderr.strip(),
+                )
+                dest = input_dir / item.filename
+                if dest.exists():
+                    stem = dest.stem
+                    suffix = dest.suffix
+                    counter = 1
+                    while dest.exists():
+                        dest = input_dir / f"{stem}_{counter}{suffix}"
+                        counter += 1
+                shutil.copy2(src, dest)
+                effective_type = item.media_type
+        else:
+            shutil.copy2(src, dest)
+
         input_files.append({
             "filename": dest.name,
-            "media_type": item.media_type,
+            "media_type": effective_type,
             "media_item_id": item.id,
         })
 
