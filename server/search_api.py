@@ -6,6 +6,8 @@ import json
 import logging
 import mimetypes
 import os
+import subprocess
+import tempfile
 import uuid
 import zipfile
 from datetime import datetime, timezone
@@ -14,6 +16,7 @@ from typing import Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
+from starlette.background import BackgroundTask
 from starlette.responses import RedirectResponse
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
@@ -1757,6 +1760,91 @@ def get_media_file(
             "Content-Disposition": content_disposition("inline", filename),
             "Cache-Control": "private, max-age=86400",
         },
+    )
+
+
+@router.get("/media/{media_id}/audio", tags=["Media Items"], summary="Extract audio track from media")
+def get_media_audio(
+    media_id: str,
+    _auth=Depends(require_scope("read")),
+    db: Session = Depends(get_db),
+):
+    """Return the audio track of a media file.
+
+    For **audio** files, returns the original file directly.
+    For **video** files, extracts the audio track using ffmpeg and returns it
+    as a WAV. This lets browser-side audio tools (waveform viewers, Web Audio
+    decoders) work with video inputs.
+
+    **Scope required:** `read`
+    """
+    item = _get_media_item_or_404(db, media_id)
+    file_path = _get_search_media_dir() / item.file_path
+    db.close()
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found on disk")
+
+    if item.media_type == "audio":
+        return FileResponse(
+            file_path,
+            media_type=item.mime_type or "audio/wav",
+            headers={
+                "Content-Disposition": content_disposition("inline", item.filename),
+                "Cache-Control": "private, max-age=86400",
+            },
+        )
+
+    if item.media_type != "video":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot extract audio from media type: {item.media_type}",
+        )
+
+    tmp_path = tempfile.mktemp(suffix=".wav")
+
+    def _cleanup():
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+    try:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(file_path),
+                "-vn",
+                "-acodec",
+                "pcm_s16le",
+                "-ar",
+                "44100",
+                "-ac",
+                "2",
+                tmp_path,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        _cleanup()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Audio extraction failed: {exc.stderr}",
+        )
+    except Exception:
+        _cleanup()
+        raise
+
+    return FileResponse(
+        tmp_path,
+        media_type="audio/wav",
+        filename=f"{Path(item.filename).stem}.wav",
+        headers={"Cache-Control": "private, max-age=86400"},
+        background=BackgroundTask(_cleanup),
     )
 
 

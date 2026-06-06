@@ -1,10 +1,10 @@
 // Ossuary — source acquisition.
 //
-// Phase 1: pick a clip to carve. A clip can come from the samples-bored index
+// Phase 1: pick a clip to carve. A clip comes from the **inputs** index
 // (search or random pull) or a local file upload. Everything here just gets us
 // a decoded AudioBuffer + a name; the RAVE pass and carving come in later phases.
 
-const SAMPLES_INDEX = 'samples-bored';
+const INPUTS_INDEX = '__inputs__';
 
 export function authHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
@@ -17,6 +17,7 @@ export interface SearchHit {
   id: string;
   filename: string;
   durationSeconds: number | null;
+  mediaType: string;
 }
 
 export interface LoadedClip {
@@ -26,15 +27,18 @@ export interface LoadedClip {
   buffer: AudioBuffer;
 }
 
-/** Search the samples-bored index. Returns lightweight hits for the picker list. */
-export async function searchSamples(query: string): Promise<SearchHit[]> {
+/** Search the inputs index for audio + video. Returns lightweight hits for the picker list. */
+export async function searchInputs(query: string): Promise<SearchHit[]> {
   const res = await fetch('/api/search', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({
       query,
-      filters: { output_index: [SAMPLES_INDEX] },
+      filters: {
+        output_index: [INPUTS_INDEX],
+        media_type: ['audio', 'video'],
+      },
       page: 1,
       per_page: 40,
     }),
@@ -46,16 +50,23 @@ export async function searchSamples(query: string): Promise<SearchHit[]> {
     id: h.id,
     filename: h.filename ?? h.id,
     durationSeconds: h.duration_seconds ?? null,
+    mediaType: h.media_type ?? 'audio',
   }));
 }
 
-/** Fetch a specific library clip by media id and decode it. */
+/** Fetch a specific input clip by media id and decode it. */
 export async function fetchClipById(
   id: string,
   name: string,
+  mediaType: string,
   ctx: AudioContext,
 ): Promise<LoadedClip> {
-  const res = await fetch(`/api/media/${encodeURIComponent(id)}/file`, {
+  // Use /audio endpoint so video files have their audio extracted server-side.
+  const endpoint =
+    mediaType === 'video'
+      ? `/api/media/${encodeURIComponent(id)}/audio`
+      : `/api/media/${encodeURIComponent(id)}/file`;
+  const res = await fetch(endpoint, {
     credentials: 'include',
     headers: authHeaders(),
   });
@@ -72,10 +83,10 @@ export async function fetchRandomClip(
   query: string,
   ctx: AudioContext,
 ): Promise<LoadedClip> {
-  const hits = await searchSamples(query);
-  if (!hits.length) throw new Error('no samples matched');
+  const hits = await searchInputs(query);
+  if (!hits.length) throw new Error('no inputs matched');
   const hit = hits[Math.floor(Math.random() * hits.length)];
-  return fetchClipById(hit.id, hit.filename, ctx);
+  return fetchClipById(hit.id, hit.filename, hit.mediaType, ctx);
 }
 
 /** Decode an uploaded local file. */

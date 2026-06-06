@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import {
-    searchSamples,
+    searchInputs,
     fetchClipById,
     fetchRandomClip,
     loadLocalFile,
@@ -265,7 +265,7 @@
     searching = true;
     error = '';
     try {
-      results = await searchSamples(query.trim());
+      results = await searchInputs(query.trim());
     } catch (e) {
       error = (e as Error).message;
       results = [];
@@ -293,7 +293,7 @@
   }
 
   const pickResult = (hit: SearchHit) =>
-    load(fetchClipById(hit.id, hit.filename, audioCtx()));
+    load(fetchClipById(hit.id, hit.filename, hit.mediaType, audioCtx()));
   const pullRandom = () => load(fetchRandomClip(query.trim(), audioCtx()));
 
   function onUpload(e: Event) {
