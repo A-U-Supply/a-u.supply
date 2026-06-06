@@ -9,6 +9,30 @@
     type SearchHit,
     type LoadedClip,
   } from '../lib/ossuary/source.ts';
+  import {
+    interpret,
+    defaultParams,
+    MODELS,
+    type InterpretParams,
+    type InterpretPhase,
+  } from '../lib/ossuary/interpret.ts';
+  import {
+    carve,
+    SLOTS,
+    SLOT_COLOR,
+    type Hit,
+    type Slot,
+  } from '../lib/ossuary/carve.ts';
+  import { renderHit } from '../lib/ossuary/render.ts';
+  import { AuditionLoop } from '../lib/ossuary/loop.ts';
+  import { encodeWav } from '../lib/ossuary/wav.ts';
+  import {
+    indexSample,
+    zipSamples,
+    sampleTags,
+    slugify,
+  } from '../lib/ossuary/export.ts';
+  import HitEditor from './ossuary/HitEditor.svelte';
 
   // ── Source picker state ───────────────────────────────────────────────────
   let query = $state('');
@@ -17,14 +41,206 @@
   let loading = $state(false);
   let error = $state('');
 
-  // ── Loaded clip ───────────────────────────────────────────────────────────
+  // ── Loaded source clip ──────────────────────────────────────────────────--
   let clip = $state<LoadedClip | null>(null);
-  let canvas: HTMLCanvasElement | undefined;
+  let sourceCanvas: HTMLCanvasElement | undefined;
+
+  // ── Interpreter ───────────────────────────────────────────────────────────
+  let params = $state<InterpretParams>(defaultParams());
+  let interpreting = $state(false);
+  let interpretPhase = $state<InterpretPhase | null>(null);
+  let interpretError = $state('');
+  let wetBuffer = $state<AudioBuffer | null>(null);
+  let wetCanvas: HTMLCanvasElement | undefined;
+
+  // ── Carve ─────────────────────────────────────────────────────────────────
+  let sensitivity = $state(0.5);
+  let zoom = $state(1);
+  let hits = $state<Hit[]>([]);
+  let selectedHitId = $state<string | null>(null);
+  const selectedHit = $derived(
+    hits.find((h) => h.id === selectedHitId) ?? null,
+  );
+
+  // ── Audition loop (one slot, minimal — Litany owns real sequencing) ────────
+  let loop: AuditionLoop | null = null;
+  let loopSlot = $state<Slot | null>(null);
+  let looping = $state(false);
+  let loopBpm = $state(120);
+  let loopRate = $state(8);
+  let loopLength = $state(16);
+  let loopProb = $state(100);
+  let plrTouched = $state(false); // onset-seeded default until the user engages PLR
+  let loopPattern = $state<boolean[]>([]);
+  let loopStep = $state(-1);
+
+  const stepDurSec = () => (60 / loopBpm) * (4 / loopRate);
+
+  function rebuildPattern() {
+    if (!loopSlot || !wetBuffer) {
+      loopPattern = [];
+    } else if (plrTouched) {
+      loopPattern = Array.from(
+        { length: loopLength },
+        () => Math.random() * 100 < loopProb,
+      );
+    } else {
+      // Invisible default: seed steps from this slot's onset timing. Diagnostic
+      // — it shows the rhythm the brain actually found. No UI, no toggle.
+      const sr = wetBuffer.sampleRate;
+      const dur = stepDurSec();
+      const pat = new Array(loopLength).fill(false);
+      for (const h of hitsInSlot(loopSlot)) {
+        pat[Math.round(h.start / sr / dur) % loopLength] = true;
+      }
+      loopPattern = pat;
+    }
+    if (loop) loop.pattern = loopPattern;
+  }
+
+  async function renderSlotBuffers(slot: Slot): Promise<AudioBuffer[]> {
+    if (!wetBuffer) return [];
+    return Promise.all(
+      hitsInSlot(slot).map((h) =>
+        renderHit(wetBuffer!, h.start, h.end, $state.snapshot(h.edit)),
+      ),
+    );
+  }
+
+  async function startLoop(slot: Slot) {
+    if (!wetBuffer) return;
+    const c = audioCtx();
+    if (c.state === 'suspended') await c.resume();
+    stopLoop();
+    loopSlot = slot;
+    plrTouched = false;
+    if (!loop) {
+      loop = new AuditionLoop(c);
+      loop.onStep = (i) => (loopStep = i);
+    }
+    loop.buffers = await renderSlotBuffers(slot);
+    if (destroyed) return;
+    loop.bpm = loopBpm;
+    loop.rate = loopRate;
+    rebuildPattern();
+    loop.start();
+    looping = true;
+  }
+
+  function stopLoop() {
+    loop?.stop();
+    looping = false;
+    loopStep = -1;
+  }
+
+  const toggleLoop = (slot: Slot) =>
+    looping && loopSlot === slot ? stopLoop() : startLoop(slot);
+
+  // Loop-control handlers. BPM/Rate/Length re-seed the onset default; only
+  // Probability flips to generated PLR.
+  function onLoopBpm() {
+    if (loop) loop.bpm = loopBpm;
+    if (!plrTouched) rebuildPattern();
+  }
+  function onLoopRate() {
+    if (loop) loop.rate = loopRate;
+    if (!plrTouched) rebuildPattern();
+  }
+  const onLoopLength = () => rebuildPattern();
+  function onLoopProb() {
+    plrTouched = true;
+    rebuildPattern();
+  }
+
+  // ── Export: bake hits → index into samples-bored / download a ZIP ──────────
+  let kitName = $state('');
+  let exporting = $state(false);
+  let exportMsg = $state('');
+
+  const kitSlug = () =>
+    slugify(kitName || `${clip?.name ?? 'ossuary'}-${params.model}`);
+
+  /** Bake every hit to a named WAV; returns [filename, bytes] pairs. */
+  async function bakeAll(slug: string): Promise<Array<[string, Uint8Array]>> {
+    const counters: Record<string, number> = {};
+    const out: Array<[string, Uint8Array]> = [];
+    for (const h of hits) {
+      const rendered = await renderHit(
+        wetBuffer!,
+        h.start,
+        h.end,
+        $state.snapshot(h.edit),
+      );
+      counters[h.slot] = (counters[h.slot] ?? 0) + 1;
+      out.push([
+        `${slug}_${h.slot}_${counters[h.slot]}.wav`,
+        encodeWav(rendered),
+      ]);
+    }
+    return out;
+  }
+
+  async function indexAll() {
+    if (!wetBuffer || exporting || !hits.length) return;
+    exporting = true;
+    exportMsg = '';
+    try {
+      const slug = kitSlug();
+      let n = 0;
+      for (const h of hits) {
+        const rendered = await renderHit(
+          wetBuffer,
+          h.start,
+          h.end,
+          $state.snapshot(h.edit),
+        );
+        const bytes = encodeWav(rendered);
+        const filename = `${slug}_${h.slot}_${n + 1}.wav`;
+        await indexSample(
+          bytes,
+          filename,
+          sampleTags(h.slot, params.model, slug),
+          `Carved ${h.slot} from "${clip?.name ?? 'clip'}" via RGZ-9 ${params.model} brain`,
+        );
+        n++;
+        exportMsg = `indexing… ${n}/${hits.length}`;
+      }
+      exportMsg = `✓ indexed ${n} samples (kit:${slug})`;
+    } catch (e) {
+      exportMsg = (e as Error).message;
+    } finally {
+      exporting = false;
+    }
+  }
+
+  async function downloadZip() {
+    if (!wetBuffer || exporting || !hits.length) return;
+    exporting = true;
+    exportMsg = '';
+    try {
+      const slug = kitSlug();
+      const baked = await bakeAll(slug);
+      const files: Record<string, Uint8Array> = {};
+      for (const [name, bytes] of baked) files[`${slug}/${name}`] = bytes;
+      const blob = zipSamples(files);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${slug}.zip`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      exportMsg = `✓ downloaded ${baked.length} samples`;
+    } catch (e) {
+      exportMsg = (e as Error).message;
+    } finally {
+      exporting = false;
+    }
+  }
 
   // ── Audition ────────────────────────────────────────────────────────────--
   let ctx: AudioContext | null = null;
   let preview: AudioBufferSourceNode | null = null;
-  let auditioning = $state(false);
+  let playingKey = $state<string | null>(null);
+  let destroyed = false;
 
   function audioCtx(): AudioContext {
     if (!ctx) ctx = new AudioContext();
@@ -32,7 +248,18 @@
   }
 
   const duration = $derived(clip ? clip.buffer.duration : 0);
+  const canInterpret = $derived(!!clip?.sourceId && !interpreting && !loading);
 
+  const PHASE_LABEL: Record<InterpretPhase, string> = {
+    submitting: 'summoning the brain…',
+    queued: 'waiting in the queue…',
+    running: 'interpreting…',
+    fetching: 'retrieving the bones…',
+  };
+
+  const hitsInSlot = (slot: Slot) => hits.filter((h) => h.slot === slot);
+
+  // ── Source loading ──────────────────────────────────────────────────────--
   async function runSearch() {
     if (searching) return;
     searching = true;
@@ -51,10 +278,13 @@
     if (loading) return;
     loading = true;
     error = '';
-    stopAudition();
+    stop();
+    wetBuffer = null;
+    hits = [];
+    interpretError = '';
     try {
       clip = await promise;
-      requestAnimationFrame(drawWaveform);
+      requestAnimationFrame(() => drawWaveform(sourceCanvas, clip?.buffer));
     } catch (e) {
       error = (e as Error).message;
     } finally {
@@ -71,25 +301,98 @@
     if (file) load(loadLocalFile(file, audioCtx()));
   }
 
-  function toggleAudition() {
-    if (auditioning) {
-      stopAudition();
-    } else if (clip) {
+  // ── Interpret pass ────────────────────────────────────────────────────────
+  async function runInterpret() {
+    if (!clip?.sourceId || interpreting) return;
+    interpreting = true;
+    interpretError = '';
+    wetBuffer = null;
+    hits = [];
+    stop();
+    try {
       const c = audioCtx();
-      if (c.state === 'suspended') c.resume();
-      preview = c.createBufferSource();
-      preview.buffer = clip.buffer;
-      preview.connect(c.destination);
-      preview.onended = () => {
-        auditioning = false;
-        preview = null;
-      };
-      preview.start();
-      auditioning = true;
+      if (c.state === 'suspended') await c.resume();
+      const buf = await interpret(
+        clip.sourceId,
+        $state.snapshot(params),
+        c,
+        (p) => (interpretPhase = p),
+        () => destroyed,
+      );
+      if (buf) {
+        wetBuffer = buf;
+        hits = carve(buf, sensitivity); // auto-carve on arrival
+      }
+    } catch (e) {
+      interpretError = (e as Error).message;
+    } finally {
+      interpreting = false;
+      interpretPhase = null;
     }
   }
 
-  function stopAudition() {
+  function recarve() {
+    if (wetBuffer) hits = carve(wetBuffer, sensitivity);
+  }
+
+  function reassign(hit: Hit, slot: Slot) {
+    hit.slot = slot;
+  }
+
+  function dropHit(hit: Hit) {
+    hits = hits.filter((h) => h.id !== hit.id);
+  }
+
+  // ── Audition ────────────────────────────────────────────────────────────--
+  function toggleRange(
+    key: string,
+    buffer: AudioBuffer | null,
+    offsetSec: number,
+    durSec: number,
+  ) {
+    if (playingKey === key) {
+      stop();
+      return;
+    }
+    if (!buffer) return;
+    stop();
+    const c = audioCtx();
+    if (c.state === 'suspended') c.resume();
+    preview = c.createBufferSource();
+    preview.buffer = buffer;
+    preview.connect(c.destination);
+    preview.onended = () => {
+      playingKey = null;
+      preview = null;
+    };
+    preview.start(0, offsetSec, durSec);
+    playingKey = key;
+  }
+
+  const playFull = (key: string, buffer: AudioBuffer | null) =>
+    toggleRange(key, buffer, 0, buffer ? buffer.duration : 0);
+
+  // Audition the *edited* hit: render its FX/envelope/trim offline, then play.
+  async function auditionHit(h: Hit) {
+    const key = `hit:${h.id}`;
+    if (playingKey === key) {
+      stop();
+      return;
+    }
+    if (!wetBuffer) return;
+    const c = audioCtx();
+    if (c.state === 'suspended') await c.resume();
+    const rendered = await renderHit(
+      wetBuffer,
+      h.start,
+      h.end,
+      $state.snapshot(h.edit),
+    );
+    if (destroyed) return;
+    toggleRange(key, rendered, 0, rendered.duration);
+  }
+
+  function stop() {
     if (preview) {
       try {
         preview.stop();
@@ -97,14 +400,19 @@
       preview.disconnect();
       preview = null;
     }
-    auditioning = false;
+    playingKey = null;
   }
 
-  function drawWaveform() {
-    if (!canvas || !clip) return;
+  // ── Waveform drawing ──────────────────────────────────────────────────────
+  function drawWaveform(
+    canvas: HTMLCanvasElement | undefined,
+    buffer?: AudioBuffer | null,
+    overlayHits: Hit[] = [],
+  ) {
+    if (!canvas || !buffer) return;
     const dpr = window.devicePixelRatio || 1;
     const cssWidth = canvas.clientWidth || 800;
-    const cssHeight = canvas.clientHeight || 160;
+    const cssHeight = canvas.clientHeight || 120;
     canvas.width = Math.floor(cssWidth * dpr);
     canvas.height = Math.floor(cssHeight * dpr);
     const g = canvas.getContext('2d');
@@ -113,9 +421,8 @@
     g.clearRect(0, 0, cssWidth, cssHeight);
 
     const mid = cssHeight / 2;
-    const peaks = computePeaks(clip.buffer, Math.floor(cssWidth));
+    const peaks = computePeaks(buffer, Math.floor(cssWidth));
 
-    // zero line
     g.strokeStyle = 'rgba(255,255,255,0.08)';
     g.beginPath();
     g.moveTo(0, mid);
@@ -131,7 +438,40 @@
       g.lineTo(x + 0.5, mid - min * mid);
     }
     g.stroke();
+
+    // Slice boundaries from carving.
+    const len = buffer.length;
+    for (const h of overlayHits) {
+      const x0 = (h.start / len) * cssWidth;
+      const x1 = (h.end / len) * cssWidth;
+      const color = SLOT_COLOR[h.slot];
+      g.globalAlpha = playingKey === `hit:${h.id}` ? 0.85 : 0.45;
+      g.fillStyle = color;
+      g.fillRect(x0, 0, Math.max(1, x1 - x0), 4);
+      g.globalAlpha = 1;
+      g.strokeStyle = color;
+      g.beginPath();
+      g.moveTo(x0, 0);
+      g.lineTo(x0, cssHeight);
+      g.stroke();
+    }
   }
+
+  const drawWet = () => drawWaveform(wetCanvas, wetBuffer, hits);
+
+  // Redraw the carve view whenever the buffer, hits (incl. trims/slots), zoom,
+  // or playing state change.
+  $effect(() => {
+    for (const h of hits) {
+      void h.start;
+      void h.end;
+      void h.slot;
+    }
+    void zoom;
+    void wetBuffer;
+    void playingKey;
+    requestAnimationFrame(drawWet);
+  });
 
   function formatDuration(s: number): string {
     if (!s) return '0:00';
@@ -142,12 +482,18 @@
 
   let resizeObserver: ResizeObserver | undefined;
   onMount(() => {
-    resizeObserver = new ResizeObserver(() => clip && drawWaveform());
-    if (canvas) resizeObserver.observe(canvas);
+    resizeObserver = new ResizeObserver(() => {
+      drawWaveform(sourceCanvas, clip?.buffer);
+      drawWet();
+    });
+    if (sourceCanvas) resizeObserver.observe(sourceCanvas);
+    if (wetCanvas) resizeObserver.observe(wetCanvas);
   });
 
   onDestroy(() => {
-    stopAudition();
+    destroyed = true;
+    stop();
+    loop?.stop();
     resizeObserver?.disconnect();
     ctx?.close();
   });
@@ -155,7 +501,7 @@
 
 <div class="ossuary">
   <!-- ── Source picker ──────────────────────────────────────────────────── -->
-  <section class="oss-panel oss-source">
+  <section class="oss-panel">
     <header class="oss-panel__head">
       <h2>Source</h2>
       <span class="oss-hint">pick a clip to carve</span>
@@ -184,7 +530,7 @@
           type="button"
           onclick={pullRandom}
           disabled={loading}
-          title="Pull a random match (or any random sample if the query is empty)"
+          title="Load a random match (or any random sample if the query is empty)"
         >
           🎲 Random
         </button>
@@ -222,8 +568,8 @@
     </div>
   </section>
 
-  <!-- ── Clip preview ───────────────────────────────────────────────────── -->
-  <section class="oss-panel oss-preview">
+  <!-- ── Source clip preview ────────────────────────────────────────────── -->
+  <section class="oss-panel">
     <header class="oss-panel__head">
       <h2>Clip</h2>
       {#if clip}
@@ -235,11 +581,14 @@
       <div class="oss-empty">decoding…</div>
     {:else if clip}
       <div class="oss-waveform">
-        <canvas bind:this={canvas}></canvas>
+        <canvas bind:this={sourceCanvas}></canvas>
       </div>
-      <div class="oss-preview__actions">
-        <button class="brutalist-control" onclick={toggleAudition}>
-          {auditioning ? '■ Stop' : '▶ Audition'}
+      <div class="oss-actions">
+        <button
+          class="brutalist-control"
+          onclick={() => playFull('source', clip!.buffer)}
+        >
+          {playingKey === 'source' ? '■ Stop' : '▶ Audition'}
         </button>
       </div>
     {:else}
@@ -249,4 +598,369 @@
       </div>
     {/if}
   </section>
+
+  <!-- ── Interpreter ────────────────────────────────────────────────────── -->
+  <section class="oss-panel">
+    <header class="oss-panel__head">
+      <h2>Interpreter</h2>
+      <span class="oss-hint"
+        >hear the clip through a one-track-minded brain</span
+      >
+    </header>
+
+    <div class="oss-interp">
+      <div class="oss-knobs">
+        <label class="oss-knob">
+          <span>Brain</span>
+          <select class="brutalist-control" bind:value={params.model}>
+            {#each MODELS as m}
+              <option value={m}>{m}</option>
+            {/each}
+          </select>
+        </label>
+
+        <label class="oss-knob">
+          <span>Temperature <em>{params.temperature.toFixed(2)}</em></span>
+          <input
+            type="range"
+            min="0.1"
+            max="3"
+            step="0.05"
+            bind:value={params.temperature}
+          />
+        </label>
+
+        <label class="oss-knob">
+          <span>Noise <em>{params.noise.toFixed(2)}</em></span>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            bind:value={params.noise}
+          />
+        </label>
+
+        <label class="oss-knob">
+          <span>Wet/Dry <em>{params.mix.toFixed(2)}</em></span>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            bind:value={params.mix}
+          />
+        </label>
+
+        <label class="oss-knob">
+          <span>Shuffle <em>{params.shuffle.toFixed(0)}</em></span>
+          <input
+            type="range"
+            min="0"
+            max="32"
+            step="1"
+            bind:value={params.shuffle}
+          />
+        </label>
+
+        <label class="oss-knob">
+          <span>Quantize <em>{params.quantize.toFixed(2)}</em></span>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            bind:value={params.quantize}
+          />
+        </label>
+
+        <label class="oss-knob">
+          <span>Dims</span>
+          <input
+            class="brutalist-control"
+            type="text"
+            placeholder="e.g. 0,2,6 (blank = all)"
+            bind:value={params.dims}
+          />
+        </label>
+
+        <label class="oss-knob oss-knob--toggle">
+          <input type="checkbox" bind:checked={params.reverse} />
+          <span>Reverse</span>
+        </label>
+      </div>
+
+      <div class="oss-interp__action">
+        <button
+          class="brutalist-control oss-interpret-btn"
+          onclick={runInterpret}
+          disabled={!canInterpret}
+          title={clip && !clip.sourceId
+            ? 'Uploaded clips can’t be interpreted yet — pick or random-pull a library clip'
+            : ''}
+        >
+          {interpreting ? 'INTERPRETING…' : 'INTERPRET'}
+        </button>
+        {#if clip && !clip.sourceId}
+          <span class="oss-hint">uploads can’t be interpreted yet</span>
+        {:else if !clip}
+          <span class="oss-hint">load a clip first</span>
+        {/if}
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Interpreted + carve ────────────────────────────────────────────── -->
+  {#if interpreting || wetBuffer || interpretError}
+    <section class="oss-panel">
+      <header class="oss-panel__head">
+        <h2>Interpreted &amp; carved</h2>
+        {#if wetBuffer}
+          <span class="oss-hint"
+            >{params.model} · {formatDuration(wetBuffer.duration)} · {hits.length}
+            hits</span
+          >
+        {/if}
+      </header>
+
+      {#if interpreting}
+        <div class="oss-loader">
+          <div class="oss-loader__spine">
+            {#each Array(6) as _, i}
+              <span style={`--i:${i}`}></span>
+            {/each}
+          </div>
+          <p class="oss-loader__label">
+            {interpretPhase ? PHASE_LABEL[interpretPhase] : 'working…'}
+          </p>
+        </div>
+      {:else if interpretError}
+        <p class="oss-error oss-error--pad">{interpretError}</p>
+      {:else if wetBuffer}
+        <div class="oss-carve">
+          <div class="oss-waveform-scroll">
+            <div class="oss-waveform" style={`width:${zoom * 100}%`}>
+              <canvas bind:this={wetCanvas}></canvas>
+            </div>
+          </div>
+
+          <div class="oss-carve__controls">
+            <button
+              class="brutalist-control"
+              onclick={() => playFull('wet', wetBuffer)}
+            >
+              {playingKey === 'wet' ? '■ Stop' : '▶ Whole'}
+            </button>
+            <label class="oss-knob">
+              <span>Sensitivity <em>{sensitivity.toFixed(2)}</em></span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                bind:value={sensitivity}
+              />
+            </label>
+            <button class="brutalist-control" onclick={recarve}>Re-carve</button
+            >
+            <label class="oss-knob">
+              <span>Zoom <em>{zoom}×</em></span>
+              <input type="range" min="1" max="12" step="1" bind:value={zoom} />
+            </label>
+          </div>
+
+          {#if hits.length}
+            <div class="oss-slots">
+              {#each SLOTS as slot}
+                {@const slotHits = hitsInSlot(slot)}
+                <div
+                  class="oss-slot"
+                  style={`--slot-color:${SLOT_COLOR[slot]}`}
+                >
+                  <div class="oss-slot__head">
+                    <span class="oss-slot__name">{slot}</span>
+                    {#if slotHits.length}
+                      <button
+                        class="oss-slot__loop"
+                        class:is-active={looping && loopSlot === slot}
+                        onclick={() => toggleLoop(slot)}
+                        title="Audition loop for this slot"
+                      >
+                        {looping && loopSlot === slot ? '◼' : '↻'}
+                      </button>
+                    {/if}
+                    <span class="oss-slot__count">{slotHits.length}</span>
+                  </div>
+                  {#each slotHits as h, idx (h.id)}
+                    <div
+                      class="oss-hit"
+                      class:is-playing={playingKey === `hit:${h.id}`}
+                      class:is-selected={selectedHitId === h.id}
+                    >
+                      <button
+                        class="oss-hit__play"
+                        onclick={() => auditionHit(h)}
+                        title="Audition (edited)"
+                      >
+                        {playingKey === `hit:${h.id}` ? '■' : '▶'}
+                      </button>
+                      <button
+                        class="oss-hit__name"
+                        onclick={() =>
+                          (selectedHitId =
+                            selectedHitId === h.id ? null : h.id)}
+                        title="Edit this hit"
+                      >
+                        {slot}
+                        {idx + 1}
+                      </button>
+                      <select
+                        class="oss-hit__slot"
+                        value={h.slot}
+                        onchange={(e) =>
+                          reassign(
+                            h,
+                            (e.target as HTMLSelectElement).value as Slot,
+                          )}
+                        title="Reassign slot"
+                      >
+                        {#each SLOTS as s}
+                          <option value={s}>{s}</option>
+                        {/each}
+                      </select>
+                      <button
+                        class="oss-hit__drop"
+                        onclick={() => dropHit(h)}
+                        title="Drop"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  {/each}
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <p class="oss-empty">
+              No hits found. Nudge sensitivity up and re-carve.
+            </p>
+          {/if}
+
+          {#if selectedHit && wetBuffer}
+            <div class="oss-editor-wrap">
+              <div class="oss-editor__head">
+                <span>Editing <strong>{selectedHit.slot}</strong></span>
+                <button
+                  class="oss-editor__close"
+                  onclick={() => (selectedHitId = null)}>close ✕</button
+                >
+              </div>
+              <HitEditor
+                hit={selectedHit}
+                buffer={wetBuffer}
+                playing={playingKey === `hit:${selectedHit.id}`}
+                onAudition={() => auditionHit(selectedHit)}
+              />
+            </div>
+          {/if}
+
+          {#if looping && loopSlot}
+            <div class="oss-loop">
+              <div class="oss-loop__head">
+                <button class="brutalist-control" onclick={stopLoop}
+                  >◼ Stop</button
+                >
+                <span class="oss-loop__title"
+                  >loop · <strong>{loopSlot}</strong></span
+                >
+              </div>
+              <div class="oss-loop__steps">
+                {#each loopPattern as on, i}
+                  <span
+                    class="oss-loop__step"
+                    class:on
+                    class:cur={i === loopStep}
+                  ></span>
+                {/each}
+              </div>
+              <div class="oss-knobs">
+                <label class="oss-knob">
+                  <span>BPM <em>{loopBpm}</em></span>
+                  <input
+                    type="range"
+                    min="60"
+                    max="200"
+                    step="1"
+                    bind:value={loopBpm}
+                    oninput={onLoopBpm}
+                  />
+                </label>
+                <label class="oss-knob">
+                  <span>Rate <em>1/{loopRate}</em></span>
+                  <input
+                    type="range"
+                    min="2"
+                    max="16"
+                    step="2"
+                    bind:value={loopRate}
+                    oninput={onLoopRate}
+                  />
+                </label>
+                <label class="oss-knob">
+                  <span>Length <em>{loopLength}</em></span>
+                  <input
+                    type="range"
+                    min="4"
+                    max="32"
+                    step="1"
+                    bind:value={loopLength}
+                    oninput={onLoopLength}
+                  />
+                </label>
+                <label class="oss-knob">
+                  <span>Probability <em>{loopProb}%</em></span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    bind:value={loopProb}
+                    oninput={onLoopProb}
+                  />
+                </label>
+              </div>
+            </div>
+          {/if}
+
+          {#if hits.length}
+            <div class="oss-export">
+              <input
+                class="brutalist-control oss-export__name"
+                type="text"
+                placeholder="kit name (optional)"
+                bind:value={kitName}
+              />
+              <button
+                class="brutalist-control oss-interpret-btn"
+                onclick={indexAll}
+                disabled={exporting}
+              >
+                {exporting ? 'WORKING…' : `Index ${hits.length} to library`}
+              </button>
+              <button
+                class="brutalist-control"
+                onclick={downloadZip}
+                disabled={exporting}
+              >
+                Download ZIP
+              </button>
+              {#if exportMsg}
+                <span class="oss-export__msg">{exportMsg}</span>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </section>
+  {/if}
 </div>

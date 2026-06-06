@@ -172,7 +172,7 @@
   border: 1px solid var(--oss-border);
 }
 
-.oss-preview__actions {
+.oss-actions {
   display: flex;
   gap: 0.5rem;
   padding: 0 0.85rem 0.85rem;
@@ -183,4 +183,441 @@
   color: var(--oss-text-faint);
   font-size: 0.82rem;
   text-align: center;
+}
+
+/* ── Interpreter ───────────────────────────────────────────────────────────- */
+.oss-interp {
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.oss-knobs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem 1rem;
+}
+
+.oss-knob {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.74rem;
+  color: var(--oss-text-dim);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.oss-knob em {
+  font-style: normal;
+  color: var(--oss-accent);
+}
+
+.oss-knob input[type='range'] {
+  width: 100%;
+  accent-color: var(--oss-accent);
+}
+
+.oss-knob--toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.oss-knob--toggle input {
+  accent-color: var(--oss-accent);
+}
+
+.oss-interp__action {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.oss-interpret-btn {
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  padding: 0.55rem 1.4rem;
+  color: var(--oss-bg);
+  background: var(--oss-accent);
+  border-color: var(--oss-accent);
+}
+
+.oss-interpret-btn:disabled {
+  opacity: 0.4;
+  background: var(--oss-cell);
+  color: var(--oss-text-faint);
+  border-color: var(--oss-border);
+}
+
+.oss-error--pad {
+  padding: 1.25rem 0.85rem;
+}
+
+/* ── Skeleton-building loader ──────────────────────────────────────────────- */
+.oss-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 2rem 0.85rem 2.25rem;
+}
+
+.oss-loader__spine {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 36px;
+}
+
+.oss-loader__spine span {
+  width: 10px;
+  height: 10px;
+  background: var(--oss-bone);
+  border-radius: 2px;
+  animation: oss-stack 1.1s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 0.12s);
+  opacity: 0.35;
+}
+
+@keyframes oss-stack {
+  0%,
+  100% {
+    height: 10px;
+    opacity: 0.3;
+  }
+  50% {
+    height: 34px;
+    opacity: 1;
+  }
+}
+
+.oss-loader__label {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--oss-text-dim);
+  letter-spacing: 0.05em;
+}
+
+/* ── Carve ─────────────────────────────────────────────────────────────────- */
+.oss-carve {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem 0.85rem 0.85rem;
+}
+
+.oss-waveform-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--oss-border);
+  background: var(--oss-bg);
+}
+
+.oss-waveform-scroll .oss-waveform {
+  padding: 0;
+}
+
+.oss-carve__controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.oss-carve__controls .oss-knob {
+  min-width: 150px;
+}
+
+.oss-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.oss-slot {
+  border: 1px solid var(--oss-border);
+  border-top: 2px solid var(--slot-color, var(--oss-border));
+  background: var(--oss-cell);
+  display: flex;
+  flex-direction: column;
+}
+
+.oss-slot__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--slot-color, var(--oss-bone));
+  border-bottom: 1px solid var(--oss-border);
+}
+
+.oss-slot__name {
+  flex: 1;
+}
+
+.oss-slot__loop {
+  background: none;
+  border: 1px solid var(--oss-border);
+  color: var(--oss-text-dim);
+  font: inherit;
+  cursor: pointer;
+  padding: 0 0.4rem;
+  line-height: 1.5;
+}
+
+.oss-slot__loop:hover {
+  color: var(--oss-bone);
+  border-color: var(--oss-border-hover);
+}
+
+.oss-slot__loop.is-active {
+  color: var(--oss-bg);
+  background: var(--slot-color, var(--oss-accent));
+  border-color: var(--slot-color, var(--oss-accent));
+}
+
+.oss-slot__count {
+  color: var(--oss-text-faint);
+  min-width: 1.2em;
+  text-align: right;
+}
+
+/* ── Audition loop ─────────────────────────────────────────────────────────- */
+.oss-loop {
+  border: 1px solid var(--oss-border-hover);
+  background: var(--oss-panel);
+  padding: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.oss-loop__head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.oss-loop__title {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--oss-text-dim);
+}
+
+.oss-loop__title strong {
+  color: var(--oss-accent);
+}
+
+.oss-loop__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.oss-loop__step {
+  width: 12px;
+  height: 12px;
+  background: var(--oss-cell);
+  border: 1px solid var(--oss-border);
+}
+
+.oss-loop__step.on {
+  background: var(--oss-accent);
+  border-color: var(--oss-accent);
+}
+
+.oss-loop__step.cur {
+  outline: 1px solid var(--oss-bone);
+  outline-offset: 1px;
+}
+
+/* ── Export ────────────────────────────────────────────────────────────────- */
+.oss-export {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--oss-border);
+  padding-top: 0.75rem;
+}
+
+.oss-export__name {
+  flex: 0 1 220px;
+}
+
+.oss-export__msg {
+  font-size: 0.78rem;
+  color: var(--oss-text-dim);
+}
+
+.oss-hit {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.45rem;
+  border-bottom: 1px solid var(--oss-border);
+  font-size: 0.76rem;
+}
+
+.oss-hit:last-child {
+  border-bottom: none;
+}
+
+.oss-hit.is-playing {
+  background: rgba(201, 162, 39, 0.12);
+}
+
+.oss-hit__play,
+.oss-hit__drop {
+  border: 1px solid var(--oss-border);
+  background: var(--oss-panel);
+  color: var(--oss-text);
+  font: inherit;
+  cursor: pointer;
+  padding: 0.05rem 0.4rem;
+  line-height: 1.4;
+}
+
+.oss-hit__play:hover,
+.oss-hit__drop:hover {
+  border-color: var(--oss-border-hover);
+}
+
+.oss-hit__drop {
+  color: var(--oss-red);
+  margin-left: auto;
+}
+
+.oss-hit__name {
+  color: var(--oss-text-dim);
+  background: none;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.oss-hit__name:hover {
+  color: var(--oss-bone);
+  text-decoration: underline;
+}
+
+.oss-hit.is-selected {
+  outline: 1px solid var(--oss-accent);
+  outline-offset: -1px;
+}
+
+/* ── Hit editor ────────────────────────────────────────────────────────────- */
+.oss-editor-wrap {
+  border: 1px solid var(--oss-accent);
+  background: var(--oss-panel);
+}
+
+.oss-editor__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.45rem 0.7rem;
+  border-bottom: 1px solid var(--oss-border);
+  font-size: 0.76rem;
+  color: var(--oss-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.oss-editor__head strong {
+  color: var(--oss-accent);
+}
+
+.oss-editor__close {
+  background: none;
+  border: 1px solid var(--oss-border);
+  color: var(--oss-text-dim);
+  font: inherit;
+  cursor: pointer;
+  padding: 0.1rem 0.5rem;
+}
+
+.oss-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.7rem;
+}
+
+.oss-editor__wave {
+  position: relative;
+  height: 110px;
+  border: 1px solid var(--oss-border);
+  background: var(--oss-bg);
+  touch-action: none;
+}
+
+.oss-editor__wave canvas {
+  display: block;
+  width: 100%;
+  height: 110px;
+}
+
+.oss-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  margin: 0;
+  padding: 0;
+  transform: translateX(-50%);
+  background: var(--oss-accent);
+  opacity: 0.55;
+  border: none;
+  cursor: ew-resize;
+}
+
+.oss-handle:hover {
+  opacity: 0.9;
+}
+
+.oss-handle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--oss-bg);
+  transform: translateX(-50%);
+}
+
+.oss-editor__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.oss-editor__group {
+  border-top: 1px solid var(--oss-border);
+  padding-top: 0.6rem;
+}
+
+.oss-editor__group-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--oss-text-faint);
+  margin-bottom: 0.5rem;
+}
+
+.oss-hit__slot {
+  background: var(--oss-panel);
+  color: var(--oss-text);
+  border: 1px solid var(--oss-border);
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0.05rem 0.2rem;
 }
