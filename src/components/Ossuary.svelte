@@ -25,6 +25,13 @@
   } from '../lib/ossuary/carve.ts';
   import { renderHit } from '../lib/ossuary/render.ts';
   import { AuditionLoop } from '../lib/ossuary/loop.ts';
+  import { encodeWav } from '../lib/ossuary/wav.ts';
+  import {
+    indexSample,
+    zipSamples,
+    sampleTags,
+    slugify,
+  } from '../lib/ossuary/export.ts';
   import HitEditor from './ossuary/HitEditor.svelte';
 
   // ── Source picker state ───────────────────────────────────────────────────
@@ -143,6 +150,90 @@
   function onLoopProb() {
     plrTouched = true;
     rebuildPattern();
+  }
+
+  // ── Export: bake hits → index into samples-bored / download a ZIP ──────────
+  let kitName = $state('');
+  let exporting = $state(false);
+  let exportMsg = $state('');
+
+  const kitSlug = () =>
+    slugify(kitName || `${clip?.name ?? 'ossuary'}-${params.model}`);
+
+  /** Bake every hit to a named WAV; returns [filename, bytes] pairs. */
+  async function bakeAll(slug: string): Promise<Array<[string, Uint8Array]>> {
+    const counters: Record<string, number> = {};
+    const out: Array<[string, Uint8Array]> = [];
+    for (const h of hits) {
+      const rendered = await renderHit(
+        wetBuffer!,
+        h.start,
+        h.end,
+        $state.snapshot(h.edit),
+      );
+      counters[h.slot] = (counters[h.slot] ?? 0) + 1;
+      out.push([
+        `${slug}_${h.slot}_${counters[h.slot]}.wav`,
+        encodeWav(rendered),
+      ]);
+    }
+    return out;
+  }
+
+  async function indexAll() {
+    if (!wetBuffer || exporting || !hits.length) return;
+    exporting = true;
+    exportMsg = '';
+    try {
+      const slug = kitSlug();
+      let n = 0;
+      for (const h of hits) {
+        const rendered = await renderHit(
+          wetBuffer,
+          h.start,
+          h.end,
+          $state.snapshot(h.edit),
+        );
+        const bytes = encodeWav(rendered);
+        const filename = `${slug}_${h.slot}_${n + 1}.wav`;
+        await indexSample(
+          bytes,
+          filename,
+          sampleTags(h.slot, params.model, slug),
+          `Carved ${h.slot} from "${clip?.name ?? 'clip'}" via RGZ-9 ${params.model} brain`,
+        );
+        n++;
+        exportMsg = `indexing… ${n}/${hits.length}`;
+      }
+      exportMsg = `✓ indexed ${n} samples (kit:${slug})`;
+    } catch (e) {
+      exportMsg = (e as Error).message;
+    } finally {
+      exporting = false;
+    }
+  }
+
+  async function downloadZip() {
+    if (!wetBuffer || exporting || !hits.length) return;
+    exporting = true;
+    exportMsg = '';
+    try {
+      const slug = kitSlug();
+      const baked = await bakeAll(slug);
+      const files: Record<string, Uint8Array> = {};
+      for (const [name, bytes] of baked) files[`${slug}/${name}`] = bytes;
+      const blob = zipSamples(files);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${slug}.zip`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      exportMsg = `✓ downloaded ${baked.length} samples`;
+    } catch (e) {
+      exportMsg = (e as Error).message;
+    } finally {
+      exporting = false;
+    }
   }
 
   // ── Audition ────────────────────────────────────────────────────────────--
@@ -838,6 +929,34 @@
                   />
                 </label>
               </div>
+            </div>
+          {/if}
+
+          {#if hits.length}
+            <div class="oss-export">
+              <input
+                class="brutalist-control oss-export__name"
+                type="text"
+                placeholder="kit name (optional)"
+                bind:value={kitName}
+              />
+              <button
+                class="brutalist-control oss-interpret-btn"
+                onclick={indexAll}
+                disabled={exporting}
+              >
+                {exporting ? 'WORKING…' : `Index ${hits.length} to library`}
+              </button>
+              <button
+                class="brutalist-control"
+                onclick={downloadZip}
+                disabled={exporting}
+              >
+                Download ZIP
+              </button>
+              {#if exportMsg}
+                <span class="oss-export__msg">{exportMsg}</span>
+              {/if}
             </div>
           {/if}
         </div>
