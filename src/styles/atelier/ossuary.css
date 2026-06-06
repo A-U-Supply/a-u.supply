@@ -299,3 +299,113 @@
   color: var(--oss-text-dim);
   letter-spacing: 0.05em;
 }
+
+/* ── Carve ─────────────────────────────────────────────────────────────────- */
+.oss-carve {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem 0.85rem 0.85rem;
+}
+
+.oss-waveform-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--oss-border);
+  background: var(--oss-bg);
+}
+
+.oss-waveform-scroll .oss-waveform {
+  padding: 0;
+}
+
+.oss-carve__controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.oss-carve__controls .oss-knob {
+  min-width: 150px;
+}
+
+.oss-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.oss-slot {
+  border: 1px solid var(--oss-border);
+  border-top: 2px solid var(--slot-color, var(--oss-border));
+  background: var(--oss-cell);
+  display: flex;
+  flex-direction: column;
+}
+
+.oss-slot__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--slot-color, var(--oss-bone));
+  border-bottom: 1px solid var(--oss-border);
+}
+
+.oss-slot__count {
+  color: var(--oss-text-faint);
+}
+
+.oss-hit {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.45rem;
+  border-bottom: 1px solid var(--oss-border);
+  font-size: 0.76rem;
+}
+
+.oss-hit:last-child {
+  border-bottom: none;
+}
+
+.oss-hit.is-playing {
+  background: rgba(201, 162, 39, 0.12);
+}
+
+.oss-hit__play,
+.oss-hit__drop {
+  border: 1px solid var(--oss-border);
+  background: var(--oss-panel);
+  color: var(--oss-text);
+  font: inherit;
+  cursor: pointer;
+  padding: 0.05rem 0.4rem;
+  line-height: 1.4;
+}
+
+.oss-hit__play:hover,
+.oss-hit__drop:hover {
+  border-color: var(--oss-border-hover);
+}
+
+.oss-hit__drop {
+  color: var(--oss-red);
+  margin-left: auto;
+}
+
+.oss-hit__name {
+  color: var(--oss-text-dim);
+}
+
+.oss-hit__slot {
+  background: var(--oss-panel);
+  color: var(--oss-text);
+  border: 1px solid var(--oss-border);
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0.05rem 0.2rem;
+}

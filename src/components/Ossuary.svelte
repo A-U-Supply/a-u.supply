@@ -16,6 +16,13 @@
     type InterpretParams,
     type InterpretPhase,
   } from '../lib/ossuary/interpret.ts';
+  import {
+    carve,
+    SLOTS,
+    SLOT_COLOR,
+    type Hit,
+    type Slot,
+  } from '../lib/ossuary/carve.ts';
 
   // ── Source picker state ───────────────────────────────────────────────────
   let query = $state('');
@@ -36,10 +43,15 @@
   let wetBuffer = $state<AudioBuffer | null>(null);
   let wetCanvas: HTMLCanvasElement | undefined;
 
+  // ── Carve ─────────────────────────────────────────────────────────────────
+  let sensitivity = $state(0.5);
+  let zoom = $state(1);
+  let hits = $state<Hit[]>([]);
+
   // ── Audition ────────────────────────────────────────────────────────────--
   let ctx: AudioContext | null = null;
   let preview: AudioBufferSourceNode | null = null;
-  let playingKey = $state<'source' | 'wet' | null>(null);
+  let playingKey = $state<string | null>(null);
   let destroyed = false;
 
   function audioCtx(): AudioContext {
@@ -56,6 +68,8 @@
     running: 'interpreting…',
     fetching: 'retrieving the bones…',
   };
+
+  const hitsInSlot = (slot: Slot) => hits.filter((h) => h.slot === slot);
 
   // ── Source loading ──────────────────────────────────────────────────────--
   async function runSearch() {
@@ -78,10 +92,11 @@
     error = '';
     stop();
     wetBuffer = null;
+    hits = [];
     interpretError = '';
     try {
       clip = await promise;
-      requestAnimationFrame(() => draw(sourceCanvas, clip?.buffer));
+      requestAnimationFrame(() => drawWaveform(sourceCanvas, clip?.buffer));
     } catch (e) {
       error = (e as Error).message;
     } finally {
@@ -104,6 +119,7 @@
     interpreting = true;
     interpretError = '';
     wetBuffer = null;
+    hits = [];
     stop();
     try {
       const c = audioCtx();
@@ -117,7 +133,7 @@
       );
       if (buf) {
         wetBuffer = buf;
-        requestAnimationFrame(() => draw(wetCanvas, wetBuffer));
+        hits = carve(buf, sensitivity); // auto-carve on arrival
       }
     } catch (e) {
       interpretError = (e as Error).message;
@@ -127,25 +143,55 @@
     }
   }
 
+  function recarve() {
+    if (wetBuffer) hits = carve(wetBuffer, sensitivity);
+  }
+
+  function reassign(hit: Hit, slot: Slot) {
+    hit.slot = slot;
+  }
+
+  function dropHit(hit: Hit) {
+    hits = hits.filter((h) => h.id !== hit.id);
+  }
+
   // ── Audition ────────────────────────────────────────────────────────────--
-  function toggle(key: 'source' | 'wet', buffer: AudioBuffer | null) {
+  function toggleRange(
+    key: string,
+    buffer: AudioBuffer | null,
+    offsetSec: number,
+    durSec: number,
+  ) {
     if (playingKey === key) {
       stop();
-    } else if (buffer) {
-      stop();
-      const c = audioCtx();
-      if (c.state === 'suspended') c.resume();
-      preview = c.createBufferSource();
-      preview.buffer = buffer;
-      preview.connect(c.destination);
-      preview.onended = () => {
-        playingKey = null;
-        preview = null;
-      };
-      preview.start();
-      playingKey = key;
+      return;
     }
+    if (!buffer) return;
+    stop();
+    const c = audioCtx();
+    if (c.state === 'suspended') c.resume();
+    preview = c.createBufferSource();
+    preview.buffer = buffer;
+    preview.connect(c.destination);
+    preview.onended = () => {
+      playingKey = null;
+      preview = null;
+    };
+    preview.start(0, offsetSec, durSec);
+    playingKey = key;
   }
+
+  const playFull = (key: string, buffer: AudioBuffer | null) =>
+    toggleRange(key, buffer, 0, buffer ? buffer.duration : 0);
+
+  const playHit = (h: Hit) =>
+    wetBuffer &&
+    toggleRange(
+      `hit:${h.id}`,
+      wetBuffer,
+      h.start / wetBuffer.sampleRate,
+      (h.end - h.start) / wetBuffer.sampleRate,
+    );
 
   function stop() {
     if (preview) {
@@ -159,9 +205,10 @@
   }
 
   // ── Waveform drawing ──────────────────────────────────────────────────────
-  function draw(
+  function drawWaveform(
     canvas: HTMLCanvasElement | undefined,
     buffer?: AudioBuffer | null,
+    overlayHits: Hit[] = [],
   ) {
     if (!canvas || !buffer) return;
     const dpr = window.devicePixelRatio || 1;
@@ -192,7 +239,35 @@
       g.lineTo(x + 0.5, mid - min * mid);
     }
     g.stroke();
+
+    // Slice boundaries from carving.
+    const len = buffer.length;
+    for (const h of overlayHits) {
+      const x0 = (h.start / len) * cssWidth;
+      const x1 = (h.end / len) * cssWidth;
+      const color = SLOT_COLOR[h.slot];
+      g.globalAlpha = playingKey === `hit:${h.id}` ? 0.85 : 0.45;
+      g.fillStyle = color;
+      g.fillRect(x0, 0, Math.max(1, x1 - x0), 4);
+      g.globalAlpha = 1;
+      g.strokeStyle = color;
+      g.beginPath();
+      g.moveTo(x0, 0);
+      g.lineTo(x0, cssHeight);
+      g.stroke();
+    }
   }
+
+  const drawWet = () => drawWaveform(wetCanvas, wetBuffer, hits);
+
+  // Redraw the carve view whenever the buffer, hits, or zoom change.
+  $effect(() => {
+    void hits;
+    void zoom;
+    void wetBuffer;
+    void playingKey;
+    requestAnimationFrame(drawWet);
+  });
 
   function formatDuration(s: number): string {
     if (!s) return '0:00';
@@ -204,8 +279,8 @@
   let resizeObserver: ResizeObserver | undefined;
   onMount(() => {
     resizeObserver = new ResizeObserver(() => {
-      draw(sourceCanvas, clip?.buffer);
-      draw(wetCanvas, wetBuffer);
+      drawWaveform(sourceCanvas, clip?.buffer);
+      drawWet();
     });
     if (sourceCanvas) resizeObserver.observe(sourceCanvas);
     if (wetCanvas) resizeObserver.observe(wetCanvas);
@@ -306,7 +381,7 @@
       <div class="oss-actions">
         <button
           class="brutalist-control"
-          onclick={() => toggle('source', clip!.buffer)}
+          onclick={() => playFull('source', clip!.buffer)}
         >
           {playingKey === 'source' ? '■ Stop' : '▶ Audition'}
         </button>
@@ -430,14 +505,15 @@
     </div>
   </section>
 
-  <!-- ── Result (wet WAV) ───────────────────────────────────────────────── -->
+  <!-- ── Interpreted + carve ────────────────────────────────────────────── -->
   {#if interpreting || wetBuffer || interpretError}
     <section class="oss-panel">
       <header class="oss-panel__head">
-        <h2>Interpreted</h2>
+        <h2>Interpreted &amp; carved</h2>
         {#if wetBuffer}
           <span class="oss-hint"
-            >{params.model} · {formatDuration(wetBuffer.duration)}</span
+            >{params.model} · {formatDuration(wetBuffer.duration)} · {hits.length}
+            hits</span
           >
         {/if}
       </header>
@@ -456,16 +532,93 @@
       {:else if interpretError}
         <p class="oss-error oss-error--pad">{interpretError}</p>
       {:else if wetBuffer}
-        <div class="oss-waveform">
-          <canvas bind:this={wetCanvas}></canvas>
-        </div>
-        <div class="oss-actions">
-          <button
-            class="brutalist-control"
-            onclick={() => toggle('wet', wetBuffer)}
-          >
-            {playingKey === 'wet' ? '■ Stop' : '▶ Audition'}
-          </button>
+        <div class="oss-carve">
+          <div class="oss-waveform-scroll">
+            <div class="oss-waveform" style={`width:${zoom * 100}%`}>
+              <canvas bind:this={wetCanvas}></canvas>
+            </div>
+          </div>
+
+          <div class="oss-carve__controls">
+            <button
+              class="brutalist-control"
+              onclick={() => playFull('wet', wetBuffer)}
+            >
+              {playingKey === 'wet' ? '■ Stop' : '▶ Whole'}
+            </button>
+            <label class="oss-knob">
+              <span>Sensitivity <em>{sensitivity.toFixed(2)}</em></span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                bind:value={sensitivity}
+              />
+            </label>
+            <button class="brutalist-control" onclick={recarve}>Re-carve</button
+            >
+            <label class="oss-knob">
+              <span>Zoom <em>{zoom}×</em></span>
+              <input type="range" min="1" max="12" step="1" bind:value={zoom} />
+            </label>
+          </div>
+
+          {#if hits.length}
+            <div class="oss-slots">
+              {#each SLOTS as slot}
+                {@const slotHits = hitsInSlot(slot)}
+                <div
+                  class="oss-slot"
+                  style={`--slot-color:${SLOT_COLOR[slot]}`}
+                >
+                  <div class="oss-slot__head">
+                    {slot}<span class="oss-slot__count">{slotHits.length}</span>
+                  </div>
+                  {#each slotHits as h, idx (h.id)}
+                    <div
+                      class="oss-hit"
+                      class:is-playing={playingKey === `hit:${h.id}`}
+                    >
+                      <button
+                        class="oss-hit__play"
+                        onclick={() => playHit(h)}
+                        title="Audition"
+                      >
+                        {playingKey === `hit:${h.id}` ? '■' : '▶'}
+                      </button>
+                      <span class="oss-hit__name">{slot} {idx + 1}</span>
+                      <select
+                        class="oss-hit__slot"
+                        value={h.slot}
+                        onchange={(e) =>
+                          reassign(
+                            h,
+                            (e.target as HTMLSelectElement).value as Slot,
+                          )}
+                        title="Reassign slot"
+                      >
+                        {#each SLOTS as s}
+                          <option value={s}>{s}</option>
+                        {/each}
+                      </select>
+                      <button
+                        class="oss-hit__drop"
+                        onclick={() => dropHit(h)}
+                        title="Drop"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  {/each}
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <p class="oss-empty">
+              No hits found. Nudge sensitivity up and re-carve.
+            </p>
+          {/if}
         </div>
       {/if}
     </section>
