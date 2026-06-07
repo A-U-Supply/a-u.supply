@@ -293,7 +293,7 @@
   }
 
   const pickResult = (hit: SearchHit) =>
-    load(fetchClipById(hit.id, hit.filename, audioCtx()));
+    load(fetchClipById(hit.id, hit.filename, hit.mediaType, audioCtx()));
   const pullRandom = () => load(fetchRandomClip(query.trim(), audioCtx()));
 
   function onUpload(e: Event) {

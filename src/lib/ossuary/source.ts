@@ -28,7 +28,10 @@ export interface LoadedClip {
 }
 
 /** Search the inputs index for audio + video. Returns lightweight hits for the picker list. */
-export async function searchInputs(query: string): Promise<SearchHit[]> {
+export async function searchInputs(
+  query: string,
+  opts: { sort?: string; perPage?: number } = {},
+): Promise<SearchHit[]> {
   const res = await fetch('/api/search', {
     method: 'POST',
     credentials: 'include',
@@ -39,8 +42,9 @@ export async function searchInputs(query: string): Promise<SearchHit[]> {
       filters: {
         output_index: [INPUTS_INDEX],
       },
+      sort: opts.sort,
       page: 1,
-      per_page: 40,
+      per_page: opts.perPage ?? 40,
     }),
   });
   if (!res.ok) throw new Error(`search failed: HTTP ${res.status}`);
@@ -77,14 +81,15 @@ export async function fetchClipById(
 /**
  * Pull one random matching clip. Goes through search (not /api/serve) so the
  * clip carries its media-item id — the interpreter needs an id to submit a job.
+ * Uses Meilisearch's random sort so every input has an equal chance.
  */
 export async function fetchRandomClip(
   query: string,
   ctx: AudioContext,
 ): Promise<LoadedClip> {
-  const hits = await searchInputs(query);
+  const hits = await searchInputs(query, { sort: 'random', perPage: 1 });
   if (!hits.length) throw new Error('no inputs matched');
-  const hit = hits[Math.floor(Math.random() * hits.length)];
+  const hit = hits[0];
   return fetchClipById(hit.id, hit.filename, hit.mediaType, ctx);
 }
 
