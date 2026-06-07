@@ -61,6 +61,8 @@
   const selectedHit = $derived(
     hits.find((h) => h.id === selectedHitId) ?? null,
   );
+  let auditioningHitId = $state<string | null>(null);
+  let auditionError = $state('');
 
   // ── Audition loop (one slot, minimal — Litany owns real sequencing) ────────
   let loop: AuditionLoop | null = null;
@@ -408,16 +410,24 @@
       return;
     }
     if (!wetBuffer) return;
-    const c = audioCtx();
-    if (c.state === 'suspended') await c.resume();
-    const rendered = await renderHit(
-      wetBuffer,
-      h.start,
-      h.end,
-      $state.snapshot(h.edit),
-    );
-    if (destroyed) return;
-    toggleRange(key, rendered, 0, rendered.duration);
+    auditioningHitId = h.id;
+    auditionError = '';
+    try {
+      const c = audioCtx();
+      if (c.state === 'suspended') await c.resume();
+      const rendered = await renderHit(
+        wetBuffer,
+        h.start,
+        h.end,
+        $state.snapshot(h.edit),
+      );
+      if (destroyed) return;
+      await toggleRange(key, rendered, 0, rendered.duration);
+    } catch (e) {
+      auditionError = (e as Error).message;
+    } finally {
+      auditioningHitId = null;
+    }
   }
 
   function stop() {
@@ -490,6 +500,29 @@
   }
 
   const drawWet = () => drawWaveform(wetCanvas, wetBuffer, hits);
+
+  /** Click on the carve waveform canvas to select the nearest hit. */
+  function onCanvasClick(e: MouseEvent) {
+    if (!wetCanvas || !wetBuffer || !hits.length) return;
+    const rect = wetCanvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const frac = x / rect.width;
+    const sample = Math.floor(frac * wetBuffer.length);
+    // Find nearest hit by center distance
+    let best: Hit | null = null;
+    let bestDist = Infinity;
+    for (const h of hits) {
+      const center = (h.start + h.end) / 2;
+      const dist = Math.abs(center - sample);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = h;
+      }
+    }
+    if (best) {
+      selectedHitId = selectedHitId === best.id ? null : best.id;
+    }
+  }
 
   // Redraw the carve view whenever the buffer, hits (incl. trims/slots), zoom,
   // or playing state change.
@@ -770,7 +803,7 @@
         <div class="oss-carve">
           <div class="oss-waveform-scroll">
             <div class="oss-waveform" style={`width:${zoom * 100}%`}>
-              <canvas bind:this={wetCanvas}></canvas>
+              <canvas bind:this={wetCanvas} onclick={onCanvasClick}></canvas>
             </div>
           </div>
 
@@ -799,7 +832,13 @@
             </label>
           </div>
 
+          {#if auditionError}
+            <p class="oss-error">{auditionError}</p>
+          {/if}
           {#if hits.length}
+            <p class="oss-hint" style="padding:0.3rem 0.85rem;margin:0;">
+              Click a carve on the waveform or a hit name below to edit.
+            </p>
             <div class="oss-slots">
               {#each SLOTS as slot}
                 {@const slotHits = hitsInSlot(slot)}
@@ -830,9 +869,15 @@
                       <button
                         class="oss-hit__play"
                         onclick={() => auditionHit(h)}
+                        disabled={!!auditioningHitId &&
+                          auditioningHitId !== h.id}
                         title="Audition (edited)"
                       >
-                        {playingKey === `hit:${h.id}` ? '■' : '▶'}
+                        {#if auditioningHitId === h.id}
+                          …
+                        {:else}
+                          {playingKey === `hit:${h.id}` ? '■' : '▶'}
+                        {/if}
                       </button>
                       <button
                         class="oss-hit__name"
