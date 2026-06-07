@@ -239,6 +239,7 @@
   // ── Audition ────────────────────────────────────────────────────────────--
   let ctx: AudioContext | null = null;
   let preview: AudioBufferSourceNode | null = null;
+  let sourceAudio: HTMLAudioElement | undefined;
   let playingKey = $state<string | null>(null);
   let destroyed = false;
 
@@ -372,6 +373,33 @@
   const playFull = (key: string, buffer: AudioBuffer | null) =>
     toggleRange(key, buffer, 0, buffer ? buffer.duration : 0);
 
+  /** Source preview: native <audio> for video, Web Audio for audio. */
+  function toggleSourcePlayback() {
+    if (!clip) return;
+    if (playingKey === 'source') {
+      stop();
+      return;
+    }
+    stop();
+    if (clip.mediaType === 'video' && sourceAudio) {
+      sourceAudio.src = clip.url;
+      sourceAudio.currentTime = 0;
+      sourceAudio
+        .play()
+        .then(() => {
+          playingKey = 'source';
+        })
+        .catch(() => {
+          playingKey = null;
+        });
+      sourceAudio.onended = () => {
+        playingKey = null;
+      };
+    } else {
+      playFull('source', clip.buffer);
+    }
+  }
+
   // Audition the *edited* hit: render its FX/envelope/trim offline, then play.
   async function auditionHit(h: Hit) {
     const key = `hit:${h.id}`;
@@ -399,6 +427,10 @@
       } catch {}
       preview.disconnect();
       preview = null;
+    }
+    if (sourceAudio) {
+      sourceAudio.pause();
+      sourceAudio.currentTime = 0;
     }
     playingKey = null;
   }
@@ -583,11 +615,9 @@
       <div class="oss-waveform">
         <canvas bind:this={sourceCanvas}></canvas>
       </div>
+      <audio bind:this={sourceAudio} style="display:none;"></audio>
       <div class="oss-actions">
-        <button
-          class="brutalist-control"
-          onclick={() => playFull('source', clip!.buffer)}
-        >
+        <button class="brutalist-control" onclick={toggleSourcePlayback}>
           {playingKey === 'source' ? '■ Stop' : '▶ Audition'}
         </button>
       </div>

@@ -25,6 +25,9 @@ export interface LoadedClip {
   /** Media item id when the clip came from the library; null for uploads. */
   sourceId: string | null;
   buffer: AudioBuffer;
+  mediaType: string;
+  /** Original file URL for native browser playback (esp. video). */
+  url: string;
 }
 
 /** Search the inputs index for audio + video. Returns lightweight hits for the picker list. */
@@ -75,7 +78,8 @@ export async function fetchClipById(
   });
   if (!res.ok) throw new Error(`fetch clip failed: HTTP ${res.status}`);
   const buffer = await decode(await res.arrayBuffer(), ctx);
-  return { name, sourceId: id, buffer };
+  const url = `/api/media/${encodeURIComponent(id)}/file`;
+  return { name, sourceId: id, buffer, mediaType, url };
 }
 
 /**
@@ -99,7 +103,13 @@ export async function loadLocalFile(
   ctx: AudioContext,
 ): Promise<LoadedClip> {
   const buffer = await decode(await file.arrayBuffer(), ctx);
-  return { name: file.name, sourceId: null, buffer };
+  return {
+    name: file.name,
+    sourceId: null,
+    buffer,
+    mediaType: file.type.startsWith('video') ? 'video' : 'audio',
+    url: URL.createObjectURL(file),
+  };
 }
 
 async function decode(
