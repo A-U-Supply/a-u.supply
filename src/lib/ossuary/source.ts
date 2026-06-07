@@ -101,7 +101,6 @@ async function decode(
   data: ArrayBuffer,
   ctx: AudioContext,
 ): Promise<AudioBuffer> {
-  // decodeAudioData detaches the buffer; callers pass a fresh ArrayBuffer.
   return await ctx.decodeAudioData(data);
 }
 

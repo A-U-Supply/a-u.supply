@@ -13,12 +13,9 @@ export class AuditionLoop {
   private stepIndex = 0;
   private rrIndex = 0;
 
-  /** Rendered one-shots for the active slot; triggered round-robin. */
   buffers: AudioBuffer[] = [];
-  /** Active steps. */
   pattern: boolean[] = [];
   bpm = 120;
-  /** Steps per bar (4 = quarters, 8 = eighths, 16 = sixteenths). */
   rate = 8;
   onStep?: (i: number) => void;
 

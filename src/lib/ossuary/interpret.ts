@@ -25,12 +25,12 @@ export type Model = (typeof MODELS)[number];
 
 export interface InterpretParams {
   model: Model;
-  temperature: number; // 0.1–3.0
-  noise: number; // 0.0–1.0
-  mix: number; // 0.0 dry … 1.0 wet
-  dims: string; // comma-separated, "" = all
-  shuffle: number; // 0–32
-  quantize: number; // 0.0–1.0
+  temperature: number;
+  noise: number;
+  mix: number;
+  dims: string;
+  shuffle: number;
+  quantize: number;
   reverse: boolean;
 }
 
@@ -56,7 +56,6 @@ interface JobStatus {
   output_count: number;
 }
 
-/** Submit a single_pass rotten job for one media item. Returns the job id. */
 async function submitJob(
   mediaItemId: string,
   params: InterpretParams,
@@ -94,7 +93,6 @@ async function getJob(jobId: string): Promise<JobStatus> {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Download the job's first audio output and decode it. */
 async function fetchWetBuffer(
   jobId: string,
   ctx: AudioContext,
@@ -117,14 +115,6 @@ async function fetchWetBuffer(
   return ctx.decodeAudioData(await fileRes.arrayBuffer());
 }
 
-/**
- * Run a full interpret pass: submit → poll → fetch wet WAV.
- * `onPhase` reports progress for the loading UI. `cancelled` lets the caller
- * abandon polling (e.g. on unmount) without throwing.
- *
- * Returns `null` if cancelled. On error throws with a message that includes
- * the job URL when available.
- */
 export async function interpret(
   mediaItemId: string,
   params: InterpretParams,
@@ -159,7 +149,6 @@ export async function interpret(
       onPhase(job.status === 'running' ? 'running' : 'queued');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      // Transient 502 or network error — retry
       if (msg.includes('HTTP 502') || msg.includes('Failed to fetch')) {
         await sleep(POLL_INTERVAL_MS * 3);
         continue;

@@ -7,27 +7,27 @@
 // so what you hear is what you export.
 
 export interface FxParams {
-  filterType: BiquadFilterType; // lowpass / highpass / bandpass …
-  filterFreq: number; // Hz
+  filterType: BiquadFilterType;
+  filterFreq: number;
   filterQ: number;
-  eqFreq: number; // Hz, peaking band
-  eqGain: number; // dB
+  eqFreq: number;
+  eqGain: number;
   eqQ: number;
-  delayTime: number; // s
-  delayFeedback: number; // 0..0.95
-  delayMix: number; // 0..1 wet send
-  reverbSize: number; // s (IR length)
-  reverbMix: number; // 0..1 wet send
+  delayTime: number;
+  delayFeedback: number;
+  delayMix: number;
+  reverbSize: number;
+  reverbMix: number;
 }
 
 export interface HitEdit {
-  gainDb: number; // -24..+24
+  gainDb: number;
   normalize: boolean;
   reverse: boolean;
-  pitch: number; // semitones, bakes into the WAV
-  attack: number; // s
-  decay: number; // s (release tail)
-  curve: number; // -1 exponential … 0 linear … +1 logarithmic
+  pitch: number;
+  attack: number;
+  decay: number;
+  curve: number;
   fx: FxParams;
 }
 
@@ -56,14 +56,12 @@ export function defaultEdit(): HitEdit {
   };
 }
 
-/** Shape a 0..1 ramp: curve<0 → convex (exp), >0 → concave (log). */
 function shape(x: number, curve: number): number {
   const clamped = Math.min(1, Math.max(0, x));
-  const exponent = Math.exp(-curve * 4); // huge range, per design
+  const exponent = Math.exp(-curve * 4);
   return Math.pow(clamped, exponent);
 }
 
-/** Amplitude envelope across the (pitched) segment duration, scaled by peak. */
 function buildEnvelope(
   outDur: number,
   attack: number,
@@ -91,7 +89,6 @@ function buildEnvelope(
   return arr;
 }
 
-/** Exponentially-decaying white-noise impulse response for the reverb. */
 function makeImpulse(ctx: OfflineAudioContext, seconds: number): AudioBuffer {
   const len = Math.max(1, Math.floor(seconds * ctx.sampleRate));
   const buf = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -102,10 +99,6 @@ function makeImpulse(ctx: OfflineAudioContext, seconds: number): AudioBuffer {
   return buf;
 }
 
-/**
- * Render one edited hit to a fresh (mono) AudioBuffer.
- * `start`/`end` are sample offsets into `source` (already trimmed + snapped).
- */
 export async function renderHit(
   source: AudioBuffer,
   start: number,
@@ -116,7 +109,6 @@ export async function renderHit(
   const segLen = Math.max(1, end - start);
   const src0 = source.getChannelData(0);
 
-  // Extract the segment (reversed in place if requested).
   const seg = new Float32Array(segLen);
   for (let i = 0; i < segLen; i++) {
     const idx = start + (edit.reverse ? segLen - 1 - i : i);
@@ -174,7 +166,7 @@ export async function renderHit(
   node.connect(env);
   env.connect(filter);
   filter.connect(eq);
-  eq.connect(master); // dry
+  eq.connect(master);
 
   if (fx.delayMix > 0) {
     const delay = ctx.createDelay(2.0);

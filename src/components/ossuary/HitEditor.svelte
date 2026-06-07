@@ -18,9 +18,6 @@
   let container: HTMLDivElement | undefined;
   let dragging: 'start' | 'end' | null = $state(null);
 
-  // A stable view window (segment + padding) so trim handles can grow or shrink
-  // without the waveform shifting under the cursor. Reset only when the hit id
-  // changes, not on every trim tweak.
   let win = $state({ a: 0, b: 1 });
   $effect(() => {
     void hit.id;
@@ -52,7 +49,6 @@
     const span = Math.max(1, win.b - win.a);
     const mid = h / 2;
 
-    // Windowed peaks.
     const samplesPerCol = Math.max(1, Math.floor(span / w));
     g.strokeStyle = '#c9a227';
     g.beginPath();
@@ -70,7 +66,6 @@
     }
     g.stroke();
 
-    // Shade outside the trimmed region.
     const xs = (pct(hit.start) / 100) * w;
     const xe = (pct(hit.end) / 100) * w;
     g.fillStyle = 'rgba(0,0,0,0.55)';
@@ -143,7 +138,6 @@
     <span class="oss-hint">{durationMs.toFixed(0)} ms</span>
   </div>
 
-  <!-- Shape -->
   <div class="oss-editor__group">
     <div class="oss-editor__group-title">Shape</div>
     <div class="oss-knobs">
@@ -208,7 +202,6 @@
     </div>
   </div>
 
-  <!-- Filter / EQ -->
   <div class="oss-editor__group">
     <div class="oss-editor__group-title">Filter / EQ</div>
     <div class="oss-knobs">
@@ -273,7 +266,6 @@
     </div>
   </div>
 
-  <!-- Delay -->
   <div class="oss-editor__group">
     <div class="oss-editor__group-title">Delay</div>
     <div class="oss-knobs">
@@ -311,7 +303,6 @@
     </div>
   </div>
 
-  <!-- Reverb -->
   <div class="oss-editor__group">
     <div class="oss-editor__group-title">Reverb</div>
     <div class="oss-knobs">

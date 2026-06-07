@@ -20,7 +20,6 @@ export const SLOT_COLOR: Record<Slot, string> = {
 
 export interface Hit {
   id: string;
-  /** Sample offsets into the source (wet) buffer. */
   start: number;
   end: number;
   slot: Slot;
@@ -31,16 +30,11 @@ const HOP = 256;
 const WIN = 1024;
 const MAX_HIT_SECONDS = 2.0;
 
-/**
- * Adaptive energy-flux onset detector. Returns onset positions in samples.
- * `sensitivity` 0..1 lowers the picking threshold (more onsets).
- */
 export function detectOnsets(buffer: AudioBuffer, sensitivity = 0.5): number[] {
   const data = buffer.getChannelData(0);
   const nFrames = Math.max(0, Math.floor((data.length - WIN) / HOP));
   if (nFrames < 2) return data.length ? [0] : [];
 
-  // Per-frame RMS energy envelope.
   const env = new Float32Array(nFrames);
   for (let f = 0; f < nFrames; f++) {
     const s = f * HOP;
@@ -52,7 +46,6 @@ export function detectOnsets(buffer: AudioBuffer, sensitivity = 0.5): number[] {
     env[f] = Math.sqrt(sum / WIN);
   }
 
-  // Detection function: rectified first difference (energy rises = onsets).
   const df = new Float32Array(nFrames);
   let mean = 0;
   for (let i = 1; i < nFrames; i++) {
@@ -61,9 +54,9 @@ export function detectOnsets(buffer: AudioBuffer, sensitivity = 0.5): number[] {
   }
   mean /= nFrames || 1;
 
-  const W = 20; // local-average half-window (frames)
-  const minGap = Math.max(1, Math.floor((0.05 * buffer.sampleRate) / HOP)); // 50ms
-  const factor = 1.8 - 1.3 * sensitivity; // higher sensitivity → lower bar
+  const W = 20;
+  const minGap = Math.max(1, Math.floor((0.05 * buffer.sampleRate) / HOP));
+  const factor = 1.8 - 1.3 * sensitivity;
   const floor = mean * (0.6 - 0.5 * sensitivity) + 1e-4;
 
   const onsets: number[] = [];
@@ -89,7 +82,6 @@ export function detectOnsets(buffer: AudioBuffer, sensitivity = 0.5): number[] {
   return onsets;
 }
 
-/** Nearest zero crossing to `index`, searched outward within `win` samples. */
 export function snapToZeroCrossing(
   data: Float32Array,
   index: number,
@@ -108,10 +100,6 @@ export function snapToZeroCrossing(
   return clamped;
 }
 
-/**
- * Crude but reassignable slot guess from zero-crossing rate + duration.
- * Low brightness → kick, high → hi-hat, otherwise snare.
- */
 export function classifySlot(
   data: Float32Array,
   start: number,
@@ -132,7 +120,6 @@ export function classifySlot(
   return 'snare';
 }
 
-/** Carve the buffer into classified, zero-cross-snapped hits. */
 export function carve(buffer: AudioBuffer, sensitivity = 0.5): Hit[] {
   const data = buffer.getChannelData(0);
   const sr = buffer.sampleRate;

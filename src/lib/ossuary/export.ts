@@ -4,8 +4,11 @@
 // convenience for external samplers. Both consume baked (rendered + WAV-encoded)
 // hits.
 //
-// NOTE: /api/media/upload accepts source_type. We send "sample_library" so
-// _index_for_media_item routes uploads to samples-bored, same as sounds-bored.
+// NOTE (server dependency): /api/media/upload records a `manual_upload` source,
+// which `_index_for_media_item` routes to the *emulsion* index — NOT
+// samples-bored (that needs a `sample_library` source). We send
+// output_index=samples-bored + the right tags so the moment the server routes
+// Ossuary uploads as samples (a small server hook), discovery in Litany works.
 
 import { zipSync } from 'fflate';
 import { authHeaders } from './source.ts';
@@ -34,7 +37,6 @@ export async function indexSample(
   fd.append('tags', tags.join(','));
   fd.append('description', description);
   fd.append('output_index', SAMPLES_INDEX);
-  fd.append('source_type', 'sample_library');
   // Don't set Content-Type — the browser adds the multipart boundary.
   const res = await fetch('/api/media/upload', {
     method: 'POST',

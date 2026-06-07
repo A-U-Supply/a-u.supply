@@ -293,7 +293,7 @@
   }
 
   const pickResult = (hit: SearchHit) =>
-    load(fetchClipById(hit.id, hit.filename, hit.mediaType, audioCtx()));
+    load(fetchClipById(hit.id, hit.filename, audioCtx()));
   const pullRandom = () => load(fetchRandomClip(query.trim(), audioCtx()));
 
   function onUpload(e: Event) {
@@ -344,7 +344,7 @@
   }
 
   // ── Audition ────────────────────────────────────────────────────────────--
-  function toggleRange(
+  async function toggleRange(
     key: string,
     buffer: AudioBuffer | null,
     offsetSec: number,
@@ -357,7 +357,7 @@
     if (!buffer) return;
     stop();
     const c = audioCtx();
-    if (c.state === 'suspended') c.resume();
+    if (c.state === 'suspended') await c.resume();
     preview = c.createBufferSource();
     preview.buffer = buffer;
     preview.connect(c.destination);
@@ -518,9 +518,9 @@
         <input
           class="brutalist-control oss-search__input"
           type="search"
-          placeholder="search inputs…"
+          placeholder="search samples-bored…"
           bind:value={query}
-          aria-label="Search input library"
+          aria-label="Search the sample library"
         />
         <button class="brutalist-control" type="submit" disabled={searching}>
           {searching ? '…' : 'Search'}
@@ -735,22 +735,7 @@
           </p>
         </div>
       {:else if interpretError}
-        <div class="oss-error oss-error--pad">
-          {#each interpretError.split('\n') as line, i}
-            {@const match = line.match(/Job: (\/admin\/jobs\/.+)/)}
-            {#if match}
-              <span
-                >{line.replace(match[0], '')}<a
-                  href={match[1]}
-                  class="oss-job-link">{match[1]}</a
-                ></span
-              >
-            {:else}
-              <span>{line}</span>
-            {/if}
-            {#if i < interpretError.split('\n').length - 1}<br />{/if}
-          {/each}
-        </div>
+        <p class="oss-error oss-error--pad">{interpretError}</p>
       {:else if wetBuffer}
         <div class="oss-carve">
           <div class="oss-waveform-scroll">
