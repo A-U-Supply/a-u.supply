@@ -9,6 +9,7 @@ In Recipe mode, you choose from 41 pre-built multi-step chains. Recipes define s
 
 When processing multiple inputs, choose how they're combined: splice (chop and shuffle segments together), concat (join end-to-end), or independent (process each file separately)."""
 image = "ghcr.io/a-u-supply/rottengenizdat:latest"
+force_pull = true
 command = "rave"
 timeout_seconds = 900
 
