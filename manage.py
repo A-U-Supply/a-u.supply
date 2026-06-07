@@ -1505,6 +1505,36 @@ if __name__ == "__main__":
         r = _sp.run(cmd_parts)
         sys.exit(r.returncode)
 
+    elif cmd == "meili-check":
+        from server.search_client import get_client
+        c = get_client()
+        for idx in ["audio", "video"]:
+            for filt in ['output_index IS NULL', 'output_index = "__inputs__"']:
+                r = c.index(idx).search("", {"filter": filt, "limit": 1})
+                n = r.get("estimatedTotalHits", r.get("total", 0))
+                print(f"{idx} where {filt}: {n}")
+
+    elif cmd == "docker-pull-rottengenizdat":
+        import subprocess as _sp
+        import os as _os
+        image = "ghcr.io/a-u-supply/rottengenizdat:latest"
+        user = _os.environ.get("GHCR_USER", "")
+        token = _os.environ.get("GHCR_TOKEN", "")
+        if user and token:
+            login = _sp.run(
+                ["docker", "login", "ghcr.io", "-u", user, "--password-stdin"],
+                input=token, capture_output=True, text=True, timeout=30,
+            )
+            if login.returncode == 0:
+                print("GHCR login OK")
+            else:
+                print(f"GHCR login failed: {login.stderr.strip()}")
+        pull = _sp.run(["docker", "pull", image], capture_output=True, text=True, timeout=300)
+        if pull.returncode == 0:
+            print(f"Pulled {image}")
+        else:
+            print(f"Pull failed: {pull.stderr.strip()}")
+
     else:
         print(f"Unknown command: {cmd}")
         print(__doc__)
