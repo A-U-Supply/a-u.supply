@@ -58,10 +58,14 @@ export async function searchInputs(query: string): Promise<SearchHit[]> {
 export async function fetchClipById(
   id: string,
   name: string,
-  _mediaType: string,
+  mediaType: string,
   ctx: AudioContext,
 ): Promise<LoadedClip> {
-  const res = await fetch(`/api/media/${encodeURIComponent(id)}/file`, {
+  const endpoint =
+    mediaType === 'video'
+      ? `/api/media/${encodeURIComponent(id)}/audio`
+      : `/api/media/${encodeURIComponent(id)}/file`;
+  const res = await fetch(endpoint, {
     credentials: 'include',
     headers: authHeaders(),
   });
