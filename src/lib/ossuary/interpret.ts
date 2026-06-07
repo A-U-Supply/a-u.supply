@@ -120,6 +120,9 @@ async function fetchWetBuffer(
  * Run a full interpret pass: submit → poll → fetch wet WAV.
  * `onPhase` reports progress for the loading UI. `cancelled` lets the caller
  * abandon polling (e.g. on unmount) without throwing.
+ *
+ * Returns `null` if cancelled. On error throws with a message that includes
+ * the job URL when available.
  */
 export async function interpret(
   mediaItemId: string,
@@ -128,21 +131,49 @@ export async function interpret(
   onPhase: (phase: InterpretPhase) => void,
   cancelled: () => boolean = () => false,
 ): Promise<AudioBuffer | null> {
+  let jobId: string | null = null;
+
   onPhase('submitting');
-  const jobId = await submitJob(mediaItemId, params);
+  try {
+    jobId = await submitJob(mediaItemId, params);
+  } catch (e) {
+    const msg = (e as Error).message;
+    const detail = msg.replace("couldn't start interpret: ", '');
+    throw new Error(
+      `couldn't start interpret: ${detail}\nJob may have been created — check /admin/jobs`,
+    );
+  }
 
   onPhase('queued');
   while (!cancelled()) {
-    const job = await getJob(jobId);
-    if (job.status === 'completed') break;
-    if (job.status === 'failed' || job.status === 'cancelled') {
-      throw new Error(job.error_message || `interpret ${job.status}`);
+    try {
+      const job = await getJob(jobId);
+      if (job.status === 'completed') break;
+      if (job.status === 'failed' || job.status === 'cancelled') {
+        throw new Error(
+          (job.error_message || `interpret ${job.status}`) +
+            `\nJob: /admin/jobs/${jobId}`,
+        );
+      }
+      onPhase(job.status === 'running' ? 'running' : 'queued');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // Transient 502 or network error — retry
+      if (msg.includes('HTTP 502') || msg.includes('Failed to fetch')) {
+        await sleep(POLL_INTERVAL_MS * 3);
+        continue;
+      }
+      throw new Error(`${msg}\nJob: /admin/jobs/${jobId}`);
     }
-    onPhase(job.status === 'running' ? 'running' : 'queued');
     await sleep(POLL_INTERVAL_MS);
   }
   if (cancelled()) return null;
 
   onPhase('fetching');
-  return fetchWetBuffer(jobId, ctx);
+  try {
+    return await fetchWetBuffer(jobId, ctx);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`${msg}\nJob: /admin/jobs/${jobId}`);
+  }
 }

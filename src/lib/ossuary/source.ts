@@ -58,15 +58,10 @@ export async function searchInputs(query: string): Promise<SearchHit[]> {
 export async function fetchClipById(
   id: string,
   name: string,
-  mediaType: string,
+  _mediaType: string,
   ctx: AudioContext,
 ): Promise<LoadedClip> {
-  // Use /audio endpoint so video files have their audio extracted server-side.
-  const endpoint =
-    mediaType === 'video'
-      ? `/api/media/${encodeURIComponent(id)}/audio`
-      : `/api/media/${encodeURIComponent(id)}/file`;
-  const res = await fetch(endpoint, {
+  const res = await fetch(`/api/media/${encodeURIComponent(id)}/file`, {
     credentials: 'include',
     headers: authHeaders(),
   });

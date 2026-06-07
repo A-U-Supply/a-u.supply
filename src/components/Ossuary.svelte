@@ -735,7 +735,22 @@
           </p>
         </div>
       {:else if interpretError}
-        <p class="oss-error oss-error--pad">{interpretError}</p>
+        <div class="oss-error oss-error--pad">
+          {#each interpretError.split('\n') as line, i}
+            {@const match = line.match(/Job: (\/admin\/jobs\/.+)/)}
+            {#if match}
+              <span
+                >{line.replace(match[0], '')}<a
+                  href={match[1]}
+                  class="oss-job-link">{match[1]}</a
+                ></span
+              >
+            {:else}
+              <span>{line}</span>
+            {/if}
+            {#if i < interpretError.split('\n').length - 1}<br />{/if}
+          {/each}
+        </div>
       {:else if wetBuffer}
         <div class="oss-carve">
           <div class="oss-waveform-scroll">

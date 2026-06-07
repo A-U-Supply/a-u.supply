@@ -225,6 +225,7 @@ def _build_docker_command(job: Job, manifest: dict, job_dir: Path) -> list[str]:
         "-v", f"{host_job_dir}:/work",
         "-v", f"{MODEL_CACHE_HOST_DIR}:/root/.cache/torch",
         "-v", f"{MODEL_CACHE_HOST_DIR}/hf:/root/.cache/huggingface",
+        "-v", f"{MODEL_CACHE_HOST_DIR}/rave:/root/.cache/rottengenizdat/models/rave",
         "-e", "TORCH_HOME=/root/.cache/torch",
         "-e", "HF_HOME=/root/.cache/huggingface",
     ]
@@ -843,6 +844,7 @@ def main():
     """Main worker loop."""
     JOB_DATA_DIR.mkdir(parents=True, exist_ok=True)
     (MODEL_CACHE_DIR / "hf").mkdir(parents=True, exist_ok=True)
+    (MODEL_CACHE_DIR / "rottengenizdat" / "models" / "rave").mkdir(parents=True, exist_ok=True)
     logger.info("Worker started. Polling every %ds. Job data: %s", POLL_INTERVAL, JOB_DATA_DIR)
 
     startup_db = SessionLocal()
