@@ -159,6 +159,11 @@
   font-size: 0.8rem;
 }
 
+.oss-error .oss-job-link {
+  color: var(--oss-accent);
+  text-decoration: underline;
+}
+
 /* ── Clip preview ──────────────────────────────────────────────────────────- */
 .oss-waveform {
   padding: 0.5rem;
