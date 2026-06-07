@@ -1,5 +1,6 @@
 """Media search engine API endpoints."""
 
+import asyncio
 import hashlib
 import io
 import json
@@ -1764,7 +1765,7 @@ def get_media_file(
 
 
 @router.get("/media/{media_id}/audio", tags=["Media Items"], summary="Extract audio track from media")
-def get_media_audio(
+async def get_media_audio(
     media_id: str,
     _auth=Depends(require_scope("read")),
     db: Session = Depends(get_db),
@@ -1810,24 +1811,26 @@ def get_media_audio(
             pass
 
     try:
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-i",
-                str(file_path),
-                "-vn",
-                "-acodec",
-                "pcm_s16le",
-                "-ar",
-                "44100",
-                "-ac",
-                "2",
-                tmp_path,
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
+        await asyncio.to_thread(
+            lambda: subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    str(file_path),
+                    "-vn",
+                    "-acodec",
+                    "pcm_s16le",
+                    "-ar",
+                    "44100",
+                    "-ac",
+                    "2",
+                    tmp_path,
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
         )
     except subprocess.CalledProcessError as exc:
         _cleanup()

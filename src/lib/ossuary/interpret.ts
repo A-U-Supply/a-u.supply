@@ -88,7 +88,8 @@ async function getJob(jobId: string): Promise<JobStatus> {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error(`job status failed: HTTP ${res.status}`);
-  return (await res.json()) as JobStatus;
+  const data = await res.json();
+  return data.job as JobStatus;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
