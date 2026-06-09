@@ -2305,6 +2305,9 @@ import Admin from '../../../layouts/Admin.astro';
         fd.append('file', blob, 'photism.png');
         fd.append('tags', 'photism,atelier');
         fd.append('output_index', 'outputs');
+        // Non-manual source_type so the output routes to the public media
+        // index (not Emulsion) and stays searchable in the Outputs tab.
+        fd.append('source_type', 'atelier_output');
         const res = await fetch('/api/media/upload', {
           method: 'POST',
           body: fd,
@@ -2734,6 +2737,9 @@ import Admin from '../../../layouts/Admin.astro';
         fd.append('file', new Blob([wav], { type: 'audio/wav' }), filename);
         fd.append('tags', 'photism,atelier,audio');
         fd.append('output_index', 'outputs');
+        // Non-manual source_type so the output routes to the public media
+        // index (not Emulsion) and stays searchable in the Outputs tab.
+        fd.append('source_type', 'atelier_output');
         const res = await fetch('/api/media/upload', {
           method: 'POST',
           body: fd,

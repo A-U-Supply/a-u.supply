@@ -21445,6 +21445,11 @@ import Admin from '../../../layouts/Admin.astro';
               fd.append('file', blob, filename);
               fd.append('tags', `${currentBot},atelier,punctum`);
               fd.append('output_index', 'outputs');
+              // Route to the public media index (not Emulsion). A bare
+              // manual_upload with an output_index still lands in Emulsion, so
+              // outputs never show in the Outputs tab; a non-manual source_type
+              // routes by media type and keeps the output_index searchable.
+              fd.append('source_type', 'atelier_output');
               const meta = atelierMeta();
               if (meta) fd.append('description', meta);
               const res = await fetch('/api/media/upload', {
@@ -21516,6 +21521,7 @@ import Admin from '../../../layouts/Admin.astro';
                 fd.append('file', blob, `${currentBot}-${i}.${ext}`);
                 fd.append('tags', `${currentBot},atelier,punctum`);
                 fd.append('output_index', 'outputs');
+                fd.append('source_type', 'atelier_output');
                 fd.append(
                   'description',
                   JSON.stringify({
