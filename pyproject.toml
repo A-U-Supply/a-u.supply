@@ -38,6 +38,14 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 
+# onnxruntime 1.20+ dropped Intel Mac (x86_64) wheels — pin to the last
+# compatible version for local dev on Intel Macs. Arm Macs and Linux are
+# unaffected.
+[tool.uv]
+constraint-dependencies = [
+  "onnxruntime==1.19.2 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+]
+
 # Force CPU-only PyTorch wheels — EasyOCR depends on torch/torchvision and the
 # default PyPI wheels pull in ~2GB of CUDA libraries we'd never use on dokku.
 [[tool.uv.index]]
