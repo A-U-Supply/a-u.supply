@@ -780,7 +780,7 @@ def _resolve_index_routing(body: SearchRequest) -> tuple[list[str] | None, bool]
       - ``__emulsion__`` alongside other indexes turns on include_emulsion
       - ``samples-bored`` in output_index adds "sample" to searched indexes
     """
-    from server.search_client import SAMPLES_INDEX
+    from server.search_client import SAMPLES_INDEX, PUKE_BOX_INDEX
 
     media_types = body.media_types
     include_emulsion = body.include_emulsion
@@ -802,6 +802,13 @@ def _resolve_index_routing(body: SearchRequest) -> tuple[list[str] | None, bool]
         if SAMPLES_INDEX in body.filters.output_index:
             mtypes = set(media_types or ["image", "audio", "video"])
             mtypes.add("sample")
+            media_types = list(mtypes)
+
+        # If puke-box is selected in the Index dropdown, add it to the
+        # searched indexes alongside whatever types are already selected.
+        if PUKE_BOX_INDEX in body.filters.output_index:
+            mtypes = set(media_types or ["image", "audio", "video"])
+            mtypes.add("puke-box")
             media_types = list(mtypes)
 
     return media_types, include_emulsion
@@ -1053,7 +1060,7 @@ def search_facets(
 
     # Distinct output index names (excludes NULL — those are "inputs", surfaced
     # in the UI as a synthetic `__inputs__` pill).
-    from server.search_client import SAMPLES_INDEX
+    from server.search_client import SAMPLES_INDEX, PUKE_BOX_INDEX
     output_indexes = {
         r[0] for r in
         db.query(distinct(MediaItem.output_index))
@@ -1061,6 +1068,7 @@ def search_facets(
         .all()
     }
     output_indexes.add(SAMPLES_INDEX)
+    output_indexes.add(PUKE_BOX_INDEX)
 
     return {
         "channels": sorted(channels),
@@ -1261,6 +1269,124 @@ def get_public_output_thumbnail(
     response = _thumbnail_response(item, "public, max-age=86400, immutable", size=size)
     db.close()
     return response
+
+
+# ---------------------------------------------------------------------------
+# Puke Box — public manifest for the Daily MIDI jukebox (no auth)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/pukebox/manifest",
+    tags=["Puke Box"],
+    summary="Public: Puke Box manifest (Daily MIDI entries)",
+)
+def pukebox_manifest(
+    response: Response,
+    limit: int = Query(200, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    """Return the Puke Box manifest — every archived Daily MIDI entry.
+
+    No auth required. Each entry includes the musical metadata (scale, root,
+    tempo, description), a streamable OGG preview URL, and per-stem MIDI
+    download URLs. Ordered newest-first.
+    """
+    from server.models import MediaPukeBoxMeta
+
+    q = (
+        db.query(MediaItem, MediaPukeBoxMeta)
+        .join(MediaPukeBoxMeta, MediaPukeBoxMeta.media_item_id == MediaItem.id)
+        .filter(MediaItem.output_index == "puke-box")
+        .order_by(MediaPukeBoxMeta.entry_id.desc())
+    )
+    total = q.count()
+    rows = q.limit(limit).offset(offset).all()
+
+    entries = []
+    for item, meta in rows:
+        midi_paths: dict = {}
+        if meta.midi_paths:
+            try:
+                midi_paths = json.loads(meta.midi_paths)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        entries.append({
+            "id": item.id,
+            "entry_id": meta.entry_id,
+            "date": meta.entry_id[:10] if meta.entry_id else None,
+            "scale": meta.scale,
+            "root": meta.root,
+            "tempo": meta.tempo,
+            "description": meta.description or item.description or "",
+            "chords": json.loads(meta.chords) if meta.chords else [],
+            "melody_instrument": meta.melody_instrument,
+            "temperature": meta.temperature,
+            "preview_url": f"/api/public/outputs/{item.id}/file",
+            "midi_urls": {
+                stem: f"/api/pukebox/midi/{item.id}/{stem}"
+                for stem in ("melody", "drums", "bass", "chords")
+                if stem in midi_paths
+            },
+        })
+
+    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
+    return {"total": total, "limit": limit, "offset": offset, "entries": entries}
+
+
+@router.get(
+    "/pukebox/midi/{media_id}/{stem}",
+    tags=["Puke Box"],
+    summary="Public: download a Puke Box MIDI stem",
+)
+def pukebox_midi_stem(
+    media_id: str,
+    stem: str,
+    db: Session = Depends(get_db),
+):
+    """Download an individual MIDI stem (melody/drums/bass/chords) for a
+    Puke Box entry. No auth required.
+    """
+    from server.models import MediaPukeBoxMeta
+
+    if stem not in ("melody", "drums", "bass", "chords"):
+        raise HTTPException(status_code=400, detail="Invalid stem name")
+
+    item = (
+        db.query(MediaItem)
+        .filter(MediaItem.id == media_id, MediaItem.output_index == "puke-box")
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    meta = db.query(MediaPukeBoxMeta).filter(MediaPukeBoxMeta.media_item_id == media_id).first()
+    if not meta or not meta.midi_paths:
+        raise HTTPException(status_code=404, detail="No MIDI stems for this entry")
+
+    try:
+        midi_paths = json.loads(meta.midi_paths)
+    except (json.JSONDecodeError, TypeError):
+        raise HTTPException(status_code=404, detail="No MIDI stems for this entry")
+
+    if stem not in midi_paths:
+        raise HTTPException(status_code=404, detail=f"{stem}.mid not available for this entry")
+
+    file_path = _get_search_media_dir() / midi_paths[stem]
+    db.close()
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found on disk")
+
+    entry_id = meta.entry_id or media_id
+    return FileResponse(
+        file_path,
+        media_type="audio/midi",
+        headers={
+            "Content-Disposition": f'attachment; filename="{entry_id}-{stem}.mid"',
+            "Cache-Control": "public, max-age=86400, immutable",
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -2908,12 +3034,14 @@ def serve_media(
     }
     sort_list = sort_map.get(sort, ["random"])
 
-    # Resolve media_types from param, with routing for samples-bored
+    # Resolve media_types from param, with routing for samples-bored + puke-box
     mtypes_set = set()
     if media_types:
         mtypes_set.update(t.strip() for t in media_types.split(",") if t.strip())
     if filters_obj.output_index and SAMPLES_INDEX in filters_obj.output_index:
         mtypes_set.add("sample")
+    if filters_obj.output_index and "puke-box" in filters_obj.output_index:
+        mtypes_set.add("puke-box")
     if not mtypes_set:
         mtypes_set = {"image", "audio", "video"}
     mtypes = list(mtypes_set)

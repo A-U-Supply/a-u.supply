@@ -1535,6 +1535,16 @@ if __name__ == "__main__":
         else:
             print(f"Pull failed: {pull.stderr.strip()}")
 
+    elif cmd == "pukebox-ingest":
+        from server.pukebox_ingest import run_ingest
+        result = run_ingest()
+        print(f"Puke Box ingest: {result}")
+
+    elif cmd == "pukebox-backfill":
+        from server.pukebox_ingest import backfill_from_legacy
+        result = backfill_from_legacy()
+        print(f"Puke Box backfill: {result}")
+
     else:
         print(f"Unknown command: {cmd}")
         print(__doc__)

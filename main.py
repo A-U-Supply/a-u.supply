@@ -289,6 +289,27 @@ async def _auto_scrape_loop():
         await asyncio.sleep(SYNC_INTERVAL_SCRAPE)
 
 
+PUKE_BOX_INGEST_INTERVAL = int(os.environ.get("PUKE_BOX_INGEST_INTERVAL", "3600"))  # seconds
+
+
+async def _auto_pukebox_ingest_loop():
+    """Periodically ingest new Daily MIDI entries from Slack #midieval.
+
+    Runs on its own cadence (default 1h) so the Puke Box page stays current
+    without the broken legacy webhook chain.
+    """
+    await asyncio.sleep(120)  # let the app settle before the first run
+    loop = asyncio.get_running_loop()
+    while True:
+        try:
+            from server.pukebox_ingest import run_ingest
+            result = await loop.run_in_executor(_sync_executor, run_ingest)
+            logger.info("Puke Box ingest: %s", result)
+        except Exception:
+            logger.exception("Puke Box ingest failed")
+        await asyncio.sleep(PUKE_BOX_INGEST_INTERVAL)
+
+
 async def _auto_reactions_loop():
     """Periodically refresh reaction counts."""
     await asyncio.sleep(60)  # offset from scrape loop
@@ -381,6 +402,9 @@ async def lifespan(app: FastAPI):
 
     logger.info("Midden reaper enabled (every %ds, 24h TTL)", MIDDEN_REAPER_INTERVAL)
     tasks.append(asyncio.create_task(_midden_reaper_loop()))
+
+    logger.info("Puke Box ingest enabled (every %ds)", PUKE_BOX_INGEST_INTERVAL)
+    tasks.append(asyncio.create_task(_auto_pukebox_ingest_loop()))
 
     from server.slack_notifier import ROLLUP_INTERVAL_SECONDS as _ROLLUP, rollup_loop as _rollup_loop
     logger.info("Slack activity rollup enabled (every %ds)", _ROLLUP)

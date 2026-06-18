@@ -61,13 +61,16 @@ dependencies = [
     { name = "fastapi" },
     { name = "faster-whisper" },
     { name = "meilisearch" },
+    { name = "numpy" },
     { name = "passlib", extra = ["bcrypt"] },
     { name = "pillow" },
     { name = "pillow-heif" },
+    { name = "pretty-midi" },
     { name = "psycopg2-binary" },
     { name = "python-jose", extra = ["cryptography"] },
     { name = "python-multipart" },
     { name = "scikit-learn" },
+    { name = "scipy" },
     { name = "slowapi" },
     { name = "sqlalchemy" },
     { name = "torch", version = "2.12.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "platform_machine != 'x86_64' and sys_platform == 'darwin'" },
@@ -93,14 +96,17 @@ requires-dist = [
     { name = "faster-whisper", specifier = ">=1.1.0" },
     { name = "httpx", marker = "extra == 'test'", specifier = ">=0.27" },
     { name = "meilisearch", specifier = ">=0.31.0" },
+    { name = "numpy", specifier = ">=1.26.0" },
     { name = "passlib", extras = ["bcrypt"], specifier = ">=1.7.4" },
     { name = "pillow", specifier = ">=11.0.0" },
     { name = "pillow-heif", specifier = ">=0.18.0" },
+    { name = "pretty-midi", specifier = ">=0.2.10" },
     { name = "psycopg2-binary", specifier = ">=2.9.9" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
     { name = "python-jose", extras = ["cryptography"], specifier = ">=3.5.0" },
     { name = "python-multipart", specifier = ">=0.0.26" },
     { name = "scikit-learn", specifier = ">=1.5.0" },
+    { name = "scipy", specifier = ">=1.13.0" },
     { name = "slowapi", specifier = ">=0.1.9" },
     { name = "sqlalchemy", specifier = ">=2.0.49" },
     { name = "torch", specifier = ">=2.4.0", index = "https://download.pytorch.org/whl/cpu" },
@@ -736,6 +742,15 @@ wheels = [
 ]
 
 [[package]]
+name = "importlib-resources"
+version = "7.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e4/06/b56dfa750b44e86157093bc8fca0ab81dccbf5260510de4eaf1cb69b5b99/importlib_resources-7.1.0.tar.gz", hash = "sha256:0722d4c6212489c530f2a145a34c0a7a3b4721bc96a15fada5930e2a0b760708", size = 44985, upload-time = "2026-04-12T16:36:09.232Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8a/db/55a262f3606bebcae07cc14095338471ad7c0bbcaa37707e6f0ee49725b7/importlib_resources-7.1.0-py3-none-any.whl", hash = "sha256:1bd7b48b4088eddb2cd16382150bb515af0bd2c70128194392725f82ad2c96a1", size = 37232, upload-time = "2026-04-12T16:36:08.219Z" },
+]
+
+[[package]]
 name = "iniconfig"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -886,6 +901,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/35/3d/f0f4de580446f69b3df416f63d3df46cceecddb1a3815d2b2be364a3b1e9/meilisearch-0.41.0.tar.gz", hash = "sha256:317e96e18ae6628eb19a3b4533af165fc24b6b2c8aa7a7238c76bc081e7122ee", size = 32762, upload-time = "2026-04-22T05:17:29.525Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/db/79/773acfa746126450eef7a084f09bda02be2aed8fbcf312dfcccfff6cce66/meilisearch-0.41.0-py3-none-any.whl", hash = "sha256:87f542031d3ee8cce89ee47576ef6137ebd7245039845f0ad2bea29e2a535851", size = 33128, upload-time = "2026-04-22T05:17:28.17Z" },
+]
+
+[[package]]
+name = "mido"
+version = "1.3.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/23/14/cfda3fe61ce4c0f50a9f707ae02b46cb53211732b2cd4522bf06272848f4/mido-1.3.3.tar.gz", hash = "sha256:1aecb30b7f282404f17e43768cbf74a6a31bf22b3b783bdd117a1ce9d22cb74c", size = 124288, upload-time = "2024-10-25T15:05:21.847Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fd/28/45deb15c11859d2f10702b32e71de9328a9fa494f989626916db39a9617f/mido-1.3.3-py3-none-any.whl", hash = "sha256:01033c9b10b049e4436fca2762194ca839b09a4334091dd3c34e7f4ae674fd8a", size = 54614, upload-time = "2024-10-25T15:05:20.349Z" },
 ]
 
 [[package]]
@@ -1205,6 +1232,18 @@ sdist = { url = "https://files.pythonhosted.org/packages/f9/e2/3e91f31a7d2b083fe
 wheels = [
     { url = "https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746", size = 20538, upload-time = "2025-05-15T12:30:06.134Z" },
 ]
+
+[[package]]
+name = "pretty-midi"
+version = "0.2.11"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "importlib-resources" },
+    { name = "mido" },
+    { name = "numpy" },
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/12/4f/5b18643f947ca2a97e25c3615740e4ead2b833fcd0b1d5d4262ea688519d/pretty_midi-0.2.11.tar.gz", hash = "sha256:dda81d643f71a0e91843a8644b312c0380237f1e63d5c6188225785c8d58cc67", size = 5600984, upload-time = "2025-10-08T18:57:50.288Z" }
 
 [[package]]
 name = "protobuf"

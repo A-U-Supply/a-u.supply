@@ -202,7 +202,8 @@ class MediaItem(Base):
     image_meta = relationship("MediaImageMeta", back_populates="media_item", uselist=False, cascade="all, delete-orphan")
     audio_meta = relationship("MediaAudioMeta", back_populates="media_item", uselist=False, cascade="all, delete-orphan")
     video_meta = relationship("MediaVideoMeta", back_populates="media_item", uselist=False, cascade="all, delete-orphan")
-    session_meta = relationship("MediaSessionMeta", uselist=False, cascade="all, delete-orphan")
+    session_meta = relationship("MediaSessionMeta", uselist=False, cascade="all, delete-orphan", back_populates="media_item")
+    puke_box_meta = relationship("MediaPukeBoxMeta", uselist=False, cascade="all, delete-orphan", back_populates="media_item")
     extraction_failures = relationship("ExtractionFailure", back_populates="media_item", cascade="all, delete-orphan")
 
 
@@ -321,7 +322,32 @@ class MediaSessionMeta(Base):
     bundle_size_bytes = Column(Integer, nullable=False)
     notes = Column(String, nullable=True)
 
-    media_item = relationship("MediaItem")
+    media_item = relationship("MediaItem", back_populates="session_meta")
+
+
+class MediaPukeBoxMeta(Base):
+    """Per-item musical metadata for Puke Box entries (Daily MIDI bot).
+
+    1:1 with MediaItem. The MediaItem's OGG preview is the playable audio;
+    this table carries the structured musical fields (scale, root, tempo,
+    chords) and the relative paths to the 4 MIDI stems so they can be
+    downloaded individually.
+    """
+
+    __tablename__ = "media_puke_box_meta"
+
+    media_item_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True, unique=True)
+    entry_id = Column(String, nullable=False, index=True)  # YYYY-MM-DD-HHMMSS (Slack ts)
+    scale = Column(String, nullable=True)
+    root = Column(String, nullable=True)
+    tempo = Column(Integer, nullable=True)
+    chords = Column(String, nullable=True)  # JSON list
+    description = Column(String, nullable=True)
+    melody_instrument = Column(Integer, nullable=True)  # General MIDI program
+    temperature = Column(Float, nullable=True)
+    midi_paths = Column(String, nullable=True)  # JSON dict: {melody, drums, bass, chords} relative to SEARCH_MEDIA_DIR
+
+    media_item = relationship("MediaItem", back_populates="puke_box_meta")
 
 
 class MediaVote(Base):
