@@ -12,6 +12,7 @@ from server.models import (
     MediaAudioMeta,
     MediaImageMeta,
     MediaItem,
+    MediaPukeBoxMeta,
     MediaSessionMeta,
     MediaSource,
     MediaTag,
@@ -37,6 +38,11 @@ EMULSION_INDEX = "emulsion"
 # Samples-bored is the destination for the Music 2000 / one-shot sample library
 # (instrument samples, drum hits, sound effects). Managed by scripts/index_samples.py.
 SAMPLES_INDEX = "samples-bored"
+
+# Puke Box is the destination for the Daily MIDI bot output (AI-generated MIDI
+# entries scraped from the #midieval Slack channel). Each entry is one audio
+# MediaItem (OGG preview) with structured musical metadata in MediaPukeBoxMeta.
+PUKE_BOX_INDEX = "puke-box"
 
 STACKS_COMMUNITY_NAME = "stacks"
 
@@ -128,6 +134,12 @@ FILTERABLE_ATTRIBUTES = [
     "royalty_free",
     "voice",
     "instrument",
+    # Puke Box index fields (Daily MIDI entries)
+    "scale",
+    "root",
+    "tempo",
+    "chords",
+    "entry_id",
 ]
 
 SORTABLE_ATTRIBUTES = [
@@ -137,6 +149,7 @@ SORTABLE_ATTRIBUTES = [
     "file_size_bytes",
     "duration_seconds",
     "tag_count",
+    "tempo",
     # Votes (issue #318)
     "vote_score",
     "up_count",
@@ -175,7 +188,7 @@ def configure_indexes() -> None:
         "displayedAttributes": ["*"],
     }
 
-    all_indexes = list(INDEX_NAMES.values()) + [EMULSION_INDEX, SAMPLES_INDEX]
+    all_indexes = list(INDEX_NAMES.values()) + [EMULSION_INDEX, SAMPLES_INDEX, PUKE_BOX_INDEX]
     for index_name in all_indexes:
         try:
             client.create_index(index_name, {"primaryKey": "id"})
@@ -192,10 +205,13 @@ def _index_for_media_item(media_item: MediaItem) -> str | None:
     - `session` media type always goes to Emulsion.
     - Items whose only sources are `manual_upload` go to Emulsion (user uploads).
     - Items with a `sample_library` source type go to the Samples index.
+    - Items with `output_index == "puke-box"` go to the Puke Box index.
     - Everything else routes by media_type via INDEX_NAMES.
     """
     if media_item.media_type == "session":
         return EMULSION_INDEX
+    if getattr(media_item, "output_index", None) == PUKE_BOX_INDEX:
+        return PUKE_BOX_INDEX
     sources = list(media_item.sources or [])
     if sources and all(getattr(s, "source_type", None) == "manual_upload" for s in sources):
         return EMULSION_INDEX
@@ -538,6 +554,23 @@ def _build_document(db: Session, media_item: MediaItem) -> dict:
         doc["bundle_size_bytes"] = meta.bundle_size_bytes
         doc["notes"] = meta.notes
 
+    # Puke Box musical metadata (Daily MIDI entries)
+    if media_item.puke_box_meta:
+        pbm = media_item.puke_box_meta
+        doc["entry_id"] = pbm.entry_id
+        doc["scale"] = pbm.scale
+        doc["root"] = pbm.root
+        doc["tempo"] = pbm.tempo
+        if pbm.chords:
+            try:
+                doc["chords"] = json.loads(pbm.chords)
+            except (json.JSONDecodeError, TypeError):
+                doc["chords"] = []
+        else:
+            doc["chords"] = []
+        if pbm.description and not doc.get("description"):
+            doc["description"] = pbm.description
+
     # Latents membership — filterable so a single doc can be found via any Latent it belongs to.
     project_ids = [pi.project_id for pi in db.query(ProjectItem).filter(ProjectItem.media_item_id == media_item.id).all()]
     doc["project_ids"] = list(set(project_ids))
@@ -640,8 +673,8 @@ def delete_media_item(
     candidate_indexes: list[str] = []
     if media_type is None:
         # Cleaning up a stale Meili entry where we don't know the original
-        # routing. Sweep all four indexes; misses are silent.
-        candidate_indexes = list(INDEX_NAMES.values()) + [EMULSION_INDEX]
+        # routing. Sweep all indexes; misses are silent.
+        candidate_indexes = list(INDEX_NAMES.values()) + [EMULSION_INDEX, SAMPLES_INDEX, PUKE_BOX_INDEX]
     elif source_type == "manual_upload" or media_type == "session":
         candidate_indexes.append(EMULSION_INDEX)
     else:
@@ -652,6 +685,9 @@ def delete_media_item(
         # upload — without `source_type` we can't tell from media_type alone.
         # Belt-and-suspenders: also try the Emulsion index.
         candidate_indexes.append(EMULSION_INDEX)
+        # Audio items may live in the puke-box index.
+        if media_type == "audio":
+            candidate_indexes.append(PUKE_BOX_INDEX)
 
     if not candidate_indexes:
         logger.warning("Unknown media_type '%s' for deletion of %s", media_type, media_item_id)
@@ -731,6 +767,8 @@ def multi_search(
             index_name = EMULSION_INDEX
         elif mt == "sample":
             index_name = SAMPLES_INDEX
+        elif mt == "puke-box":
+            index_name = PUKE_BOX_INDEX
         else:
             index_name = INDEX_NAMES.get(mt)
         if not index_name:
