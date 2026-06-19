@@ -200,6 +200,38 @@
     }
   }
 
+  function handleTouchStart(e) {
+    touchStartY = e.touches[0].clientY;
+  }
+
+  function handleTouchEnd(e) {
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(dy) > 30) {
+      dy > 0 ? flipUp() : flipDown();
+    }
+  }
+
+  function handleMousemove(e) {
+    const dot = document.createElement('div');
+    dot.className = 'trail-dot';
+    const colors = ['#ff00ff', '#00ffff', '#ffff00', '#00ff00', '#ff6600'];
+    const size = 4 + Math.random() * 8;
+    dot.style.cssText = `
+      left: ${e.clientX - size / 2}px;
+      top: ${e.clientY - size / 2}px;
+      width: ${size}px;
+      height: ${size}px;
+      background: ${colors[Math.floor(Math.random() * colors.length)]};
+      opacity: 0.8;
+    `;
+    document.body.appendChild(dot);
+    setTimeout(() => {
+      dot.style.transition = 'opacity 0.5s';
+      dot.style.opacity = '0';
+      setTimeout(() => dot.remove(), 500);
+    }, 100);
+  }
+
   let cardContent = '';
   let descriptionMarquee = 'Loading the jukebox...';
   let playBtn = '\u25B6';
@@ -210,13 +242,26 @@
   let dlDrums = null;
   let dlBass = null;
   let dlChords = null;
+  let touchStartY = 0;
+  let visitorCount = '0000000';
+
+  // Visitor counter
+  (function () {
+    let count = parseInt(localStorage.getItem('pukebox-visits') || '0') + 1;
+    localStorage.setItem('pukebox-visits', count);
+    count += 8675309;
+    visitorCount = count.toString().padStart(7, '0');
+  })();
 
   loadManifest();
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window on:keydown={handleKeydown} on:mousemove={handleMousemove} />
 
-<div class="pukebox">
+<div class="pukebox-root">
+  <a href="/" class="home-link">&laquo; HOME</a>
+
+  <!-- Top rainbow marquee -->
   <div class="top-marquees">
     <marquee scrollamount="4">
       &#127925; WELCOME TO THE PUKE BOX &#127925; YOUR #1 SOURCE FOR
@@ -226,21 +271,71 @@
     </marquee>
   </div>
 
+  <!-- Scattered blinking text -->
+  <span class="scatter-text blink" style="top: 15%; left: 3%; color: #ff00ff;"
+    >NOW PLAYING</span
+  >
+  <span
+    class="scatter-text blink-slow"
+    style="top: 35%; right: 3%; color: #00ffff;">HOT TRACKS</span
+  >
+  <span class="scatter-text blink" style="top: 65%; left: 2%; color: #ffff00;"
+    >COOL TUNEZ</span
+  >
+  <span
+    class="scatter-text blink-slow"
+    style="bottom: 20%; right: 4%; color: #00ff00;">MIDI 4 EVER</span
+  >
+  <span class="scatter-text blink" style="top: 80%; left: 5%; color: #ff6600;"
+    >ROBO JAM</span
+  >
+
+  <!-- Title -->
   <div class="page-title">
     <h1>PUKE BOX</h1>
-    <div class="subtitle">
+    <div class="subtitle blink-slow">
       &#9834; AI-generated MIDI jukebox from the year 3000 &#9834;
     </div>
   </div>
 
+  <!-- Side marquees -->
+  <div class="side-marquee left">
+    <marquee
+      scrollamount="2"
+      direction="up"
+      style="color: #ff00ff; height: 300px;"
+    >
+      &#9733; PLAY &#9733; THAT &#9733; FUNKY &#9733; MIDI &#9733; ROBOT &#9733;
+      BOY &#9733;
+    </marquee>
+  </div>
+  <div class="side-marquee right">
+    <marquee
+      scrollamount="2"
+      direction="down"
+      style="color: #00ffff; height: 300px;"
+    >
+      &#9733; BEEP &#9733; BOOP &#9733; SINE &#9733; WAVE &#9733; CITY &#9733;
+    </marquee>
+  </div>
+
+  <!-- Jukebox -->
   <div class="jukebox-wrapper">
     <div class="jukebox-container">
-      <img src="/assets/puke-box.png" alt="THE PUKE BOX" class="jukebox-img" />
+      <img src="/assets/puke-box.png" alt="THE PUKE BOX" />
+
+      <!-- Overlay: amber marquee display -->
       <div class="overlay-zone" id="marquee-zone">
         <marquee scrollamount="2">{descriptionMarquee}</marquee>
       </div>
 
-      <div class="overlay-zone" id="flipper-zone">
+      <!-- Overlay: card flipper -->
+      <div
+        class="overlay-zone"
+        id="flipper-zone"
+        on:touchstart={handleTouchStart}
+        on:touchend={handleTouchEnd}
+      >
         <div class="flipper-nav">
           <button class="flip-btn" on:click={flipUp} title="Previous track"
             >&#9650;</button
@@ -260,6 +355,7 @@
         </div>
       </div>
 
+      <!-- Overlay: controls -->
       <div class="overlay-zone" id="controls-zone">
         <div class="player-row">
           <button class="play-btn" on:click={togglePlay}>{playBtn}</button>
@@ -281,16 +377,41 @@
           <button
             class="mode-btn"
             class:active={shuffleOn}
-            on:click={toggleShuffle}>&#x1F500; SHUFFLE</button
+            on:click={toggleShuffle}
+            title="Shuffle">&#x1F500; SHUFFLE</button
           >
-          <button class="mode-btn" class:active={loopOn} on:click={toggleLoop}
-            >&#x1F501; LOOP</button
+          <button
+            class="mode-btn"
+            class:active={loopOn}
+            on:click={toggleLoop}
+            title="Loop">&#x1F501; LOOP</button
           >
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Another marquee -->
+  <marquee
+    scrollamount="3"
+    style="color: #ff6600; font-size: 0.9rem; padding: 5px 0;"
+  >
+    &#128165; EVERY TRACK IS GENERATED FRESH DAILY BY AN AI THAT READS THE NEWS
+    AND FEELS THINGS &#128165; SCALES FROM AROUND THE WORLD &#127758; MAQAM
+    &#8226; RAGA &#8226; BLUES &#8226; GAMELAN &#8226; KLEZMER &#8226; PELOG
+    &#128165;
+  </marquee>
+
+  <!-- Visitor counter -->
+  <div class="visitor-counter">
+    <div>You are visitor number:</div>
+    <div class="counter-box">{visitorCount}</div>
+    <div style="margin-top: 6px; font-size: 0.7rem; color: #666;">
+      best viewed with Netscape Navigator 4.0 at 800x600
+    </div>
+  </div>
+
+  <!-- Bottom rainbow marquee -->
   <div class="bottom-marquee">
     <marquee scrollamount="5" direction="right">
       &#127911; SINE WAVES ARE THE NEW VINYL &#127911; DOWNLOAD MIDI &#127911;
@@ -301,7 +422,7 @@
 </div>
 
 <style>
-  .pukebox {
+  .pukebox-root {
     background-color: #000033;
     background-image:
       radial-gradient(
@@ -313,13 +434,34 @@
         circle at 80% 50%,
         rgba(0, 255, 255, 0.08) 0%,
         transparent 50%
-      );
+      ),
+      url("data:image/svg+xml,%3Csvg width='40' height='40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 5 L25 15 L35 15 L27 22 L30 32 L20 26 L10 32 L13 22 L5 15 L15 15Z' fill='none' stroke='%23220044' stroke-width='0.5'/%3E%3C/svg%3E");
     color: #00ff00;
     font-family: 'Comic Sans MS', 'Chalkboard SE', cursive;
     min-height: 100vh;
     overflow-x: hidden;
+    cursor:
+      url("data:image/svg+xml,%3Csvg width='32' height='32' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='16' cy='16' r='8' fill='%23ff00ff' opacity='0.7'/%3E%3C/svg%3E")
+        16 16,
+      auto;
   }
 
+  .home-link {
+    position: fixed;
+    top: 70px;
+    left: 10px;
+    z-index: 10;
+    color: #ff00ff;
+    font-family: 'Courier New', monospace;
+    font-size: 1.3rem;
+    text-decoration: none;
+    text-shadow: 0 0 8px #ff00ff;
+  }
+  .home-link:hover {
+    color: #00ffff;
+  }
+
+  /* === MARQUEES === */
   .top-marquees {
     padding: 8px 0;
     background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
@@ -334,19 +476,57 @@
       background-position: 300% 0;
     }
   }
-  .top-marquees marquee {
+  .top-marquees :global(marquee) {
     font-size: 1.1rem;
     font-weight: bold;
     color: #000;
     text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.5);
   }
 
+  /* === BLINK === */
+  @keyframes blink-neon {
+    0%,
+    49% {
+      opacity: 1;
+    }
+    50%,
+    100% {
+      opacity: 0;
+    }
+  }
+  @keyframes blink-slow {
+    0%,
+    69% {
+      opacity: 1;
+    }
+    70%,
+    100% {
+      opacity: 0.2;
+    }
+  }
+  .blink {
+    animation: blink-neon 0.8s infinite;
+  }
+  .blink-slow {
+    animation: blink-slow 1.5s infinite;
+  }
+
+  .scatter-text {
+    position: fixed;
+    font-size: 1rem;
+    font-weight: bold;
+    z-index: 2;
+    pointer-events: none;
+    text-shadow: 0 0 10px currentColor;
+  }
+
+  /* === TITLE === */
   .page-title {
     text-align: center;
     padding: 20px 10px 5px;
   }
   .page-title h1 {
-    font-family: 'Impact', sans-serif;
+    font-family: 'Bungee Shade', 'Impact', sans-serif;
     font-size: clamp(2rem, 6vw, 4rem);
     color: #ff00ff;
     text-shadow:
@@ -362,6 +542,7 @@
     margin-top: 4px;
   }
 
+  /* === JUKEBOX CONTAINER === */
   .jukebox-wrapper {
     display: flex;
     justify-content: center;
@@ -373,7 +554,7 @@
     width: min(85vw, 500px);
     aspect-ratio: 1;
   }
-  .jukebox-img {
+  .jukebox-container img {
     width: 170%;
     height: 170%;
     object-fit: contain;
@@ -386,6 +567,7 @@
       drop-shadow(0 0 60px rgba(255, 0, 128, 0.2));
   }
 
+  /* === OVERLAY ZONES === */
   .overlay-zone {
     position: absolute;
     display: flex;
@@ -404,7 +586,7 @@
     border: 1px solid #8b6914;
     box-shadow: inset 0 0 15px rgba(200, 150, 0, 0.3);
   }
-  #marquee-zone marquee {
+  #marquee-zone :global(marquee) {
     color: #ffb000;
     font-family: 'Courier New', monospace;
     font-size: clamp(0.55rem, 1.4vw, 0.85rem);
@@ -494,6 +676,7 @@
     color: #ffb000;
     font-family: 'Courier New', monospace;
     text-align: center;
+    animation: blink-slow 1s infinite;
   }
 
   #controls-zone {
@@ -539,6 +722,7 @@
   .progress-fill {
     height: 100%;
     background: #00ff00;
+    width: 0%;
     transition: width 0.3s;
   }
   .track-time {
@@ -589,15 +773,76 @@
     text-shadow: 0 0 5px #00ff00;
   }
 
+  /* === SIDE MARQUEES === */
+  .side-marquee {
+    position: fixed;
+    z-index: 5;
+    pointer-events: none;
+  }
+  .side-marquee.left {
+    left: 5px;
+    top: 50%;
+    transform: rotate(-90deg) translateX(-50%);
+    transform-origin: left center;
+  }
+  .side-marquee.right {
+    right: 5px;
+    top: 50%;
+    transform: rotate(90deg) translateX(50%);
+    transform-origin: right center;
+  }
+  .side-marquee :global(marquee) {
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
+  /* === VISITOR COUNTER === */
+  .visitor-counter {
+    text-align: center;
+    padding: 15px 10px 30px;
+    font-size: 0.85rem;
+    color: #aaa;
+  }
+  .counter-box {
+    display: inline-block;
+    background: #000;
+    border: 2px inset #555;
+    padding: 3px 12px;
+    font-family: 'Courier New', monospace;
+    color: #00ff00;
+    font-size: 1.1rem;
+    letter-spacing: 3px;
+    margin-top: 4px;
+  }
+
+  /* === BOTTOM MARQUEE === */
   .bottom-marquee {
     background: linear-gradient(90deg, #00ffff, #ff00ff, #ffff00, #00ffff);
     background-size: 300% 100%;
     animation: rainbow-scroll 4s linear infinite;
     padding: 4px 0;
   }
-  .bottom-marquee marquee {
+  .bottom-marquee :global(marquee) {
     color: #000;
     font-weight: bold;
     font-size: 0.9rem;
+  }
+
+  /* === CURSOR TRAIL === */
+  :global(.trail-dot) {
+    position: fixed;
+    pointer-events: none;
+    border-radius: 50%;
+    z-index: 9999;
+  }
+
+  /* === RESPONSIVE === */
+  @media (max-width: 500px) {
+    .scatter-text {
+      display: none;
+    }
+    .side-marquee {
+      display: none;
+    }
   }
 </style>
