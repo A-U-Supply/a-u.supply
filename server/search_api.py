@@ -1389,6 +1389,86 @@ def pukebox_midi_stem(
     )
 
 
+@router.get(
+    "/pukebox/search",
+    tags=["Puke Box"],
+    summary="Public: search the Puke Box index",
+)
+def pukebox_search(
+    response: Response,
+    q: str = Query("", description="Search query (scale, root, description, etc.)"),
+    scale: str = Query(None, description="Filter by scale name (e.g. Lydian, Blues)"),
+    root: str = Query(None, description="Filter by root note (e.g. C#, Bb)"),
+    sort: str = Query("newest", description="Sort order: newest, oldest, random"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    """Search the Puke Box index — public, no auth required.
+
+    Full-text search across scale, root, description, chords. Optional
+    filters for scale and root note. Returns the same entry shape as
+    /api/pukebox/manifest but filtered/searched.
+    """
+    from server.models import MediaPukeBoxMeta
+
+    query = (
+        db.query(MediaItem, MediaPukeBoxMeta)
+        .join(MediaPukeBoxMeta, MediaPukeBoxMeta.media_item_id == MediaItem.id)
+        .filter(MediaItem.output_index == "puke-box")
+    )
+
+    if q:
+        query = query.filter(
+            (MediaPukeBoxMeta.scale.ilike(f"%{q}%"))
+            | (MediaPukeBoxMeta.root.ilike(f"%{q}%"))
+            | (MediaPukeBoxMeta.description.ilike(f"%{q}%"))
+            | (MediaPukeBoxMeta.chords.ilike(f"%{q}%"))
+        )
+    if scale:
+        query = query.filter(MediaPukeBoxMeta.scale.ilike(f"%{scale}%"))
+    if root:
+        query = query.filter(MediaPukeBoxMeta.root == root)
+
+    if sort == "oldest":
+        query = query.order_by(MediaPukeBoxMeta.entry_id.asc())
+    elif sort == "random":
+        query = query.order_by(MediaItem.created_at.desc())
+    else:
+        query = query.order_by(MediaPukeBoxMeta.entry_id.desc())
+
+    total = query.count()
+    rows = query.limit(limit).offset(offset).all()
+
+    entries = []
+    for item, meta in rows:
+        midi_paths: dict = {}
+        if meta.midi_paths:
+            try:
+                midi_paths = json.loads(meta.midi_paths)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        entries.append({
+            "id": item.id,
+            "entry_id": meta.entry_id,
+            "date": meta.entry_id[:10] if meta.entry_id else None,
+            "scale": meta.scale,
+            "root": meta.root,
+            "tempo": meta.tempo,
+            "description": meta.description or item.description or "",
+            "chords": json.loads(meta.chords) if meta.chords else [],
+            "preview_url": f"/api/public/outputs/{item.id}/file",
+            "midi_urls": {
+                stem: f"/api/pukebox/midi/{item.id}/{stem}"
+                for stem in ("melody", "drums", "bass", "chords")
+                if stem in midi_paths
+            },
+        })
+
+    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
+    return {"total": total, "limit": limit, "offset": offset, "entries": entries}
+
+
 # ---------------------------------------------------------------------------
 # Media static routes (must be defined before /media/{media_id} to avoid capture)
 # ---------------------------------------------------------------------------

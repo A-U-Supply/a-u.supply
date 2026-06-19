@@ -235,6 +235,7 @@
 
   <div class="jukebox-wrapper">
     <div class="jukebox-container">
+      <img src="/assets/puke-box.png" alt="THE PUKE BOX" class="jukebox-img" />
       <div class="overlay-zone" id="marquee-zone">
         <marquee scrollamount="2">{descriptionMarquee}</marquee>
       </div>
@@ -364,23 +365,29 @@
   .jukebox-wrapper {
     display: flex;
     justify-content: center;
-    padding: 40px 0 20px;
+    padding: 140px 0 20px;
+    position: relative;
   }
   .jukebox-container {
     position: relative;
     width: min(85vw, 500px);
     aspect-ratio: 1;
-    border: 4px solid #8b6914;
-    border-radius: 12px;
-    background: linear-gradient(180deg, #2a1a0a 0%, #1a0a05 100%);
-    box-shadow:
-      0 0 40px rgba(0, 150, 255, 0.3),
-      0 0 80px rgba(255, 0, 128, 0.15);
-    display: flex;
-    flex-direction: column;
+  }
+  .jukebox-img {
+    width: 170%;
+    height: 170%;
+    object-fit: contain;
+    display: block;
+    position: absolute;
+    top: -35%;
+    left: -35%;
+    pointer-events: none;
+    filter: drop-shadow(0 0 30px rgba(0, 150, 255, 0.4))
+      drop-shadow(0 0 60px rgba(255, 0, 128, 0.2));
   }
 
   .overlay-zone {
+    position: absolute;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -389,9 +396,10 @@
   }
 
   #marquee-zone {
-    flex: 0 0 12%;
-    width: 90%;
-    margin-top: 4%;
+    top: 24%;
+    left: 40.25%;
+    width: 37%;
+    height: 9%;
     background: rgba(30, 15, 0, 0.85);
     border: 1px solid #8b6914;
     box-shadow: inset 0 0 15px rgba(200, 150, 0, 0.3);
@@ -406,9 +414,10 @@
   }
 
   #flipper-zone {
-    flex: 1;
-    width: 90%;
-    margin: 4% 0;
+    top: 42%;
+    left: 36.25%;
+    width: 44%;
+    height: 21%;
     background: rgba(10, 5, 20, 0.88);
     border: 2px solid #3a2a1a;
     display: flex;
@@ -488,9 +497,10 @@
   }
 
   #controls-zone {
-    flex: 0 0 20%;
-    width: 90%;
-    margin-bottom: 4%;
+    top: 64%;
+    left: 38.25%;
+    width: 40%;
+    height: 13%;
     display: flex;
     flex-direction: column;
     align-items: center;

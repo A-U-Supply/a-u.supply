@@ -188,3 +188,56 @@ class TestPukeboxMessageParser:
         assert result is not None
         assert result["root"] == "Bb"
         assert result["tempo"] == 90
+
+
+class TestPukeboxSearch:
+    """Tests for GET /api/pukebox/search (public, no auth)."""
+
+    def test_no_auth_required(self, client, db_session):
+        _make_pukebox_entry(db_session)
+        resp = client.get("/api/pukebox/search")
+        assert resp.status_code == 200
+
+    def test_full_text_search(self, client, db_session):
+        _make_pukebox_entry(db_session, description="A shimmering lydian adventure")
+        _make_pukebox_entry(
+            db_session,
+            entry_id="2026-06-14-170705",
+            scale="Phrygian",
+            description="Dark phrygian mood",
+        )
+        resp = client.get("/api/pukebox/search?q=lydian")
+        data = resp.json()
+        assert data["total"] == 1
+        assert "lydian" in data["entries"][0]["description"].lower()
+
+    def test_filter_by_scale(self, client, db_session):
+        _make_pukebox_entry(db_session, scale="Lydian", entry_id="2026-06-15-193727")
+        _make_pukebox_entry(db_session, scale="Blues", entry_id="2026-06-14-170705")
+        resp = client.get("/api/pukebox/search?scale=Lydian")
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["entries"][0]["scale"] == "Lydian"
+
+    def test_filter_by_root(self, client, db_session):
+        _make_pukebox_entry(db_session, root="C#", entry_id="2026-06-15-193727")
+        _make_pukebox_entry(db_session, root="Bb", entry_id="2026-06-14-170705")
+        resp = client.get("/api/pukebox/search?root=Bb")
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["entries"][0]["root"] == "Bb"
+
+    def test_sorted_newest_first(self, client, db_session):
+        _make_pukebox_entry(db_session, entry_id="2026-06-01-100000")
+        _make_pukebox_entry(db_session, entry_id="2026-06-15-200000")
+        resp = client.get("/api/pukebox/search")
+        entries = resp.json()["entries"]
+        assert entries[0]["entry_id"] == "2026-06-15-200000"
+        assert entries[1]["entry_id"] == "2026-06-01-100000"
+
+    def test_empty_results(self, client, db_session):
+        _make_pukebox_entry(db_session)
+        resp = client.get("/api/pukebox/search?q=nonexistent_term_xyz")
+        data = resp.json()
+        assert data["total"] == 0
+        assert data["entries"] == []
