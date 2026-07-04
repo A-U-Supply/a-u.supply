@@ -1,8 +1,8 @@
 """Tests for the public /api/media/{id}/og-audio unfurling route.
 
-Sibling to test_thumbnail_cache.py — same shape but for the audio
-preview route that link-unfurling bots (Slack media unfurl, iMessage,
-etc.) fetch.
+Sibling to test_thumbnail_cache.py — same shape but for the audio file
+route that link-unfurling bots (Slack media unfurl, iMessage, etc.)
+fetch.
 """
 
 import os
@@ -21,15 +21,6 @@ def _write_wav(media_dir: str, rel_path: str) -> str:
     return full
 
 
-def _write_mp3_cache(media_dir: str, wav_rel_path: str) -> str:
-    """Pre-place a fake <stem>_og.mp3 cache file next to the wav."""
-    wav_full = os.path.join(media_dir, wav_rel_path)
-    cache_full = os.path.splitext(wav_full)[0] + "_og.mp3"
-    with open(cache_full, "wb") as f:
-        f.write(b"ID3\x04\x00\x00\x00\x00\x00\x00\x00" + b"\xff\xfb" + b"\x00" * 256)
-    return cache_full
-
-
 def _write_png(media_dir: str, rel_path: str) -> str:
     full = os.path.join(media_dir, rel_path)
     os.makedirs(os.path.dirname(full), exist_ok=True)
@@ -40,50 +31,26 @@ def _write_png(media_dir: str, rel_path: str) -> str:
 class TestPublicOGAudio:
     """GET /api/media/{id}/og-audio serves audio items publicly."""
 
-    def test_serves_cached_mp3_preview(self, client, db_session, tmp_media_dir):
-        rel = "audio/2026-04/cached.wav"
+    def test_serves_audio_item_with_public_cache(self, client, db_session, tmp_media_dir):
+        rel = "audio/2026-04/sharetest.wav"
         _write_wav(tmp_media_dir, rel)
-        _write_mp3_cache(tmp_media_dir, rel)
         item = make_media_item(
             db_session,
             file_path=rel,
-            filename="cached.wav",
+            filename="sharetest.wav",
             media_type="audio",
             mime_type="audio/wav",
         )
 
         resp = client.get(f"/api/media/{item.id}/og-audio")
         assert resp.status_code == 200
-        assert resp.headers.get("content-type", "") in ("audio/mpeg", "audio/mpeg; charset=utf-8")
+        assert resp.headers.get("content-type", "") in ("audio/wav", "audio/wav; charset=utf-8")
         cc = resp.headers.get("Cache-Control", "")
         assert "public" in cc
         assert "max-age=86400" in cc
         cd = resp.headers.get("Content-Disposition", "")
         assert "inline" in cd
-        assert "cached.mp3" in cd
-
-    def test_falls_back_to_raw_when_no_cache_and_no_ffmpeg(
-        self, client, db_session, tmp_media_dir, monkeypatch
-    ):
-        monkeypatch.setattr(
-            "server.search_api.subprocess.run",
-            lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError("ffmpeg")),
-        )
-        rel = "audio/2026-04/raw.wav"
-        _write_wav(tmp_media_dir, rel)
-        item = make_media_item(
-            db_session,
-            file_path=rel,
-            filename="raw.wav",
-            media_type="audio",
-            mime_type="audio/wav",
-        )
-
-        resp = client.get(f"/api/media/{item.id}/og-audio")
-        assert resp.status_code == 200
-        assert "audio/wav" in resp.headers.get("content-type", "")
-        cd = resp.headers.get("Content-Disposition", "")
-        assert "raw.wav" in cd
+        assert "sharetest.wav" in cd
 
     def test_404_for_image_items(self, client, db_session, tmp_media_dir):
         rel = "image/2026-04/notaudio.png"
@@ -106,7 +73,6 @@ class TestPublicOGAudio:
     def test_no_auth_required(self, client, db_session, tmp_media_dir):
         rel = "audio/2026-04/noauth.wav"
         _write_wav(tmp_media_dir, rel)
-        _write_mp3_cache(tmp_media_dir, rel)
         item = make_media_item(
             db_session,
             file_path=rel,
