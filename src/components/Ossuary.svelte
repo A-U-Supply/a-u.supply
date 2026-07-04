@@ -19,12 +19,19 @@
   } from '../lib/ossuary/interpret.ts';
   import {
     carve,
+    carvePhrase,
+    mergeHits,
+    areAdjacent,
+    snapToZeroCrossing,
     resizeKeep,
     DEFAULT_KEEP_LIMIT,
+    MAX_PHRASE_SECONDS,
     SLOTS,
+    ALL_SLOTS,
     SLOT_COLOR,
     type Hit,
     type Slot,
+    type PercSlot,
   } from '../lib/ossuary/carve.ts';
   import { renderHit } from '../lib/ossuary/render.ts';
   import { AuditionLoop } from '../lib/ossuary/loop.ts';
@@ -70,7 +77,7 @@
 
   // ── Audition loop (one slot, minimal — Litany owns real sequencing) ────────
   let loop: AuditionLoop | null = null;
-  let loopSlot = $state<Slot | null>(null);
+  let loopSlot = $state<PercSlot | null>(null);
   let looping = $state(false);
   let loopBpm = $state(120);
   let loopRate = $state(8);
@@ -104,7 +111,7 @@
     if (loop) loop.pattern = loopPattern;
   }
 
-  async function renderSlotBuffers(slot: Slot): Promise<AudioBuffer[]> {
+  async function renderSlotBuffers(slot: PercSlot): Promise<AudioBuffer[]> {
     if (!wetBuffer) return [];
     return Promise.all(
       keptInSlot(slot).map((h) =>
@@ -113,7 +120,7 @@
     );
   }
 
-  async function startLoop(slot: Slot) {
+  async function startLoop(slot: PercSlot) {
     if (!wetBuffer) return;
     const c = audioCtx();
     if (c.state === 'suspended') await c.resume();
@@ -139,7 +146,7 @@
     loopStep = -1;
   }
 
-  const toggleLoop = (slot: Slot) =>
+  const toggleLoop = (slot: PercSlot) =>
     looping && loopSlot === slot ? stopLoop() : startLoop(slot);
 
   // Loop-control handlers. BPM/Rate/Length re-seed the onset default; only
@@ -302,6 +309,134 @@
   const benchInSlot = (slot: Slot) =>
     hits.filter((h) => h.slot === slot && !h.kept);
   const keptCount = $derived(hits.filter((h) => h.kept).length);
+  const phraseHits = $derived(hits.filter((h) => h.slot === 'phrase'));
+
+  // ── Phrase: drag-select on the wet waveform ─────────────────────────────--
+  // A plain click (< DRAG_PX of movement) keeps select-nearest-hit verbatim.
+  const DRAG_PX = 5;
+  let dragSel = $state<{ a: number; b: number } | null>(null);
+  let dragLive = $state(false); // pointer is down (hides the selection bar)
+  let selClamped = $state(false);
+  let dragAnchor = 0;
+  let dragStartX = 0;
+  let dragMoved = false;
+  let dragPointerId: number | null = null;
+
+  const selDurSec = $derived(
+    dragSel && wetBuffer ? (dragSel.b - dragSel.a) / wetBuffer.sampleRate : 0,
+  );
+
+  function canvasSample(e: PointerEvent): number {
+    const rect = wetCanvas!.getBoundingClientRect();
+    const frac = (e.clientX - rect.left) / rect.width;
+    return Math.max(
+      0,
+      Math.min(wetBuffer!.length, Math.round(frac * wetBuffer!.length)),
+    );
+  }
+
+  function onCanvasPointerDown(e: PointerEvent) {
+    if (!wetCanvas || !wetBuffer) return;
+    dragPointerId = e.pointerId;
+    dragStartX = e.clientX;
+    dragMoved = false;
+    dragLive = true;
+    dragAnchor = canvasSample(e);
+    wetCanvas.setPointerCapture(e.pointerId);
+  }
+
+  function onCanvasPointerMove(e: PointerEvent) {
+    if (dragPointerId !== e.pointerId || !wetBuffer) return;
+    if (!dragMoved && Math.abs(e.clientX - dragStartX) < DRAG_PX) return;
+    dragMoved = true;
+    // Clamp at the drag origin so a runaway drag caps at MAX_PHRASE_SECONDS.
+    const maxLen = Math.floor(MAX_PHRASE_SECONDS * wetBuffer.sampleRate);
+    const cur = canvasSample(e);
+    selClamped = Math.abs(cur - dragAnchor) > maxLen;
+    const b = selClamped
+      ? dragAnchor + Math.sign(cur - dragAnchor) * maxLen
+      : cur;
+    dragSel = { a: Math.min(dragAnchor, b), b: Math.max(dragAnchor, b) };
+  }
+
+  function onCanvasPointerUp(e: PointerEvent) {
+    if (dragPointerId !== e.pointerId) return;
+    dragPointerId = null;
+    dragLive = false;
+    if (!dragMoved) {
+      clearSelection();
+      selectNearestHit(e);
+      return;
+    }
+    if (!wetBuffer || !dragSel) return;
+    const data = wetBuffer.getChannelData(0);
+    const a = snapToZeroCrossing(data, dragSel.a);
+    const b = snapToZeroCrossing(data, dragSel.b);
+    if ((b - a) / wetBuffer.sampleRate < 0.1) {
+      clearSelection(); // sub-100ms slivers are noise, not phrases
+      return;
+    }
+    dragSel = { a, b };
+  }
+
+  function onCanvasPointerCancel(e: PointerEvent) {
+    if (dragPointerId !== e.pointerId) return;
+    dragPointerId = null;
+    dragLive = false;
+    clearSelection();
+  }
+
+  function clearSelection() {
+    dragSel = null;
+    selClamped = false;
+  }
+
+  function carveSelection() {
+    if (!wetBuffer || !dragSel) return;
+    const h = carvePhrase(wetBuffer, dragSel.a, dragSel.b);
+    hits = [...hits, h];
+    selectedHitId = h.id;
+    clearSelection();
+  }
+
+  // ── Phrase: merge adjacent slices ─────────────────────────────────────────
+  let mergeIds = $state<string[]>([]);
+  const mergeSel = $derived(hits.filter((h) => mergeIds.includes(h.id)));
+  const mergeSpanSec = $derived(
+    mergeSel.length && wetBuffer
+      ? (Math.max(...mergeSel.map((h) => h.end)) -
+          Math.min(...mergeSel.map((h) => h.start))) /
+          wetBuffer.sampleRate
+      : 0,
+  );
+  // Validation, not clamping — clamping a merge would silently drop a slice.
+  const mergeReason = $derived(
+    mergeSel.length < 2
+      ? ''
+      : !areAdjacent(
+            hits.filter((h) => h.slot !== 'phrase'),
+            mergeSel,
+          )
+        ? 'slices must be adjacent'
+        : mergeSpanSec > MAX_PHRASE_SECONDS
+          ? `exceeds ${MAX_PHRASE_SECONDS} s`
+          : '',
+  );
+
+  function toggleMerge(h: Hit) {
+    mergeIds = mergeIds.includes(h.id)
+      ? mergeIds.filter((id) => id !== h.id)
+      : [...mergeIds, h.id];
+  }
+
+  function mergeSelected() {
+    if (mergeSel.length < 2 || mergeReason) return;
+    const merged = mergeHits(mergeSel);
+    // Merge consumes the sources — Re-carve is the recovery path.
+    hits = [...hits.filter((h) => !mergeIds.includes(h.id)), merged];
+    mergeIds = [];
+    selectedHitId = merged.id;
+  }
 
   // ── Source loading ──────────────────────────────────────────────────────--
   async function runSearch() {
@@ -325,6 +460,8 @@
     stop();
     wetBuffer = null;
     hits = [];
+    mergeIds = [];
+    clearSelection();
     interpretError = '';
     try {
       clip = await promise;
@@ -346,12 +483,26 @@
   }
 
   // ── Interpret pass ────────────────────────────────────────────────────────
+  // Phrases are deliberate work — don't let a stray re-carve/re-INTERPRET
+  // wipe them silently.
+  function confirmPhraseWipe(action: string): boolean {
+    return (
+      !phraseHits.length ||
+      confirm(
+        `${action} will discard your ${phraseHits.length} phrase hit${phraseHits.length > 1 ? 's' : ''}. Continue?`,
+      )
+    );
+  }
+
   async function runInterpret() {
     if (!clip?.sourceId || interpreting) return;
+    if (!confirmPhraseWipe('A new interpretation')) return;
     interpreting = true;
     interpretError = '';
     wetBuffer = null;
     hits = [];
+    mergeIds = [];
+    clearSelection();
     stop();
     try {
       const c = audioCtx();
@@ -376,15 +527,24 @@
   }
 
   function recarve() {
-    if (wetBuffer) hits = carve(wetBuffer, sensitivity, keepLimit);
+    if (!wetBuffer || !confirmPhraseWipe('Re-carving')) return;
+    hits = carve(wetBuffer, sensitivity, keepLimit);
+    mergeIds = [];
+    clearSelection();
   }
 
   function reassign(hit: Hit, slot: Slot) {
     hit.slot = slot;
+    // Phrases have no bench — a hit reassigned in is kept by definition.
+    if (slot === 'phrase') {
+      hit.kept = true;
+      mergeIds = mergeIds.filter((id) => id !== hit.id);
+    }
   }
 
   function dropHit(hit: Hit) {
     hits = hits.filter((h) => h.id !== hit.id);
+    mergeIds = mergeIds.filter((id) => id !== hit.id);
   }
 
   // Keep/bench. The limit is only enforced at carve time and by the slider —
@@ -497,6 +657,7 @@
     canvas: HTMLCanvasElement | undefined,
     buffer?: AudioBuffer | null,
     overlayHits: Hit[] = [],
+    selection: { a: number; b: number } | null = null,
   ) {
     if (!canvas || !buffer) return;
     const dpr = window.devicePixelRatio || 1;
@@ -546,12 +707,30 @@
       g.stroke();
     }
     g.globalAlpha = 1;
+
+    // In-progress / committed phrase selection.
+    if (selection) {
+      const x0 = (selection.a / len) * cssWidth;
+      const x1 = (selection.b / len) * cssWidth;
+      g.fillStyle = SLOT_COLOR.phrase;
+      g.globalAlpha = 0.18;
+      g.fillRect(x0, 0, Math.max(1, x1 - x0), cssHeight);
+      g.globalAlpha = 0.8;
+      g.strokeStyle = SLOT_COLOR.phrase;
+      g.beginPath();
+      g.moveTo(x0, 0);
+      g.lineTo(x0, cssHeight);
+      g.moveTo(x1, 0);
+      g.lineTo(x1, cssHeight);
+      g.stroke();
+      g.globalAlpha = 1;
+    }
   }
 
-  const drawWet = () => drawWaveform(wetCanvas, wetBuffer, hits);
+  const drawWet = () => drawWaveform(wetCanvas, wetBuffer, hits, dragSel);
 
-  /** Click on the carve waveform canvas to select the nearest hit. */
-  function onCanvasClick(e: MouseEvent) {
+  /** Plain click on the carve waveform selects the nearest hit. */
+  function selectNearestHit(e: PointerEvent) {
     if (!wetCanvas || !wetBuffer || !hits.length) return;
     const rect = wetCanvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -585,6 +764,7 @@
     void zoom;
     void wetBuffer;
     void playingKey;
+    void dragSel;
     requestAnimationFrame(drawWet);
   });
 
@@ -873,9 +1053,44 @@
         <div class="oss-carve">
           <div class="oss-waveform-scroll">
             <div class="oss-waveform" style={`width:${zoom * 100}%`}>
-              <canvas bind:this={wetCanvas} onclick={onCanvasClick}></canvas>
+              <canvas
+                bind:this={wetCanvas}
+                onpointerdown={onCanvasPointerDown}
+                onpointermove={onCanvasPointerMove}
+                onpointerup={onCanvasPointerUp}
+                onpointercancel={onCanvasPointerCancel}
+              ></canvas>
             </div>
           </div>
+
+          {#if dragSel && !dragLive}
+            <div class="oss-selection-bar">
+              <button
+                class="brutalist-control"
+                onclick={() =>
+                  toggleRange(
+                    'selection',
+                    wetBuffer,
+                    dragSel!.a / wetBuffer!.sampleRate,
+                    selDurSec,
+                  )}
+              >
+                {playingKey === 'selection' ? '■ Stop' : '▶ Selection'}
+              </button>
+              <button
+                class="brutalist-control oss-interpret-btn"
+                onclick={carveSelection}
+              >
+                Carve as phrase ({selDurSec.toFixed(1)} s)
+              </button>
+              {#if selClamped}
+                <span class="oss-hint">clamped to {MAX_PHRASE_SECONDS} s</span>
+              {/if}
+              <button class="brutalist-control" onclick={clearSelection}>
+                ✕
+              </button>
+            </div>
+          {/if}
 
           <div class="oss-carve__controls">
             <button
@@ -918,8 +1133,31 @@
           {/if}
           {#if hits.length}
             <p class="oss-hint" style="padding:0.3rem 0.85rem;margin:0;">
-              Click a carve on the waveform or a hit name below to edit.
+              Click a carve on the waveform or a hit name below to edit. Drag
+              across the waveform to select a phrase.
             </p>
+            {#if mergeSel.length >= 2}
+              <div class="oss-merge-bar">
+                <button
+                  class="brutalist-control"
+                  onclick={mergeSelected}
+                  disabled={!!mergeReason}
+                >
+                  Merge {mergeSel.length} slices → phrase ({mergeSpanSec.toFixed(
+                    1,
+                  )} s)
+                </button>
+                {#if mergeReason}
+                  <span class="oss-hint">{mergeReason}</span>
+                {/if}
+                <button
+                  class="brutalist-control"
+                  onclick={() => (mergeIds = [])}
+                >
+                  ✕
+                </button>
+              </div>
+            {/if}
             <div class="oss-slots">
               {#snippet hitRow(h: Hit, label: string)}
                 <div
@@ -947,6 +1185,15 @@
                   >
                     {label}
                   </button>
+                  {#if h.slot !== 'phrase'}
+                    <input
+                      class="oss-hit__merge"
+                      type="checkbox"
+                      checked={mergeIds.includes(h.id)}
+                      onchange={() => toggleMerge(h)}
+                      title="Select for merge → phrase"
+                    />
+                  {/if}
                   <select
                     class="oss-hit__slot"
                     value={h.slot}
@@ -957,11 +1204,13 @@
                       )}
                     title="Reassign slot"
                   >
-                    {#each SLOTS as s}
+                    {#each ALL_SLOTS as s}
                       <option value={s}>{s}</option>
                     {/each}
                   </select>
-                  {#if h.kept}
+                  {#if h.slot === 'phrase'}
+                    <!-- phrases have no bench; no keep toggle -->
+                  {:else if h.kept}
                     <button
                       class="oss-hit__keep"
                       onclick={() => demote(h)}
@@ -1023,6 +1272,27 @@
                   {/if}
                 </div>
               {/each}
+              <!-- Long bones. Click-to-audition only — no loop, ever. -->
+              {#if phraseHits.length}
+                <div
+                  class="oss-slot oss-slot--phrase"
+                  style={`--slot-color:${SLOT_COLOR.phrase}`}
+                >
+                  <div class="oss-slot__head">
+                    <span class="oss-slot__name">phrase</span>
+                    <span class="oss-slot__count">{phraseHits.length}</span>
+                  </div>
+                  {#each phraseHits as h, idx (h.id)}
+                    {@render hitRow(
+                      h,
+                      `phrase ${idx + 1} · ${(
+                        (h.end - h.start) /
+                        wetBuffer.sampleRate
+                      ).toFixed(1)} s`,
+                    )}
+                  {/each}
+                </div>
+              {/if}
             </div>
           {:else}
             <p class="oss-empty">

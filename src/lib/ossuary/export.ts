@@ -58,6 +58,9 @@ export function zipSamples(files: Record<string, Uint8Array>): Blob {
 export function sampleTags(slot: string, model: string, kit: string): string[] {
   return [
     'source:ossuary',
+    // Bare slot name matches the existing library's flat-tag convention, so
+    // `query=phrase` / `query=kick` filter the same way everywhere (issue #514).
+    slot,
     `slot:${slot}`,
     `model:${model}`,
     `kit:${kit}`,
