@@ -50,6 +50,14 @@ phrases immediately.
   live here.
 - `sampleTags` becomes origin-aware; phrase filenames prefer `slugify(name)`.
 
+## Addendum (same interview): page-bottom docs
+
+Ossuary's page gets the same collapsed-`<details>` documentation block Litany has
+at the bottom of its page (`src/pages/admin/atelier/litany.astro`), covering every
+element and step: source/clip, brains + knobs, carving/slots/bench, the hit editor,
+the audition loop, phrases (both origins), and export/tags. Same markup pattern and
+type scale, restyled to the Ossuary charcoal palette.
+
 ## Out of scope
 
 Phrase transcription/auto-naming, phrase consumers (Litany phrase voice, phrase

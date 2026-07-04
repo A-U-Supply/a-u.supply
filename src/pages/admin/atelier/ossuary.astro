@@ -20,4 +20,402 @@ import '../../../styles/atelier/ossuary.css';
   </div>
 
   <Ossuary client:only="svelte" />
+
+  <div class="ossuary-docs">
+    <details>
+      <summary>Source &amp; clip</summary>
+      <div class="ossuary-docs-body">
+        <p>
+          Three ways to load a clip: <strong>search</strong> the sample library (results
+          list under the field), <strong>&#127922; Random</strong>
+          (pulls a random match for the query, or any random sample when the query
+          is empty), or <strong>Upload</strong> a local file.
+        </p>
+        <p>
+          The <strong>Clip</strong> panel shows the decoded waveform with
+          <strong>&#9654; Audition</strong> and a <strong>zoom</strong> slider. Dragging
+          across this waveform carves a <em>dry</em> phrase straight from the raw
+          audio — see the Phrases section below.
+        </p>
+        <p>
+          <strong>Uploads can&rsquo;t be interpreted</strong> (the brain needs a library
+          media id), but everything client-side works on them: audition, zoom, and
+          dry phrase carving + export.
+        </p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Interpreter — brains &amp; knobs</summary>
+      <div class="ossuary-docs-body">
+        <p>
+          <strong>INTERPRET</strong> sends the clip through a RAVE model (a &ldquo;brain&rdquo;)
+          that has only ever heard one kind of sound and re-hears your clip through
+          it. The job runs server-side (submit &rarr; queue &rarr; run &rarr; fetch);
+          one job at a time.
+        </p>
+        <table>
+          <tr><th>Brain</th><th>Character</th></tr>
+          <tr
+            ><td><code>percussion</code></td><td
+              >Trained on drums; pushes everything toward rhythmic transients.
+              The default for kit carving.</td
+            ></tr
+          >
+          <tr
+            ><td><code>vintage</code></td><td
+              >Warm analog color — tape saturation and old-console character.</td
+            ></tr
+          >
+          <tr
+            ><td><code>nasa</code></td><td
+              >Alien-transmission artifacts: static, telemetry, interference.</td
+            ></tr
+          >
+          <tr
+            ><td><code>VCTK</code></td><td
+              >A speech brain; makes anything babble.</td
+            ></tr
+          >
+          <tr
+            ><td><code>musicnet</code></td><td
+              >Classical chamber timbres — strings, winds, piano bleed.</td
+            ></tr
+          >
+          <tr
+            ><td><code>isis</code></td><td
+              >Middle Eastern string resonance; long ringing sustains.</td
+            ></tr
+          >
+          <tr
+            ><td><code>sol_ordinario</code></td><td
+              >Bowed strings, plain sustains only.</td
+            ></tr
+          >
+          <tr
+            ><td><code>sol_full</code></td><td
+              >The full bowed-string palette, extended techniques included.</td
+            ></tr
+          >
+          <tr
+            ><td><code>darbouka_onnx</code></td><td
+              >Hand drum — goblet-drum attack and slap.</td
+            ></tr
+          >
+        </table>
+        <p>
+          The knobs shape the pass in latent space:
+          <strong>Temperature</strong> (drift from a faithful re-hearing — 1.0 honest,
+          1.5+ hallucinating), <strong>Noise</strong> (random energy injected before
+          decoding), <strong>Wet/Dry</strong> (blend with the original), <strong
+            >Shuffle</strong
+          > (chops the latent timeline into chunks and deals them at random — the
+          value is chunk size),
+          <strong>Quantize</strong> (bit-crush in latent space),
+          <strong>Dims</strong> (touch only specific latent dimensions, e.g.
+          <code>0,2,6</code>; blank = all), and <strong>Reverse</strong> (flips the
+          latent trajectory while the audio plays forward). The
+          <em>what do these knobs do?</em> glossary in the panel has the same notes
+          inline.
+        </p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Carving — hits, slots, bench</summary>
+      <div class="ossuary-docs-body">
+        <p>
+          When an interpretation arrives it is <strong>auto-carved</strong>:
+          onset detection finds the transients, every cut snaps to a zero
+          crossing (no clicks), and each slice is classified by brightness
+          (zero-crossing rate) and length into a slot:
+        </p>
+        <table>
+          <tr><th>Slot</th><th>Heuristic</th></tr>
+          <tr
+            ><td><code>kick</code></td><td>Dark — under ~1500 crossings/sec</td
+            ></tr
+          >
+          <tr
+            ><td><code>hi-hat</code></td><td
+              >Bright — over ~5000, or short and bright</td
+            ></tr
+          >
+          <tr
+            ><td><code>perc</code></td><td
+              >Mid-bright and ringing &ge; 240 ms — toms, congas, blocks</td
+            ></tr
+          >
+          <tr
+            ><td><code>snare</code></td><td
+              >Everything left — cracks and claps</td
+            ></tr
+          >
+        </table>
+        <p>
+          <strong>Sensitivity</strong> re-tunes the onset detector (higher = more,
+          smaller slices) — hit <strong>Re-carve</strong> to apply. Each slice is
+          capped at 2 s.
+        </p>
+        <p>
+          Long clips carve hundreds of hits, so each slot
+          <strong>auto-keeps</strong> only the strongest (the
+          <strong>Keep</strong> slider, default 12/slot); the rest sit in a per-slot
+          <strong>&ldquo;+ N more&rdquo; bench drawer</strong>, drawn dimmer on
+          the waveform. <strong>+</strong> promotes a benched hit into the kit, <strong
+            >&minus;</strong
+          > demotes. Raising the slider fills with the strongest benched; lowering
+          trims the weakest kept — manual promotions survive.
+        </p>
+        <p>
+          On the waveform: <strong>click</strong> selects the nearest hit for editing;
+          the colored ticks along the top are slice boundaries in each slot&rsquo;s
+          color. Every hit row has audition (<strong>&#9654;</strong>), a <strong
+            >merge checkbox</strong
+          > (see Phrases), a
+          <strong>slot dropdown</strong> to reassign, and <strong
+            >&#10005;</strong
+          >
+          to drop.
+        </p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Editing a hit</summary>
+      <div class="ossuary-docs-body">
+        <p>
+          Click a hit&rsquo;s name (or its carve on the waveform) to open the
+          editor. Everything auditions and exports <em>rendered</em> — what you hear
+          is what you get.
+        </p>
+        <ul>
+          <li>
+            <strong>Trim handles</strong> — drag the edges on the mini waveform; both
+            ends snap to zero crossings.
+          </li>
+          <li>
+            <strong>Shape</strong> — <strong>Reverse</strong>,
+            <strong>Normalize</strong>, <strong>Gain</strong>, and
+            <strong>Pitch</strong> (baked into the render).
+          </li>
+          <li>
+            <strong>Envelope</strong> — <strong>Attack</strong> /
+            <strong>Decay</strong> edge fades with a <strong>Curve</strong>
+            control. On a one-shot that&rsquo;s a percussive gate; on a phrase it&rsquo;s
+            a gentle de-click.
+          </li>
+          <li>
+            <strong>FX</strong> — <strong>Filter</strong> (cutoff/reso) + peaking
+            <strong>EQ</strong> (freq/gain/Q), <strong>Delay</strong>
+            (time/feedback/mix), <strong>Reverb</strong> (size/mix).
+          </li>
+        </ul>
+      </div>
+    </details>
+
+    <details>
+      <summary>Audition loop</summary>
+      <div class="ossuary-docs-body">
+        <p>
+          Each percussion slot header has a <strong>&#8635;</strong> button: a minimal
+          single-track loop that triggers that slot&rsquo;s kept hits in rhythmic
+          context, rotating through them round-robin. Deliberately not a sequencer
+          — Litany owns sequencing; phrases never loop.
+        </p>
+        <p>
+          The default pattern is invisible and diagnostic: it seeds steps from
+          the slot&rsquo;s own onset timing, so you hear the rhythm the brain
+          actually found. <strong>BPM</strong> / <strong>Rate</strong> /
+          <strong>Length</strong> re-seed that default; touching
+          <strong>Probability</strong> switches to a generated pattern.
+        </p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Phrases — long samples</summary>
+      <div class="ossuary-docs-body">
+        <p>
+          A <strong>phrase</strong> is any long material — a whole word, a spoken
+          phrase, a melodic run, a texture pull — up to
+          <strong>15 seconds</strong>. Phrases are never auto-detected and never
+          loop: they only exist because you carved one. They live in their own
+          panel at the bottom of the page.
+        </p>
+        <h3>Two gestures</h3>
+        <ul>
+          <li>
+            <strong>Drag-select</strong> — drag across either waveform to paint a
+            selection (ends snap to zero crossings; under 100 ms is discarded; over
+            15 s clamps with a hint). The bar that appears lets you audition the region,
+            <strong>Carve as phrase</strong>, or clear. A plain click still
+            selects the nearest hit.
+          </li>
+          <li>
+            <strong>Merge slices</strong> — tick the checkboxes on two or more
+            <em>adjacent</em> carved slices and hit
+            <strong>Merge N slices &rarr; phrase</strong>. Merging consumes the
+            source hits; Re-carve is the recovery path.
+          </li>
+        </ul>
+        <h3>Dry vs wet</h3>
+        <p>
+          A phrase carved from the <strong>Clip</strong> waveform is
+          <strong>dry</strong> — no brain touched it, it survives re-interpretation,
+          and it indexes without model lineage (tagged
+          <code>dry</code>). One carved from the interpreted waveform is
+          <strong>wet</strong> (tagged <code>interpreted</code>) and dies with
+          its interpretation — a confirm guard warns first.
+        </p>
+        <p>
+          Each phrase row shows its origin badge and duration, and has an
+          optional <strong>name field</strong> — a named phrase exports as
+          <code>that-name.wav</code> instead of <code>kit_phrase_2.wav</code>.
+        </p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Export — library &amp; ZIP</summary>
+      <div class="ossuary-docs-body">
+        <p>
+          Two destinations, from either export row. <strong
+            >Index to library</strong
+          > renders each hit and uploads it to
+          <code>samples-bored</code>, where Litany and search find it.
+          <strong>Download ZIP</strong> bundles the same renders locally (phrases
+          nest in a <code>phrases/</code> folder).
+        </p>
+        <p>
+          The kit buttons (bottom of the carve panel) export
+          <em>everything kept</em>; the phrase buttons (Phrases panel) export
+          phrases only — so drums-only, phrases-only, and both are all one-click
+          workflows. The optional <strong>kit name</strong> becomes the filename prefix
+          and the <code>kit:</code> tag.
+        </p>
+        <h3>Tags on every indexed sample</h3>
+        <table>
+          <tr><th>Tag</th><th>Meaning</th></tr>
+          <tr
+            ><td><code>source:ossuary</code></td><td>Came from this tool</td
+            ></tr
+          >
+          <tr
+            ><td><code>kick</code> &hellip; <code>phrase</code></td><td
+              >Flat slot name — search <code>query=kick</code> just works</td
+            ></tr
+          >
+          <tr><td><code>slot:&hellip;</code></td><td>Namespaced slot</td></tr>
+          <tr
+            ><td><code>kit:&lt;slug&gt;</code></td><td
+              >Groups one carving session</td
+            ></tr
+          >
+          <tr
+            ><td
+              ><code>model:&lt;brain&gt;</code>, <code>rave</code>, <code
+                >rotten</code
+              >, <code>rgz-9</code></td
+            ><td>Brain lineage — interpreted hits only</td></tr
+          >
+          <tr
+            ><td><code>dry</code> / <code>interpreted</code></td><td
+              >Whether a brain touched it</td
+            ></tr
+          >
+        </table>
+      </div>
+    </details>
+  </div>
 </Admin>
+
+<style is:global>
+  .ossuary-docs {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 8px 0 24px;
+    font-size: 0.75rem;
+    line-height: 1.6;
+    color: #8b867d;
+    font-family:
+      'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', 'Courier New',
+      monospace;
+  }
+
+  .ossuary-docs details {
+    margin-top: 8px;
+  }
+
+  .ossuary-docs summary {
+    cursor: pointer;
+    color: #d6d2cb;
+    font-weight: 600;
+    font-size: 0.78rem;
+    padding: 4px 0;
+    user-select: none;
+  }
+
+  .ossuary-docs summary:hover {
+    color: #c9a227;
+  }
+
+  .ossuary-docs-body {
+    padding: 6px 0 4px 8px;
+    border-left: 1px solid #383838;
+    margin-left: 4px;
+  }
+
+  .ossuary-docs-body p {
+    margin: 6px 0;
+  }
+
+  .ossuary-docs-body strong,
+  .ossuary-docs-body em {
+    color: #d6d2cb;
+  }
+
+  .ossuary-docs-body ul {
+    margin: 4px 0;
+    padding-left: 16px;
+  }
+
+  .ossuary-docs-body li {
+    margin: 3px 0;
+  }
+
+  .ossuary-docs-body code {
+    background: #2a2a2a;
+    padding: 1px 4px;
+    font-size: 0.7rem;
+    color: #c9a227;
+  }
+
+  .ossuary-docs-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 0.7rem;
+  }
+
+  .ossuary-docs-body th,
+  .ossuary-docs-body td {
+    text-align: left;
+    padding: 4px 6px;
+    border-bottom: 1px solid #383838;
+    vertical-align: top;
+  }
+
+  .ossuary-docs-body th {
+    color: #d6d2cb;
+    font-weight: 600;
+    width: 20%;
+  }
+
+  .ossuary-docs-body h3 {
+    color: #d6d2cb;
+    font-size: 0.72rem;
+    font-weight: 600;
+    margin: 12px 0 4px;
+  }
+</style>
