@@ -18,11 +18,18 @@ export const SLOT_COLOR: Record<Slot, string> = {
   perc: '#9b8cc0',
 };
 
+export interface Onset {
+  sample: number;
+  strength: number;
+}
+
 export interface Hit {
   id: string;
   start: number;
   end: number;
   slot: Slot;
+  strength: number;
+  kept: boolean;
   edit: HitEdit;
 }
 
@@ -30,10 +37,10 @@ const HOP = 256;
 const WIN = 1024;
 const MAX_HIT_SECONDS = 2.0;
 
-export function detectOnsets(buffer: AudioBuffer, sensitivity = 0.5): number[] {
+export function detectOnsets(buffer: AudioBuffer, sensitivity = 0.5): Onset[] {
   const data = buffer.getChannelData(0);
   const nFrames = Math.max(0, Math.floor((data.length - WIN) / HOP));
-  if (nFrames < 2) return data.length ? [0] : [];
+  if (nFrames < 2) return data.length ? [{ sample: 0, strength: 1 }] : [];
 
   const env = new Float32Array(nFrames);
   for (let f = 0; f < nFrames; f++) {
@@ -59,7 +66,7 @@ export function detectOnsets(buffer: AudioBuffer, sensitivity = 0.5): number[] {
   const factor = 1.8 - 1.3 * sensitivity;
   const floor = mean * (0.6 - 0.5 * sensitivity) + 1e-4;
 
-  const onsets: number[] = [];
+  const onsets: Onset[] = [];
   let last = -minGap;
   for (let i = 1; i < nFrames - 1; i++) {
     let acc = 0;
@@ -75,7 +82,7 @@ export function detectOnsets(buffer: AudioBuffer, sensitivity = 0.5): number[] {
       df[i] > df[i + 1] &&
       i - last >= minGap
     ) {
-      onsets.push(i * HOP);
+      onsets.push({ sample: i * HOP, strength: df[i] });
       last = i;
     }
   }
@@ -124,7 +131,45 @@ export function classifySlot(
   return 'snare';
 }
 
-export function carve(buffer: AudioBuffer, sensitivity = 0.5): Hit[] {
+export const DEFAULT_KEEP_LIMIT = 12;
+
+// Reset pass: kept = top-limit by onset strength, per slot. Carve-time only —
+// the cap is never re-enforced on reassign or promote. Iterates SLOTS, so any
+// future non-slot hit kind (phrase) is invisible here.
+export function applyAutoKeep(hits: Hit[], limit: number): void {
+  for (const slot of SLOTS) {
+    const inSlot = hits.filter((h) => h.slot === slot);
+    inSlot.sort((a, b) => b.strength - a.strength);
+    inSlot.forEach((h, i) => (h.kept = i < limit));
+  }
+}
+
+// Nudge toward a new limit without resetting: fill promotes the strongest
+// benched, trim demotes the weakest kept — so manual promotions survive
+// raises, and usually survive trims.
+export function resizeKeep(hits: Hit[], limit: number): void {
+  for (const slot of SLOTS) {
+    const inSlot = hits.filter((h) => h.slot === slot);
+    const kept = inSlot
+      .filter((h) => h.kept)
+      .sort((a, b) => a.strength - b.strength);
+    const bench = inSlot
+      .filter((h) => !h.kept)
+      .sort((a, b) => b.strength - a.strength);
+    while (kept.length < limit && bench.length) {
+      const h = bench.shift()!;
+      h.kept = true;
+      kept.unshift(h);
+    }
+    while (kept.length > limit) kept.shift()!.kept = false;
+  }
+}
+
+export function carve(
+  buffer: AudioBuffer,
+  sensitivity = 0.5,
+  keepLimit = DEFAULT_KEEP_LIMIT,
+): Hit[] {
   const data = buffer.getChannelData(0);
   const sr = buffer.sampleRate;
   const maxLen = Math.floor(MAX_HIT_SECONDS * sr);
@@ -132,8 +177,8 @@ export function carve(buffer: AudioBuffer, sensitivity = 0.5): Hit[] {
 
   const hits: Hit[] = [];
   for (let i = 0; i < onsets.length; i++) {
-    const start = snapToZeroCrossing(data, onsets[i]);
-    const rawEnd = i + 1 < onsets.length ? onsets[i + 1] : data.length;
+    const start = snapToZeroCrossing(data, onsets[i].sample);
+    const rawEnd = i + 1 < onsets.length ? onsets[i + 1].sample : data.length;
     let end = snapToZeroCrossing(data, Math.min(rawEnd, start + maxLen));
     if (end <= start)
       end = Math.min(start + Math.floor(0.05 * sr), data.length);
@@ -142,8 +187,11 @@ export function carve(buffer: AudioBuffer, sensitivity = 0.5): Hit[] {
       start,
       end,
       slot: classifySlot(data, start, end, sr),
+      strength: onsets[i].strength,
+      kept: false,
       edit: defaultEdit(),
     });
   }
+  applyAutoKeep(hits, keepLimit);
   return hits;
 }

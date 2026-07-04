@@ -533,6 +533,7 @@
 }
 
 .oss-hit__play,
+.oss-hit__keep,
 .oss-hit__drop {
   border: 1px solid var(--oss-border);
   background: var(--oss-panel);
@@ -544,6 +545,7 @@
 }
 
 .oss-hit__play:hover,
+.oss-hit__keep:hover,
 .oss-hit__drop:hover {
   border-color: var(--oss-border-hover);
 }
@@ -571,6 +573,32 @@
 .oss-hit.is-selected {
   outline: 1px solid var(--oss-accent);
   outline-offset: -1px;
+}
+
+/* ── Bench drawer (unkept hits) ────────────────────────────────────────────- */
+.oss-slot__bench summary {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.72rem;
+  color: var(--oss-text-faint);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.oss-slot__bench summary::-webkit-details-marker {
+  display: none;
+}
+
+.oss-slot__bench summary:hover {
+  color: var(--oss-text-dim);
+}
+
+.oss-slot__bench .oss-hit {
+  opacity: 0.7;
+}
+
+.oss-slot__bench .oss-hit:hover {
+  opacity: 1;
 }
 
 /* ── Hit editor ────────────────────────────────────────────────────────────- */
