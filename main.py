@@ -1000,51 +1000,30 @@ async def webhook_deploy(request: Request):
 SITE_URL = "https://a-u.supply"
 
 
-@app.get("/admin/search/detail", include_in_schema=False)
-def media_detail_with_og(request: Request, id: str | None = None):
-    """Serve the detail page with OG tags injected for link unfurling."""
-    index = DIST_DIR / "admin" / "search" / "detail" / "index.html"
-    if not index.is_file():
-        raise HTTPException(status_code=404, detail="Page not found")
+def _inject_og(raw_html: str, item, canonical_url: str) -> str:
+    """Inject OpenGraph meta tags into the detail page HTML for link unfurling.
 
-    raw_html = index.read_text()
+    `item` is a `MediaItem` (with `image_meta` / `video_meta` eager-loaded). The
+    tags are stable across call sites — only `canonical_url` differs. Returns
+    the original HTML if `item` is None (so callers can fall back to the bare
+    page when the id is unknown).
+    """
+    if item is None:
+        return raw_html
 
-    if not id:
-        return HTMLResponse(raw_html)
-
-    from server.models import MediaItem
-    from sqlalchemy.orm import joinedload
-
-    db = next(get_db())
-    try:
-        item = (
-            db.query(MediaItem)
-            .options(joinedload(MediaItem.image_meta), joinedload(MediaItem.video_meta))
-            .filter(MediaItem.id == id)
-            .first()
-        )
-    finally:
-        db.close()
-
-    if not item:
-        return HTMLResponse(raw_html)
-
-    # Build OG tags
     title = html.escape(item.filename or "Media")
     desc = html.escape(item.description or f"{(item.media_type or 'file').capitalize()} — A-U.SUPPLY")
-    page_url = f"{SITE_URL}/admin/search/detail?id={id}"
-    image_url = f"{SITE_URL}/api/media/{id}/og-thumb"
+    image_url = f"{SITE_URL}/api/media/{item.id}/og-thumb"
 
     og_tags = [
         f'<meta property="og:title" content="{title}" />',
         f'<meta property="og:description" content="{desc}" />',
         f'<meta property="og:image" content="{image_url}" />',
-        f'<meta property="og:url" content="{page_url}" />',
+        f'<meta property="og:url" content="{canonical_url}" />',
         f'<meta property="og:type" content="website" />',
         '<meta name="twitter:card" content="summary_large_image" />',
     ]
 
-    # Add dimensions if available
     width, height = None, None
     if item.image_meta:
         width, height = item.image_meta.width, item.image_meta.height
@@ -1055,9 +1034,58 @@ def media_detail_with_og(request: Request, id: str | None = None):
         og_tags.append(f'<meta property="og:image:height" content="{height}" />')
 
     og_block = "\n  ".join(og_tags)
-    injected_html = raw_html.replace("</head>", f"  {og_block}\n</head>", 1)
+    return raw_html.replace("</head>", f"  {og_block}\n</head>", 1)
 
-    return HTMLResponse(injected_html)
+
+def _load_media_item_for_og(db, media_id: str):
+    """Fetch a MediaItem with the relations the OG injector needs, or None."""
+    from server.models import MediaItem
+    from sqlalchemy.orm import joinedload
+
+    return (
+        db.query(MediaItem)
+        .options(joinedload(MediaItem.image_meta), joinedload(MediaItem.video_meta))
+        .filter(MediaItem.id == media_id)
+        .first()
+    )
+
+
+def _detail_html() -> str:
+    """Read the built admin search detail page, or 404 if it isn't on disk."""
+    index = DIST_DIR / "admin" / "search" / "detail" / "index.html"
+    if not index.is_file():
+        raise HTTPException(status_code=404, detail="Page not found")
+    return index.read_text()
+
+
+@app.get("/admin/search/detail", include_in_schema=False)
+def media_detail_with_og(
+    request: Request,
+    id: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Serve the detail page with OG tags injected for link unfurling."""
+    raw_html = _detail_html()
+    if not id:
+        return HTMLResponse(raw_html)
+
+    item = _load_media_item_for_og(db, id)
+    page_url = f"{SITE_URL}/admin/search/detail?id={id}"
+    return HTMLResponse(_inject_og(raw_html, item, page_url))
+
+
+@app.get("/m/{media_id}", include_in_schema=False)
+def media_share_page(media_id: str, db: Session = Depends(get_db)):
+    """Short public share URL for a media item.
+
+    Renders the same detail page with OG tags injected so Slack/Twitter/
+    iMessage-style unfurlers see the thumbnail + filename. The raw media
+    stays authed — only the OG metadata and thumbnail are public.
+    """
+    raw_html = _detail_html()
+    item = _load_media_item_for_og(db, media_id)
+    canonical_url = f"{SITE_URL}/m/{media_id}"
+    return HTMLResponse(_inject_og(raw_html, item, canonical_url))
 
 
 # --- Static files ---
