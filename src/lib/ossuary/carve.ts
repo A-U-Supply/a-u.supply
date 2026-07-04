@@ -31,13 +31,21 @@ export interface Onset {
   strength: number;
 }
 
+// Which buffer a hit's start/end index into: the raw source clip, or the
+// interpreted (wet) render. Auto-carves are always 'interpreted'; only phrases
+// can be 'source' (carved dry, before/without a brain pass).
+export type HitOrigin = 'source' | 'interpreted';
+
 export interface Hit {
   id: string;
   start: number;
   end: number;
   slot: Slot;
+  origin: HitOrigin;
   strength: number;
   kept: boolean;
+  /** Optional user-given name (phrases) — wins over the default export filename. */
+  name?: string;
   edit: HitEdit;
 }
 
@@ -199,6 +207,7 @@ export function carve(
       start,
       end,
       slot: classifySlot(data, start, end, sr),
+      origin: 'interpreted',
       strength: onsets[i].strength,
       kept: false,
       edit: defaultEdit(),
@@ -217,6 +226,7 @@ export function carvePhrase(
   buffer: AudioBuffer,
   startSample: number,
   endSample: number,
+  origin: HitOrigin,
 ): Hit {
   const data = buffer.getChannelData(0);
   const start = snapToZeroCrossing(data, Math.min(startSample, endSample));
@@ -228,6 +238,7 @@ export function carvePhrase(
     start,
     end,
     slot: 'phrase',
+    origin,
     strength: 0,
     kept: true,
     edit: defaultEdit(),
@@ -259,6 +270,8 @@ export function mergeHits(selected: Hit[]): Hit {
     start: Math.min(...selected.map((h) => h.start)),
     end: Math.max(...selected.map((h) => h.end)),
     slot: 'phrase',
+    // Merge sources are carved slices, which only exist on the wet buffer.
+    origin: 'interpreted',
     strength: Math.max(...selected.map((h) => h.strength)),
     kept: true,
     edit: defaultEdit(),

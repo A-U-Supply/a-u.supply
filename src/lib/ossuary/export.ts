@@ -54,19 +54,27 @@ export function zipSamples(files: Record<string, Uint8Array>): Blob {
   return new Blob([zipSync(files)], { type: 'application/zip' });
 }
 
-/** Standard Ossuary tag set for a carved hit. */
-export function sampleTags(slot: string, model: string, kit: string): string[] {
-  return [
+/**
+ * Standard Ossuary tag set for a carved hit. Dry hits (carved from the raw
+ * source clip, no brain pass) honestly carry no model/rave lineage — `dry` and
+ * `interpreted` are flat searchable discriminators.
+ */
+export function sampleTags(
+  slot: string,
+  model: string,
+  kit: string,
+  origin: 'source' | 'interpreted' = 'interpreted',
+): string[] {
+  const base = [
     'source:ossuary',
     // Bare slot name matches the existing library's flat-tag convention, so
     // `query=phrase` / `query=kick` filter the same way everywhere (issue #514).
     slot,
     `slot:${slot}`,
-    `model:${model}`,
     `kit:${kit}`,
     'carved',
-    'rave',
-    'rotten',
-    'rgz-9',
   ];
+  return origin === 'source'
+    ? [...base, 'dry']
+    : [...base, `model:${model}`, 'interpreted', 'rave', 'rotten', 'rgz-9'];
 }
