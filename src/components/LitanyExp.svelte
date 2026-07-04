@@ -213,8 +213,10 @@
       pools.set(voice.id, pool);
     }
     poolInfo[voice.id] = buildPoolInfo(pool);
+    // Never pull with a blank query — an unfiltered random can return long
+    // slot:phrase samples (issue #514: the positive query IS the filter).
     pool.fill(
-      voice.query,
+      voice.query.trim() || voice.label.toLowerCase(),
       () => {
         poolInfo[voice.id] = buildPoolInfo(pool!);
       },

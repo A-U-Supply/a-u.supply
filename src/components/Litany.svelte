@@ -136,7 +136,9 @@
       pools.set(voice.id, pool);
     }
     poolInfo[voice.id] = { status: 'loading', name: '', entryNames: [] };
-    pool.fill(voice.query, () => {
+    // Never pull with a blank query — an unfiltered random can return long
+    // slot:phrase samples (issue #514: the positive query IS the filter).
+    pool.fill(voice.query.trim() || voice.label.toLowerCase(), () => {
       poolInfo[voice.id] = {
         status: pool!.status,
         name: pool!.currentName,

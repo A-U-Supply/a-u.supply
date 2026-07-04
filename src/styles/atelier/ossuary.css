@@ -446,6 +446,30 @@
   text-align: right;
 }
 
+/* ── Phrase: drag-select + merge ───────────────────────────────────────────- */
+.oss-waveform-scroll .oss-waveform canvas {
+  touch-action: none; /* pointer-capture drag must not scroll on touch */
+  cursor: crosshair;
+}
+
+.oss-slot--phrase {
+  grid-column: 1 / -1;
+}
+
+.oss-selection-bar,
+.oss-merge-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.oss-hit__merge {
+  accent-color: var(--slot-color, var(--oss-accent));
+  margin: 0;
+  flex: 0 0 auto;
+}
+
 /* ── Audition loop ─────────────────────────────────────────────────────────- */
 .oss-loop {
   border: 1px solid var(--oss-border-hover);

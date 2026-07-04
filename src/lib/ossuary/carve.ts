@@ -8,14 +8,22 @@
 
 import { defaultEdit, type HitEdit } from './render.ts';
 
+// Percussive slots: auto-carved, auto-classified, loopable.
 export const SLOTS = ['kick', 'snare', 'hi-hat', 'perc'] as const;
-export type Slot = (typeof SLOTS)[number];
+export type PercSlot = (typeof SLOTS)[number];
+
+// `phrase` is long material (a word, a run, a texture) — only ever created by a
+// deliberate gesture (drag-select or merge), never by the classifier, and never
+// looped. See docs/plans/2026-06-09-ossuary-phrase.md.
+export const ALL_SLOTS = [...SLOTS, 'phrase'] as const;
+export type Slot = (typeof ALL_SLOTS)[number];
 
 export const SLOT_COLOR: Record<Slot, string> = {
   kick: '#c98a3a',
   snare: '#cf5b57',
   'hi-hat': '#6fb3c0',
   perc: '#9b8cc0',
+  phrase: '#8fa87c',
 };
 
 export interface Onset {
@@ -36,6 +44,10 @@ export interface Hit {
 const HOP = 256;
 const WIN = 1024;
 const MAX_HIT_SECONDS = 2.0;
+
+// Client guardrail for both phrase gestures, not a server contract — keeps
+// AudioBuffers, offline renders, and upload sizes sane.
+export const MAX_PHRASE_SECONDS = 15;
 
 export function detectOnsets(buffer: AudioBuffer, sensitivity = 0.5): Onset[] {
   const data = buffer.getChannelData(0);
@@ -112,7 +124,7 @@ export function classifySlot(
   start: number,
   end: number,
   sampleRate: number,
-): Slot {
+): PercSlot {
   const n = Math.max(1, end - start);
   let zc = 0;
   for (let i = start + 1; i < end; i++) {
@@ -194,4 +206,61 @@ export function carve(
   }
   applyAutoKeep(hits, keepLimit);
   return hits;
+}
+
+// ── Phrases ─────────────────────────────────────────────────────────────────
+// Both creators return a kept hit — phrases have no bench; they only exist
+// because the user asked for them.
+
+/** Carve a phrase from a drag-selected region. Ends snap to zero crossings. */
+export function carvePhrase(
+  buffer: AudioBuffer,
+  startSample: number,
+  endSample: number,
+): Hit {
+  const data = buffer.getChannelData(0);
+  const start = snapToZeroCrossing(data, Math.min(startSample, endSample));
+  let end = snapToZeroCrossing(data, Math.max(startSample, endSample));
+  if (end <= start)
+    end = Math.min(start + Math.floor(0.1 * buffer.sampleRate), data.length);
+  return {
+    id: crypto.randomUUID(),
+    start,
+    end,
+    slot: 'phrase',
+    strength: 0,
+    kept: true,
+    edit: defaultEdit(),
+  };
+}
+
+/**
+ * Adjacent = no unselected non-phrase hit sits between the selected ones when
+ * sorted by start. (Phrases overlap the timeline freely, so they don't count.)
+ */
+export function areAdjacent(all: Hit[], selected: Hit[]): boolean {
+  if (selected.length < 2) return false;
+  const ids = new Set(selected.map((h) => h.id));
+  const sorted = [...all].sort((a, b) => a.start - b.start);
+  const positions: number[] = [];
+  sorted.forEach((h, i) => {
+    if (ids.has(h.id)) positions.push(i);
+  });
+  if (positions.length !== selected.length) return false;
+  return (
+    positions[positions.length - 1] - positions[0] === positions.length - 1
+  );
+}
+
+/** Merge slices into one phrase spanning min(start)→max(end), fresh edit. */
+export function mergeHits(selected: Hit[]): Hit {
+  return {
+    id: crypto.randomUUID(),
+    start: Math.min(...selected.map((h) => h.start)),
+    end: Math.max(...selected.map((h) => h.end)),
+    slot: 'phrase',
+    strength: Math.max(...selected.map((h) => h.strength)),
+    kept: true,
+    edit: defaultEdit(),
+  };
 }
