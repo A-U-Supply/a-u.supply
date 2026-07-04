@@ -23,6 +23,22 @@ export const MODELS = [
 
 export type Model = (typeof MODELS)[number];
 
+// Glossary blurbs — adapted from the param descriptions in
+// apps/rottengenizdat.toml (the bot manifest is the source of truth for what
+// each checkpoint was trained on).
+export const MODEL_NOTES: Record<Model, string> = {
+  percussion:
+    'Trained on drums; pushes everything toward rhythmic transients. The default brain for kit carving.',
+  vintage: 'Warm analog color — tape saturation and old-console character.',
+  nasa: 'Alien-transmission artifacts: static, telemetry, deep-space interference.',
+  VCTK: 'A speech brain; makes anything babble.',
+  musicnet: 'Classical chamber timbres — strings, winds, piano bleed.',
+  isis: 'Middle Eastern string resonance; long ringing sustains.',
+  sol_ordinario: 'Bowed strings, plain ordinario sustains only.',
+  sol_full: 'The full bowed-string palette, extended techniques included.',
+  darbouka_onnx: 'Hand drum — goblet-drum attack and slap.',
+};
+
 export interface InterpretParams {
   model: Model;
   temperature: number;

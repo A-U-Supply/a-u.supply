@@ -13,11 +13,14 @@
     interpret,
     defaultParams,
     MODELS,
+    MODEL_NOTES,
     type InterpretParams,
     type InterpretPhase,
   } from '../lib/ossuary/interpret.ts';
   import {
     carve,
+    resizeKeep,
+    DEFAULT_KEEP_LIMIT,
     SLOTS,
     SLOT_COLOR,
     type Hit,
@@ -56,6 +59,7 @@
   // ── Carve ─────────────────────────────────────────────────────────────────
   let sensitivity = $state(0.5);
   let zoom = $state(1);
+  let keepLimit = $state(DEFAULT_KEEP_LIMIT);
   let hits = $state<Hit[]>([]);
   let selectedHitId = $state<string | null>(null);
   const selectedHit = $derived(
@@ -92,7 +96,7 @@
       const sr = wetBuffer.sampleRate;
       const dur = stepDurSec();
       const pat = new Array(loopLength).fill(false);
-      for (const h of hitsInSlot(loopSlot)) {
+      for (const h of keptInSlot(loopSlot)) {
         pat[Math.round(h.start / sr / dur) % loopLength] = true;
       }
       loopPattern = pat;
@@ -103,7 +107,7 @@
   async function renderSlotBuffers(slot: Slot): Promise<AudioBuffer[]> {
     if (!wetBuffer) return [];
     return Promise.all(
-      hitsInSlot(slot).map((h) =>
+      keptInSlot(slot).map((h) =>
         renderHit(wetBuffer!, h.start, h.end, $state.snapshot(h.edit)),
       ),
     );
@@ -162,11 +166,11 @@
   const kitSlug = () =>
     slugify(kitName || `${clip?.name ?? 'ossuary'}-${params.model}`);
 
-  /** Bake every hit to a named WAV; returns [filename, bytes] pairs. */
+  /** Bake every kept hit to a named WAV; returns [filename, bytes] pairs. */
   async function bakeAll(slug: string): Promise<Array<[string, Uint8Array]>> {
     const counters: Record<string, number> = {};
     const out: Array<[string, Uint8Array]> = [];
-    for (const h of hits) {
+    for (const h of hits.filter((h) => h.kept)) {
       const rendered = await renderHit(
         wetBuffer!,
         h.start,
@@ -183,13 +187,13 @@
   }
 
   async function indexAll() {
-    if (!wetBuffer || exporting || !hits.length) return;
+    if (!wetBuffer || exporting || !keptCount) return;
     exporting = true;
     exportMsg = '';
     try {
       const slug = kitSlug();
       let n = 0;
-      for (const h of hits) {
+      for (const h of hits.filter((h) => h.kept)) {
         const rendered = await renderHit(
           wetBuffer,
           h.start,
@@ -205,7 +209,7 @@
           `Carved ${h.slot} from "${clip?.name ?? 'clip'}" via RGZ-9 ${params.model} brain`,
         );
         n++;
-        exportMsg = `indexing… ${n}/${hits.length}`;
+        exportMsg = `indexing… ${n}/${keptCount}`;
       }
       exportMsg = `✓ indexed ${n} samples (kit:${slug})`;
     } catch (e) {
@@ -216,7 +220,7 @@
   }
 
   async function downloadZip() {
-    if (!wetBuffer || exporting || !hits.length) return;
+    if (!wetBuffer || exporting || !keptCount) return;
     exporting = true;
     exportMsg = '';
     try {
@@ -260,7 +264,44 @@
     fetching: 'retrieving the bones…',
   };
 
+  // Glossary blurbs for the single-pass knobs (brains live in MODEL_NOTES).
+  const KNOB_NOTES: Array<[string, string]> = [
+    [
+      'Temperature',
+      'How far the latent drifts from a faithful re-hearing. ~0.3 is smoothed and softened, 1.0 an honest reconstruction through the brain’s lens; above 1.5 it hallucinates, 2.0+ brings heavy artifacts.',
+    ],
+    [
+      'Noise',
+      'Random energy injected into the latent before decoding. 0.1–0.3 adds grain and texture; higher progressively dissolves the source into the brain’s noise floor.',
+    ],
+    [
+      'Wet/Dry',
+      '0 is your original, 1 is brain-only. 0.3–0.5 keeps the source recognizable under the neural coloring.',
+    ],
+    [
+      'Shuffle',
+      'Chops the latent timeline into chunks and deals them out at random. The value is chunk size: 2–3 granular chaos, 4–8 mild glitch, higher means longer coherent segments in random order.',
+    ],
+    [
+      'Quantize',
+      'Bit-crush, but in latent space. 0.1 subtle stepping, 0.5 audibly crunchy, 1.0 collapses the latent to a handful of values.',
+    ],
+    [
+      'Dims',
+      'Which latent dimensions get touched (e.g. 0,2,6). Untouched dimensions keep the source’s values, so the brain bleeds through only on specific axes. Blank means all.',
+    ],
+    [
+      'Reverse',
+      'Flips the latent trajectory, not the waveform — the audio plays forward while the brain remembers backward. Uncanny.',
+    ],
+  ];
+
   const hitsInSlot = (slot: Slot) => hits.filter((h) => h.slot === slot);
+  const keptInSlot = (slot: Slot) =>
+    hits.filter((h) => h.slot === slot && h.kept);
+  const benchInSlot = (slot: Slot) =>
+    hits.filter((h) => h.slot === slot && !h.kept);
+  const keptCount = $derived(hits.filter((h) => h.kept).length);
 
   // ── Source loading ──────────────────────────────────────────────────────--
   async function runSearch() {
@@ -324,7 +365,7 @@
       );
       if (buf) {
         wetBuffer = buf;
-        hits = carve(buf, sensitivity); // auto-carve on arrival
+        hits = carve(buf, sensitivity, keepLimit); // auto-carve on arrival
       }
     } catch (e) {
       interpretError = (e as Error).message;
@@ -335,7 +376,7 @@
   }
 
   function recarve() {
-    if (wetBuffer) hits = carve(wetBuffer, sensitivity);
+    if (wetBuffer) hits = carve(wetBuffer, sensitivity, keepLimit);
   }
 
   function reassign(hit: Hit, slot: Slot) {
@@ -345,6 +386,12 @@
   function dropHit(hit: Hit) {
     hits = hits.filter((h) => h.id !== hit.id);
   }
+
+  // Keep/bench. The limit is only enforced at carve time and by the slider —
+  // promote and reassign may push a slot over it, intentionally.
+  const promote = (hit: Hit) => (hit.kept = true);
+  const demote = (hit: Hit) => (hit.kept = false);
+  const onKeepLimit = () => resizeKeep(hits, keepLimit);
 
   // ── Audition ────────────────────────────────────────────────────────────--
   async function toggleRange(
@@ -481,22 +528,24 @@
     }
     g.stroke();
 
-    // Slice boundaries from carving.
+    // Slice boundaries from carving. Benched (unkept) hits draw dimmer.
     const len = buffer.length;
     for (const h of overlayHits) {
       const x0 = (h.start / len) * cssWidth;
       const x1 = (h.end / len) * cssWidth;
       const color = SLOT_COLOR[h.slot];
-      g.globalAlpha = playingKey === `hit:${h.id}` ? 0.85 : 0.45;
+      g.globalAlpha =
+        playingKey === `hit:${h.id}` ? 0.85 : h.kept ? 0.45 : 0.15;
       g.fillStyle = color;
       g.fillRect(x0, 0, Math.max(1, x1 - x0), 4);
-      g.globalAlpha = 1;
+      g.globalAlpha = h.kept ? 1 : 0.3;
       g.strokeStyle = color;
       g.beginPath();
       g.moveTo(x0, 0);
       g.lineTo(x0, cssHeight);
       g.stroke();
     }
+    g.globalAlpha = 1;
   }
 
   const drawWet = () => drawWaveform(wetCanvas, wetBuffer, hits);
@@ -531,6 +580,7 @@
       void h.start;
       void h.end;
       void h.slot;
+      void h.kept;
     }
     void zoom;
     void wetBuffer;
@@ -670,6 +720,26 @@
         >hear the clip through a one-track-minded brain</span
       >
     </header>
+
+    <details class="oss-glossary">
+      <summary>what do these knobs do?</summary>
+      <div class="oss-glossary__body">
+        <p class="oss-glossary__title">Brains</p>
+        <dl>
+          {#each MODELS as m}
+            <dt>{m}</dt>
+            <dd>{MODEL_NOTES[m]}</dd>
+          {/each}
+        </dl>
+        <p class="oss-glossary__title">Knobs</p>
+        <dl>
+          {#each KNOB_NOTES as [name, note]}
+            <dt>{name}</dt>
+            <dd>{note}</dd>
+          {/each}
+        </dl>
+      </div>
+    </details>
 
     <div class="oss-interp">
       <div class="oss-knobs">
@@ -824,6 +894,17 @@
                 bind:value={sensitivity}
               />
             </label>
+            <label class="oss-knob">
+              <span>Keep <em>{keepLimit}/slot</em></span>
+              <input
+                type="range"
+                min="4"
+                max="32"
+                step="1"
+                bind:value={keepLimit}
+                oninput={onKeepLimit}
+              />
+            </label>
             <button class="brutalist-control" onclick={recarve}>Re-carve</button
             >
             <label class="oss-knob">
@@ -840,15 +921,82 @@
               Click a carve on the waveform or a hit name below to edit.
             </p>
             <div class="oss-slots">
+              {#snippet hitRow(h: Hit, label: string)}
+                <div
+                  class="oss-hit"
+                  class:is-playing={playingKey === `hit:${h.id}`}
+                  class:is-selected={selectedHitId === h.id}
+                >
+                  <button
+                    class="oss-hit__play"
+                    onclick={() => auditionHit(h)}
+                    disabled={!!auditioningHitId && auditioningHitId !== h.id}
+                    title="Audition (edited)"
+                  >
+                    {#if auditioningHitId === h.id}
+                      …
+                    {:else}
+                      {playingKey === `hit:${h.id}` ? '■' : '▶'}
+                    {/if}
+                  </button>
+                  <button
+                    class="oss-hit__name"
+                    onclick={() =>
+                      (selectedHitId = selectedHitId === h.id ? null : h.id)}
+                    title="Edit this hit"
+                  >
+                    {label}
+                  </button>
+                  <select
+                    class="oss-hit__slot"
+                    value={h.slot}
+                    onchange={(e) =>
+                      reassign(
+                        h,
+                        (e.target as HTMLSelectElement).value as Slot,
+                      )}
+                    title="Reassign slot"
+                  >
+                    {#each SLOTS as s}
+                      <option value={s}>{s}</option>
+                    {/each}
+                  </select>
+                  {#if h.kept}
+                    <button
+                      class="oss-hit__keep"
+                      onclick={() => demote(h)}
+                      title="Demote to bench"
+                    >
+                      −
+                    </button>
+                  {:else}
+                    <button
+                      class="oss-hit__keep"
+                      onclick={() => promote(h)}
+                      title="Promote to kit"
+                    >
+                      +
+                    </button>
+                  {/if}
+                  <button
+                    class="oss-hit__drop"
+                    onclick={() => dropHit(h)}
+                    title="Drop"
+                  >
+                    ✕
+                  </button>
+                </div>
+              {/snippet}
               {#each SLOTS as slot}
-                {@const slotHits = hitsInSlot(slot)}
+                {@const kept = keptInSlot(slot)}
+                {@const bench = benchInSlot(slot)}
                 <div
                   class="oss-slot"
                   style={`--slot-color:${SLOT_COLOR[slot]}`}
                 >
                   <div class="oss-slot__head">
                     <span class="oss-slot__name">{slot}</span>
-                    {#if slotHits.length}
+                    {#if kept.length}
                       <button
                         class="oss-slot__loop"
                         class:is-active={looping && loopSlot === slot}
@@ -858,60 +1006,21 @@
                         {looping && loopSlot === slot ? '◼' : '↻'}
                       </button>
                     {/if}
-                    <span class="oss-slot__count">{slotHits.length}</span>
-                  </div>
-                  {#each slotHits as h, idx (h.id)}
-                    <div
-                      class="oss-hit"
-                      class:is-playing={playingKey === `hit:${h.id}`}
-                      class:is-selected={selectedHitId === h.id}
+                    <span class="oss-slot__count"
+                      >{kept.length}/{kept.length + bench.length}</span
                     >
-                      <button
-                        class="oss-hit__play"
-                        onclick={() => auditionHit(h)}
-                        disabled={!!auditioningHitId &&
-                          auditioningHitId !== h.id}
-                        title="Audition (edited)"
-                      >
-                        {#if auditioningHitId === h.id}
-                          …
-                        {:else}
-                          {playingKey === `hit:${h.id}` ? '■' : '▶'}
-                        {/if}
-                      </button>
-                      <button
-                        class="oss-hit__name"
-                        onclick={() =>
-                          (selectedHitId =
-                            selectedHitId === h.id ? null : h.id)}
-                        title="Edit this hit"
-                      >
-                        {slot}
-                        {idx + 1}
-                      </button>
-                      <select
-                        class="oss-hit__slot"
-                        value={h.slot}
-                        onchange={(e) =>
-                          reassign(
-                            h,
-                            (e.target as HTMLSelectElement).value as Slot,
-                          )}
-                        title="Reassign slot"
-                      >
-                        {#each SLOTS as s}
-                          <option value={s}>{s}</option>
-                        {/each}
-                      </select>
-                      <button
-                        class="oss-hit__drop"
-                        onclick={() => dropHit(h)}
-                        title="Drop"
-                      >
-                        ✕
-                      </button>
-                    </div>
+                  </div>
+                  {#each kept as h, idx (h.id)}
+                    {@render hitRow(h, `${slot} ${idx + 1}`)}
                   {/each}
+                  {#if bench.length}
+                    <details class="oss-slot__bench">
+                      <summary>+ {bench.length} more</summary>
+                      {#each bench as h, idx (h.id)}
+                        {@render hitRow(h, `${slot} ${kept.length + idx + 1}`)}
+                      {/each}
+                    </details>
+                  {/if}
                 </div>
               {/each}
             </div>
@@ -1018,14 +1127,14 @@
               <button
                 class="brutalist-control oss-interpret-btn"
                 onclick={indexAll}
-                disabled={exporting}
+                disabled={exporting || !keptCount}
               >
-                {exporting ? 'WORKING…' : `Index ${hits.length} to library`}
+                {exporting ? 'WORKING…' : `Index ${keptCount} to library`}
               </button>
               <button
                 class="brutalist-control"
                 onclick={downloadZip}
-                disabled={exporting}
+                disabled={exporting || !keptCount}
               >
                 Download ZIP
               </button>
