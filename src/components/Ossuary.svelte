@@ -30,6 +30,7 @@
     ALL_SLOTS,
     SLOT_COLOR,
     type Hit,
+    type HitOrigin,
     type Slot,
     type PercSlot,
   } from '../lib/ossuary/carve.ts';
@@ -66,6 +67,7 @@
   // ── Carve ─────────────────────────────────────────────────────────────────
   let sensitivity = $state(0.5);
   let zoom = $state(1);
+  let srcZoom = $state(1);
   let keepLimit = $state(DEFAULT_KEEP_LIMIT);
   let hits = $state<Hit[]>([]);
   let selectedHitId = $state<string | null>(null);
@@ -166,84 +168,116 @@
   }
 
   // ── Export: bake hits → index into samples-bored / download a ZIP ──────────
+  // Two scopes: 'all' (the kit buttons — everything kept, phrases nested under
+  // phrases/ in the ZIP) and 'phrases' (the phrase-only buttons).
+  type ExportScope = 'all' | 'phrases';
   let kitName = $state('');
   let exporting = $state(false);
   let exportMsg = $state('');
+  let phraseExportMsg = $state('');
 
   const kitSlug = () =>
     slugify(kitName || `${clip?.name ?? 'ossuary'}-${params.model}`);
 
-  /** Bake every kept hit to a named WAV; returns [filename, bytes] pairs. */
-  async function bakeAll(slug: string): Promise<Array<[string, Uint8Array]>> {
+  const exportSubset = (scope: ExportScope) =>
+    scope === 'phrases' ? phraseHits : hits.filter((h) => h.kept);
+
+  const setExportMsg = (scope: ExportScope, msg: string) => {
+    if (scope === 'phrases') phraseExportMsg = msg;
+    else exportMsg = msg;
+  };
+
+  /** Optional user name wins over the default `{kit}_phrase_{n}` filename. */
+  const phraseFilename = (h: Hit, slug: string, n: number) =>
+    h.name?.trim() ? `${slugify(h.name)}.wav` : `${slug}_phrase_${n}.wav`;
+
+  const hitFilename = (h: Hit, slug: string, n: number) =>
+    h.slot === 'phrase'
+      ? phraseFilename(h, slug, n)
+      : `${slug}_${h.slot}_${n}.wav`;
+
+  const hitDescription = (h: Hit) =>
+    h.origin === 'source'
+      ? `Phrase carved dry from "${clip?.name ?? 'clip'}"`
+      : `Carved ${h.slot} from "${clip?.name ?? 'clip'}" via RGZ-9 ${params.model} brain`;
+
+  /** Bake hits to WAVs; returns [ZIP-relative path, bytes] pairs. */
+  async function bakeHits(
+    slug: string,
+    subset: Hit[],
+  ): Promise<Array<[string, Uint8Array]>> {
     const counters: Record<string, number> = {};
     const out: Array<[string, Uint8Array]> = [];
-    for (const h of hits.filter((h) => h.kept)) {
+    for (const h of subset) {
       const rendered = await renderHit(
-        wetBuffer!,
+        bufferFor(h)!,
         h.start,
         h.end,
         $state.snapshot(h.edit),
       );
       counters[h.slot] = (counters[h.slot] ?? 0) + 1;
+      const name = hitFilename(h, slug, counters[h.slot]);
       out.push([
-        `${slug}_${h.slot}_${counters[h.slot]}.wav`,
+        h.slot === 'phrase' ? `phrases/${name}` : name,
         encodeWav(rendered),
       ]);
     }
     return out;
   }
 
-  async function indexAll() {
-    if (!wetBuffer || exporting || !keptCount) return;
+  async function indexHits(scope: ExportScope) {
+    const subset = exportSubset(scope);
+    if (exporting || !subset.length) return;
     exporting = true;
-    exportMsg = '';
+    setExportMsg(scope, '');
     try {
       const slug = kitSlug();
+      const counters: Record<string, number> = {};
       let n = 0;
-      for (const h of hits.filter((h) => h.kept)) {
+      for (const h of subset) {
         const rendered = await renderHit(
-          wetBuffer,
+          bufferFor(h)!,
           h.start,
           h.end,
           $state.snapshot(h.edit),
         );
-        const bytes = encodeWav(rendered);
-        const filename = `${slug}_${h.slot}_${n + 1}.wav`;
+        counters[h.slot] = (counters[h.slot] ?? 0) + 1;
         await indexSample(
-          bytes,
-          filename,
-          sampleTags(h.slot, params.model, slug),
-          `Carved ${h.slot} from "${clip?.name ?? 'clip'}" via RGZ-9 ${params.model} brain`,
+          encodeWav(rendered),
+          hitFilename(h, slug, counters[h.slot]),
+          sampleTags(h.slot, params.model, slug, h.origin),
+          hitDescription(h),
         );
         n++;
-        exportMsg = `indexing… ${n}/${keptCount}`;
+        setExportMsg(scope, `indexing… ${n}/${subset.length}`);
       }
-      exportMsg = `✓ indexed ${n} samples (kit:${slug})`;
+      setExportMsg(scope, `✓ indexed ${n} samples (kit:${slug})`);
     } catch (e) {
-      exportMsg = (e as Error).message;
+      setExportMsg(scope, (e as Error).message);
     } finally {
       exporting = false;
     }
   }
 
-  async function downloadZip() {
-    if (!wetBuffer || exporting || !keptCount) return;
+  async function downloadZip(scope: ExportScope) {
+    const subset = exportSubset(scope);
+    if (exporting || !subset.length) return;
     exporting = true;
-    exportMsg = '';
+    setExportMsg(scope, '');
     try {
       const slug = kitSlug();
-      const baked = await bakeAll(slug);
+      const baked = await bakeHits(slug, subset);
       const files: Record<string, Uint8Array> = {};
-      for (const [name, bytes] of baked) files[`${slug}/${name}`] = bytes;
+      for (const [path, bytes] of baked) files[`${slug}/${path}`] = bytes;
       const blob = zipSamples(files);
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `${slug}.zip`;
+      a.download = scope === 'phrases' ? `${slug}-phrases.zip` : `${slug}.zip`;
       a.click();
       URL.revokeObjectURL(a.href);
-      exportMsg = `✓ downloaded ${baked.length} samples`;
+      setExportMsg(scope, `✓ downloaded ${baked.length} samples`);
     } catch (e) {
-      exportMsg = (e as Error).message;
+      setExportMsg(scope, (e as Error).message);
     } finally {
       exporting = false;
     }
@@ -310,94 +344,154 @@
     hits.filter((h) => h.slot === slot && !h.kept);
   const keptCount = $derived(hits.filter((h) => h.kept).length);
   const phraseHits = $derived(hits.filter((h) => h.slot === 'phrase'));
-
-  // ── Phrase: drag-select on the wet waveform ─────────────────────────────--
-  // A plain click (< DRAG_PX of movement) keeps select-nearest-hit verbatim.
-  const DRAG_PX = 5;
-  let dragSel = $state<{ a: number; b: number } | null>(null);
-  let dragLive = $state(false); // pointer is down (hides the selection bar)
-  let selClamped = $state(false);
-  let dragAnchor = 0;
-  let dragStartX = 0;
-  let dragMoved = false;
-  let dragPointerId: number | null = null;
-
-  const selDurSec = $derived(
-    dragSel && wetBuffer ? (dragSel.b - dragSel.a) / wetBuffer.sampleRate : 0,
+  const wetPhraseCount = $derived(
+    phraseHits.filter((h) => h.origin === 'interpreted').length,
   );
 
-  function canvasSample(e: PointerEvent): number {
-    const rect = wetCanvas!.getBoundingClientRect();
-    const frac = (e.clientX - rect.left) / rect.width;
-    return Math.max(
-      0,
-      Math.min(wetBuffer!.length, Math.round(frac * wetBuffer!.length)),
-    );
-  }
+  /** The buffer a hit's start/end index into (dry phrases live on the clip). */
+  const bufferFor = (h: Hit): AudioBuffer | null =>
+    h.origin === 'source' ? (clip?.buffer ?? null) : wetBuffer;
 
-  function onCanvasPointerDown(e: PointerEvent) {
-    if (!wetCanvas || !wetBuffer) return;
-    dragPointerId = e.pointerId;
-    dragStartX = e.clientX;
-    dragMoved = false;
-    dragLive = true;
-    dragAnchor = canvasSample(e);
-    wetCanvas.setPointerCapture(e.pointerId);
-  }
+  const phraseDurSec = (h: Hit): number => {
+    const buf = bufferFor(h);
+    return buf ? (h.end - h.start) / buf.sampleRate : 0;
+  };
 
-  function onCanvasPointerMove(e: PointerEvent) {
-    if (dragPointerId !== e.pointerId || !wetBuffer) return;
-    if (!dragMoved && Math.abs(e.clientX - dragStartX) < DRAG_PX) return;
-    dragMoved = true;
-    // Clamp at the drag origin so a runaway drag caps at MAX_PHRASE_SECONDS.
-    const maxLen = Math.floor(MAX_PHRASE_SECONDS * wetBuffer.sampleRate);
-    const cur = canvasSample(e);
-    selClamped = Math.abs(cur - dragAnchor) > maxLen;
-    const b = selClamped
-      ? dragAnchor + Math.sign(cur - dragAnchor) * maxLen
-      : cur;
-    dragSel = { a: Math.min(dragAnchor, b), b: Math.max(dragAnchor, b) };
-  }
+  // ── Phrase: drag-select (source + wet waveforms) ─────────────────────────
+  // One controller per canvas. A plain click (< DRAG_PX of movement) falls
+  // through to onClick — the wet canvas selects the nearest hit, the source
+  // canvas does nothing.
+  const DRAG_PX = 5;
 
-  function onCanvasPointerUp(e: PointerEvent) {
-    if (dragPointerId !== e.pointerId) return;
-    dragPointerId = null;
-    dragLive = false;
-    if (!dragMoved) {
-      clearSelection();
-      selectNearestHit(e);
-      return;
-    }
-    if (!wetBuffer || !dragSel) return;
-    const data = wetBuffer.getChannelData(0);
-    const a = snapToZeroCrossing(data, dragSel.a);
-    const b = snapToZeroCrossing(data, dragSel.b);
-    if ((b - a) / wetBuffer.sampleRate < 0.1) {
-      clearSelection(); // sub-100ms slivers are noise, not phrases
-      return;
-    }
-    dragSel = { a, b };
-  }
+  function makeDragSelect(
+    getCanvas: () => HTMLCanvasElement | undefined,
+    getBuffer: () => AudioBuffer | null,
+    origin: HitOrigin,
+    onClick?: (e: PointerEvent) => void,
+  ) {
+    const s = $state({
+      sel: null as { a: number; b: number } | null,
+      live: false, // pointer is down (hides the selection bar)
+      clamped: false,
+    });
+    let anchor = 0;
+    let startX = 0;
+    let moved = false;
+    let pointerId: number | null = null;
 
-  function onCanvasPointerCancel(e: PointerEvent) {
-    if (dragPointerId !== e.pointerId) return;
-    dragPointerId = null;
-    dragLive = false;
-    clearSelection();
-  }
+    const sample = (e: PointerEvent) => {
+      const rect = getCanvas()!.getBoundingClientRect();
+      const buffer = getBuffer()!;
+      const frac = (e.clientX - rect.left) / rect.width;
+      return Math.max(
+        0,
+        Math.min(buffer.length, Math.round(frac * buffer.length)),
+      );
+    };
 
-  function clearSelection() {
-    dragSel = null;
-    selClamped = false;
-  }
+    const clear = () => {
+      s.sel = null;
+      s.clamped = false;
+    };
 
-  function carveSelection() {
-    if (!wetBuffer || !dragSel) return;
-    const h = carvePhrase(wetBuffer, dragSel.a, dragSel.b);
-    hits = [...hits, h];
-    selectedHitId = h.id;
-    clearSelection();
+    const down = (e: PointerEvent) => {
+      if (!getCanvas() || !getBuffer()) return;
+      pointerId = e.pointerId;
+      startX = e.clientX;
+      moved = false;
+      s.live = true;
+      anchor = sample(e);
+      getCanvas()!.setPointerCapture(e.pointerId);
+    };
+
+    const move = (e: PointerEvent) => {
+      const buffer = getBuffer();
+      if (pointerId !== e.pointerId || !buffer) return;
+      if (!moved && Math.abs(e.clientX - startX) < DRAG_PX) return;
+      moved = true;
+      // Clamp at the drag origin so a runaway drag caps at MAX_PHRASE_SECONDS.
+      const maxLen = Math.floor(MAX_PHRASE_SECONDS * buffer.sampleRate);
+      const cur = sample(e);
+      s.clamped = Math.abs(cur - anchor) > maxLen;
+      const b = s.clamped ? anchor + Math.sign(cur - anchor) * maxLen : cur;
+      s.sel = { a: Math.min(anchor, b), b: Math.max(anchor, b) };
+    };
+
+    const up = (e: PointerEvent) => {
+      if (pointerId !== e.pointerId) return;
+      pointerId = null;
+      s.live = false;
+      if (!moved) {
+        clear();
+        onClick?.(e);
+        return;
+      }
+      const buffer = getBuffer();
+      if (!buffer || !s.sel) return;
+      const data = buffer.getChannelData(0);
+      const a = snapToZeroCrossing(data, s.sel.a);
+      const b = snapToZeroCrossing(data, s.sel.b);
+      if ((b - a) / buffer.sampleRate < 0.1) {
+        clear(); // sub-100ms slivers are noise, not phrases
+        return;
+      }
+      s.sel = { a, b };
+    };
+
+    const cancel = (e: PointerEvent) => {
+      if (pointerId !== e.pointerId) return;
+      pointerId = null;
+      s.live = false;
+      clear();
+    };
+
+    const carve = () => {
+      const buffer = getBuffer();
+      if (!buffer || !s.sel) return;
+      const h = carvePhrase(buffer, s.sel.a, s.sel.b, origin);
+      hits = [...hits, h];
+      selectedHitId = h.id;
+      clear();
+    };
+
+    return {
+      get sel() {
+        return s.sel;
+      },
+      get live() {
+        return s.live;
+      },
+      get clamped() {
+        return s.clamped;
+      },
+      get buffer() {
+        return getBuffer();
+      },
+      get durSec() {
+        const buffer = getBuffer();
+        return s.sel && buffer ? (s.sel.b - s.sel.a) / buffer.sampleRate : 0;
+      },
+      clear,
+      down,
+      move,
+      up,
+      cancel,
+      carve,
+    };
   }
+  type DragSelect = ReturnType<typeof makeDragSelect>;
+
+  const wetSel = makeDragSelect(
+    () => wetCanvas,
+    () => wetBuffer,
+    'interpreted',
+    selectNearestHit,
+  );
+  const srcSel = makeDragSelect(
+    () => sourceCanvas,
+    () => clip?.buffer ?? null,
+    'source',
+  );
 
   // ── Phrase: merge adjacent slices ─────────────────────────────────────────
   let mergeIds = $state<string[]>([]);
@@ -461,11 +555,11 @@
     wetBuffer = null;
     hits = [];
     mergeIds = [];
-    clearSelection();
+    wetSel.clear();
+    srcSel.clear();
     interpretError = '';
     try {
-      clip = await promise;
-      requestAnimationFrame(() => drawWaveform(sourceCanvas, clip?.buffer));
+      clip = await promise; // redraw is handled by the source $effect
     } catch (e) {
       error = (e as Error).message;
     } finally {
@@ -483,13 +577,13 @@
   }
 
   // ── Interpret pass ────────────────────────────────────────────────────────
-  // Phrases are deliberate work — don't let a stray re-carve/re-INTERPRET
-  // wipe them silently.
+  // Wet phrases are deliberate work — don't let a stray re-carve/re-INTERPRET
+  // wipe them silently. Dry (source) phrases belong to the clip and survive.
   function confirmPhraseWipe(action: string): boolean {
     return (
-      !phraseHits.length ||
+      !wetPhraseCount ||
       confirm(
-        `${action} will discard your ${phraseHits.length} phrase hit${phraseHits.length > 1 ? 's' : ''}. Continue?`,
+        `${action} will discard your ${wetPhraseCount} interpreted phrase hit${wetPhraseCount > 1 ? 's' : ''}. (Dry phrases survive.) Continue?`,
       )
     );
   }
@@ -500,9 +594,9 @@
     interpreting = true;
     interpretError = '';
     wetBuffer = null;
-    hits = [];
+    hits = hits.filter((h) => h.origin === 'source');
     mergeIds = [];
-    clearSelection();
+    wetSel.clear();
     stop();
     try {
       const c = audioCtx();
@@ -516,7 +610,11 @@
       );
       if (buf) {
         wetBuffer = buf;
-        hits = carve(buf, sensitivity, keepLimit); // auto-carve on arrival
+        // Auto-carve on arrival; dry phrases ride along untouched.
+        hits = [
+          ...hits.filter((h) => h.origin === 'source'),
+          ...carve(buf, sensitivity, keepLimit),
+        ];
       }
     } catch (e) {
       interpretError = (e as Error).message;
@@ -528,9 +626,12 @@
 
   function recarve() {
     if (!wetBuffer || !confirmPhraseWipe('Re-carving')) return;
-    hits = carve(wetBuffer, sensitivity, keepLimit);
+    hits = [
+      ...hits.filter((h) => h.origin === 'source'),
+      ...carve(wetBuffer, sensitivity, keepLimit),
+    ];
     mergeIds = [];
-    clearSelection();
+    wetSel.clear();
   }
 
   function reassign(hit: Hit, slot: Slot) {
@@ -616,14 +717,15 @@
       stop();
       return;
     }
-    if (!wetBuffer) return;
+    const buf = bufferFor(h);
+    if (!buf) return;
     auditioningHitId = h.id;
     auditionError = '';
     try {
       const c = audioCtx();
       if (c.state === 'suspended') await c.resume();
       const rendered = await renderHit(
-        wetBuffer,
+        buf,
         h.start,
         h.end,
         $state.snapshot(h.edit),
@@ -727,19 +829,33 @@
     }
   }
 
-  const drawWet = () => drawWaveform(wetCanvas, wetBuffer, hits, dragSel);
+  const drawWet = () =>
+    drawWaveform(
+      wetCanvas,
+      wetBuffer,
+      hits.filter((h) => h.origin === 'interpreted'),
+      wetSel.sel,
+    );
+  const drawSource = () =>
+    drawWaveform(
+      sourceCanvas,
+      clip?.buffer,
+      hits.filter((h) => h.origin === 'source'),
+      srcSel.sel,
+    );
 
-  /** Plain click on the carve waveform selects the nearest hit. */
+  /** Plain click on the carve waveform selects the nearest (wet) hit. */
   function selectNearestHit(e: PointerEvent) {
     if (!wetCanvas || !wetBuffer || !hits.length) return;
     const rect = wetCanvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const frac = x / rect.width;
     const sample = Math.floor(frac * wetBuffer.length);
-    // Find nearest hit by center distance
+    // Find nearest hit by center distance (source phrases index a different
+    // buffer — their coordinates mean nothing here)
     let best: Hit | null = null;
     let bestDist = Infinity;
-    for (const h of hits) {
+    for (const h of hits.filter((h) => h.origin === 'interpreted')) {
       const center = (h.start + h.end) / 2;
       const dist = Math.abs(center - sample);
       if (dist < bestDist) {
@@ -752,8 +868,8 @@
     }
   }
 
-  // Redraw the carve view whenever the buffer, hits (incl. trims/slots), zoom,
-  // or playing state change.
+  // Redraw the carve views whenever the buffers, hits (incl. trims/slots),
+  // zoom, selections, or playing state change.
   $effect(() => {
     for (const h of hits) {
       void h.start;
@@ -764,8 +880,20 @@
     void zoom;
     void wetBuffer;
     void playingKey;
-    void dragSel;
+    void wetSel.sel;
     requestAnimationFrame(drawWet);
+  });
+
+  $effect(() => {
+    for (const h of hits) {
+      void h.start;
+      void h.end;
+    }
+    void srcZoom;
+    void clip;
+    void playingKey;
+    void srcSel.sel;
+    requestAnimationFrame(drawSource);
   });
 
   function formatDuration(s: number): string {
@@ -778,7 +906,7 @@
   let resizeObserver: ResizeObserver | undefined;
   onMount(() => {
     resizeObserver = new ResizeObserver(() => {
-      drawWaveform(sourceCanvas, clip?.buffer);
+      drawSource();
       drawWet();
     });
     if (sourceCanvas) resizeObserver.observe(sourceCanvas);
@@ -795,6 +923,32 @@
 </script>
 
 <div class="ossuary">
+  {#snippet selectionBar(sel: DragSelect, key: string)}
+    {#if sel.sel && !sel.live}
+      <div class="oss-selection-bar">
+        <button
+          class="brutalist-control"
+          onclick={() =>
+            toggleRange(
+              key,
+              sel.buffer,
+              sel.sel!.a / sel.buffer!.sampleRate,
+              sel.durSec,
+            )}
+        >
+          {playingKey === key ? '■ Stop' : '▶ Selection'}
+        </button>
+        <button class="brutalist-control oss-interpret-btn" onclick={sel.carve}>
+          Carve as phrase ({sel.durSec.toFixed(1)} s)
+        </button>
+        {#if sel.clamped}
+          <span class="oss-hint">clamped to {MAX_PHRASE_SECONDS} s</span>
+        {/if}
+        <button class="brutalist-control" onclick={sel.clear}>✕</button>
+      </div>
+    {/if}
+  {/snippet}
+
   <!-- ── Source picker ──────────────────────────────────────────────────── -->
   <section class="oss-panel">
     <header class="oss-panel__head">
@@ -875,14 +1029,36 @@
     {#if loading}
       <div class="oss-empty">decoding…</div>
     {:else if clip}
-      <div class="oss-waveform">
-        <canvas bind:this={sourceCanvas}></canvas>
-      </div>
-      <audio bind:this={sourceAudio} style="display:none;"></audio>
-      <div class="oss-actions">
-        <button class="brutalist-control" onclick={toggleSourcePlayback}>
-          {playingKey === 'source' ? '■ Stop' : '▶ Audition'}
-        </button>
+      <div class="oss-carve">
+        <div class="oss-waveform-scroll">
+          <div class="oss-waveform" style={`width:${srcZoom * 100}%`}>
+            <canvas
+              bind:this={sourceCanvas}
+              onpointerdown={srcSel.down}
+              onpointermove={srcSel.move}
+              onpointerup={srcSel.up}
+              onpointercancel={srcSel.cancel}
+            ></canvas>
+          </div>
+        </div>
+        <p class="oss-wave-caption">drag: carve a phrase</p>
+        {@render selectionBar(srcSel, 'selection:src')}
+        <audio bind:this={sourceAudio} style="display:none;"></audio>
+        <div class="oss-actions">
+          <button class="brutalist-control" onclick={toggleSourcePlayback}>
+            {playingKey === 'source' ? '■ Stop' : '▶ Audition'}
+          </button>
+          <label class="oss-knob">
+            <span>Zoom <em>{srcZoom}×</em></span>
+            <input
+              type="range"
+              min="1"
+              max="12"
+              step="1"
+              bind:value={srcZoom}
+            />
+          </label>
+        </div>
       </div>
     {:else}
       <div class="oss-empty">
@@ -1030,8 +1206,9 @@
         <h2>Interpreted &amp; carved</h2>
         {#if wetBuffer}
           <span class="oss-hint"
-            >{params.model} · {formatDuration(wetBuffer.duration)} · {hits.length}
-            hits</span
+            >{params.model} · {formatDuration(wetBuffer.duration)} · {hits.filter(
+              (h) => h.origin === 'interpreted',
+            ).length} hits</span
           >
         {/if}
       </header>
@@ -1055,42 +1232,17 @@
             <div class="oss-waveform" style={`width:${zoom * 100}%`}>
               <canvas
                 bind:this={wetCanvas}
-                onpointerdown={onCanvasPointerDown}
-                onpointermove={onCanvasPointerMove}
-                onpointerup={onCanvasPointerUp}
-                onpointercancel={onCanvasPointerCancel}
+                onpointerdown={wetSel.down}
+                onpointermove={wetSel.move}
+                onpointerup={wetSel.up}
+                onpointercancel={wetSel.cancel}
               ></canvas>
             </div>
           </div>
-
-          {#if dragSel && !dragLive}
-            <div class="oss-selection-bar">
-              <button
-                class="brutalist-control"
-                onclick={() =>
-                  toggleRange(
-                    'selection',
-                    wetBuffer,
-                    dragSel!.a / wetBuffer!.sampleRate,
-                    selDurSec,
-                  )}
-              >
-                {playingKey === 'selection' ? '■ Stop' : '▶ Selection'}
-              </button>
-              <button
-                class="brutalist-control oss-interpret-btn"
-                onclick={carveSelection}
-              >
-                Carve as phrase ({selDurSec.toFixed(1)} s)
-              </button>
-              {#if selClamped}
-                <span class="oss-hint">clamped to {MAX_PHRASE_SECONDS} s</span>
-              {/if}
-              <button class="brutalist-control" onclick={clearSelection}>
-                ✕
-              </button>
-            </div>
-          {/if}
+          <p class="oss-wave-caption">
+            click: select a hit · drag: carve a phrase
+          </p>
+          {@render selectionBar(wetSel, 'selection:wet')}
 
           <div class="oss-carve__controls">
             <button
@@ -1131,11 +1283,7 @@
           {#if auditionError}
             <p class="oss-error">{auditionError}</p>
           {/if}
-          {#if hits.length}
-            <p class="oss-hint" style="padding:0.3rem 0.85rem;margin:0;">
-              Click a carve on the waveform or a hit name below to edit. Drag
-              across the waveform to select a phrase.
-            </p>
+          {#if hits.some((h) => h.origin === 'interpreted')}
             {#if mergeSel.length >= 2}
               <div class="oss-merge-bar">
                 <button
@@ -1185,15 +1333,13 @@
                   >
                     {label}
                   </button>
-                  {#if h.slot !== 'phrase'}
-                    <input
-                      class="oss-hit__merge"
-                      type="checkbox"
-                      checked={mergeIds.includes(h.id)}
-                      onchange={() => toggleMerge(h)}
-                      title="Select for merge → phrase"
-                    />
-                  {/if}
+                  <input
+                    class="oss-hit__merge"
+                    type="checkbox"
+                    checked={mergeIds.includes(h.id)}
+                    onchange={() => toggleMerge(h)}
+                    title="Select for merge → phrase"
+                  />
                   <select
                     class="oss-hit__slot"
                     value={h.slot}
@@ -1208,9 +1354,7 @@
                       <option value={s}>{s}</option>
                     {/each}
                   </select>
-                  {#if h.slot === 'phrase'}
-                    <!-- phrases have no bench; no keep toggle -->
-                  {:else if h.kept}
+                  {#if h.kept}
                     <button
                       class="oss-hit__keep"
                       onclick={() => demote(h)}
@@ -1272,27 +1416,6 @@
                   {/if}
                 </div>
               {/each}
-              <!-- Long bones. Click-to-audition only — no loop, ever. -->
-              {#if phraseHits.length}
-                <div
-                  class="oss-slot oss-slot--phrase"
-                  style={`--slot-color:${SLOT_COLOR.phrase}`}
-                >
-                  <div class="oss-slot__head">
-                    <span class="oss-slot__name">phrase</span>
-                    <span class="oss-slot__count">{phraseHits.length}</span>
-                  </div>
-                  {#each phraseHits as h, idx (h.id)}
-                    {@render hitRow(
-                      h,
-                      `phrase ${idx + 1} · ${(
-                        (h.end - h.start) /
-                        wetBuffer.sampleRate
-                      ).toFixed(1)} s`,
-                    )}
-                  {/each}
-                </div>
-              {/if}
             </div>
           {:else}
             <p class="oss-empty">
@@ -1300,7 +1423,7 @@
             </p>
           {/if}
 
-          {#if selectedHit && wetBuffer}
+          {#if selectedHit && selectedHit.slot !== 'phrase' && wetBuffer}
             <div class="oss-editor-wrap">
               <div class="oss-editor__head">
                 <span>Editing <strong>{selectedHit.slot}</strong></span>
@@ -1396,14 +1519,14 @@
               />
               <button
                 class="brutalist-control oss-interpret-btn"
-                onclick={indexAll}
+                onclick={() => indexHits('all')}
                 disabled={exporting || !keptCount}
               >
                 {exporting ? 'WORKING…' : `Index ${keptCount} to library`}
               </button>
               <button
                 class="brutalist-control"
-                onclick={downloadZip}
+                onclick={() => downloadZip('all')}
                 disabled={exporting || !keptCount}
               >
                 Download ZIP
@@ -1413,6 +1536,171 @@
               {/if}
             </div>
           {/if}
+        </div>
+      {/if}
+    </section>
+  {/if}
+
+  <!-- ── Phrases: long bones, both origins. Click-to-audition only. ──────── -->
+  {#if clip && !loading}
+    <section class="oss-panel">
+      <header class="oss-panel__head">
+        <h2>Phrases</h2>
+        <span class="oss-hint"
+          >long bones — words, runs, textures (≤ {MAX_PHRASE_SECONDS} s)</span
+        >
+      </header>
+
+      <details class="oss-glossary">
+        <summary>what is a phrase?</summary>
+        <div class="oss-glossary__body">
+          <dl>
+            <dt>phrase</dt>
+            <dd>
+              Any long material — a whole word, a spoken phrase, a melodic run,
+              a texture pull. Up to {MAX_PHRASE_SECONDS} s. Never auto-detected, never
+              looped: phrases only exist because you carved one.
+            </dd>
+            <dt>how to carve one</dt>
+            <dd>
+              Drag across either waveform to paint a selection, then “Carve as
+              phrase” — or tick two-plus neighboring slices in a carve and merge
+              them.
+            </dd>
+            <dt>dry vs wet</dt>
+            <dd>
+              A phrase carved from the raw clip is <em>dry</em> — no brain
+              touched it, and it survives re-interpretation. One carved from the
+              interpreted waveform is <em>wet</em> and dies with its interpretation.
+              Both index with matching tags.
+            </dd>
+          </dl>
+        </div>
+      </details>
+
+      {#if phraseHits.length}
+        <div class="oss-phrases" style={`--slot-color:${SLOT_COLOR.phrase}`}>
+          {#each phraseHits as h, idx (h.id)}
+            <div
+              class="oss-hit"
+              class:is-playing={playingKey === `hit:${h.id}`}
+              class:is-selected={selectedHitId === h.id}
+            >
+              <button
+                class="oss-hit__play"
+                onclick={() => auditionHit(h)}
+                disabled={!!auditioningHitId && auditioningHitId !== h.id}
+                title="Audition (edited)"
+              >
+                {#if auditioningHitId === h.id}
+                  …
+                {:else}
+                  {playingKey === `hit:${h.id}` ? '■' : '▶'}
+                {/if}
+              </button>
+              <span
+                class="oss-phrase__origin"
+                class:is-dry={h.origin === 'source'}
+                title={h.origin === 'source'
+                  ? 'carved dry from the raw clip'
+                  : 'carved from the interpreted render'}
+              >
+                {h.origin === 'source' ? 'dry' : 'wet'}
+              </span>
+              <button
+                class="oss-hit__name"
+                onclick={() =>
+                  (selectedHitId = selectedHitId === h.id ? null : h.id)}
+                title="Edit this phrase"
+              >
+                phrase {idx + 1} · {phraseDurSec(h).toFixed(1)} s
+              </button>
+              <input
+                class="brutalist-control oss-phrase__label"
+                type="text"
+                placeholder={`${kitSlug()}_phrase_${idx + 1}`}
+                bind:value={h.name}
+                title="Name (optional) — used as the export filename"
+              />
+              {#if h.origin === 'interpreted'}
+                <select
+                  class="oss-hit__slot"
+                  value={h.slot}
+                  onchange={(e) =>
+                    reassign(h, (e.target as HTMLSelectElement).value as Slot)}
+                  title="Reassign slot"
+                >
+                  {#each ALL_SLOTS as s}
+                    <option value={s}>{s}</option>
+                  {/each}
+                </select>
+              {/if}
+              <button
+                class="oss-hit__drop"
+                onclick={() => dropHit(h)}
+                title="Drop"
+              >
+                ✕
+              </button>
+            </div>
+          {/each}
+        </div>
+
+        {#if selectedHit?.slot === 'phrase' && bufferFor(selectedHit)}
+          <div class="oss-editor-wrap oss-editor-wrap--phrase">
+            <div class="oss-editor__head">
+              <span
+                >Editing <strong>phrase</strong>
+                ({selectedHit.origin === 'source' ? 'dry' : 'wet'})</span
+              >
+              <button
+                class="oss-editor__close"
+                onclick={() => (selectedHitId = null)}>close ✕</button
+              >
+            </div>
+            <HitEditor
+              hit={selectedHit}
+              buffer={bufferFor(selectedHit)!}
+              playing={playingKey === `hit:${selectedHit.id}`}
+              onAudition={() => auditionHit(selectedHit)}
+            />
+          </div>
+        {/if}
+
+        <div class="oss-export oss-export--phrases">
+          {#if !wetBuffer}
+            <input
+              class="brutalist-control oss-export__name"
+              type="text"
+              placeholder="name (optional)"
+              bind:value={kitName}
+            />
+          {/if}
+          <button
+            class="brutalist-control oss-interpret-btn"
+            onclick={() => indexHits('phrases')}
+            disabled={exporting}
+          >
+            {exporting
+              ? 'WORKING…'
+              : `Index ${phraseHits.length} phrase${phraseHits.length > 1 ? 's' : ''} to library`}
+          </button>
+          <button
+            class="brutalist-control"
+            onclick={() => downloadZip('phrases')}
+            disabled={exporting}
+          >
+            Phrases ZIP
+          </button>
+          {#if phraseExportMsg}
+            <span class="oss-export__msg">{phraseExportMsg}</span>
+          {/if}
+        </div>
+      {:else}
+        <div class="oss-empty">
+          No phrases yet. Drag across either waveform to paint a selection (up
+          to {MAX_PHRASE_SECONDS} s), then “Carve as phrase” — or tick two-plus adjacent
+          slices in a carve and merge them.
         </div>
       {/if}
     </section>
