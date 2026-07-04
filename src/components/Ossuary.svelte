@@ -13,6 +13,7 @@
     interpret,
     defaultParams,
     MODELS,
+    MODEL_NOTES,
     type InterpretParams,
     type InterpretPhase,
   } from '../lib/ossuary/interpret.ts';
@@ -259,6 +260,38 @@
     running: 'interpreting…',
     fetching: 'retrieving the bones…',
   };
+
+  // Glossary blurbs for the single-pass knobs (brains live in MODEL_NOTES).
+  const KNOB_NOTES: Array<[string, string]> = [
+    [
+      'Temperature',
+      'How far the latent drifts from a faithful re-hearing. ~0.3 is smoothed and softened, 1.0 an honest reconstruction through the brain’s lens; above 1.5 it hallucinates, 2.0+ brings heavy artifacts.',
+    ],
+    [
+      'Noise',
+      'Random energy injected into the latent before decoding. 0.1–0.3 adds grain and texture; higher progressively dissolves the source into the brain’s noise floor.',
+    ],
+    [
+      'Wet/Dry',
+      '0 is your original, 1 is brain-only. 0.3–0.5 keeps the source recognizable under the neural coloring.',
+    ],
+    [
+      'Shuffle',
+      'Chops the latent timeline into chunks and deals them out at random. The value is chunk size: 2–3 granular chaos, 4–8 mild glitch, higher means longer coherent segments in random order.',
+    ],
+    [
+      'Quantize',
+      'Bit-crush, but in latent space. 0.1 subtle stepping, 0.5 audibly crunchy, 1.0 collapses the latent to a handful of values.',
+    ],
+    [
+      'Dims',
+      'Which latent dimensions get touched (e.g. 0,2,6). Untouched dimensions keep the source’s values, so the brain bleeds through only on specific axes. Blank means all.',
+    ],
+    [
+      'Reverse',
+      'Flips the latent trajectory, not the waveform — the audio plays forward while the brain remembers backward. Uncanny.',
+    ],
+  ];
 
   const hitsInSlot = (slot: Slot) => hits.filter((h) => h.slot === slot);
 
@@ -670,6 +703,26 @@
         >hear the clip through a one-track-minded brain</span
       >
     </header>
+
+    <details class="oss-glossary">
+      <summary>what do these knobs do?</summary>
+      <div class="oss-glossary__body">
+        <p class="oss-glossary__title">Brains</p>
+        <dl>
+          {#each MODELS as m}
+            <dt>{m}</dt>
+            <dd>{MODEL_NOTES[m]}</dd>
+          {/each}
+        </dl>
+        <p class="oss-glossary__title">Knobs</p>
+        <dl>
+          {#each KNOB_NOTES as [name, note]}
+            <dt>{name}</dt>
+            <dd>{note}</dd>
+          {/each}
+        </dl>
+      </div>
+    </details>
 
     <div class="oss-interp">
       <div class="oss-knobs">

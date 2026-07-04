@@ -185,6 +185,66 @@
   text-align: center;
 }
 
+/* ── Interpreter glossary ──────────────────────────────────────────────────- */
+.oss-glossary {
+  border-bottom: 1px solid var(--oss-border);
+}
+
+.oss-glossary summary {
+  padding: 0.45rem 0.85rem;
+  font-size: 0.72rem;
+  color: var(--oss-text-faint);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.oss-glossary summary::-webkit-details-marker {
+  display: none;
+}
+
+.oss-glossary summary::before {
+  content: '▸ ';
+}
+
+.oss-glossary[open] summary::before {
+  content: '▾ ';
+}
+
+.oss-glossary summary:hover {
+  color: var(--oss-text-dim);
+}
+
+.oss-glossary__body {
+  padding: 0 0.85rem 0.85rem;
+  max-width: 70ch;
+}
+
+.oss-glossary__title {
+  margin: 0.6rem 0 0.35rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--oss-text-faint);
+}
+
+.oss-glossary dl {
+  margin: 0;
+}
+
+.oss-glossary dt {
+  color: var(--oss-accent);
+  font-size: 0.74rem;
+  margin-top: 0.45rem;
+}
+
+.oss-glossary dd {
+  margin: 0.1rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--oss-text-dim);
+}
+
 /* ── Interpreter ───────────────────────────────────────────────────────────- */
 .oss-interp {
   padding: 0.85rem;
