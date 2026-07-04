@@ -117,6 +117,10 @@ export function classifySlot(
   if (crossingsPerSec < 1500) return 'kick';
   if (crossingsPerSec > 5000 || (durMs < 120 && crossingsPerSec > 3000))
     return 'hi-hat';
+  // Mid-brightness (below the 3000 hat-bright line) that rings ≥240ms — 2× the
+  // 120ms "crack" window — is tonal perc: toms, congas, blocks. Snare cracks
+  // and claps stay short and fall through.
+  if (crossingsPerSec < 3000 && durMs >= 240) return 'perc';
   return 'snare';
 }
 
