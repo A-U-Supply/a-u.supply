@@ -1970,43 +1970,6 @@ def get_media_file(
     )
 
 
-@router.get(
-    "/media/{media_id}/og-audio",
-    tags=["Media Items"],
-    summary="Public audio file for link unfurling",
-    include_in_schema=False,
-)
-def get_media_og_audio(media_id: str, db: Session = Depends(get_db)):
-    """Serve the audio file for an item without auth so link-unfurling bots
-    (Slack, iMessage, etc.) that media-unfurl direct audio URLs can fetch it.
-
-    Sibling to ``/media/{media_id}/og-thumb``. Only serves items whose
-    ``media_type`` is ``audio`` — video and image items 404 here, keeping
-    the public surface limited to audio shares.
-    """
-    item = db.query(MediaItem).filter(MediaItem.id == media_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Not found")
-    if item.media_type != "audio":
-        raise HTTPException(status_code=404, detail="Not an audio item")
-
-    file_path = _get_search_media_dir() / item.file_path
-    mime = item.mime_type or "audio/wav"
-    filename = item.filename
-    db.close()
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found on disk")
-    safe_filename = (filename or "audio").replace('"', "")
-    return FileResponse(
-        file_path,
-        media_type=mime,
-        headers={
-            "Content-Disposition": f'inline; filename="{safe_filename}"',
-            "Cache-Control": "public, max-age=86400, immutable",
-        },
-    )
-
-
 @router.get("/media/{media_id}/audio", tags=["Media Items"], summary="Extract audio track from media")
 async def get_media_audio(
     media_id: str,

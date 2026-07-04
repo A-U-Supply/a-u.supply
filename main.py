@@ -1033,12 +1033,6 @@ def _inject_og(raw_html: str, item, canonical_url: str) -> str:
         og_tags.append(f'<meta property="og:image:width" content="{width}" />')
         og_tags.append(f'<meta property="og:image:height" content="{height}" />')
 
-    if item.media_type == "audio":
-        audio_url = f"{SITE_URL}/api/media/{item.id}/og-audio"
-        og_tags.append(f'<meta property="og:audio" content="{audio_url}" />')
-        if item.mime_type:
-            og_tags.append(f'<meta property="og:audio:type" content="{html.escape(item.mime_type)}" />')
-
     og_block = "\n  ".join(og_tags)
     return raw_html.replace("</head>", f"  {og_block}\n</head>", 1)
 
