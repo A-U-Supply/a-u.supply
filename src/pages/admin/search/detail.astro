@@ -794,7 +794,11 @@ import Admin from '../../../layouts/Admin.astro';
     const errorEl = document.getElementById('detail-error')!;
 
     const params = new URLSearchParams(window.location.search);
-    const mediaId = params.get('id');
+    let mediaId = params.get('id');
+    if (!mediaId) {
+      const m = window.location.pathname.match(/^\/m\/([^/?#]+)/);
+      if (m) mediaId = m[1];
+    }
     if (!mediaId) {
       loadingEl.style.display = 'none';
       errorEl.textContent = 'No media ID provided';
