@@ -1,7 +1,9 @@
 # Ossuary — the `phrase` slot (long samples)
 
 **Date:** 2026-06-09
-**Status:** Design for review (Tube). Direction pre-agreed in Slack; this doc locks the details.
+**Status:** Approved to implement. Direction pre-agreed in Slack; the server-side ask
+was resolved in issue #514 (closed won't-do — the search query *is* the filter; two
+small client-side changes folded into this doc, see "Server contract").
 **Lives:** `/admin/atelier/ossuary` (existing tool — this is an extension, not a new page)
 **Depends on:** Ossuary MVP (merged); server filtering ask tracked separately as a GitHub issue.
 
@@ -35,7 +37,9 @@ Tube floated "vocal" and "long". Both rejected:
   (it's server-computed on every upload; tags depend on the client behaving).
 
 `slot:phrase` reads naturally beside `slot:kick`, and the existing tag pipeline
-(`sampleTags()` in `src/lib/ossuary/export.ts:58`) emits it with zero changes.
+(`sampleTags()` in `src/lib/ossuary/export.ts:58`) emits it almost unchanged — per
+the #514 resolution it also pushes the bare slot name (`phrase`, `kick`, …) as a flat
+searchable tag, matching the existing library's convention.
 
 ## How phrases are made (two gestures, both deliberate)
 
@@ -122,26 +126,31 @@ change). New `SLOT_COLOR.phrase`.
 
 **`src/styles/atelier/ossuary.css`** — phrase section, overlay, bars.
 
-**Verified no-changes:** HitEditor, `render.ts`, `export.ts`. `renderHit` is
+**`src/lib/ossuary/export.ts`** — one line in `sampleTags()`: push the bare slot
+name alongside `slot:${slot}` (per #514; see below).
+
+**Verified no-changes:** HitEditor, `render.ts`. `renderHit` is
 duration-agnostic (FX tails compute on top of any length; a 15 s offline render is
 sub-second). Envelope defaults are absolute edge fades (4 ms attack / 60 ms decay) —
 on a phrase that's a gentle de-click, not a percussive gate. Export iterates all hits:
 filenames come out `{slug}_phrase_1.wav`, tags `slot:phrase`, automatically.
 
-## Server contract (Tube — tracked as a GitHub issue, not in this change)
+## Server contract — RESOLVED (issue #514, closed won't-do by Tube)
 
-Phrase docs land in `samples-bored` exactly like one-shots, with two filterable
-discriminators already in the Meili doc:
-- `tags` contains **`slot:phrase`** (filterable — `tags` is in
-  `FILTERABLE_ATTRIBUTES`, `server/search_client.py:71-131`)
-- **`duration_seconds`** — server-computed on upload, filterable + sortable
-  (`search_client.py:80,138`)
+The original ask was a filter param on `/api/serve` so Litany's random pulls could
+exclude phrases. Tube closed it: **the search query is the filter.** `tags` is the
+top searchable attribute, the existing library uses flat tags (`kick`, `snare`, …),
+and a positive query like `query=kick` can never return a `slot:phrase` doc. No new
+`/api/serve` params, no negation support, no schema change.
 
-What's missing is exposure: `/api/serve` (`server/search_api.py:2870-2946`) accepts
-no filter parameter, and Litany queries it unfiltered (`src/lib/litany/pool.ts:49`),
-so phrases would pollute Litany's random pulls. The ask: expose filtering on
-`/api/serve` (e.g. `max_duration_seconds=` and/or tag exclusion — Tube's call which),
-and add the Litany-side exclusion Tube mentioned he'd do separately.
+Two client-side changes fall out of that decision (both in scope here):
+
+1. **Flat tag** — `sampleTags()` (`src/lib/ossuary/export.ts`) additionally pushes
+   the bare slot name (`phrase`, `kick`, …) so `query=phrase` matches the same way
+   the existing Music 2000 library tags do.
+2. **Litany positive queries** — every Litany slot must send a real query
+   (`src/lib/litany/pool.ts`), never a blank one; drums-only slots then exclude
+   phrases automatically. Verified/adjusted as part of this change.
 
 ## Edge cases
 
@@ -168,5 +177,8 @@ and add the Litany-side exclusion Tube mentioned he'd do separately.
 6. Zoom 6× and drag-select — selection lands where dragged.
 7. Export ZIP → `{slug}_phrase_1.wav` present, correct length, plays. Index to
    library → doc carries `source:ossuary, slot:phrase, model:<m>, kit:<slug>,
-   carved, rave, rotten, rgz-9`.
+   carved, rave, rotten, rgz-9` **plus the flat `phrase` tag**.
 8. Re-carve with phrases present → confirm guard fires.
+9. Search contract (curl, `Authorization: Bearer <AU_API_KEY>`):
+   `/api/serve?output_index=samples-bored&query=phrase&sort=random` returns a phrase;
+   `query=kick` never returns one.
