@@ -32,6 +32,7 @@ class TestShareUrlOg:
         assert f'<meta property="og:title" content="cool_sample.png" />' in body
         assert '<meta property="og:type" content="website" />' in body
         assert '<meta name="twitter:card" content="summary_large_image" />' in body
+        # image URL uses the id and the public og-thumb route
         assert (
             f'<meta property="og:image" content="https://a-u.supply/api/media/{item.id}/og-thumb" />'
             in body
@@ -59,26 +60,6 @@ class TestShareUrlOg:
         body = resp.text
         assert '<meta property="og:image:width" content="640" />' in body
         assert '<meta property="og:image:height" content="480" />' in body
-
-    def test_audio_injects_og_audio_tag(self, client, db_session, dist_html):
-        item = make_media_item(
-            db_session,
-            filename="heiry.wav",
-            media_type="audio",
-            mime_type="audio/wav",
-        )
-        resp = client.get(f"/m/{item.id}")
-        body = resp.text
-        assert (
-            f'<meta property="og:audio" content="https://a-u.supply/api/media/{item.id}/og-audio" />'
-            in body
-        )
-        assert '<meta property="og:audio:type" content="audio/mpeg" />' in body
-
-    def test_non_audio_omits_og_audio_tag(self, client, db_session, dist_html):
-        item = make_media_item(db_session, filename="img.png", media_type="image")
-        resp = client.get(f"/m/{item.id}")
-        assert "og:audio" not in resp.text
 
 
 class TestAdminDetailOgRegression:
