@@ -330,15 +330,21 @@ def _thumbnail_response(item: "MediaItem", cache_control: str, size: str = "md")
     )
 
 
-def _media_type_from_mime(mime: str) -> str | None:
-    """Derive media_type (image/audio/video) from a MIME type string."""
+def _media_type_from_mime(mime: str) -> str:
+    """Derive media_type (image/audio/video/document) from a MIME type string.
+
+    We never reject a file based on its MIME type — any type we don't recognise
+    rolls up into the generic ``document`` bucket so PDFs, text files, archives,
+    application bundles, etc. all land in the Emulsion index alongside other
+    user uploads. Extraction is media-type-scoped and silently skips documents.
+    """
     if mime.startswith("image/"):
         return "image"
     elif mime.startswith("audio/"):
         return "audio"
     elif mime.startswith("video/"):
         return "video"
-    return None
+    return "document"
 
 
 # DAW / NLE / photo project-file extensions → tool name. Used to detect `session`
@@ -1476,7 +1482,7 @@ def pukebox_search(
 
 @router.post("/media/upload", status_code=201, tags=["Media Items"], summary="Upload a media file")
 async def upload_media(
-    file: UploadFile = File(..., description="The media file to upload. Supported types: images, audio, video, session (DAW/NLE bundles)."),
+    file: UploadFile = File(..., description="The media file to upload. Any file type is accepted — non-image/audio/video types land in the `document` bucket."),
     tags: str = Form("", description="Comma-separated tags to apply (e.g. `drums,percussive,loop`). Optional."),
     description: str = Form("", description="Freeform notes or description. Optional."),
     output_index: str = Form("", description="Index name to file this item under (e.g. `outputs`). Optional."),
@@ -1495,8 +1501,9 @@ async def upload_media(
     record is added to the existing media item (recording that the file was uploaded
     again from a different context). The existing item is returned.
 
-    **Media type** is auto-detected from the file's MIME type. Unsupported types are
-    rejected with 400.
+    **Media type** is auto-detected from the file's MIME type. Any type we don't
+    recognise (PDFs, text, archives, application bundles, …) rolls up into the
+    generic `document` bucket — nothing is ever rejected on the basis of type.
 
     **Storage path:** Files are stored as `{media_type}/{YYYY-MM}/{8char-sha256}_{filename}`.
 
@@ -1521,9 +1528,6 @@ async def upload_media(
     else:
         media_type = _media_type_from_mime(mime)
         session_tool = None
-
-    if not media_type:
-        raise HTTPException(status_code=400, detail=f"Unsupported MIME type: {mime}")
 
     # SHA-256 hash for dedup
     sha256 = hashlib.sha256(content).hexdigest()
