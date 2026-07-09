@@ -95,13 +95,26 @@ class TestUploadMedia:
         )
         assert resp.status_code == 400
 
-    def test_upload_unsupported_mime_rejected(self, client, auth_headers):
+    def test_upload_unknown_mime_accepted_as_document(self, client, auth_headers, tmp_media_dir):
+        """PDFs (and any other non-image/audio/video type) are accepted, not rejected.
+
+        We never block a file based on its MIME type — unknown types roll up
+        into the generic ``document`` media_type so PDFs, text, archives, etc.
+        all land in the Emulsion index alongside other user uploads.
+        """
+        content = b"%%PDF-1.4 fake pdf body"
         resp = client.post(
             "/api/media/upload",
-            files={"file": ("doc.pdf", io.BytesIO(b"pdf data"), "application/pdf")},
+            files={"file": ("doc.pdf", io.BytesIO(content), "application/pdf")},
             headers=auth_headers,
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 201, resp.text
+        data = resp.json()
+        assert data["media_type"] == "document"
+        assert data["mime_type"] == "application/pdf"
+        assert data["filename"] == "doc.pdf"
+        assert data["file_path"].startswith("document/")
+        assert os.path.exists(os.path.join(tmp_media_dir, data["file_path"]))
 
     def test_upload_dedup_same_content(self, client, auth_headers, db_session):
         """Uploading the same file twice should create one MediaItem and two sources."""
