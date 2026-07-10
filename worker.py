@@ -717,12 +717,15 @@ def _run_job(job: Job, db: Session):
     ghcr_user = os.environ.get("GHCR_USER")
     ghcr_token = os.environ.get("GHCR_TOKEN")
     if ghcr_user and ghcr_token:
-        login_result = subprocess.run(
-            ["docker", "login", "ghcr.io", "-u", ghcr_user, "--password-stdin"],
-            input=ghcr_token, capture_output=True, text=True, timeout=30,
-        )
-        if login_result.returncode != 0:
-            logger.warning("GHCR login failed: %s", login_result.stderr.strip())
+        try:
+            login_result = subprocess.run(
+                ["docker", "login", "ghcr.io", "-u", ghcr_user, "--password-stdin"],
+                input=ghcr_token, capture_output=True, text=True, timeout=30,
+            )
+            if login_result.returncode != 0:
+                logger.warning("GHCR login failed: %s", login_result.stderr.strip())
+        except subprocess.TimeoutExpired:
+            logger.warning("GHCR login timed out; continuing (cached image may still serve)")
 
     # Pull image only if not already present locally, or if the manifest sets force_pull = true.
     # Skipping the pull on cached images saves 5-15s of registry round-trip per job.
@@ -735,12 +738,25 @@ def _run_job(job: Job, db: Session):
     image_missing = inspect_result.returncode != 0
     if image_missing or force_pull:
         logger.info("Pulling image %s (missing=%s, force=%s)", image, image_missing, force_pull)
-        pull_result = subprocess.run(
-            ["docker", "pull", image],
-            capture_output=True, text=True, timeout=300,
-        )
-        if pull_result.returncode != 0:
-            logger.warning("Docker pull failed (may use cached image): %s", pull_result.stderr.strip())
+        # A slow registry must not crash the job when a cached image can serve it
+        # (force_pull manifests hit this path on every run).
+        pull_ok = False
+        try:
+            pull_result = subprocess.run(
+                ["docker", "pull", image],
+                capture_output=True, text=True, timeout=300,
+            )
+            pull_ok = pull_result.returncode == 0
+            if not pull_ok:
+                logger.warning("Docker pull failed (may use cached image): %s", pull_result.stderr.strip())
+        except subprocess.TimeoutExpired:
+            logger.warning("Docker pull of %s timed out after 300s (may use cached image)", image)
+        if image_missing and not pull_ok:
+            job.status = "failed"
+            job.error_message = f"Image {image} is not cached locally and could not be pulled"
+            job.completed_at = _utcnow()
+            db.commit()
+            return
     else:
         logger.info("Image %s already present locally, skipping pull", image)
 
