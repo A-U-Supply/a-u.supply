@@ -18,6 +18,7 @@ Usage (from host):
     ssh dokku run au-supply .venv/bin/python manage.py test-ai-description <media_id> [--write]
     ssh dokku run au-supply .venv/bin/python manage.py backfill-audio-ai-tags [--all]
     ssh dokku run au-supply .venv/bin/python manage.py index-drum-machines [--limit N]
+    ssh dokku run au-supply .venv/bin/python manage.py reroute-sample-uploads
     ssh dokku run au-supply .venv/bin/python manage.py jobs-list
     ssh dokku run au-supply .venv/bin/python manage.py jobs-kick [<job-id>]
 """
@@ -1513,6 +1514,42 @@ if __name__ == "__main__":
                 r = c.index(idx).search("", {"filter": filt, "limit": 1})
                 n = r.get("estimatedTotalHits", r.get("total", 0))
                 print(f"{idx} where {filt}: {n}")
+
+    elif cmd == "reroute-sample-uploads":
+        # Ossuary "Index to library" uploads made before the client sent
+        # source_type=sample_library were routed to Emulsion (manual_upload-only
+        # sources) while carrying output_index=samples-bored — stranded in a
+        # physical index the samples-bored filter never queries. Give each one
+        # the sample_library source it should have had, resync it into
+        # samples-bored, and delete the stray Emulsion doc.
+        from server.models import MediaItem, MediaSource
+        from server.search_client import (
+            EMULSION_INDEX,
+            SAMPLES_INDEX,
+            get_client,
+            sync_media_item,
+        )
+        db = SessionLocal()
+        items = db.query(MediaItem).filter(MediaItem.output_index == SAMPLES_INDEX).all()
+        stranded = [
+            i for i in items
+            if any(s.source_type == "manual_upload" for s in i.sources)
+            and not any(s.source_type == "sample_library" for s in i.sources)
+        ]
+        print(f"{len(stranded)} stranded of {len(items)} items with output_index={SAMPLES_INDEX}")
+        c = get_client()
+        for item in stranded:
+            db.add(MediaSource(media_item_id=item.id, source_type="sample_library"))
+            db.flush()
+            db.refresh(item)
+            sync_media_item(db, item)
+            try:
+                c.index(EMULSION_INDEX).delete_document(item.id)
+            except Exception:
+                pass  # stray may already be gone; the resync above is what matters
+            print(f"  {item.id}: {item.filename} -> {SAMPLES_INDEX}")
+        db.commit()
+        db.close()
 
     elif cmd == "docker-pull-rottengenizdat":
         import subprocess as _sp
