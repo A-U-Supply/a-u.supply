@@ -189,6 +189,48 @@ def _dominant_colors_quantize(img, num_colors: int) -> list[str]:
     return colors
 
 
+def pick_accent_color(hex_colors: list[str]) -> str | None:
+    """Pick a single UI accent color from dominant-color candidates.
+
+    Candidates are scored in HLS as `saturation × (1 − 0.12·rank)` — mild
+    dominance weighting, so a vivid minority color beats a dominant
+    near-gray background. Near-monochrome palettes (best saturation < 0.12)
+    keep their neutral hue rather than inventing one. The winner is clamped
+    for legibility: lightness into [0.35, 0.62], saturation raised to ≥ 0.30
+    when colored. Returns "#rrggbb" or None if no parseable candidate.
+    """
+    import colorsys
+
+    best_hls: tuple[float, float, float] | None = None
+    best_score = -1.0
+    for rank, raw in enumerate(hex_colors or []):
+        if not isinstance(raw, str):
+            continue
+        candidate = raw.strip()
+        if len(candidate) != 7 or not candidate.startswith("#"):
+            continue
+        try:
+            value = int(candidate[1:], 16)
+        except ValueError:
+            continue
+        r = ((value >> 16) & 0xFF) / 255.0
+        g = ((value >> 8) & 0xFF) / 255.0
+        b = (value & 0xFF) / 255.0
+        h, l, s = colorsys.rgb_to_hls(r, g, b)
+        score = s * (1.0 - 0.12 * rank)
+        if score > best_score:
+            best_score = score
+            best_hls = (h, l, s)
+    if best_hls is None:
+        return None
+    h, l, s = best_hls
+    l = min(max(l, 0.35), 0.62)
+    if s >= 0.12:
+        s = max(s, 0.30)
+    r, g, b = colorsys.hls_to_rgb(h, l, s)
+    return f"#{round(r * 255):02x}{round(g * 255):02x}{round(b * 255):02x}"
+
+
 _OCR_CONF_THRESHOLD = 0.3
 _OCR_MAX_DIM = 1600
 _OCR_IDLE_TIMEOUT = 300  # match Whisper — unload model after 5 min idle

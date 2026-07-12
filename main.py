@@ -151,6 +151,9 @@ _project_cols = [c["name"] for c in _sa_inspect(engine).get_columns("projects")]
 for _col, _ddl in (
     ("description",   "ALTER TABLE projects ADD COLUMN description TEXT"),
     ("metadata_json", "ALTER TABLE projects ADD COLUMN metadata_json TEXT"),
+    ("hero_style",           "ALTER TABLE projects ADD COLUMN hero_style TEXT"),
+    ("hero_accent_auto",     "ALTER TABLE projects ADD COLUMN hero_accent_auto TEXT"),
+    ("hero_accent_override", "ALTER TABLE projects ADD COLUMN hero_accent_override TEXT"),
 ):
     if _col not in _project_cols:
         with engine.begin() as _conn:

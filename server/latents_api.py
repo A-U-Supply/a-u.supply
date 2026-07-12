@@ -125,6 +125,10 @@ def _project_summary(p: Project) -> dict:
         "description": p.description,
         "metadata": _parse_metadata(p.metadata_json),
         "hero_media_item_id": p.hero_media_item_id,
+        "hero_style": p.hero_style or "scrim",
+        "hero_accent": p.hero_accent_override or p.hero_accent_auto,
+        "hero_accent_auto": p.hero_accent_auto,
+        "hero_accent_override": p.hero_accent_override,
         "lemmy_community_id": p.lemmy_community_id,
         "created_by": p.created_by,
         "created_at": p.created_at.isoformat() if p.created_at else None,
@@ -201,6 +205,44 @@ def _pin_map_for_slot(db: Session, slot_id: str) -> dict[str, str]:
     return {p.media_type: p.media_item_id for p in pins}
 
 
+def _compute_hero_accent(mi: MediaItem) -> str | None:
+    """Best-effort accent extraction for a hero image. Never raises.
+
+    Prefers the worker-populated `dominant_colors` on image_meta; falls back
+    to a live extraction off the smallest on-disk rendition (an image set as
+    hero seconds after upload may not have meta or thumbnails yet). The live
+    result is deliberately not written back to image_meta — that stays the
+    extraction worker's job.
+    """
+    from server.extraction import extract_dominant_colors, pick_accent_color
+
+    try:
+        colors: list = []
+        meta = mi.image_meta
+        if meta and meta.dominant_colors:
+            try:
+                parsed = json.loads(meta.dominant_colors)
+                if isinstance(parsed, list):
+                    colors = parsed
+            except (ValueError, TypeError):
+                colors = []
+        if not colors:
+            from server.search_api import _get_search_media_dir, _resolve_thumbnail_path
+
+            resolved = _resolve_thumbnail_path(mi, size="sm")
+            path = resolved[0] if resolved else None
+            if path is None and mi.file_path:
+                candidate = _get_search_media_dir() / mi.file_path
+                path = candidate if candidate.exists() else None
+            if path is None:
+                return None
+            colors = extract_dominant_colors(str(path))
+        return pick_accent_color(colors)
+    except Exception:
+        logger.exception("Hero accent extraction failed for media %s", mi.id)
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Request bodies
 # ---------------------------------------------------------------------------
@@ -210,6 +252,12 @@ VALID_KINDS = {"album", "video", "zine", "session", "other"}
 VALID_PROJECT_STATUSES = {"forming", "developing", "fixing", "abandoned"}
 VALID_SLOT_STATUSES = {"forming", "developing", "fixed"}
 VALID_PIN_TYPES = {"image", "audio", "video", "session"}
+VALID_HERO_STYLES = {"scrim", "plate", "treat"}
+
+# The entire style-injection defense for the accent: the client writes the
+# stored value into a `style="--latent-accent:…"` attribute verbatim, so
+# nothing outside this grammar may ever be persisted.
+_HERO_ACCENT_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 class CreateProjectBody(BaseModel):
@@ -225,6 +273,8 @@ class UpdateProjectBody(BaseModel):
     description: str | None = None
     metadata: dict | None = None
     hero_media_item_id: str | None = None
+    hero_style: str | None = None
+    hero_accent_override: str | None = None  # "" resets to auto
 
 
 class CreateSlotBody(BaseModel):
@@ -483,9 +533,25 @@ def update_project(
             mi = db.query(MediaItem).filter(MediaItem.id == body.hero_media_item_id).first()
             if not mi:
                 raise HTTPException(status_code=404, detail="hero_media_item_id refers to a missing media item")
+            if mi.media_type != "image":
+                raise HTTPException(status_code=400, detail="Hero must be an image media item")
+            if body.hero_media_item_id != p.hero_media_item_id:
+                p.hero_accent_auto = _compute_hero_accent(mi)
             p.hero_media_item_id = body.hero_media_item_id
         else:
             p.hero_media_item_id = None
+            p.hero_accent_auto = None  # override survives; auto belongs to the departed image
+    if body.hero_style is not None:
+        if body.hero_style not in VALID_HERO_STYLES:
+            raise HTTPException(status_code=400, detail=f"Invalid hero_style '{body.hero_style}'")
+        p.hero_style = body.hero_style
+    if body.hero_accent_override is not None:
+        if body.hero_accent_override == "":
+            p.hero_accent_override = None  # reset to auto
+        elif _HERO_ACCENT_RE.match(body.hero_accent_override):
+            p.hero_accent_override = body.hero_accent_override.lower()
+        else:
+            raise HTTPException(status_code=400, detail="hero_accent_override must be '#rrggbb'")
     db.commit()
     db.refresh(p)
 
