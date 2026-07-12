@@ -80,6 +80,57 @@ class TestExtractDominantColors:
         assert b > r and b > g
 
 
+class TestPickAccentColor:
+    """Tests for pick_accent_color (hero-card accent selection)."""
+
+    def test_vivid_minority_beats_dominant_gray(self):
+        from server.extraction import pick_accent_color
+
+        # Rank 0 is a near-gray; the saturated red at rank 1 should win.
+        assert pick_accent_color(["#808080", "#ff0000"]) == "#ff0000"
+
+    def test_monochrome_stays_neutral(self):
+        from server.extraction import pick_accent_color
+        import colorsys
+
+        result = pick_accent_color(["#777777", "#888888", "#6a6a6a"])
+        assert result is not None
+        r, g, b = (int(result[i : i + 2], 16) / 255.0 for i in (1, 3, 5))
+        _, _, s = colorsys.rgb_to_hls(r, g, b)
+        # No invented hue: saturation stays below the monochrome threshold.
+        assert s < 0.12
+
+    def test_lightness_clamped_for_legibility(self):
+        from server.extraction import pick_accent_color
+        import colorsys
+
+        for source in ["#0d0d40", "#f5f5ff", "#330000"]:
+            result = pick_accent_color([source])
+            assert result is not None
+            r, g, b = (int(result[i : i + 2], 16) / 255.0 for i in (1, 3, 5))
+            _, l, _ = colorsys.rgb_to_hls(r, g, b)
+            # One step of 8-bit quantization slack on each side.
+            assert 0.35 - 1 / 255 <= l <= 0.62 + 1 / 255
+
+    def test_colored_saturation_floor(self):
+        from server.extraction import pick_accent_color
+        import colorsys
+
+        # Weakly-colored but above the monochrome threshold → raised to >= 0.30.
+        result = pick_accent_color(["#8a7f7f"])
+        assert result is not None
+        r, g, b = (int(result[i : i + 2], 16) / 255.0 for i in (1, 3, 5))
+        _, _, s = colorsys.rgb_to_hls(r, g, b)
+        assert s >= 0.30 or s < 0.12
+
+    def test_garbage_and_empty_inputs(self):
+        from server.extraction import pick_accent_color
+
+        assert pick_accent_color([]) is None
+        assert pick_accent_color(None) is None
+        assert pick_accent_color(["not-a-color", "#12345", "", 42]) is None
+
+
 class TestExtractAudioMetadata:
     """Tests for extract_audio_metadata (mocked ffprobe)."""
 

@@ -550,6 +550,9 @@ class Project(Base):
     description = Column(String, nullable=True)        # markdown, longer-form than the name
     metadata_json = Column(String, nullable=True)      # JSON dict of arbitrary {key: value}
     hero_media_item_id = Column(String, ForeignKey("media_items.id", ondelete="SET NULL"), nullable=True)
+    hero_style = Column(String, nullable=True)             # scrim | plate | treat; NULL reads as scrim
+    hero_accent_auto = Column(String, nullable=True)       # server-extracted "#rrggbb"; recomputed when the hero changes
+    hero_accent_override = Column(String, nullable=True)   # manual "#rrggbb"; wins over auto; survives hero changes
     lemmy_community_id = Column(Integer, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, nullable=False, default=_utcnow)
