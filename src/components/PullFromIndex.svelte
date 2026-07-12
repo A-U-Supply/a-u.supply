@@ -14,6 +14,7 @@
 -->
 <script lang="ts">
   import SearchFilterBar, { type Filters } from './SearchFilterBar.svelte';
+  import Uploader from './Uploader.svelte';
   import { filtersToSearchBody } from '../lib/filterTranslator.ts';
 
   type Props = {
@@ -103,6 +104,7 @@
     [],
   );
   let attachedLoadedFor = $state('');
+  let uploadOpen = $state(false);
 
   function toggleSel(id: string) {
     if (selectMode) {
@@ -241,8 +243,32 @@
     }
   });
 
-  // Quick-picks: load the Latent's attached images once per open (selectMode
-  // only). Silent on failure — the strip just doesn't render.
+  // Quick-picks: the Latent's attached images. Silent on failure — the
+  // strip just doesn't render.
+  async function loadAttached() {
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/items`,
+        { credentials: 'include' },
+      );
+      if (!res.ok) return;
+      const body = await res.json();
+      const seen = new Set<string>();
+      const images: { media_item_id: string; filename?: string }[] = [];
+      for (const it of body.items || []) {
+        if (it.media?.media_type !== 'image') continue;
+        if (seen.has(it.media_item_id)) continue;
+        seen.add(it.media_item_id);
+        images.push({
+          media_item_id: it.media_item_id,
+          filename: it.media?.filename,
+        });
+      }
+      attachedImages = images;
+    } catch {}
+  }
+
+  // Load once per open (selectMode only).
   $effect(() => {
     if (!open) {
       attachedLoadedFor = ''; // reload next open — attachments may change
@@ -250,29 +276,19 @@
     }
     if (!selectMode || attachedLoadedFor === projectId) return;
     attachedLoadedFor = projectId;
-    (async () => {
-      try {
-        const res = await fetch(
-          `/api/projects/${encodeURIComponent(projectId)}/items`,
-          { credentials: 'include' },
-        );
-        if (!res.ok) return;
-        const body = await res.json();
-        const seen = new Set<string>();
-        const images: { media_item_id: string; filename?: string }[] = [];
-        for (const it of body.items || []) {
-          if (it.media?.media_type !== 'image') continue;
-          if (seen.has(it.media_item_id)) continue;
-          seen.add(it.media_item_id);
-          images.push({
-            media_item_id: it.media_item_id,
-            filename: it.media?.filename,
-          });
-        }
-        attachedImages = images;
-      } catch {}
-    })();
+    loadAttached();
   });
+
+  // Direct upload (selectMode): the Uploader attaches the file to the
+  // Latent server-side; refresh the quick-picks and auto-select the upload
+  // if it's an image (the items endpoint is the type authority — non-image
+  // uploads still land in loose files, they just aren't selectable heroes).
+  async function onUploadedFile(detail: { media_item_id: string }) {
+    await loadAttached();
+    if (attachedImages.some((a) => a.media_item_id === detail.media_item_id)) {
+      selected = new Set([detail.media_item_id]);
+    }
+  }
 </script>
 
 <svelte:window onkeydown={onKeydown} />
@@ -318,6 +334,21 @@
         >
           Filters {filtersOpen ? '▴' : '▾'}
         </button>
+        {#if selectMode}
+          <button
+            class="action-btn filter-toggle"
+            type="button"
+            aria-expanded={uploadOpen}
+            aria-controls="pfi-upload"
+            onclick={() => {
+              uploadOpen = !uploadOpen;
+              if (uploadOpen)
+                requestAnimationFrame(() => bodyEl?.scrollTo({ top: 0 }));
+            }}
+          >
+            Upload {uploadOpen ? '▴' : '▾'}
+          </button>
+        {/if}
         <input
           type="text"
           placeholder="Search across all indices…"
@@ -337,6 +368,25 @@
         >
           <SearchFilterBar bind:filters />
         </div>
+
+        {#if selectMode}
+          <div
+            id="pfi-upload"
+            class="filter-panel"
+            class:filter-panel--open={uploadOpen}
+          >
+            <Uploader
+              destination="project"
+              {projectId}
+              compact={true}
+              onUploaded={onUploadedFile}
+            />
+            <p class="muted">
+              Uploads land in this latent's loose files; images get selected
+              here automatically.
+            </p>
+          </div>
+        {/if}
 
         {#if selectMode && attachedImages.length > 0}
           <div class="attached">
