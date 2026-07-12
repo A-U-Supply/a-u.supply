@@ -1,8 +1,9 @@
 name = "sparagmos"
 display_name = "Sparagmos — Image Destruction"
-description = "Feed images through destruction recipes: glitch, decay, neural hallucination, geometric compositing. 174 recipes, 1-5 input images."
+description = "Feed images through destruction recipes: glitch, decay, neural hallucination, geometric compositing. 174 recipes, 2-5 input images."
 image = "ghcr.io/a-u-supply/sparagmos:latest"
-timeout_seconds = 900
+force_pull = true
+timeout_seconds = 1800
 input_mode = "flag"
 input_flag = "--input"
 output_flag = "--output /work/output/output.png"
@@ -44,52 +45,6 @@ description = "Each recipe defines a chain of destruction effects. Input count s
 required = true
 flag = "--recipe"
 depends_on = { param = "processing_mode", value = "recipe" }
-
-[[params.recipe.option_groups]]
-label = "1 Image — Omo"
-[[params.recipe.option_groups.options]]
-value = "omo-reliquary"
-label = "Omo Reliquary"
-input_count = 1
-description = "OCR finds every legible word and seals it behind glass while the rest of the frame is washed out, moshed, or pixel-sorted around the relics. Text outlives the image. Single output."
-
-[[params.recipe.option_groups]]
-label = "1 Image — Glim"
-[[params.recipe.option_groups.options]]
-value = "glim-oilslick"
-label = "Glim Oilslick"
-input_count = 1
-description = "A thin-film interference palette rides the image's own luminance gradient, so color sweeps with surface curvature — the whole frame coated in soap-bubble gasoline sheen. Single output."
-
-[[params.recipe.option_groups.options]]
-value = "glim-holofoil"
-label = "Glim Holofoil"
-input_count = 1
-description = "Otsu shapes filled with angle-swept rainbow foil and a moving sheen band, starburst glints on the brightest points — a holographic trading-card sticker of the source. Single output."
-
-[[params.recipe.option_groups.options]]
-value = "glim-prism"
-label = "Glim Prism"
-input_count = 1
-description = "Spectral dispersion: the image split into pure spectral copies smeared along a light axis — white where they align, full rainbows at every edge. Works on monochrome sources. Single output."
-
-[[params.recipe.option_groups.options]]
-value = "glim-sequin"
-label = "Glim Sequin"
-input_count = 1
-description = "The image rebuilt as hex-packed sequin discs, each hue-jittered with an off-center specular glint. From across the room it's the picture; up close it's glitter. Single output."
-
-[[params.recipe.option_groups.options]]
-value = "glim-popout"
-label = "Glim Popout"
-input_count = 1
-description = "Chromostereopsis: quantized to pure saturated red and deep blue. The eye focuses the wavelengths at different depths, so the red plane physically floats in front of the blue. Single output."
-
-[[params.recipe.option_groups.options]]
-value = "glim-drift"
-label = "Glim Drift"
-input_count = 1
-description = "Peripheral drift illusion: concentric rings of wedge quads cycling black, dark, white, light in the source's palette, direction alternating per ring — hold still and the rings crawl. Single output."
 
 [[params.recipe.option_groups]]
 label = "2 Images — Neural"
@@ -157,6 +112,12 @@ label = "Omo Medallion"
 input_count = 2
 description = "The second image is folded into a radial kaleidoscope mandala, then set only into the deepest shadows of the host, which otherwise goes untouched. Single output."
 
+
+[[params.recipe.option_groups.options]]
+value = "omo-reliquary"
+label = "Omo Reliquary"
+input_count = 2
+description = "OCR finds every legible word in A and seals it behind glass, while everything around the words is replaced by B — washed out, moshed, or pixel-sorted. A's inscription embedded in the ruins of another image. Single output."
 [[params.recipe.option_groups]]
 label = "2 Images — Glim"
 [[params.recipe.option_groups.options]]
@@ -171,6 +132,42 @@ label = "Glim Magiceye"
 input_count = 2
 description = "A true autostereogram: A's luminance becomes the depth map, B the repeating texture. Unfocus or cross your eyes and A's shapes float free of the surface. Single output."
 
+
+[[params.recipe.option_groups.options]]
+value = "glim-oilslick"
+label = "Glim Oilslick"
+input_count = 2
+description = "A is the surface dipped in oil, B is the light: B's luminance gradient drives the thin-film sheen playing across A — B's shapes visible only as shifts in the color of the slick. Single output."
+
+[[params.recipe.option_groups.options]]
+value = "glim-holofoil"
+label = "Glim Holofoil"
+input_count = 2
+description = "Shapes cut from A's Otsu stencil, filled with angle-swept rainbow foil; B ghosts inside the hologram like the latent image in a real holo sticker. Starburst glints on A's brightest points. Single output."
+
+[[params.recipe.option_groups.options]]
+value = "glim-prism"
+label = "Glim Prism"
+input_count = 2
+description = "B is the ground; A's light is split into pure spectral copies smeared along an axis and screened onto B — A's ghost lands on B as refracted rainbow light. Single output."
+
+[[params.recipe.option_groups.options]]
+value = "glim-sequin"
+label = "Glim Sequin"
+input_count = 2
+description = "The flip-sequin pillow: A is the fabric, B is what someone dragged their hand across — where B is bright the discs flip to mirror silver, drawing B's shapes into A. Single output."
+
+[[params.recipe.option_groups.options]]
+value = "glim-popout"
+label = "Glim Popout"
+input_count = 2
+description = "Two images at two optical depths: A's bright shapes become the pure-red plane, B's the deep-blue plane. Chromostereopsis makes A physically float in front of B. Single output."
+
+[[params.recipe.option_groups.options]]
+value = "glim-drift"
+label = "Glim Drift"
+input_count = 2
+description = "Peripheral drift: B's brightest points seed a field of Kitaoka wheels painted in A's palette — hold still and look just beside them. Single output."
 [[params.recipe.option_groups]]
 label = "3 Images — Ancients"
 [[params.recipe.option_groups.options]]
@@ -1142,45 +1139,6 @@ min_selections = 2
 depends_on = { param = "processing_mode", value = "chain" }
 
 [[params.chain.option_groups]]
-label = "1 Image — Omo"
-[[params.chain.option_groups.options]]
-value = "omo-reliquary"
-label = "Omo Reliquary"
-input_count = 1
-
-[[params.chain.option_groups]]
-label = "1 Image — Glim"
-[[params.chain.option_groups.options]]
-value = "glim-oilslick"
-label = "Glim Oilslick"
-input_count = 1
-
-[[params.chain.option_groups.options]]
-value = "glim-holofoil"
-label = "Glim Holofoil"
-input_count = 1
-
-[[params.chain.option_groups.options]]
-value = "glim-prism"
-label = "Glim Prism"
-input_count = 1
-
-[[params.chain.option_groups.options]]
-value = "glim-sequin"
-label = "Glim Sequin"
-input_count = 1
-
-[[params.chain.option_groups.options]]
-value = "glim-popout"
-label = "Glim Popout"
-input_count = 1
-
-[[params.chain.option_groups.options]]
-value = "glim-drift"
-label = "Glim Drift"
-input_count = 1
-
-[[params.chain.option_groups]]
 label = "2 Images — Neural"
 [[params.chain.option_groups.options]]
 value = "dream-dissolve"
@@ -1236,6 +1194,11 @@ value = "omo-medallion"
 label = "Omo Medallion"
 input_count = 2
 
+
+[[params.chain.option_groups.options]]
+value = "omo-reliquary"
+label = "Omo Reliquary"
+input_count = 2
 [[params.chain.option_groups]]
 label = "2 Images — Glim"
 [[params.chain.option_groups.options]]
@@ -1248,6 +1211,36 @@ value = "glim-magiceye"
 label = "Glim Magiceye"
 input_count = 2
 
+
+[[params.chain.option_groups.options]]
+value = "glim-oilslick"
+label = "Glim Oilslick"
+input_count = 2
+
+[[params.chain.option_groups.options]]
+value = "glim-holofoil"
+label = "Glim Holofoil"
+input_count = 2
+
+[[params.chain.option_groups.options]]
+value = "glim-prism"
+label = "Glim Prism"
+input_count = 2
+
+[[params.chain.option_groups.options]]
+value = "glim-sequin"
+label = "Glim Sequin"
+input_count = 2
+
+[[params.chain.option_groups.options]]
+value = "glim-popout"
+label = "Glim Popout"
+input_count = 2
+
+[[params.chain.option_groups.options]]
+value = "glim-drift"
+label = "Glim Drift"
+input_count = 2
 [[params.chain.option_groups]]
 label = "3 Images — Ancients"
 [[params.chain.option_groups.options]]
