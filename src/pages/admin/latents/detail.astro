@@ -195,6 +195,21 @@ import Admin from '../../../layouts/Admin.astro';
     text-transform: uppercase;
     letter-spacing: 1pt;
   }
+  /* Hero accent carry — identity learned on the grid persists inside.
+     Applied only when the Latent has an effective accent. */
+  :global(.latent-header--accent) {
+    border-left: 4px solid var(--latent-accent);
+    padding-left: var(--space-sm);
+  }
+  :global(.latent-header--accent .name-input:focus) {
+    outline: none;
+    border-color: var(--latent-accent);
+    box-shadow: 2px 2px 0 var(--latent-accent);
+  }
+  :global(.latent-header--accent .desc-input:focus) {
+    border-color: var(--latent-accent);
+    box-shadow: 2px 2px 0 var(--latent-accent);
+  }
   @media (max-width: 640px) {
     :global(.latent-header .name-input) {
       min-width: 0;
@@ -205,6 +220,7 @@ import Admin from '../../../layouts/Admin.astro';
 
 <script>
   import { mount, unmount } from 'svelte';
+  import LatentHero from '../../../components/LatentHero.svelte';
   import LatentSlots from '../../../components/LatentSlots.svelte';
   import LatentDocuments from '../../../components/LatentDocuments.svelte';
   import LatentLooseFiles from '../../../components/LatentLooseFiles.svelte';
@@ -344,6 +360,8 @@ import Admin from '../../../layouts/Admin.astro';
         <a class="action-btn" href="/admin/latents">All latents</a>
       </div>
       <p class="summary">${escapeHtml(p.kind)} latent · ${p.item_count} files · ${p.documents.length} document${p.documents.length === 1 ? '' : 's'} · ${p.slots.length} slot${p.slots.length === 1 ? '' : 's'}${p.thread_count ? ' · ' + p.thread_count + ' thread' + (p.thread_count === 1 ? '' : 's') : ''}</p>
+
+      <div id="hero-island"></div>
 
       <textarea
         class="desc-input"
@@ -547,6 +565,32 @@ import Admin from '../../../layouts/Admin.astro';
       } catch {}
     }
     mounted = [];
+
+    // Hero accent carry — the accent is server-validated #rrggbb, and the
+    // LatentHero island keeps it fresh as the hero/override changes.
+    const applyAccent = (accent: string | null) => {
+      if (accent) {
+        headerEl.style.setProperty('--latent-accent', accent);
+        headerEl.classList.add('latent-header--accent');
+      } else {
+        headerEl.style.removeProperty('--latent-accent');
+        headerEl.classList.remove('latent-header--accent');
+      }
+    };
+    applyAccent(p.hero_accent || null);
+    mounted.push(
+      mount(LatentHero, {
+        target: document.getElementById('hero-island')!,
+        props: {
+          projectId: id,
+          heroMediaItemId: p.hero_media_item_id,
+          heroStyle: p.hero_style,
+          heroAccentAuto: p.hero_accent_auto,
+          heroAccentOverride: p.hero_accent_override,
+          onAccentChange: applyAccent,
+        },
+      }),
+    );
 
     islandsEl.hidden = false;
     mounted.push(

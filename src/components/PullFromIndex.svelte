@@ -8,6 +8,9 @@
     - projectId: target Latent
     - slotId: optional slot inside that Latent (null = loose)
     - onAttached: callback fired after a successful attach (parent reloads its list)
+    - selectMode: single-select picker — no attach; the primary action
+      hands the chosen media id to onSelect instead (image filter default)
+    - onSelect: callback fired with the chosen media id in selectMode
 -->
 <script lang="ts">
   import SearchFilterBar, { type Filters } from './SearchFilterBar.svelte';
@@ -19,6 +22,8 @@
     slotId?: string | null;
     onAttached?: (attachedIds: string[]) => void;
     onClose?: () => void;
+    selectMode?: boolean;
+    onSelect?: (mediaItemId: string) => void;
   };
 
   let {
@@ -27,6 +32,8 @@
     slotId = null,
     onAttached,
     onClose,
+    selectMode = false,
+    onSelect,
   }: Props = $props();
 
   type Hit = {
@@ -39,7 +46,7 @@
 
   let q = $state('');
   let filters = $state<Filters>({
-    types: ['image', 'audio', 'video'],
+    types: selectMode ? ['image'] : ['image', 'audio', 'video'],
     outputIndexes: ['__inputs__'],
     channels: [],
     poster: '',
@@ -87,10 +94,24 @@
   let lastQuery = $state('');
 
   function toggleSel(id: string) {
+    if (selectMode) {
+      // Radio-style single select: picking another tile switches to it.
+      selected = selected.has(id) ? new Set<string>() : new Set([id]);
+      return;
+    }
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
     else next.add(id);
     selected = next;
+  }
+
+  function useSelected() {
+    const id = Array.from(selected)[0];
+    if (!id) return;
+    selected = new Set();
+    open = false;
+    onSelect?.(id);
+    onClose?.();
   }
 
   function buildBody() {
@@ -288,15 +309,24 @@
           <button class="action-btn" type="button" onclick={close}
             >Cancel</button
           >
-          <button
-            class="btn-primary"
-            type="button"
-            disabled={selected.size === 0 || attaching}
-            onclick={attach}
-            >{attaching
-              ? 'Attaching…'
-              : `Attach ${selected.size || ''}`.trim()}</button
-          >
+          {#if selectMode}
+            <button
+              class="btn-primary"
+              type="button"
+              disabled={selected.size === 0}
+              onclick={useSelected}>Use as card image</button
+            >
+          {:else}
+            <button
+              class="btn-primary"
+              type="button"
+              disabled={selected.size === 0 || attaching}
+              onclick={attach}
+              >{attaching
+                ? 'Attaching…'
+                : `Attach ${selected.size || ''}`.trim()}</button
+            >
+          {/if}
         </div>
       </footer>
     </div>

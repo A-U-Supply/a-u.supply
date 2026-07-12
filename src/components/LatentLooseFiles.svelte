@@ -74,6 +74,29 @@
     return `/api/media/${encodeURIComponent(mediaId)}/thumbnail?size=sm`;
   }
 
+  // Cover art naturally lands here via the Uploader — upload-then-click
+  // is the whole hero journey. The LatentHero island listens for the
+  // broadcast and updates itself (and the header accent).
+  async function setAsHero(item: Item) {
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}`,
+        {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hero_media_item_id: item.media_item_id }),
+        },
+      );
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      window.dispatchEvent(
+        new CustomEvent('latent-hero-changed', { detail: await res.json() }),
+      );
+    } catch (e: any) {
+      error = e?.message || 'Failed to set card image';
+    }
+  }
+
   $effect(() => {
     if (projectId) load();
   });
@@ -134,6 +157,13 @@
             </div>
           </div>
           <div class="tile__actions">
+            {#if it.media?.media_type === 'image'}
+              <button
+                class="action-btn"
+                type="button"
+                onclick={() => setAsHero(it)}>Set as card image</button
+              >
+            {/if}
             <button
               class="action-btn action-btn--danger"
               type="button"
