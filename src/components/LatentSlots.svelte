@@ -10,6 +10,7 @@
   import Threads from './Threads.svelte';
   import PullFromIndex from './PullFromIndex.svelte';
   import LatentLinks from './LatentLinks.svelte';
+  import { fileExt } from '../lib/fileExt.ts';
 
   type Props = {
     projectId: string;
@@ -840,7 +841,9 @@
                     {it.media?.filename || '(unknown)'}
                   </a>
                   <span class="file-row__type" title={it.media?.mime_type}
-                    >{it.media?.media_type || 'file'}</span
+                    >{fileExt(it.media?.filename) ||
+                      it.media?.media_type ||
+                      'file'}</span
                   >
                   <span class="file-row__size"
                     >{fmtBytes(it.media?.file_size_bytes)}</span
@@ -1135,7 +1138,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #f4f4f4;
+    background: var(--color-surface);
     text-decoration: none;
     color: var(--color-muted);
     overflow: hidden;
@@ -1241,7 +1244,7 @@
     display: block;
     width: 72px;
     height: 72px;
-    background: #f4f4f4;
+    background: var(--color-surface);
     text-decoration: none;
     color: inherit;
     display: flex;
@@ -1405,7 +1408,7 @@
     align-items: center;
     justify-content: center;
     aspect-ratio: 1;
-    background: #f4f4f4;
+    background: var(--color-surface);
     text-decoration: none;
     color: inherit;
     overflow: hidden;

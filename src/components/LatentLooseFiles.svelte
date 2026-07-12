@@ -6,6 +6,7 @@
 <script lang="ts">
   import Uploader from './Uploader.svelte';
   import PullFromIndex from './PullFromIndex.svelte';
+  import { fileExt } from '../lib/fileExt.ts';
 
   type Props = {
     projectId: string;
@@ -74,6 +75,10 @@
     return `/api/media/${encodeURIComponent(mediaId)}/thumbnail?size=sm`;
   }
 
+  function fileUrl(mediaId: string): string {
+    return `/api/media/${encodeURIComponent(mediaId)}/file`;
+  }
+
   // Cover art naturally lands here via the Uploader — upload-then-click
   // is the whole hero journey. The LatentHero island listens for the
   // broadcast and updates itself (and the header accent).
@@ -132,6 +137,7 @@
   {:else}
     <ul class="grid">
       {#each items as it (it.id)}
+        {@const ext = fileExt(it.media?.filename)}
         <li class="tile" data-type={it.media?.media_type}>
           <a
             class="tile__thumb"
@@ -139,18 +145,25 @@
           >
             {#if it.media?.media_type === 'image'}
               <img src={thumbUrl(it.media_item_id)} alt={it.media?.filename} />
-            {:else if it.media?.media_type === 'session'}
-              <span class="icon">▣ session</span>
             {:else}
-              <span class="icon">{it.media?.media_type || 'file'}</span>
+              <span class="filechip">
+                <span class="filechip__ext"
+                  >{ext ? '.' + ext : it.media?.media_type || 'file'}</span
+                >
+                <span class="filechip__type"
+                  >{it.media?.media_type === 'session'
+                    ? '▣ session'
+                    : it.media?.media_type || 'file'}</span
+                >
+              </span>
             {/if}
           </a>
           <div class="tile__info">
             <div class="tile__name" title={it.media?.filename}>
               {it.media?.filename || '(unknown)'}
             </div>
-            <div class="tile__meta">
-              {it.media?.media_type || ''}
+            <div class="tile__meta" title={it.media?.mime_type}>
+              {ext || it.media?.media_type || ''}
               {#if it.media?.file_size_bytes}
                 · {formatSize(it.media.file_size_bytes)}
               {/if}
@@ -164,6 +177,11 @@
                 onclick={() => setAsHero(it)}>Set as card image</button
               >
             {/if}
+            <a
+              class="action-btn"
+              href={fileUrl(it.media_item_id)}
+              download={it.media?.filename}>Download</a
+            >
             <button
               class="action-btn action-btn--danger"
               type="button"
@@ -219,7 +237,7 @@
     align-items: center;
     justify-content: center;
     aspect-ratio: 1;
-    background: #f4f4f4;
+    background: var(--color-surface);
     text-decoration: none;
     color: inherit;
     overflow: hidden;
@@ -229,11 +247,27 @@
     height: 100%;
     object-fit: cover;
   }
-  .icon {
+  .filechip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 0 6px;
+    min-width: 0;
+  }
+  .filechip__ext {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: var(--text-md);
+    color: var(--color-text);
+    word-break: break-all;
+    text-align: center;
+  }
+  .filechip__type {
     color: var(--color-muted);
+    font-size: 0.6rem;
     text-transform: uppercase;
     letter-spacing: 1pt;
-    font-size: var(--text-sm);
   }
   .tile__info {
     padding: 6px 8px;
@@ -250,6 +284,9 @@
     font-size: 0.7rem;
   }
   .tile__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
     padding: 0 6px 6px;
   }
   .muted {
@@ -262,8 +299,8 @@
     font-size: var(--text-sm);
   }
   .notice--error {
-    border-color: #c00;
-    color: #c00;
+    border-color: var(--color-status-fail);
+    color: var(--color-status-fail);
   }
   @media (max-width: 640px) {
     .grid {

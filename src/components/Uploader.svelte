@@ -553,7 +553,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #f4f4f4;
+    background: var(--color-surface);
     overflow: hidden;
   }
   .file__preview img {
