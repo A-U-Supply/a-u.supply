@@ -1,6 +1,6 @@
 name = "sparagmos"
 display_name = "Sparagmos — Image Destruction"
-description = "Feed images through destruction recipes: glitch, decay, neural hallucination, geometric compositing. 165 recipes, 1-5 input images."
+description = "Feed images through destruction recipes: glitch, decay, neural hallucination, geometric compositing. 174 recipes, 1-5 input images."
 image = "ghcr.io/a-u-supply/sparagmos:latest"
 timeout_seconds = 900
 input_mode = "flag"
@@ -52,6 +52,44 @@ value = "omo-reliquary"
 label = "Omo Reliquary"
 input_count = 1
 description = "OCR finds every legible word and seals it behind glass while the rest of the frame is washed out, moshed, or pixel-sorted around the relics. Text outlives the image. Single output."
+
+[[params.recipe.option_groups]]
+label = "1 Image — Glim"
+[[params.recipe.option_groups.options]]
+value = "glim-oilslick"
+label = "Glim Oilslick"
+input_count = 1
+description = "A thin-film interference palette rides the image's own luminance gradient, so color sweeps with surface curvature — the whole frame coated in soap-bubble gasoline sheen. Single output."
+
+[[params.recipe.option_groups.options]]
+value = "glim-holofoil"
+label = "Glim Holofoil"
+input_count = 1
+description = "Otsu shapes filled with angle-swept rainbow foil and a moving sheen band, starburst glints on the brightest points — a holographic trading-card sticker of the source. Single output."
+
+[[params.recipe.option_groups.options]]
+value = "glim-prism"
+label = "Glim Prism"
+input_count = 1
+description = "Spectral dispersion: the image split into pure spectral copies smeared along a light axis — white where they align, full rainbows at every edge. Works on monochrome sources. Single output."
+
+[[params.recipe.option_groups.options]]
+value = "glim-sequin"
+label = "Glim Sequin"
+input_count = 1
+description = "The image rebuilt as hex-packed sequin discs, each hue-jittered with an off-center specular glint. From across the room it's the picture; up close it's glitter. Single output."
+
+[[params.recipe.option_groups.options]]
+value = "glim-popout"
+label = "Glim Popout"
+input_count = 1
+description = "Chromostereopsis: quantized to pure saturated red and deep blue. The eye focuses the wavelengths at different depths, so the red plane physically floats in front of the blue. Single output."
+
+[[params.recipe.option_groups.options]]
+value = "glim-drift"
+label = "Glim Drift"
+input_count = 1
+description = "Peripheral drift illusion: concentric rings of wedge quads cycling black, dark, white, light in the source's palette, direction alternating per ring — hold still and the rings crawl. Single output."
 
 [[params.recipe.option_groups]]
 label = "2 Images — Neural"
@@ -118,6 +156,20 @@ value = "omo-medallion"
 label = "Omo Medallion"
 input_count = 2
 description = "The second image is folded into a radial kaleidoscope mandala, then set only into the deepest shadows of the host, which otherwise goes untouched. Single output."
+
+[[params.recipe.option_groups]]
+label = "2 Images — Glim"
+[[params.recipe.option_groups.options]]
+value = "glim-hybrid"
+label = "Glim Hybrid"
+input_count = 2
+description = "A genuine hybrid image: low frequencies of A fused with high frequencies of B. The thumbnail is one image, the expanded view is another — squint and it changes identity. Single output."
+
+[[params.recipe.option_groups.options]]
+value = "glim-magiceye"
+label = "Glim Magiceye"
+input_count = 2
+description = "A true autostereogram: A's luminance becomes the depth map, B the repeating texture. Unfocus or cross your eyes and A's shapes float free of the surface. Single output."
 
 [[params.recipe.option_groups]]
 label = "3 Images — Ancients"
@@ -514,6 +566,14 @@ value = "omo-specimen"
 label = "Omo Specimen"
 input_count = 3
 description = "One image shot through with six circular die-cuts takes its place in an Otsu stencil with the other two — a specimen tray or Rorschach plate: airy, clinical. Single output."
+
+[[params.recipe.option_groups]]
+label = "3 Images — Glim"
+[[params.recipe.option_groups.options]]
+value = "glim-moire"
+label = "Glim Moire"
+input_count = 3
+description = "Two contour-hugging line screens at slightly mismatched frequency and angle — the interference bands are in neither screen, and they shimmer as you scroll. Single output."
 
 [[params.recipe.option_groups]]
 label = "4 Images — Ancients"
@@ -1089,6 +1149,38 @@ label = "Omo Reliquary"
 input_count = 1
 
 [[params.chain.option_groups]]
+label = "1 Image — Glim"
+[[params.chain.option_groups.options]]
+value = "glim-oilslick"
+label = "Glim Oilslick"
+input_count = 1
+
+[[params.chain.option_groups.options]]
+value = "glim-holofoil"
+label = "Glim Holofoil"
+input_count = 1
+
+[[params.chain.option_groups.options]]
+value = "glim-prism"
+label = "Glim Prism"
+input_count = 1
+
+[[params.chain.option_groups.options]]
+value = "glim-sequin"
+label = "Glim Sequin"
+input_count = 1
+
+[[params.chain.option_groups.options]]
+value = "glim-popout"
+label = "Glim Popout"
+input_count = 1
+
+[[params.chain.option_groups.options]]
+value = "glim-drift"
+label = "Glim Drift"
+input_count = 1
+
+[[params.chain.option_groups]]
 label = "2 Images — Neural"
 [[params.chain.option_groups.options]]
 value = "dream-dissolve"
@@ -1142,6 +1234,18 @@ label = "2 Images — Omo"
 [[params.chain.option_groups.options]]
 value = "omo-medallion"
 label = "Omo Medallion"
+input_count = 2
+
+[[params.chain.option_groups]]
+label = "2 Images — Glim"
+[[params.chain.option_groups.options]]
+value = "glim-hybrid"
+label = "Glim Hybrid"
+input_count = 2
+
+[[params.chain.option_groups.options]]
+value = "glim-magiceye"
+label = "Glim Magiceye"
 input_count = 2
 
 [[params.chain.option_groups]]
@@ -1474,6 +1578,13 @@ input_count = 3
 [[params.chain.option_groups.options]]
 value = "omo-specimen"
 label = "Omo Specimen"
+input_count = 3
+
+[[params.chain.option_groups]]
+label = "3 Images — Glim"
+[[params.chain.option_groups.options]]
+value = "glim-moire"
+label = "Glim Moire"
 input_count = 3
 
 [[params.chain.option_groups]]
