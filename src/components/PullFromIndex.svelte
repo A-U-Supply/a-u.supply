@@ -92,6 +92,17 @@
   let attaching = $state(false);
   let error = $state<string | null>(null);
   let lastQuery = $state('');
+  const PER_PAGE = 60;
+  let page = $state(1);
+  let total = $state(0);
+  let loadingMore = $state(false);
+  let bodyEl: HTMLDivElement | null = null;
+  // "In this latent" quick-picks (selectMode only): images already attached
+  // to the Latent — usually exactly what a card image should be.
+  let attachedImages = $state<{ media_item_id: string; filename?: string }[]>(
+    [],
+  );
+  let attachedLoadedFor = $state('');
 
   function toggleSel(id: string) {
     if (selectMode) {
@@ -114,15 +125,31 @@
     onClose?.();
   }
 
-  function buildBody() {
+  function buildBody(pageNum: number) {
     const onlyEmulsion =
       filters.outputIndexes.length === 1 &&
       filters.outputIndexes[0] === '__emulsion__';
-    const body = filtersToSearchBody(filters, q, { perPage: 60 });
+    const body = filtersToSearchBody(filters, q, { perPage: PER_PAGE });
+    body.page = pageNum;
     if (onlyEmulsion) {
       body.media_types = [];
     }
     return body;
+  }
+
+  async function fetchPage(pageNum: number) {
+    const res = await fetch('/api/search', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildBody(pageNum)),
+    });
+    if (!res.ok) throw new Error(`Search failed (${res.status})`);
+    const data = await res.json();
+    return {
+      hits: (data.results || data.hits || []) as Hit[],
+      total: Number(data.total ?? 0),
+    };
   }
 
   async function runSearch() {
@@ -130,20 +157,30 @@
     error = null;
     lastQuery = q;
     try {
-      const res = await fetch('/api/search', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildBody()),
-      });
-      if (!res.ok) throw new Error(`Search failed (${res.status})`);
-      const data = await res.json();
-      const hits = data.results || data.hits || [];
-      results = hits.slice(0, 60);
+      const pageData = await fetchPage(1);
+      page = 1;
+      results = pageData.hits;
+      total = pageData.total || pageData.hits.length;
     } catch (e: any) {
       error = e?.message || 'Search failed';
     } finally {
       loading = false;
+    }
+  }
+
+  async function loadMore() {
+    if (loadingMore || loading) return;
+    loadingMore = true;
+    error = null;
+    try {
+      const pageData = await fetchPage(page + 1);
+      page += 1;
+      results = [...results, ...pageData.hits];
+      if (pageData.total) total = pageData.total;
+    } catch (e: any) {
+      error = e?.message || 'Load more failed';
+    } finally {
+      loadingMore = false;
     }
   }
 
@@ -203,6 +240,39 @@
       runSearch();
     }
   });
+
+  // Quick-picks: load the Latent's attached images once per open (selectMode
+  // only). Silent on failure — the strip just doesn't render.
+  $effect(() => {
+    if (!open) {
+      attachedLoadedFor = ''; // reload next open — attachments may change
+      return;
+    }
+    if (!selectMode || attachedLoadedFor === projectId) return;
+    attachedLoadedFor = projectId;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/projects/${encodeURIComponent(projectId)}/items`,
+          { credentials: 'include' },
+        );
+        if (!res.ok) return;
+        const body = await res.json();
+        const seen = new Set<string>();
+        const images: { media_item_id: string; filename?: string }[] = [];
+        for (const it of body.items || []) {
+          if (it.media?.media_type !== 'image') continue;
+          if (seen.has(it.media_item_id)) continue;
+          seen.add(it.media_item_id);
+          images.push({
+            media_item_id: it.media_item_id,
+            filename: it.media?.filename,
+          });
+        }
+        attachedImages = images;
+      } catch {}
+    })();
+  });
 </script>
 
 <svelte:window onkeydown={onKeydown} />
@@ -238,7 +308,13 @@
           type="button"
           aria-expanded={filtersOpen}
           aria-controls="pfi-filters"
-          onclick={() => (filtersOpen = !filtersOpen)}
+          onclick={() => {
+            filtersOpen = !filtersOpen;
+            // The panel renders at the top of the scroll area — bring it
+            // into view when opening from deep in the results.
+            if (filtersOpen)
+              requestAnimationFrame(() => bodyEl?.scrollTo({ top: 0 }));
+          }}
         >
           Filters {filtersOpen ? '▴' : '▾'}
         </button>
@@ -253,7 +329,7 @@
       <!-- Single scroll area: filter panel (when open) + error + results
            all live inside .modal__body, which is the only thing that
            scrolls. Header, search row, and footer stay pinned. -->
-      <div class="modal__body">
+      <div class="modal__body" bind:this={bodyEl}>
         <div
           id="pfi-filters"
           class="filter-panel"
@@ -261,6 +337,26 @@
         >
           <SearchFilterBar bind:filters />
         </div>
+
+        {#if selectMode && attachedImages.length > 0}
+          <div class="attached">
+            <span class="attached__label">In this latent</span>
+            <div class="attached__strip">
+              {#each attachedImages as a (a.media_item_id)}
+                <button
+                  class="attached__thumb"
+                  class:selected={selected.has(a.media_item_id)}
+                  type="button"
+                  title={a.filename || ''}
+                  aria-pressed={selected.has(a.media_item_id)}
+                  onclick={() => toggleSel(a.media_item_id)}
+                >
+                  <img src={thumbUrl(a.media_item_id)} alt={a.filename || ''} />
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/if}
 
         {#if error}
           <div class="notice notice--error">{error}</div>
@@ -299,6 +395,18 @@
                 </li>
               {/each}
             </ul>
+            {#if results.length < total}
+              <button
+                class="action-btn load-more"
+                type="button"
+                disabled={loadingMore}
+                onclick={loadMore}
+              >
+                {loadingMore
+                  ? 'Loading…'
+                  : `Load more (showing ${results.length} of ${total})`}
+              </button>
+            {/if}
           {/if}
         </div>
       </div>
@@ -396,10 +504,50 @@
     display: none;
     border: 1px solid var(--color-border);
     padding: var(--space-sm);
-    background: rgba(0, 0, 0, 0.02);
+    background: color-mix(in srgb, var(--color-fg) 2%, transparent);
   }
   .filter-panel--open {
     display: block;
+  }
+  .attached {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .attached__label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    color: var(--color-muted);
+  }
+  .attached__strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .attached__thumb {
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    cursor: pointer;
+    overflow: hidden;
+  }
+  .attached__thumb.selected {
+    border-color: var(--color-accent);
+    outline: 1px solid var(--color-accent);
+  }
+  .attached__thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .load-more {
+    display: block;
+    width: 100%;
+    margin-top: var(--space-sm);
   }
   .results {
     /* No internal scroll — .modal__body owns scrolling. */
@@ -436,7 +584,7 @@
   }
   .tile__thumb {
     aspect-ratio: 1;
-    background: #f4f4f4;
+    background: var(--color-surface);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -480,8 +628,8 @@
     font-size: var(--text-sm);
   }
   .notice--error {
-    border-color: #c00;
-    color: #c00;
+    border-color: var(--color-status-fail);
+    color: var(--color-status-fail);
   }
   @media (max-width: 640px) {
     .modal {
