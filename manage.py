@@ -1526,8 +1526,8 @@ if __name__ == "__main__":
         from server.search_client import (
             EMULSION_INDEX,
             SAMPLES_INDEX,
+            _build_document,
             get_client,
-            sync_media_item,
         )
         db = SessionLocal()
         items = db.query(MediaItem).filter(MediaItem.output_index == SAMPLES_INDEX).all()
@@ -1542,12 +1542,25 @@ if __name__ == "__main__":
             db.add(MediaSource(media_item_id=item.id, source_type="sample_library"))
             db.flush()
             db.refresh(item)
-            sync_media_item(db, item)
+            # Build + push the doc ourselves so we can tell whether the
+            # samples-bored upsert landed *before* deleting the stray Emulsion
+            # copy. sync_media_item swallows Meili errors and returns None, so
+            # using it here would let a failed resync delete the only findable
+            # copy — stranding the item harder than before.
+            doc = _build_document(db, item)
+            synced = False
             try:
-                c.index(EMULSION_INDEX).delete_document(item.id)
-            except Exception:
-                pass  # stray may already be gone; the resync above is what matters
-            print(f"  {item.id}: {item.filename} -> {SAMPLES_INDEX}")
+                c.index(SAMPLES_INDEX).add_documents([doc])
+                synced = True
+            except Exception as exc:
+                print(f"  {item.id}: FAILED to sync to {SAMPLES_INDEX}: {exc}")
+                print("  (leaving Emulsion doc in place; will retry on next run)")
+            if synced:
+                try:
+                    c.index(EMULSION_INDEX).delete_document(item.id)
+                except Exception:
+                    pass  # stray may already be gone
+                print(f"  {item.id}: {item.filename} -> {SAMPLES_INDEX}")
         db.commit()
         db.close()
 
