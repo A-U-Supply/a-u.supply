@@ -1,6 +1,6 @@
 name = "sparagmos"
 display_name = "Sparagmos — Image Destruction"
-description = "Feed images through destruction recipes: glitch, decay, neural hallucination, geometric compositing. 150 recipes, 2-5 input images."
+description = "Feed images through destruction recipes: glitch, decay, neural hallucination, geometric compositing. 165 recipes, 1-5 input images."
 image = "ghcr.io/a-u-supply/sparagmos:latest"
 timeout_seconds = 900
 input_mode = "flag"
@@ -44,6 +44,14 @@ description = "Each recipe defines a chain of destruction effects. Input count s
 required = true
 flag = "--recipe"
 depends_on = { param = "processing_mode", value = "recipe" }
+
+[[params.recipe.option_groups]]
+label = "1 Image — Omo"
+[[params.recipe.option_groups.options]]
+value = "omo-reliquary"
+label = "Omo Reliquary"
+input_count = 1
+description = "OCR finds every legible word and seals it behind glass while the rest of the frame is washed out, moshed, or pixel-sorted around the relics. Text outlives the image. Single output."
 
 [[params.recipe.option_groups]]
 label = "2 Images — Neural"
@@ -102,6 +110,14 @@ value = "x-ray-composite"
 label = "X-Ray Composite"
 input_count = 2
 description = "One image is decomposed to its principal components — stripped to structural essentials, the eigenfaces of matter. Its edge skeleton is then masked ov"
+
+[[params.recipe.option_groups]]
+label = "2 Images — Omo"
+[[params.recipe.option_groups.options]]
+value = "omo-medallion"
+label = "Omo Medallion"
+input_count = 2
+description = "The second image is folded into a radial kaleidoscope mandala, then set only into the deepest shadows of the host, which otherwise goes untouched. Single output."
 
 [[params.recipe.option_groups]]
 label = "3 Images — Ancients"
@@ -460,6 +476,44 @@ value = "bw-stencil"
 label = "B&W Stencil"
 input_count = 3
 description = "All 3 images thresholded to high-contrast black-and-white via Otsu. Stencil and fills are all B&W. Hard binary edges — the cut line is the aesthetic statement. 3 images → 6 permutation composites."
+
+[[params.recipe.option_groups]]
+label = "3 Images — Omo"
+[[params.recipe.option_groups.options]]
+value = "omo-counterfeit"
+label = "Omo Counterfeit"
+input_count = 3
+description = "Engraved-currency treatment: wobble-eyed rings through a contour-following line screen — the guilloche of a banknote that never cleared — dithered to a stamped-ink palette. Single output."
+
+[[params.recipe.option_groups.options]]
+value = "omo-foilpress"
+label = "Omo Foilpress"
+input_count = 3
+description = "Gradient displacement pushes the stencil boundary until the composite reads as an image hammered into metal, finished in a bronze duotone with a contrast anchor. Embossed foil, not glitch. Single output."
+
+[[params.recipe.option_groups.options]]
+value = "omo-hardcut"
+label = "Omo Hardcut"
+input_count = 3
+description = "BW collage bot homage, one cut only: all three images crushed to pure per-image Otsu black-and-white — fills included, no midtones — composited along one hard binary seam. Single output."
+
+[[params.recipe.option_groups.options]]
+value = "omo-nocturne"
+label = "Omo Nocturne"
+input_count = 3
+description = "Silver gelatin toning composited through a single Otsu stencil, then received on a dying CRT: faint scan lines, a breath of jitter, no color bleed. Single output."
+
+[[params.recipe.option_groups.options]]
+value = "omo-riso"
+label = "Omo Riso"
+input_count = 3
+description = "A halftone dot-screen stencil normalized, posterized to two or three flat levels, and printed in a single random spot ink on paper white. Flat, bright, hard-edged. Single output."
+
+[[params.recipe.option_groups.options]]
+value = "omo-specimen"
+label = "Omo Specimen"
+input_count = 3
+description = "One image shot through with six circular die-cuts takes its place in an Otsu stencil with the other two — a specimen tray or Rorschach plate: airy, clinical. Single output."
 
 [[params.recipe.option_groups]]
 label = "4 Images — Ancients"
@@ -1028,6 +1082,13 @@ min_selections = 2
 depends_on = { param = "processing_mode", value = "chain" }
 
 [[params.chain.option_groups]]
+label = "1 Image — Omo"
+[[params.chain.option_groups.options]]
+value = "omo-reliquary"
+label = "Omo Reliquary"
+input_count = 1
+
+[[params.chain.option_groups]]
 label = "2 Images — Neural"
 [[params.chain.option_groups.options]]
 value = "dream-dissolve"
@@ -1074,6 +1135,13 @@ input_count = 2
 [[params.chain.option_groups.options]]
 value = "x-ray-composite"
 label = "X-Ray Composite"
+input_count = 2
+
+[[params.chain.option_groups]]
+label = "2 Images — Omo"
+[[params.chain.option_groups.options]]
+value = "omo-medallion"
+label = "Omo Medallion"
 input_count = 2
 
 [[params.chain.option_groups]]
@@ -1334,6 +1402,78 @@ input_count = 3
 [[params.chain.option_groups.options]]
 value = "wobble-halation"
 label = "Wobble Halation"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "spiral-screen"
+label = "Spiral Screen"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "soapy-spiral"
+label = "Soapy Spiral"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "oil-spiral"
+label = "Oil Spiral"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "oil-spiral-cells"
+label = "Oil Spiral Cells"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "oil-spiral-cells-bleed"
+label = "Oil Spiral Cells Bleed"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "monochrome-stencil"
+label = "Monochrome Stencil"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "bw-stencil"
+label = "B&W Stencil"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "figure-ground-swap"
+label = "Figure-Ground Swap"
+input_count = 3
+
+[[params.chain.option_groups]]
+label = "3 Images — Omo"
+[[params.chain.option_groups.options]]
+value = "omo-counterfeit"
+label = "Omo Counterfeit"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "omo-foilpress"
+label = "Omo Foilpress"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "omo-hardcut"
+label = "Omo Hardcut"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "omo-nocturne"
+label = "Omo Nocturne"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "omo-riso"
+label = "Omo Riso"
+input_count = 3
+
+[[params.chain.option_groups.options]]
+value = "omo-specimen"
+label = "Omo Specimen"
 input_count = 3
 
 [[params.chain.option_groups]]
