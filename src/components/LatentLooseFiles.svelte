@@ -274,9 +274,9 @@
     min-width: 0;
   }
   .tile__name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    /* Full filename, wrapped — truncation hid the part that identifies
+       the file, and hover titles don't exist on mobile. */
+    overflow-wrap: anywhere;
     font-size: var(--text-sm);
   }
   .tile__meta {
