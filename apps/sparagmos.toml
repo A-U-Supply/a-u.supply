@@ -112,7 +112,6 @@ label = "Omo Medallion"
 input_count = 2
 description = "The second image is folded into a radial kaleidoscope mandala, then set only into the deepest shadows of the host, which otherwise goes untouched. Single output."
 
-
 [[params.recipe.option_groups.options]]
 value = "omo-reliquary"
 label = "Omo Reliquary"
@@ -131,7 +130,6 @@ value = "glim-magiceye"
 label = "Glim Magiceye"
 input_count = 2
 description = "A true autostereogram: A's luminance becomes the depth map, B the repeating texture. Unfocus or cross your eyes and A's shapes float free of the surface. Single output."
-
 
 [[params.recipe.option_groups.options]]
 value = "glim-oilslick"
@@ -168,6 +166,12 @@ value = "glim-drift"
 label = "Glim Drift"
 input_count = 2
 description = "Peripheral drift: B's brightest points seed a field of Kitaoka wheels painted in A's palette — hold still and look just beside them. Single output."
+
+[[params.recipe.option_groups.options]]
+value = "glim-anaglyph"
+label = "Glim Anaglyph"
+input_count = 2
+description = "A and B blended into one scene, then the red and blue channels pulled apart in opposite directions — the doubled 3D-glasses image. Wear actual red/cyan glasses and the two sources separate into different depths. Single output."
 [[params.recipe.option_groups]]
 label = "3 Images — Ancients"
 [[params.recipe.option_groups.options]]
@@ -566,11 +570,6 @@ description = "One image shot through with six circular die-cuts takes its place
 
 [[params.recipe.option_groups]]
 label = "3 Images — Glim"
-[[params.recipe.option_groups.options]]
-value = "glim-moire"
-label = "Glim Moire"
-input_count = 3
-description = "Two contour-hugging line screens at slightly mismatched frequency and angle — the interference bands are in neither screen, and they shimmer as you scroll. Single output."
 
 [[params.recipe.option_groups]]
 label = "4 Images — Ancients"
@@ -1194,7 +1193,6 @@ value = "omo-medallion"
 label = "Omo Medallion"
 input_count = 2
 
-
 [[params.chain.option_groups.options]]
 value = "omo-reliquary"
 label = "Omo Reliquary"
@@ -1210,7 +1208,6 @@ input_count = 2
 value = "glim-magiceye"
 label = "Glim Magiceye"
 input_count = 2
-
 
 [[params.chain.option_groups.options]]
 value = "glim-oilslick"
@@ -1240,6 +1237,11 @@ input_count = 2
 [[params.chain.option_groups.options]]
 value = "glim-drift"
 label = "Glim Drift"
+input_count = 2
+
+[[params.chain.option_groups.options]]
+value = "glim-anaglyph"
+label = "Glim Anaglyph"
 input_count = 2
 [[params.chain.option_groups]]
 label = "3 Images — Ancients"
@@ -1575,10 +1577,6 @@ input_count = 3
 
 [[params.chain.option_groups]]
 label = "3 Images — Glim"
-[[params.chain.option_groups.options]]
-value = "glim-moire"
-label = "Glim Moire"
-input_count = 3
 
 [[params.chain.option_groups]]
 label = "4 Images — Ancients"
