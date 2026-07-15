@@ -735,12 +735,23 @@ def _run_job(job: Job, db: Session):
     image_missing = inspect_result.returncode != 0
     if image_missing or force_pull:
         logger.info("Pulling image %s (missing=%s, force=%s)", image, image_missing, force_pull)
-        pull_result = subprocess.run(
-            ["docker", "pull", image],
-            capture_output=True, text=True, timeout=300,
-        )
-        if pull_result.returncode != 0:
-            logger.warning("Docker pull failed (may use cached image): %s", pull_result.stderr.strip())
+        # A slow cold pull must degrade to "use whatever is cached", never crash
+        # the job. subprocess.run raises TimeoutExpired on timeout (it does NOT
+        # return a non-zero code), so a bare timeout would propagate to the
+        # worker loop and fail the job — which is exactly what force_pull loops
+        # into right after a new image publishes. Treat a timeout like any other
+        # failed pull: warn and fall through to the cached image.
+        try:
+            pull_result = subprocess.run(
+                ["docker", "pull", image],
+                capture_output=True, text=True, timeout=900,
+            )
+            if pull_result.returncode != 0:
+                logger.warning("Docker pull failed (may use cached image): %s", pull_result.stderr.strip())
+        except subprocess.TimeoutExpired:
+            if image_missing:
+                raise  # no cached image to fall back on — surface the failure
+            logger.warning("Docker pull timed out for %s; using cached image", image)
     else:
         logger.info("Image %s already present locally, skipping pull", image)
 
