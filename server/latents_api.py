@@ -129,6 +129,7 @@ def _project_summary(p: Project) -> dict:
         "hero_accent": p.hero_accent_override or p.hero_accent_auto,
         "hero_accent_auto": p.hero_accent_auto,
         "hero_accent_override": p.hero_accent_override,
+        "section_styles": _parse_metadata(p.section_styles),
         "lemmy_community_id": p.lemmy_community_id,
         "created_by": p.created_by,
         "created_at": p.created_at.isoformat() if p.created_at else None,
@@ -141,8 +142,10 @@ def _slot_summary(
     pins: dict[str, str] | None = None,
     thread_count: int = 0,
     item_count: int = 0,
+    primary_image_media_id: str | None = None,
 ) -> dict:
     pin_map = pins or {}
+    style = _parse_metadata(s.style_json)
     return {
         "id": s.id,
         "project_id": s.project_id,
@@ -153,6 +156,10 @@ def _slot_summary(
         "notes_updated_at": s.notes_updated_at.isoformat() if s.notes_updated_at else None,
         "description": s.description,
         "metadata": _parse_metadata(s.metadata_json),
+        "style": style,
+        "accent_auto": s.accent_auto,
+        "accent": style.get("accent") or s.accent_auto,
+        "primary_image_media_id": primary_image_media_id,
         "pinned": pin_map,
         "thread_count": int(thread_count),
         "item_count": int(item_count),
@@ -203,6 +210,44 @@ def _item_summary(pi: ProjectItem) -> dict:
 def _pin_map_for_slot(db: Session, slot_id: str) -> dict[str, str]:
     pins = db.query(SlotPrimaryPin).filter(SlotPrimaryPin.slot_id == slot_id).all()
     return {p.media_type: p.media_item_id for p in pins}
+
+
+def _primary_image_map(db: Session, slot_ids: list[str]) -> dict[str, str]:
+    """slot_id -> media_item_id of the slot's ★ starred image.
+
+    Latest `added_at` wins, id as a deterministic tie-break: rows are scanned
+    ascending so the last overwrite is the winner. Must stay in step with
+    `_recompute_slot_accent`, which colors from the same pick.
+    """
+    if not slot_ids:
+        return {}
+    rows = (
+        db.query(ProjectItem.slot_id, ProjectItem.media_item_id)
+        .join(MediaItem, MediaItem.id == ProjectItem.media_item_id)
+        .filter(
+            ProjectItem.slot_id.in_(slot_ids),
+            ProjectItem.is_primary.is_(True),
+            MediaItem.media_type == "image",
+        )
+        .order_by(ProjectItem.added_at.asc(), ProjectItem.id.asc())
+        .all()
+    )
+    return {sid: mid for sid, mid in rows}
+
+
+def _primary_image_for_slot(db: Session, slot_id: str) -> str | None:
+    return _primary_image_map(db, [slot_id]).get(slot_id)
+
+
+def _recompute_slot_accent(db: Session, slot: ProjectSlot) -> None:
+    """Refresh a slot's auto accent from its ★ starred image. Best-effort:
+    extraction failures leave the accent None, never block the write."""
+    mid = _primary_image_for_slot(db, slot.id)
+    if not mid:
+        slot.accent_auto = None
+        return
+    mi = db.query(MediaItem).filter(MediaItem.id == mid).first()
+    slot.accent_auto = _compute_hero_accent(mi) if mi else None
 
 
 def _compute_hero_accent(mi: MediaItem) -> str | None:
@@ -259,6 +304,80 @@ VALID_HERO_STYLES = {"scrim", "plate", "treat"}
 # nothing outside this grammar may ever be persisted.
 _HERO_ACCENT_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
+# Section/slot style grammar (2026-07-17-latent-section-styles plan). Every
+# stored value lands in a client `style` attribute, so hex keys share the
+# hero-accent injection stance above.
+_STYLE_HEX_KEYS = {"accent", "bg_color", "border", "text", "head_tint"}
+VALID_SLOT_BG_MODES = {"auto", "image", "solid", "none"}
+VALID_SECTION_BG_MODES = {"image", "solid", "none"}  # sections have no starred image
+VALID_SECTION_KEYS = {"repo", "links", "docs", "slots", "loose", "threads"}
+
+
+def _merge_style_patch(
+    db: Session,
+    stored_raw: str | None,
+    patch: dict,
+    bg_modes: set[str],
+    what: str,
+) -> str | None:
+    """Merge a partial style dict into the stored JSON, validating every key.
+
+    `""` deletes a key (reset to auto/default); unknown keys 400. Returns the
+    new JSON string, or None when nothing remains.
+    """
+    merged = _parse_metadata(stored_raw)
+    for key, value in patch.items():
+        if key in _STYLE_HEX_KEYS:
+            if value == "":
+                merged.pop(key, None)
+            elif isinstance(value, str) and _HERO_ACCENT_RE.match(value):
+                merged[key] = value.lower()
+            else:
+                raise HTTPException(status_code=400, detail=f"{what}.{key} must be '#rrggbb'")
+        elif key == "bg_mode":
+            if value == "":
+                merged.pop(key, None)
+            elif value in bg_modes:
+                merged[key] = value
+            else:
+                raise HTTPException(status_code=400, detail=f"Invalid {what}.bg_mode '{value}'")
+        elif key == "bg_media_item_id":
+            if value == "":
+                merged.pop(key, None)
+            elif not isinstance(value, str):
+                raise HTTPException(status_code=400, detail=f"{what}.bg_media_item_id must be a media item id")
+            else:
+                mi = db.query(MediaItem).filter(MediaItem.id == value).first()
+                if not mi:
+                    raise HTTPException(status_code=404, detail=f"{what}.bg_media_item_id refers to a missing media item")
+                if mi.media_type != "image":
+                    raise HTTPException(status_code=400, detail=f"{what}.bg_media_item_id must be an image media item")
+                merged[key] = value
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown {what} key '{key}'")
+    return json.dumps(merged) if merged else None
+
+
+def _merge_section_styles(db: Session, stored_raw: str | None, patch: dict) -> str | None:
+    """Merge a partial {section_key: style object} dict. An empty section
+    object deletes that section's entry."""
+    merged = _parse_metadata(stored_raw)
+    for section, sub in patch.items():
+        if section not in VALID_SECTION_KEYS:
+            raise HTTPException(status_code=400, detail=f"Unknown section '{section}'")
+        if not isinstance(sub, dict):
+            raise HTTPException(status_code=400, detail=f"section_styles['{section}'] must be an object")
+        if not sub:
+            merged.pop(section, None)
+            continue
+        current_raw = json.dumps(merged[section]) if isinstance(merged.get(section), dict) else None
+        new_raw = _merge_style_patch(db, current_raw, sub, VALID_SECTION_BG_MODES, f"section_styles.{section}")
+        if new_raw is None:
+            merged.pop(section, None)
+        else:
+            merged[section] = json.loads(new_raw)
+    return json.dumps(merged) if merged else None
+
 
 class CreateProjectBody(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
@@ -275,6 +394,7 @@ class UpdateProjectBody(BaseModel):
     hero_media_item_id: str | None = None
     hero_style: str | None = None
     hero_accent_override: str | None = None  # "" resets to auto
+    section_styles: dict | None = None       # partial merge; {} clears all; per-key "" deletes
 
 
 class CreateSlotBody(BaseModel):
@@ -292,6 +412,7 @@ class UpdateSlotBody(BaseModel):
     repo_path: str | None = None     # set to "" to clear
     repo_ref: str | None = None      # set to "" to clear (falls back to repo default branch)
     run_command: str | None = None   # set to "" to clear (falls back to `python <path>`)
+    style: dict | None = None        # partial merge; {} clears all; per-key "" deletes
 
 
 class ReorderSlotsBody(BaseModel):
@@ -449,6 +570,7 @@ def get_project(
             .all()
         )
         slot_item_counts = {sid: int(c) for sid, c in item_rows}
+    primary_images = _primary_image_map(db, [s.id for s in slots])
     return {
         **_project_summary(p),
         "slots": [
@@ -457,6 +579,7 @@ def get_project(
                 slot_pins.get(s.id),
                 slot_thread_counts.get(s.id, 0),
                 slot_item_counts.get(s.id, 0),
+                primary_image_media_id=primary_images.get(s.id),
             )
             for s in slots
         ],
@@ -552,6 +675,11 @@ def update_project(
             p.hero_accent_override = body.hero_accent_override.lower()
         else:
             raise HTTPException(status_code=400, detail="hero_accent_override must be '#rrggbb'")
+    if body.section_styles is not None:
+        if body.section_styles == {}:
+            p.section_styles = None
+        else:
+            p.section_styles = _merge_section_styles(db, p.section_styles, body.section_styles)
     db.commit()
     db.refresh(p)
 
@@ -612,6 +740,7 @@ def list_slots(
             .all()
         ):
             thread_counts[sid] = int(c)
+    primary_images = _primary_image_map(db, slot_ids)
     return {
         "slots": [
             _slot_summary(
@@ -619,6 +748,7 @@ def list_slots(
                 _pin_map_for_slot(db, s.id),
                 thread_counts.get(s.id, 0),
                 item_counts.get(s.id, 0),
+                primary_image_media_id=primary_images.get(s.id),
             )
             for s in slots
         ]
@@ -689,9 +819,17 @@ def update_slot(
         s.repo_ref = body.repo_ref or None
     if body.run_command is not None:
         s.run_command = body.run_command or None
+    if body.style is not None:
+        if body.style == {}:
+            s.style_json = None
+        else:
+            s.style_json = _merge_style_patch(db, s.style_json, body.style, VALID_SLOT_BG_MODES, "style")
     db.commit()
     db.refresh(s)
-    return _slot_summary(s, _pin_map_for_slot(db, s.id))
+    return _slot_summary(
+        s, _pin_map_for_slot(db, s.id),
+        primary_image_media_id=_primary_image_for_slot(db, s.id),
+    )
 
 
 @router.delete("/{project_id}/slots/{slot_id}", status_code=204, summary="Delete a slot")
@@ -726,7 +864,16 @@ def reorder_slots(
     for i, sid in enumerate(body.order):
         by_id[sid].position = i + 1
     db.commit()
-    return {"slots": [_slot_summary(by_id[sid], _pin_map_for_slot(db, sid)) for sid in body.order]}
+    primary_images = _primary_image_map(db, body.order)
+    return {
+        "slots": [
+            _slot_summary(
+                by_id[sid], _pin_map_for_slot(db, sid),
+                primary_image_media_id=primary_images.get(sid),
+            )
+            for sid in body.order
+        ]
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -893,7 +1040,13 @@ def move_item(
     if body.slot_id:
         slot = _slot_or_404(db, project_id, body.slot_id)
         new_slot_id = slot.id
+    old_slot_id = pi.slot_id
     pi.slot_id = new_slot_id
+    if pi.is_primary and pi.media_item and pi.media_item.media_type == "image":
+        for sid in {old_slot_id, new_slot_id} - {None}:
+            s = db.query(ProjectSlot).filter(ProjectSlot.id == sid).first()
+            if s:
+                _recompute_slot_accent(db, s)
     db.commit()
     db.refresh(pi)
     return _item_summary(pi)
@@ -919,9 +1072,29 @@ def set_item_primary(
     if not pi:
         raise HTTPException(status_code=404, detail="Attachment not found")
     pi.is_primary = bool(body.is_primary)
+    slot = None
+    if pi.slot_id:
+        slot = db.query(ProjectSlot).filter(ProjectSlot.id == pi.slot_id).first()
+        if slot and pi.media_item and pi.media_item.media_type == "image":
+            _recompute_slot_accent(db, slot)
     db.commit()
     db.refresh(pi)
-    return _item_summary(pi)
+    out = _item_summary(pi)
+    if slot:
+        # Fresh slot summary rides along (additive) so the card can repaint
+        # its auto accent/background without a second request.
+        db.refresh(slot)
+        t_count = db.query(func.count(Thread.id)).filter(
+            Thread.anchor_type == "slot", Thread.anchor_id == slot.id,
+        ).scalar() or 0
+        i_count = db.query(func.count(ProjectItem.id)).filter(
+            ProjectItem.slot_id == slot.id,
+        ).scalar() or 0
+        out["slot"] = _slot_summary(
+            slot, _pin_map_for_slot(db, slot.id), t_count, i_count,
+            primary_image_media_id=_primary_image_for_slot(db, slot.id),
+        )
+    return out
 
 
 @router.delete("/{project_id}/slots/{slot_id}/items", summary="Detach every item from a slot (optionally purge Emulsion-only uploads)")
@@ -933,7 +1106,7 @@ def clear_slot_items(
     db: Session = Depends(get_db),
 ):
     _project_or_404(db, project_id)
-    _slot_or_404(db, project_id, slot_id)
+    cleared_slot = _slot_or_404(db, project_id, slot_id)
     pis = db.query(ProjectItem).options(joinedload(ProjectItem.media_item)).filter(
         ProjectItem.project_id == project_id,
         ProjectItem.slot_id == slot_id,
@@ -956,6 +1129,7 @@ def clear_slot_items(
             if other == 0 and is_emulsion_only:
                 purged_media.append((mi.id, mi.media_type, mi.file_path))
                 db.delete(mi)
+    cleared_slot.accent_auto = None  # no items remain, so no starred image
     db.commit()
     # Disk + Meili cleanup for purged items.
     if purged_media:
@@ -992,7 +1166,17 @@ def detach_item(
     if not pi:
         raise HTTPException(status_code=404, detail="Attachment not found")
     mi_id = pi.media_item_id
+    recompute_slot_id = (
+        pi.slot_id
+        if pi.is_primary and pi.media_item and pi.media_item.media_type == "image"
+        else None
+    )
     db.delete(pi)
+    if recompute_slot_id:
+        db.flush()  # the accent query must not see the departing row
+        s = db.query(ProjectSlot).filter(ProjectSlot.id == recompute_slot_id).first()
+        if s:
+            _recompute_slot_accent(db, s)
     db.commit()
     # Refresh the search doc — `project_ids` array shrinks.
     try:

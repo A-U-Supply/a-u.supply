@@ -553,6 +553,7 @@ class Project(Base):
     hero_style = Column(String, nullable=True)             # scrim | plate | treat; NULL reads as scrim
     hero_accent_auto = Column(String, nullable=True)       # server-extracted "#rrggbb"; recomputed when the hero changes
     hero_accent_override = Column(String, nullable=True)   # manual "#rrggbb"; wins over auto; survives hero changes
+    section_styles = Column(String, nullable=True)         # JSON dict {section_key: style object} for detail-page sections
     lemmy_community_id = Column(Integer, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, nullable=False, default=_utcnow)
@@ -580,6 +581,8 @@ class ProjectSlot(Base):
     status = Column(String, nullable=False, default="forming")  # forming | developing | fixed
     description = Column(String, nullable=True)      # markdown
     metadata_json = Column(String, nullable=True)    # JSON dict of arbitrary {key: value}
+    accent_auto = Column(String, nullable=True)      # server-extracted "#rrggbb" from the ★ starred image; NULL when none
+    style_json = Column(String, nullable=True)       # JSON dict of user style overrides (whitelisted keys)
     # Optional GitHub repo file/dir association — populated by the link UI or
     # the manifest-sync flow. `repo_id` not declared as FK in code to avoid
     # circular import; enforced by the `projects` migration on prod.
