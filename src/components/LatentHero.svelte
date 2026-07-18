@@ -78,7 +78,14 @@
         const err = await res.json().catch(() => ({}));
         throw new Error(err?.detail || `Save failed (${res.status})`);
       }
-      applySummary(await res.json());
+      const summary = await res.json();
+      applySummary(summary);
+      // Broadcast like the loose-files quick action does, so the header
+      // backdrop (and any other listener) follows hero changes made here.
+      // Our own listener picks it up too — applySummary is idempotent.
+      window.dispatchEvent(
+        new CustomEvent('latent-hero-changed', { detail: summary }),
+      );
     } catch (e: any) {
       error = e?.message || 'Save failed';
     }

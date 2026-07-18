@@ -7,6 +7,8 @@ import Admin from '../../../layouts/Admin.astro';
     <div class="header-skeleton"></div>
   </div>
 
+  <div id="map-island"></div>
+
   <div id="islands" class="islands" hidden>
     <section id="repo-island" class="latent-section" data-section="repo">
     </section>
@@ -266,6 +268,37 @@ import Admin from '../../../layouts/Admin.astro';
     text-transform: uppercase;
     letter-spacing: 1pt;
   }
+  /* Header hero backdrop (phase 3b): the latent's cover art, faint, under
+     an overlay wash, confined to the header. Inputs sit on opaque grounds
+     so text stays fully legible. Kept on mobile — it anchors "which latent
+     am I in". */
+  :global(.latent-header--backdrop) {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  :global(.latent-header .header-backdrop) {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.15;
+    z-index: 0;
+  }
+  :global(.latent-header .header-backdrop-veil) {
+    position: absolute;
+    inset: 0;
+    background: var(--color-overlay-soft);
+    z-index: 1;
+    pointer-events: none;
+  }
+  :global(
+    .latent-header--backdrop > :not(.header-backdrop):not(.header-backdrop-veil)
+  ) {
+    position: relative;
+    z-index: 2;
+  }
   /* Hero accent carry — identity learned on the grid persists inside.
      Applied only when the Latent has an effective accent. */
   :global(.latent-header--accent) {
@@ -293,6 +326,7 @@ import Admin from '../../../layouts/Admin.astro';
   import { mount, unmount } from 'svelte';
   import { SECTION_KEYS, safeHex } from '../../../lib/latentStyles.ts';
   import LatentHero from '../../../components/LatentHero.svelte';
+  import LatentSectionMap from '../../../components/LatentSectionMap.svelte';
   import LatentSlots from '../../../components/LatentSlots.svelte';
   import LatentDocuments from '../../../components/LatentDocuments.svelte';
   import LatentLooseFiles from '../../../components/LatentLooseFiles.svelte';
@@ -304,6 +338,7 @@ import Admin from '../../../layouts/Admin.astro';
   let mounted: any[] = [];
   let initialized = false;
   let styleListener: ((e: Event) => void) | null = null;
+  let heroListener: ((e: Event) => void) | null = null;
 
   function statusColor(s: string): string {
     return (
@@ -704,6 +739,56 @@ import Admin from '../../../layouts/Admin.astro';
     };
     applySectionStyles(p.section_styles);
 
+    // Header hero backdrop (phase 3b). Rebuilt whenever the hero changes —
+    // LatentHero and the loose-files quick action both broadcast
+    // `latent-hero-changed` with the fresh summary.
+    const applyHeaderBackdrop = (mediaId: string | null) => {
+      headerEl
+        .querySelectorAll(
+          ':scope > .header-backdrop, :scope > .header-backdrop-veil',
+        )
+        .forEach((n) => n.remove());
+      headerEl.classList.toggle('latent-header--backdrop', !!mediaId);
+      if (!mediaId) return;
+      const img = document.createElement('img');
+      img.className = 'header-backdrop';
+      img.alt = '';
+      img.loading = 'lazy';
+      img.src = `/api/media/${encodeURIComponent(mediaId)}/thumbnail?size=md`;
+      img.onerror = () => {
+        veil.remove();
+        img.remove();
+        headerEl.classList.remove('latent-header--backdrop');
+      };
+      const veil = document.createElement('div');
+      veil.className = 'header-backdrop-veil';
+      headerEl.prepend(img, veil);
+    };
+    applyHeaderBackdrop(p.hero_media_item_id || null);
+    heroListener = (e: Event) => {
+      const s = (e as CustomEvent).detail;
+      if (s?.id === id) applyHeaderBackdrop(s.hero_media_item_id || null);
+    };
+    window.addEventListener('latent-hero-changed', heroListener);
+
+    // Section map — between header and sections; chips live-update via
+    // latent-style-changed + latent-slots-updated.
+    mounted.push(
+      mount(LatentSectionMap, {
+        target: document.getElementById('map-island')!,
+        props: {
+          projectId: id,
+          sectionStyles: p.section_styles || {},
+          initialSlots: (p.slots || []).map((s: any) => ({
+            id: s.id,
+            label: s.label,
+            position: s.position,
+            accent: s.accent || null,
+          })),
+        },
+      }),
+    );
+
     // Live sync: the Style panel (and any future control) broadcasts
     // `latent-style-changed` with {projectId, scope, summary} — scope
     // 'section' carries a fresh project summary.
@@ -795,6 +880,10 @@ import Admin from '../../../layouts/Admin.astro';
     if (styleListener) {
       window.removeEventListener('latent-style-changed', styleListener);
       styleListener = null;
+    }
+    if (heroListener) {
+      window.removeEventListener('latent-hero-changed', heroListener);
+      heroListener = null;
     }
     initialized = false;
   });
