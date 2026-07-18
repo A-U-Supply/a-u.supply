@@ -302,3 +302,19 @@ label[for] {
     width: 1.2em;
   }
 }
+
+/*
+  Latent section head band (2026-07-17-latent-section-styles). Lives here
+  because it's applied to header elements INSIDE Svelte islands (whose styles
+  are scoped) while the color comes from --sec-accent inherited from the
+  island's .latent-section wrapper on the detail page. The 12% wash strength
+  is a deliberate legibility clamp — mirrored as WASH_STRENGTH in
+  src/lib/latentStyles.ts so contrast math matches rendering.
+*/
+.latent-band {
+  background: color-mix(
+    in srgb,
+    var(--sec-head, var(--sec-accent, transparent)) 12%,
+    var(--color-surface)
+  );
+}

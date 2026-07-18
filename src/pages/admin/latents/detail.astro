@@ -8,12 +8,18 @@ import Admin from '../../../layouts/Admin.astro';
   </div>
 
   <div id="islands" class="islands" hidden>
-    <section id="repo-island"></section>
-    <section id="links-island"></section>
-    <section id="docs-island"></section>
-    <section id="slots-island"></section>
-    <section id="loose-island"></section>
-    <section id="threads-island"></section>
+    <section id="repo-island" class="latent-section" data-section="repo">
+    </section>
+    <section id="links-island" class="latent-section" data-section="links">
+    </section>
+    <section id="docs-island" class="latent-section" data-section="docs">
+    </section>
+    <section id="slots-island" class="latent-section" data-section="slots">
+    </section>
+    <section id="loose-island" class="latent-section" data-section="loose">
+    </section>
+    <section id="threads-island" class="latent-section" data-section="threads">
+    </section>
   </div>
 </Admin>
 
@@ -48,6 +54,69 @@ import Admin from '../../../layouts/Admin.astro';
     flex-direction: column;
     gap: var(--space-lg);
     margin-top: var(--space-md);
+  }
+  /* Section chrome (2026-07-17-latent-section-styles): every fixed section
+     wears an accent spine in its palette default; per-latent overrides land
+     as inline --sec-* vars via applySectionStyles(). The head-band class
+     the islands opt into (.latent-band) lives in global.css. */
+  .latent-section {
+    position: relative;
+    isolation: isolate;
+    border-left: 4px solid var(--sec-border, var(--sec-accent));
+    padding-left: var(--space-sm);
+    color: var(--sec-text, inherit);
+  }
+  .latent-section[data-section='repo'] {
+    --sec-accent: var(--latent-sec-repo);
+  }
+  .latent-section[data-section='links'] {
+    --sec-accent: var(--latent-sec-links);
+  }
+  .latent-section[data-section='docs'] {
+    --sec-accent: var(--latent-sec-docs);
+  }
+  .latent-section[data-section='slots'] {
+    --sec-accent: var(--latent-sec-slots);
+  }
+  .latent-section[data-section='loose'] {
+    --sec-accent: var(--latent-sec-loose);
+  }
+  .latent-section[data-section='threads'] {
+    --sec-accent: var(--latent-sec-threads);
+  }
+  .latent-section--bg-solid {
+    background: color-mix(
+      in srgb,
+      var(--sec-bg-color) 12%,
+      var(--color-surface)
+    );
+  }
+  .latent-section :global(.sec-bg) {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.12;
+    z-index: 0;
+  }
+  .latent-section :global(.sec-veil) {
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+    z-index: 1;
+    pointer-events: none;
+  }
+  .latent-section > :global(:not(.sec-bg):not(.sec-veil)) {
+    position: relative;
+    z-index: 2;
+  }
+  @media (max-width: 640px) {
+    /* Imagery drops on mobile; spines and tints stay. */
+    .latent-section :global(.sec-bg),
+    .latent-section :global(.sec-veil) {
+      display: none;
+    }
   }
   :global(.latent-header .header-row) {
     display: flex;
@@ -220,6 +289,7 @@ import Admin from '../../../layouts/Admin.astro';
 
 <script>
   import { mount, unmount } from 'svelte';
+  import { SECTION_KEYS, safeHex } from '../../../lib/latentStyles.ts';
   import LatentHero from '../../../components/LatentHero.svelte';
   import LatentSlots from '../../../components/LatentSlots.svelte';
   import LatentDocuments from '../../../components/LatentDocuments.svelte';
@@ -230,6 +300,7 @@ import Admin from '../../../layouts/Admin.astro';
 
   let mounted: any[] = [];
   let initialized = false;
+  let styleListener: ((e: Event) => void) | null = null;
 
   function statusColor(s: string): string {
     return (
@@ -578,6 +649,70 @@ import Admin from '../../../layouts/Admin.astro';
       }
     };
     applyAccent(p.hero_accent || null);
+
+    // Fixed-section style carry. Palette defaults come from CSS; per-latent
+    // overrides land here as inline custom properties + background layers.
+    // Every hex is re-validated before touching a style attribute — the
+    // server regex plus this check is the whole injection defense.
+    const applySectionStyles = (
+      styles: Record<string, Record<string, string>> | null | undefined,
+    ) => {
+      for (const key of SECTION_KEYS) {
+        const el = islandsEl.querySelector<HTMLElement>(
+          `.latent-section[data-section="${key}"]`,
+        );
+        if (!el) continue;
+        const st = (styles || {})[key] || {};
+        const varMap: Record<string, string | null> = {
+          '--sec-accent': safeHex(st.accent),
+          '--sec-border': safeHex(st.border),
+          '--sec-text': safeHex(st.text),
+          '--sec-head': safeHex(st.head_tint),
+        };
+        for (const [cssVar, val] of Object.entries(varMap)) {
+          if (val) el.style.setProperty(cssVar, val);
+          else el.style.removeProperty(cssVar);
+        }
+        // Background layers. Sections have no `auto` mode; default is none.
+        el.querySelectorAll(':scope > .sec-bg, :scope > .sec-veil').forEach(
+          (n) => n.remove(),
+        );
+        el.classList.remove('latent-section--bg-solid');
+        el.style.removeProperty('--sec-bg-color');
+        const bgColor = safeHex(st.bg_color);
+        if (st.bg_mode === 'solid' && bgColor) {
+          el.style.setProperty('--sec-bg-color', bgColor);
+          el.classList.add('latent-section--bg-solid');
+        } else if (st.bg_mode === 'image' && st.bg_media_item_id) {
+          const img = document.createElement('img');
+          img.className = 'sec-bg';
+          img.alt = '';
+          img.loading = 'lazy';
+          img.src = `/api/media/${encodeURIComponent(st.bg_media_item_id)}/thumbnail?size=md`;
+          img.onerror = () => {
+            veil.remove();
+            img.remove();
+          };
+          const veil = document.createElement('div');
+          veil.className = 'sec-veil';
+          el.prepend(img, veil);
+        }
+      }
+    };
+    applySectionStyles(p.section_styles);
+
+    // Live sync: the Style panel (and any future control) broadcasts
+    // `latent-style-changed` with {projectId, scope, summary} — scope
+    // 'section' carries a fresh project summary.
+    styleListener = (e: Event) => {
+      const d = (e as CustomEvent).detail;
+      if (!d || d.projectId !== id) return;
+      if (d.scope === 'section' && d.summary?.section_styles !== undefined) {
+        applySectionStyles(d.summary.section_styles);
+      }
+    };
+    window.addEventListener('latent-style-changed', styleListener);
+
     mounted.push(
       mount(LatentHero, {
         target: document.getElementById('hero-island')!,
@@ -643,6 +778,10 @@ import Admin from '../../../layouts/Admin.astro';
       } catch {}
     }
     mounted = [];
+    if (styleListener) {
+      window.removeEventListener('latent-style-changed', styleListener);
+      styleListener = null;
+    }
     initialized = false;
   });
   init();

@@ -11,6 +11,7 @@
   import PullFromIndex from './PullFromIndex.svelte';
   import LatentLinks from './LatentLinks.svelte';
   import { fileExt } from '../lib/fileExt.ts';
+  import { safeHex } from '../lib/latentStyles.ts';
 
   type Props = {
     projectId: string;
@@ -27,6 +28,10 @@
     status: string;
     notes: string | null;
     notes_updated_at: string | null;
+    style?: Record<string, string>;
+    accent_auto?: string | null;
+    accent?: string | null;
+    primary_image_media_id?: string | null;
     pinned: Record<string, string>;
     thread_count?: number;
     item_count?: number;
@@ -474,6 +479,13 @@
           i.id === item.id ? { ...i, is_primary: body.is_primary } : i,
         ),
       };
+      // The response carries a fresh slot summary so the card's auto
+      // accent/background repaints the moment the star lands.
+      if (body.slot?.id) {
+        slots = slots.map((s) =>
+          s.id === body.slot.id ? { ...s, ...body.slot } : s,
+        );
+      }
     } catch (e: any) {
       error = e?.message || 'Failed to toggle primary';
     }
@@ -586,6 +598,61 @@
     );
   }
 
+  // --- Slot card styling (2026-07-17-latent-section-styles) ---------------
+  // All colors are server-validated #rrggbb, but safeHex re-validates before
+  // anything reaches a style attribute (the shared injection stance).
+
+  function slotBgMode(slot: Slot): string {
+    return slot.style?.bg_mode || 'auto';
+  }
+
+  function slotBgImageId(slot: Slot): string | null {
+    const mode = slotBgMode(slot);
+    if (mode === 'auto') return slot.primary_image_media_id || null;
+    if (mode === 'image') return slot.style?.bg_media_item_id || null;
+    return null;
+  }
+
+  function slotBgSolid(slot: Slot): string | null {
+    return slotBgMode(slot) === 'solid' ? safeHex(slot.style?.bg_color) : null;
+  }
+
+  function slotAccent(slot: Slot): string | null {
+    return safeHex(slot.style?.accent) || safeHex(slot.accent_auto);
+  }
+
+  function slotVars(slot: Slot): string {
+    const vars: string[] = [];
+    const accent = slotAccent(slot);
+    if (accent) vars.push(`--slot-accent:${accent}`);
+    const border = safeHex(slot.style?.border);
+    if (border) vars.push(`--slot-border:${border}`);
+    const text = safeHex(slot.style?.text);
+    if (text) vars.push(`--slot-text:${text}`);
+    const head = safeHex(slot.style?.head_tint);
+    if (head) vars.push(`--slot-head:${head}`);
+    const bg = slotBgSolid(slot);
+    if (bg) vars.push(`--slot-bg-color:${bg}`);
+    return vars.join(';');
+  }
+
+  // Un-styled slots must render byte-identical to before — chrome only
+  // switches on when there's something to show.
+  function slotStyled(slot: Slot): boolean {
+    return !!(slotVars(slot) || slotBgImageId(slot));
+  }
+
+  function bgThumbUrl(mediaId: string): string {
+    return `/api/media/${encodeURIComponent(mediaId)}/thumbnail?size=md`;
+  }
+
+  function removeBgLayers(e: Event) {
+    const img = e.currentTarget as HTMLElement;
+    const veil = img.parentElement?.querySelector(':scope > .slot__veil');
+    veil?.remove();
+    img.remove();
+  }
+
   $effect(() => {
     if (projectId) load();
   });
@@ -594,10 +661,23 @@
     load();
   }
 
+  // Style-panel edits broadcast fresh summaries; swap the matching slot so
+  // spine/band/background repaint without a refetch.
+  function onStyleChanged(e: Event) {
+    const d = (e as CustomEvent).detail;
+    if (!d || d.projectId !== projectId || d.scope !== 'slot' || !d.summary)
+      return;
+    slots = slots.map((s) =>
+      s.id === d.summary.id ? { ...s, ...d.summary } : s,
+    );
+  }
+
   onMount(() => {
     document.addEventListener('latent:slots-changed', onSlotsChanged);
+    window.addEventListener('latent-style-changed', onStyleChanged);
     return () => {
       document.removeEventListener('latent:slots-changed', onSlotsChanged);
+      window.removeEventListener('latent-style-changed', onStyleChanged);
       sortable?.destroy();
     };
   });
@@ -636,7 +716,23 @@
 
   <ul class="slot-list" bind:this={slotListEl}>
     {#each slots as slot (slot.id)}
-      <li class="slot" data-slot-id={slot.id}>
+      <li
+        class="slot"
+        class:slot--styled={slotStyled(slot)}
+        class:slot--bg-solid={!!slotBgSolid(slot)}
+        style={slotVars(slot) || undefined}
+        data-slot-id={slot.id}
+      >
+        {#if slotBgImageId(slot)}
+          <img
+            class="slot__bg"
+            src={bgThumbUrl(slotBgImageId(slot)!)}
+            alt=""
+            loading="lazy"
+            onerror={removeBgLayers}
+          />
+          <div class="slot__veil"></div>
+        {/if}
         <div class="slot__head">
           <button class="slot__drag" type="button" aria-label="Drag to reorder"
             >⋮⋮</button
@@ -1006,6 +1102,57 @@
   .slot {
     border: 1px solid var(--color-border);
     background: var(--color-bg);
+  }
+  /* Slot style chrome (2026-07-17-latent-section-styles). Everything rides
+     the --slot-* custom properties emitted (re-validated) by slotVars();
+     un-styled slots take none of these rules and render exactly as before. */
+  .slot--styled {
+    position: relative;
+    isolation: isolate;
+    border-left: 4px solid
+      var(--slot-border, var(--slot-accent, var(--color-border)));
+    color: var(--slot-text, inherit);
+  }
+  .slot--styled .slot__head {
+    background: color-mix(
+      in srgb,
+      var(--slot-head, var(--slot-accent, transparent)) 12%,
+      var(--color-surface)
+    );
+  }
+  .slot--bg-solid {
+    background: color-mix(
+      in srgb,
+      var(--slot-bg-color) 12%,
+      var(--color-surface)
+    );
+  }
+  .slot__bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.12;
+    z-index: 0;
+  }
+  .slot__veil {
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+    z-index: 1;
+    pointer-events: none;
+  }
+  .slot--styled > :not(.slot__bg):not(.slot__veil) {
+    position: relative;
+    z-index: 2;
+  }
+  @media (max-width: 640px) {
+    /* Imagery drops on mobile; spines and tints stay. */
+    .slot__bg,
+    .slot__veil {
+      display: none;
+    }
   }
   .slot--ghost {
     opacity: 0.3;
