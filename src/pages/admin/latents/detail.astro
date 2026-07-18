@@ -21,6 +21,8 @@ import Admin from '../../../layouts/Admin.astro';
     <section id="threads-island" class="latent-section" data-section="threads">
     </section>
   </div>
+
+  <div id="style-panel-island"></div>
 </Admin>
 
 <style>
@@ -296,6 +298,7 @@ import Admin from '../../../layouts/Admin.astro';
   import LatentLooseFiles from '../../../components/LatentLooseFiles.svelte';
   import LatentRepoStrip from '../../../components/LatentRepoStrip.svelte';
   import LatentLinks from '../../../components/LatentLinks.svelte';
+  import LatentStylePanel from '../../../components/LatentStylePanel.svelte';
   import Threads from '../../../components/Threads.svelte';
 
   let mounted: any[] = [];
@@ -731,31 +734,31 @@ import Admin from '../../../layouts/Admin.astro';
     mounted.push(
       mount(LatentRepoStrip, {
         target: document.getElementById('repo-island')!,
-        props: { projectId: id },
+        props: { projectId: id, styleKey: 'repo' },
       }),
     );
     mounted.push(
       mount(LatentLinks, {
         target: document.getElementById('links-island')!,
-        props: { projectId: id, title: 'Links' },
+        props: { projectId: id, title: 'Links', styleKey: 'links' },
       }),
     );
     mounted.push(
       mount(LatentDocuments, {
         target: document.getElementById('docs-island')!,
-        props: { projectId: id },
+        props: { projectId: id, styleKey: 'docs' },
       }),
     );
     mounted.push(
       mount(LatentSlots, {
         target: document.getElementById('slots-island')!,
-        props: { projectId: id, projectKind: p.kind },
+        props: { projectId: id, projectKind: p.kind, styleKey: 'slots' },
       }),
     );
     mounted.push(
       mount(LatentLooseFiles, {
         target: document.getElementById('loose-island')!,
-        props: { projectId: id },
+        props: { projectId: id, styleKey: 'loose' },
       }),
     );
     mounted.push(
@@ -765,7 +768,18 @@ import Admin from '../../../layouts/Admin.astro';
           anchorType: 'project',
           anchorId: id,
           title: 'Latent threads',
+          styleKey: 'threads',
         },
+      }),
+    );
+    // Single style-settings host for every Style button on the page.
+    // Mounted OUTSIDE the .latent-section wrappers — their isolation:
+    // isolate stacking contexts would trap the fixed panel underneath
+    // later sections.
+    mounted.push(
+      mount(LatentStylePanel, {
+        target: document.getElementById('style-panel-island')!,
+        props: { projectId: id },
       }),
     );
   }

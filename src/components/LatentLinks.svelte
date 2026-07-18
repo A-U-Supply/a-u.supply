@@ -12,6 +12,8 @@
   Dropbox are similarly badged. Anything else is a generic link chip.
 -->
 <script lang="ts">
+  import LatentStyleButton from './LatentStyleButton.svelte';
+
   type Props = {
     projectId?: string;
     slotId?: string;
@@ -19,6 +21,9 @@
     readOnly?: boolean;
     title?: string;
     compact?: boolean;
+    /** Latent detail page only: opts the header into the section style
+     * grammar (band + Style button). Requires projectId. */
+    styleKey?: string | null;
   };
 
   let {
@@ -28,6 +33,7 @@
     readOnly = false,
     title,
     compact = false,
+    styleKey = null,
   }: Props = $props();
 
   type Link = {
@@ -219,9 +225,17 @@
 
 <section class="links" class:compact>
   {#if title}
-    <header class="links__head">
+    <header class="links__head" class:latent-band={!!styleKey}>
       <h3>{title}</h3>
       <span class="muted">{links.length}</span>
+      {#if styleKey && projectId}
+        <LatentStyleButton
+          {projectId}
+          scope="section"
+          sectionKey={styleKey}
+          push
+        />
+      {/if}
     </header>
   {/if}
 

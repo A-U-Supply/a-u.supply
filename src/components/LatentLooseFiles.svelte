@@ -6,13 +6,15 @@
 <script lang="ts">
   import Uploader from './Uploader.svelte';
   import PullFromIndex from './PullFromIndex.svelte';
+  import LatentStyleButton from './LatentStyleButton.svelte';
   import { fileExt } from '../lib/fileExt.ts';
 
   type Props = {
     projectId: string;
+    styleKey?: string | null;
   };
 
-  let { projectId }: Props = $props();
+  let { projectId, styleKey = null }: Props = $props();
 
   type Item = {
     id: string;
@@ -108,13 +110,16 @@
 </script>
 
 <section class="loose">
-  <header class="loose__head">
+  <header class="loose__head" class:latent-band={!!styleKey}>
     <h2>Loose files</h2>
     <span class="muted">{items.length}</span>
     <div class="loose__actions">
       <button class="action-btn" type="button" onclick={() => (pullOpen = true)}
         >+ Pull from index</button
       >
+      {#if styleKey}
+        <LatentStyleButton {projectId} scope="section" sectionKey={styleKey} />
+      {/if}
     </div>
   </header>
 
@@ -217,6 +222,9 @@
   }
   .loose__actions {
     margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
   .grid {
     list-style: none;

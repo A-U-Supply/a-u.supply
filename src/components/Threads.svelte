@@ -16,6 +16,8 @@
     - currentUserId: local user id, used to gate the edit/delete affordances.
 -->
 <script lang="ts">
+  import LatentStyleButton from './LatentStyleButton.svelte';
+
   type Props = {
     anchorType: 'project' | 'slot' | 'media_item';
     anchorId: string;
@@ -24,6 +26,9 @@
     singleThread?: boolean;
     defaultTitle?: string;
     currentUserId?: number | null;
+    /** Latent detail page only: opts the header into the section style
+     * grammar (band + Style button). anchorId must be the project id. */
+    styleKey?: string | null;
   };
 
   let {
@@ -34,6 +39,7 @@
     singleThread = false,
     defaultTitle = 'Untitled discussion',
     currentUserId = null,
+    styleKey = null,
   }: Props = $props();
 
   type ThreadRow = {
@@ -375,7 +381,7 @@
 
 <section class="threads" class:compact={useCompactHeader}>
   {#if !useCompactHeader}
-    <header class="threads__head">
+    <header class="threads__head" class:latent-band={!!styleKey}>
       <h2>{title}</h2>
       {#if !singleThread}
         <button
@@ -385,6 +391,14 @@
           disabled={!lemmyConfigured || !lemmyLinked}
           >{composerOpen ? 'Cancel' : '+ New thread'}</button
         >
+      {/if}
+      {#if styleKey}
+        <LatentStyleButton
+          projectId={anchorId}
+          scope="section"
+          sectionKey={styleKey}
+          push
+        />
       {/if}
     </header>
   {:else if !singleThread}

@@ -10,15 +10,17 @@
   import Threads from './Threads.svelte';
   import PullFromIndex from './PullFromIndex.svelte';
   import LatentLinks from './LatentLinks.svelte';
+  import LatentStyleButton from './LatentStyleButton.svelte';
   import { fileExt } from '../lib/fileExt.ts';
   import { safeHex } from '../lib/latentStyles.ts';
 
   type Props = {
     projectId: string;
     projectKind: string;
+    styleKey?: string | null;
   };
 
-  let { projectId, projectKind }: Props = $props();
+  let { projectId, projectKind, styleKey = null }: Props = $props();
 
   type Slot = {
     id: string;
@@ -705,9 +707,17 @@
 </script>
 
 <section class="slots">
-  <header class="slots__head">
+  <header class="slots__head" class:latent-band={!!styleKey}>
     <h2>Slots ({projectKind})</h2>
     <span class="muted">{slots.length}</span>
+    {#if styleKey}
+      <LatentStyleButton
+        {projectId}
+        scope="section"
+        sectionKey={styleKey}
+        push
+      />
+    {/if}
   </header>
 
   {#if error}
@@ -794,6 +804,13 @@
               type="button"
               onclick={() => deleteSlot(slot)}>Delete</button
             >
+            <LatentStyleButton
+              {projectId}
+              scope="slot"
+              slotId={slot.id}
+              accent={slotAccent(slot)}
+              noInherit
+            />
           </div>
         </div>
 
