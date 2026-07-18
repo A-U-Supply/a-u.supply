@@ -44,10 +44,51 @@ export const SECTION_TOKENS: Record<SectionKey, string> = {
   threads: 'var(--latent-sec-threads)',
 };
 
-/** Background/head-band wash strength. Must match the color-mix percentages
- * in global.css (.latent-band), detail.astro, and LatentSlots.svelte so the
- * contrast warnings compute against what actually renders. */
+/** Head-band tint strength for face-less accented cards. Must match the
+ * color-mix percentages in global.css (.latent-band) and the face-less
+ * band rules in detail.astro / LatentSlots.svelte. */
 export const WASH_STRENGTH = 0.12;
+
+/** Image-face treatments — the hero-card vocabulary (server
+ * VALID_HERO_STYLES). Solid faces ignore treatment. */
+export const FACE_TREATMENTS = ['scrim', 'plate', 'treat'] as const;
+export type FaceTreatment = (typeof FACE_TREATMENTS)[number];
+
+/** Representative ground for contrast checks over scrim/treat faces — the
+ * overlay/brightness clamps guarantee a dark field in both themes, so one
+ * check against this stands in for per-theme math. */
+export const OVERLAY_GROUND = '#262626';
+
+/** Effective accent — JS mirror of the server's `_slot_summary` formula:
+ * manual override > solid face color > extracted auto. Sections have no
+ * server-computed accent, so they always go through this. */
+export function effectiveAccent(
+  style: Record<string, string> | null | undefined,
+  accentAuto: string | null = null,
+): string | null {
+  const st = style || {};
+  return (
+    safeHex(st.accent) ||
+    (st.bg_mode === 'solid' ? safeHex(st.bg_color) : null) ||
+    safeHex(accentAuto)
+  );
+}
+
+/** The viewer's active theme (Admin.astro stamps data-theme pre-paint). */
+export function currentTheme(): ThemeName {
+  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+}
+
+/** Re-derive theme-dependent computed colors (solid-face text) when the
+ * user toggles the theme. Returns a disposer — call it on unmount. */
+export function watchTheme(cb: (t: ThemeName) => void): () => void {
+  const mo = new MutationObserver(() => cb(currentTheme()));
+  mo.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  });
+  return () => mo.disconnect();
+}
 
 /*
  * Theme grounds for cross-theme contrast math. You can't getComputedStyle

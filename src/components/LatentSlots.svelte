@@ -12,7 +12,13 @@
   import LatentLinks from './LatentLinks.svelte';
   import LatentStyleButton from './LatentStyleButton.svelte';
   import { fileExt } from '../lib/fileExt.ts';
-  import { safeHex } from '../lib/latentStyles.ts';
+  import {
+    safeHex,
+    effectiveAccent,
+    autoTextColor,
+    currentTheme,
+    watchTheme,
+  } from '../lib/latentStyles.ts';
 
   type Props = {
     projectId: string;
@@ -606,48 +612,70 @@
     );
   }
 
-  // --- Slot card styling (2026-07-17-latent-section-styles) ---------------
+  // --- Slot card faces (2026-07-18-latent-faces) ---------------------------
   // All colors are server-validated #rrggbb, but safeHex re-validates before
   // anything reaches a style attribute (the shared injection stance).
+
+  // Solid-face text is computed for the ACTIVE theme; a toggle re-derives
+  // every card via this reactive state (watchTheme in onMount).
+  let theme = $state<'light' | 'dark'>('light');
+
+  type Face =
+    | { kind: 'image'; mediaId: string; treatment: string }
+    | { kind: 'solid'; color: string };
 
   function slotBgMode(slot: Slot): string {
     return slot.style?.bg_mode || 'auto';
   }
 
-  function slotBgImageId(slot: Slot): string | null {
+  function slotFace(slot: Slot): Face | null {
     const mode = slotBgMode(slot);
-    if (mode === 'auto') return slot.primary_image_media_id || null;
-    if (mode === 'image') return slot.style?.bg_media_item_id || null;
+    const treatment = (slot.style?.bg_style as string) || 'scrim';
+    if (mode === 'auto' && slot.primary_image_media_id)
+      return { kind: 'image', mediaId: slot.primary_image_media_id, treatment };
+    if (mode === 'image' && slot.style?.bg_media_item_id)
+      return { kind: 'image', mediaId: slot.style.bg_media_item_id, treatment };
+    if (mode === 'solid') {
+      const color = safeHex(slot.style?.bg_color);
+      if (color) return { kind: 'solid', color };
+    }
     return null;
   }
 
-  function slotBgSolid(slot: Slot): string | null {
-    return slotBgMode(slot) === 'solid' ? safeHex(slot.style?.bg_color) : null;
+  function slotFaceTreatment(slot: Slot): string | null {
+    const face = slotFace(slot);
+    return face?.kind === 'image' ? face.treatment : null;
   }
 
   function slotAccent(slot: Slot): string | null {
-    return safeHex(slot.style?.accent) || safeHex(slot.accent_auto);
+    return effectiveAccent(slot.style, slot.accent_auto ?? null);
   }
 
   function slotVars(slot: Slot): string {
     const vars: string[] = [];
     const accent = slotAccent(slot);
     if (accent) vars.push(`--slot-accent:${accent}`);
+    // Border = the card's LINEWORK: redefining the token scopes every
+    // internal line (box, dashed dividers, file rows, dropzone, inputs) to
+    // the picked color. Status pills and semantic error reds keep their own
+    // colors by design; PullFromIndex mounts outside the li and never sees
+    // this.
     const border = safeHex(slot.style?.border);
-    if (border) vars.push(`--slot-border:${border}`);
+    if (border) vars.push(`--color-border:${border}`);
     const text = safeHex(slot.style?.text);
     if (text) vars.push(`--slot-text:${text}`);
-    const head = safeHex(slot.style?.head_tint);
-    if (head) vars.push(`--slot-head:${head}`);
-    const bg = slotBgSolid(slot);
-    if (bg) vars.push(`--slot-bg-color:${bg}`);
+    const face = slotFace(slot);
+    if (face?.kind === 'solid') {
+      vars.push(`--slot-bg-color:${face.color}`);
+      vars.push(`--slot-face-text:${text || autoTextColor(face.color, theme)}`);
+    }
     return vars.join(';');
   }
 
   // Un-styled slots must render byte-identical to before — chrome only
   // switches on when there's something to show.
   function slotStyled(slot: Slot): boolean {
-    return !!(slotVars(slot) || slotBgImageId(slot));
+    return !!(slotVars(slot) || slotFace(slot));
   }
 
   function bgThumbUrl(mediaId: string): string {
@@ -701,9 +729,12 @@
   }
 
   onMount(() => {
+    theme = currentTheme();
+    const stopTheme = watchTheme((t) => (theme = t));
     document.addEventListener('latent:slots-changed', onSlotsChanged);
     window.addEventListener('latent-style-changed', onStyleChanged);
     return () => {
+      stopTheme();
       document.removeEventListener('latent:slots-changed', onSlotsChanged);
       window.removeEventListener('latent-style-changed', onStyleChanged);
       sortable?.destroy();
@@ -755,14 +786,18 @@
       <li
         class="slot"
         class:slot--styled={slotStyled(slot)}
-        class:slot--bg-solid={!!slotBgSolid(slot)}
+        class:slot--faced={!!slotFace(slot)}
+        class:slot--face-solid={slotFace(slot)?.kind === 'solid'}
+        class:slot--face-scrim={slotFaceTreatment(slot) === 'scrim'}
+        class:slot--face-plate={slotFaceTreatment(slot) === 'plate'}
+        class:slot--face-treat={slotFaceTreatment(slot) === 'treat'}
         style={slotVars(slot) || undefined}
         data-slot-id={slot.id}
       >
-        {#if slotBgImageId(slot)}
+        {#if slotFace(slot)?.kind === 'image'}
           <img
             class="slot__bg"
-            src={bgThumbUrl(slotBgImageId(slot)!)}
+            src={bgThumbUrl((slotFace(slot) as { mediaId: string }).mediaId)}
             alt=""
             loading="lazy"
             onerror={removeBgLayers}
@@ -770,73 +805,81 @@
           <div class="slot__veil"></div>
         {/if}
         <div class="slot__head">
-          <button class="slot__drag" type="button" aria-label="Drag to reorder"
-            >⋮⋮</button
-          >
-          <span class="slot__pos">#{slot.position}</span>
-          <button
-            class="slot__label"
-            onclick={() => renameSlot(slot)}
-            type="button"
-            title="Click to rename">{slot.label}</button
-          >
-          <div class="slot__status">
-            {#each ['forming', 'developing', 'fixed'] as st}
-              <button
-                class="status-pill"
-                class:active={slot.status === st}
-                style="--c: {statusColor(st)}"
-                onclick={() => setStatus(slot, st)}
-                type="button">{st}</button
-              >
-            {/each}
+          <!-- Two rows: the title owns its line; controls sit underneath.
+               (One shared row squeezed the label into wrapping.) -->
+          <div class="slot__title-row">
+            <button
+              class="slot__drag"
+              type="button"
+              aria-label="Drag to reorder">⋮⋮</button
+            >
+            <span class="slot__pos">#{slot.position}</span>
+            <button
+              class="slot__label"
+              onclick={() => renameSlot(slot)}
+              type="button"
+              title="Click to rename">{slot.label}</button
+            >
           </div>
-          <div class="slot__actions">
-            <!-- Files are always visible inline below; no Files toggle needed. -->
-            <span class="slot__file-count"
-              >{slot.item_count ?? 0} file{(slot.item_count ?? 0) === 1
-                ? ''
-                : 's'}</span
-            >
-            <button
-              class="action-btn"
-              type="button"
-              onclick={() => toggleSection(slot.id, 'notes')}>Notes</button
-            >
-            <button
-              class="action-btn"
-              type="button"
-              onclick={() => toggleSection(slot.id, 'threads')}
-              >Threads{#if slot.thread_count}
-                ({slot.thread_count}){/if}</button
-            >
-            {#if slot.repo_path}
+          <div class="slot__controls-row">
+            <div class="slot__status">
+              {#each ['forming', 'developing', 'fixed'] as st}
+                <button
+                  class="status-pill"
+                  class:active={slot.status === st}
+                  style="--c: {statusColor(st)}"
+                  onclick={() => setStatus(slot, st)}
+                  type="button">{st}</button
+                >
+              {/each}
+            </div>
+            <div class="slot__actions">
+              <!-- Files are always visible inline below; no Files toggle needed. -->
+              <span class="slot__file-count"
+                >{slot.item_count ?? 0} file{(slot.item_count ?? 0) === 1
+                  ? ''
+                  : 's'}</span
+              >
               <button
                 class="action-btn"
                 type="button"
-                onclick={() => toggleSection(slot.id, 'runs')}>Runs</button
+                onclick={() => toggleSection(slot.id, 'notes')}>Notes</button
               >
-            {/if}
-            {#if (slot.item_count ?? 0) > 0}
+              <button
+                class="action-btn"
+                type="button"
+                onclick={() => toggleSection(slot.id, 'threads')}
+                >Threads{#if slot.thread_count}
+                  ({slot.thread_count}){/if}</button
+              >
+              {#if slot.repo_path}
+                <button
+                  class="action-btn"
+                  type="button"
+                  onclick={() => toggleSection(slot.id, 'runs')}>Runs</button
+                >
+              {/if}
+              {#if (slot.item_count ?? 0) > 0}
+                <button
+                  class="action-btn action-btn--danger"
+                  type="button"
+                  title="Detach + permanently delete every Emulsion file on this slot"
+                  onclick={() => clearSlotItems(slot)}>Clear files</button
+                >
+              {/if}
               <button
                 class="action-btn action-btn--danger"
                 type="button"
-                title="Detach + permanently delete every Emulsion file on this slot"
-                onclick={() => clearSlotItems(slot)}>Clear files</button
+                onclick={() => deleteSlot(slot)}>Delete</button
               >
-            {/if}
-            <button
-              class="action-btn action-btn--danger"
-              type="button"
-              onclick={() => deleteSlot(slot)}>Delete</button
-            >
-            <LatentStyleButton
-              {projectId}
-              scope="slot"
-              slotId={slot.id}
-              accent={slotAccent(slot)}
-              noInherit
-            />
+              <LatentStyleButton
+                {projectId}
+                scope="slot"
+                slotId={slot.id}
+                accent={slotAccent(slot)}
+                noInherit
+              />
+            </div>
           </div>
         </div>
 
@@ -1146,29 +1189,32 @@
     border: 1px solid var(--color-border);
     background: var(--color-bg);
   }
-  /* Slot style chrome (2026-07-17-latent-section-styles). Everything rides
-     the --slot-* custom properties emitted (re-validated) by slotVars();
-     un-styled slots take none of these rules and render exactly as before. */
+  /* Slot card faces (2026-07-18-latent-faces). Everything rides the
+     custom properties emitted (re-validated) by slotVars(); un-styled slots
+     take none of these rules and render exactly as before. The face is the
+     WHOLE card, rendered with the index-card recipe at full strength. */
   .slot--styled {
     position: relative;
     isolation: isolate;
-    border-left: 4px solid
-      var(--slot-border, var(--slot-accent, var(--color-border)));
+    border-left: 4px solid var(--slot-accent, var(--color-border));
     color: var(--slot-text, inherit);
   }
-  .slot--styled .slot__head {
+  /* Head band survives ONLY for face-less accented cards; a face replaces
+     it — the whole card is the identity zone. */
+  .slot--styled:not(.slot--faced) .slot__head {
     background: color-mix(
       in srgb,
-      var(--slot-head, var(--slot-accent, transparent)) 12%,
+      var(--slot-accent, transparent) 12%,
       var(--color-surface)
     );
   }
-  .slot--bg-solid {
-    background: color-mix(
+  .slot--faced {
+    border-color: color-mix(
       in srgb,
-      var(--slot-bg-color) 12%,
-      var(--color-surface)
+      var(--slot-accent, var(--color-border)) 55%,
+      var(--color-border)
     );
+    border-left: 4px solid var(--slot-accent, var(--color-border));
   }
   .slot__bg {
     position: absolute;
@@ -1176,37 +1222,89 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    opacity: 0.12;
     z-index: 0;
   }
   .slot__veil {
     position: absolute;
     inset: 0;
-    background: color-mix(in srgb, var(--color-surface) 82%, transparent);
     z-index: 1;
     pointer-events: none;
+  }
+  /* scrim — the index-card recipe with the gradient anchored to the TOP:
+     slot heads sit at the top of the card, index-card content at the
+     bottom. Deliberate deviation, not drift. */
+  .slot--face-scrim .slot__veil {
+    background: linear-gradient(
+      to bottom,
+      var(--color-overlay),
+      transparent 70%
+    );
+  }
+  .slot--face-scrim .slot__head {
+    color: var(--slot-text, var(--color-on-overlay));
+  }
+  .slot--face-scrim .slot__head .slot__pos,
+  .slot--face-scrim .slot__head .slot__drag,
+  .slot--face-scrim .slot__head .slot__file-count {
+    color: color-mix(in srgb, var(--color-on-overlay) 75%, transparent);
+  }
+  /* treat — whole-card duotone; the brightness clamp guarantees a dark
+     field for on-overlay text. */
+  .slot--face-treat .slot__bg {
+    filter: grayscale(1) brightness(0.45);
+  }
+  .slot--face-treat .slot__veil {
+    background: var(--slot-accent, var(--color-overlay-soft));
+    mix-blend-mode: color;
+    opacity: 0.55;
+  }
+  .slot--face-treat .slot__head {
+    color: var(--slot-text, var(--color-on-overlay));
+  }
+  .slot--face-treat .slot__head .slot__pos,
+  .slot--face-treat .slot__head .slot__drag,
+  .slot--face-treat .slot__head .slot__file-count {
+    color: color-mix(in srgb, var(--color-on-overlay) 75%, transparent);
+  }
+  /* plate — image at full strength; head + panels sit on opaque theme
+     plates, the face reads through padding and gaps. Theme-native text. */
+  .slot--face-plate .slot__head,
+  .slot--face-plate .slot__panel {
+    background: var(--color-bg);
+  }
+  /* solid — first-class full-strength color; text auto-contrast-computed
+     client-side (--slot-face-text), overridable. */
+  .slot--face-solid {
+    background: var(--slot-bg-color);
+  }
+  .slot--face-solid .slot__head {
+    color: var(--slot-text, var(--slot-face-text, inherit));
   }
   .slot--styled > :not(.slot__bg):not(.slot__veil) {
     position: relative;
     z-index: 2;
-  }
-  @media (max-width: 640px) {
-    /* Imagery drops on mobile; spines and tints stay. */
-    .slot__bg,
-    .slot__veil {
-      display: none;
-    }
   }
   .slot--ghost {
     opacity: 0.3;
   }
   .slot__head {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-sm);
+    flex-direction: column;
+    gap: 4px;
     padding: 6px var(--space-sm);
     border-bottom: 1px dashed var(--color-border);
+  }
+  .slot__title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    min-width: 0;
+  }
+  .slot__controls-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
   }
   .slot__drag {
     background: transparent;
@@ -1234,7 +1332,7 @@
     font-weight: bold;
     cursor: text;
     flex: 1;
-    min-width: 80px;
+    min-width: 0; /* full title row — no squeeze, no wrap */
     text-align: left;
   }
   .slot__status {
@@ -1666,10 +1764,6 @@
     }
     .slot__head {
       gap: 6px;
-    }
-    .slot__actions {
-      flex-basis: 100%;
-      justify-content: flex-end;
     }
     .grid {
       grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));

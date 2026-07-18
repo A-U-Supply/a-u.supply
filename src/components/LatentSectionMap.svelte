@@ -18,6 +18,7 @@
     SECTION_LABELS,
     SECTION_TOKENS,
     safeHex,
+    effectiveAccent,
     type SectionKey,
   } from '../lib/latentStyles.ts';
 
@@ -39,7 +40,8 @@
   let slots = $state<SlotChip[]>(initialSlots);
 
   function sectionSwatch(key: SectionKey): string {
-    const hex = safeHex(styles[key]?.accent);
+    // effectiveAccent so chips track solid-face-derived accents too.
+    const hex = effectiveAccent(styles[key]);
     return `background:${hex || SECTION_TOKENS[key]}`;
   }
 

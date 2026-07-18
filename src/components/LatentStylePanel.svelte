@@ -16,8 +16,11 @@
   import PullFromIndex from './PullFromIndex.svelte';
   import {
     SECTION_LABELS,
+    FACE_TREATMENTS,
+    OVERLAY_GROUND,
+    THEME_SURFACES,
     safeHex,
-    effectiveGround,
+    effectiveAccent,
     autoTextColor,
     contrastRatio,
     type SectionKey,
@@ -44,7 +47,7 @@
   let pickerOpen = $state(false);
   let panelEl = $state<HTMLElement | null>(null);
 
-  const PANEL_WIDTH = 300;
+  const PANEL_WIDTH = 320;
 
   const bgModes = $derived(
     scope === 'slot'
@@ -54,20 +57,45 @@
   const effBgMode = $derived(
     current.bg_mode || (scope === 'slot' ? 'auto' : 'none'),
   );
-  const effAccent = $derived(safeHex(current.accent) || safeHex(accentAuto));
+  // Treatments apply to image-backed faces (auto inherits the ★ starred
+  // image, so it's image-backed too).
+  const imageFace = $derived(effBgMode === 'auto' || effBgMode === 'image');
+  const effTreatment = $derived(
+    FACE_TREATMENTS.includes(current.bg_style as any)
+      ? current.bg_style
+      : 'scrim',
+  );
+  const effAccent = $derived(effectiveAccent(current, accentAuto));
+  const accentFromFace = $derived(
+    !current.accent && effBgMode === 'solid' && !!safeHex(current.bg_color),
+  );
   const accentResetLabel = $derived(scope === 'slot' ? 'auto' : 'default');
 
   // Warn (never block) when the current text choice fails WCAG AA against
-  // the blended card ground in either theme. Auto text is contrast-computed,
-  // so this fires almost exclusively on explicit picks — in exactly the
-  // theme that's bad.
+  // the face it actually sits on. Auto text is contrast-computed or rides
+  // the guaranteed-dark overlay field, so this fires almost exclusively on
+  // explicit picks — in exactly the theme that's bad.
   const contrastWarnings = $derived.by(() => {
-    const washHex = effBgMode === 'solid' ? safeHex(current.bg_color) : null;
-    const bad: ThemeName[] = [];
+    const text = safeHex(current.text);
+    const bad: string[] = [];
+    if (imageFace && effTreatment !== 'plate') {
+      // scrim/treat: overlay clamps guarantee a dark field in both themes.
+      if (text && contrastRatio(text, OVERLAY_GROUND) < 4.5)
+        bad.push('over imagery');
+      return bad;
+    }
+    if (effBgMode === 'solid' && safeHex(current.bg_color)) {
+      // Full-strength color — same ground in both themes.
+      const ground = safeHex(current.bg_color)!;
+      const t = text || autoTextColor(ground, 'light');
+      if (contrastRatio(t, ground) < 4.5) bad.push('on the face color');
+      return bad;
+    }
+    // none / plate: text sits on theme surfaces.
     for (const theme of ['light', 'dark'] as ThemeName[]) {
-      const ground = effectiveGround(washHex, theme);
-      const text = safeHex(current.text) || autoTextColor(ground, theme);
-      if (contrastRatio(text, ground) < 4.5) bad.push(theme);
+      const ground = THEME_SURFACES[theme].surface;
+      const t = text || autoTextColor(ground, theme);
+      if (contrastRatio(t, ground) < 4.5) bad.push(`in ${theme} theme`);
     }
     return bad;
   });
@@ -232,25 +260,8 @@
     </header>
 
     <div class="row">
-      <span class="row__label">Accent</span>
-      <input
-        type="color"
-        value={effAccent || '#888888'}
-        oninput={(e) => colorInput('accent', e)}
-      />
-      {#if current.accent}
-        <button
-          class="chip"
-          type="button"
-          title="Reset to the {accentResetLabel} color"
-          onclick={() => resetKey('accent')}>{accentResetLabel}</button
-        >
-      {/if}
-    </div>
-
-    <div class="row">
-      <span class="row__label">Background</span>
-      <div class="chips" role="radiogroup" aria-label="Background mode">
+      <span class="row__label">Face</span>
+      <div class="chips" role="radiogroup" aria-label="Face mode">
         {#each bgModes as m (m)}
           <button
             class="chip"
@@ -270,7 +281,7 @@
           <img
             class="bg-thumb"
             src={thumbUrl(current.bg_media_item_id)}
-            alt="Background"
+            alt="Face"
           />
         {/if}
         <button class="chip" type="button" onclick={() => (pickerOpen = true)}
@@ -284,8 +295,7 @@
           value={safeHex(current.bg_color) || '#888888'}
           oninput={(e) => colorInput('bg_color', e)}
         />
-        <span class="muted-note">washed into the card, never full-strength</span
-        >
+        <span class="muted-note">full-strength card color</span>
       </div>
     {:else if effBgMode === 'auto'}
       <div class="row row--indent">
@@ -293,19 +303,56 @@
       </div>
     {/if}
 
+    {#if imageFace}
+      <div class="row row--indent">
+        <div class="chips" role="radiogroup" aria-label="Face treatment">
+          {#each FACE_TREATMENTS as t (t)}
+            <button
+              class="chip"
+              class:active={effTreatment === t}
+              type="button"
+              role="radio"
+              aria-checked={effTreatment === t}
+              onclick={() => patchStyle({ bg_style: t })}>{t}</button
+            >
+          {/each}
+        </div>
+      </div>
+    {/if}
+
     <div class="row">
-      <span class="row__label">Border</span>
+      <span class="row__label">Accent</span>
       <input
         type="color"
-        value={safeHex(current.border) || effAccent || '#888888'}
+        value={effAccent || '#888888'}
+        oninput={(e) => colorInput('accent', e)}
+      />
+      {#if current.accent}
+        <button
+          class="chip"
+          type="button"
+          title="Reset to the {accentResetLabel} color"
+          onclick={() => resetKey('accent')}>{accentResetLabel}</button
+        >
+      {:else if accentFromFace}
+        <span class="muted-note">from face color</span>
+      {/if}
+    </div>
+
+    <div class="row">
+      <span class="row__label">Lines</span>
+      <input
+        type="color"
+        value={safeHex(current.border) || '#888888'}
         oninput={(e) => colorInput('border', e)}
+        title="Recolors this card's linework — box, dividers, file rows"
       />
       {#if current.border}
         <button
           class="chip"
           type="button"
-          title="Reset to the accent color"
-          onclick={() => resetKey('border')}>accent</button
+          title="Reset the linework to the default border color"
+          onclick={() => resetKey('border')}>default</button
         >
       {/if}
     </div>
@@ -326,26 +373,9 @@
         >
       {/if}
     </div>
-    {#each contrastWarnings as theme (theme)}
-      <div class="warn">▲ low contrast in {theme} theme</div>
+    {#each contrastWarnings as where (where)}
+      <div class="warn">▲ low contrast {where}</div>
     {/each}
-
-    <div class="row">
-      <span class="row__label">Head band</span>
-      <input
-        type="color"
-        value={safeHex(current.head_tint) || effAccent || '#888888'}
-        oninput={(e) => colorInput('head_tint', e)}
-      />
-      {#if current.head_tint}
-        <button
-          class="chip"
-          type="button"
-          title="Reset to the accent color"
-          onclick={() => resetKey('head_tint')}>accent</button
-        >
-      {/if}
-    </div>
 
     <footer class="panel__foot">
       <button

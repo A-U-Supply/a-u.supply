@@ -366,7 +366,7 @@ class TestSlotStyle:
         assert slot["accent"] is None
         assert slot["primary_image_media_id"] is None
 
-    @pytest.mark.parametrize("key", ["accent", "bg_color", "border", "text", "head_tint"])
+    @pytest.mark.parametrize("key", ["accent", "bg_color", "border", "text"])
     def test_hex_keys_accept_and_normalize(self, client, auth_headers, project, slot, key):
         resp = patch_slot(
             client, auth_headers, project["id"], slot["id"], {"style": {key: "#AbCdEf"}},
@@ -446,6 +446,172 @@ class TestSlotStyle:
         resp = patch_slot(client, auth_headers, project["id"], slot["id"], {"style": {}})
         assert resp.status_code == 200
         assert resp.json()["style"] == {}
+
+
+class TestFaceStyle:
+    """bg_style treatments + head_tint retirement (latent-faces revision)."""
+
+    @pytest.mark.parametrize("treatment", ["scrim", "plate", "treat"])
+    def test_slot_bg_style_accepted(self, client, auth_headers, project, slot, treatment):
+        resp = patch_slot(
+            client, auth_headers, project["id"], slot["id"],
+            {"style": {"bg_style": treatment}},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["style"]["bg_style"] == treatment
+
+    @pytest.mark.parametrize("treatment", ["scrim", "plate", "treat"])
+    def test_section_bg_style_accepted(self, client, auth_headers, project, treatment):
+        resp = patch_project(
+            client, auth_headers, project["id"],
+            {"section_styles": {"docs": {"bg_style": treatment}}},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["section_styles"]["docs"]["bg_style"] == treatment
+
+    @pytest.mark.parametrize("bad", ["vignette", "SCRIM", "scrim; }", "treat}body{"])
+    def test_bg_style_rejected(self, client, auth_headers, project, slot, bad):
+        resp = patch_slot(
+            client, auth_headers, project["id"], slot["id"],
+            {"style": {"bg_style": bad}},
+        )
+        assert resp.status_code == 400
+
+    def test_bg_style_empty_string_deletes(self, client, auth_headers, project, slot):
+        patch_slot(
+            client, auth_headers, project["id"], slot["id"],
+            {"style": {"bg_style": "treat", "accent": "#111111"}},
+        )
+        resp = patch_slot(
+            client, auth_headers, project["id"], slot["id"], {"style": {"bg_style": ""}},
+        )
+        assert resp.json()["style"] == {"accent": "#111111"}
+
+    def test_bg_style_legal_before_image_picked(self, client, auth_headers, project, slot):
+        # Single-key PATCHes stay order-independent: treatment before image.
+        resp = patch_slot(
+            client, auth_headers, project["id"], slot["id"],
+            {"style": {"bg_style": "plate"}},
+        )
+        assert resp.status_code == 200
+        assert "bg_media_item_id" not in resp.json()["style"]
+
+    def test_head_tint_rejected_for_slots(self, client, auth_headers, project, slot):
+        resp = patch_slot(
+            client, auth_headers, project["id"], slot["id"],
+            {"style": {"head_tint": "#abcdef"}},
+        )
+        assert resp.status_code == 400
+
+    def test_head_tint_rejected_for_sections(self, client, auth_headers, project):
+        resp = patch_project(
+            client, auth_headers, project["id"],
+            {"section_styles": {"docs": {"head_tint": "#abcdef"}}},
+        )
+        assert resp.status_code == 400
+
+    def test_legacy_head_tint_scrubbed_on_write(self, client, auth_headers, db_session, project, slot):
+        # Pre-faces styles may hold head_tint; any style write scrubs it.
+        from server.models import ProjectSlot
+
+        db_session.query(ProjectSlot).filter(ProjectSlot.id == slot["id"]).update(
+            {"style_json": json.dumps({"accent": "#111111", "head_tint": "#222222"})}
+        )
+        db_session.commit()
+        resp = patch_slot(
+            client, auth_headers, project["id"], slot["id"], {"style": {"text": "#333333"}},
+        )
+        assert resp.json()["style"] == {"accent": "#111111", "text": "#333333"}
+
+
+class TestSolidFaceAccent:
+    """Effective accent: manual override > solid face color > extracted."""
+
+    def test_solid_color_becomes_accent(self, client, auth_headers, project, slot):
+        resp = patch_slot(
+            client, auth_headers, project["id"], slot["id"],
+            {"style": {"bg_mode": "solid", "bg_color": "#123456"}},
+        )
+        assert resp.json()["accent"] == "#123456"
+
+    def test_solid_wins_over_extracted(self, client, auth_headers, db_session, project, slot):
+        item = make_image_with_colors(db_session, ["#ff0000"])
+        pi = attach_item(client, auth_headers, project["id"], item.id, slot["id"])
+        star_item(client, auth_headers, project["id"], pi["id"])
+        resp = patch_slot(
+            client, auth_headers, project["id"], slot["id"],
+            {"style": {"bg_mode": "solid", "bg_color": "#123456"}},
+        )
+        assert resp.json()["accent_auto"] == "#ff0000"
+        assert resp.json()["accent"] == "#123456"
+
+    def test_override_wins_over_solid(self, client, auth_headers, project, slot):
+        patch_slot(
+            client, auth_headers, project["id"], slot["id"],
+            {"style": {"bg_mode": "solid", "bg_color": "#123456"}},
+        )
+        resp = patch_slot(
+            client, auth_headers, project["id"], slot["id"], {"style": {"accent": "#654321"}},
+        )
+        assert resp.json()["accent"] == "#654321"
+
+        resp = patch_slot(
+            client, auth_headers, project["id"], slot["id"], {"style": {"accent": ""}},
+        )
+        assert resp.json()["accent"] == "#123456"  # falls back to the face color
+
+    def test_non_solid_bg_color_not_accent(self, client, auth_headers, project, slot):
+        # bg_color only feeds the accent while the face is actually solid.
+        resp = patch_slot(
+            client, auth_headers, project["id"], slot["id"],
+            {"style": {"bg_color": "#123456", "bg_mode": "none"}},
+        )
+        assert resp.json()["accent"] is None
+
+
+class TestSlotCountsInResponses:
+    """Slot summaries from mutation endpoints must carry real counts —
+    the client replaces/merges slot objects from these responses."""
+
+    def _slot_with_items(self, client, auth_headers, db_session, project, slot, n=2):
+        for _ in range(n):
+            item = make_image_with_colors(db_session, ["#ff0000"])
+            attach_item(client, auth_headers, project["id"], item.id, slot["id"])
+
+    def test_label_patch_keeps_counts(self, client, auth_headers, db_session, project, slot):
+        self._slot_with_items(client, auth_headers, db_session, project, slot)
+        resp = patch_slot(client, auth_headers, project["id"], slot["id"], {"label": "Renamed"})
+        assert resp.json()["item_count"] == 2
+
+    def test_style_patch_keeps_counts(self, client, auth_headers, db_session, project, slot):
+        # The exact clobber path from the field report: a style edit zeroed
+        # the visible file count.
+        self._slot_with_items(client, auth_headers, db_session, project, slot)
+        resp = patch_slot(
+            client, auth_headers, project["id"], slot["id"], {"style": {"accent": "#111111"}},
+        )
+        assert resp.json()["item_count"] == 2
+
+    def test_reorder_keeps_counts(self, client, auth_headers, db_session, project, slot):
+        self._slot_with_items(client, auth_headers, db_session, project, slot)
+        other = client.post(
+            f"/api/projects/{project['id']}/slots", json={}, headers=auth_headers,
+        ).json()
+        resp = client.post(
+            f"/api/projects/{project['id']}/slots/reorder",
+            json={"order": [other["id"], slot["id"]]},
+            headers=auth_headers,
+        )
+        rows = {s["id"]: s for s in resp.json()["slots"]}
+        assert rows[slot["id"]]["item_count"] == 2
+        assert rows[other["id"]]["item_count"] == 0
+
+    def test_create_slot_counts_zero(self, client, auth_headers, project):
+        resp = client.post(
+            f"/api/projects/{project['id']}/slots", json={}, headers=auth_headers,
+        )
+        assert resp.json()["item_count"] == 0
+        assert resp.json()["thread_count"] == 0
 
 
 class TestSlotAccentAuto:

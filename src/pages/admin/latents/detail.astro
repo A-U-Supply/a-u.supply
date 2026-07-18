@@ -59,14 +59,15 @@ import Admin from '../../../layouts/Admin.astro';
     gap: var(--space-lg);
     margin-top: var(--space-md);
   }
-  /* Section chrome (2026-07-17-latent-section-styles): every fixed section
-     wears an accent spine in its palette default; per-latent overrides land
-     as inline --sec-* vars via applySectionStyles(). The head-band class
-     the islands opt into (.latent-band) lives in global.css. */
+  /* Section faces (2026-07-18-latent-faces): every fixed section wears an
+     accent spine in its palette default; per-latent overrides land as
+     inline vars via applySectionStyles(), which also builds the full-card
+     face layers (index-card recipe). The head-band class the islands opt
+     into (.latent-band) lives in global.css. */
   .latent-section {
     position: relative;
     isolation: isolate;
-    border-left: 4px solid var(--sec-border, var(--sec-accent));
+    border-left: 4px solid var(--sec-accent);
     padding-left: var(--space-sm);
     color: var(--sec-text, inherit);
   }
@@ -88,12 +89,16 @@ import Admin from '../../../layouts/Admin.astro';
   .latent-section[data-section='threads'] {
     --sec-accent: var(--latent-sec-threads);
   }
-  .latent-section--bg-solid {
-    background: color-mix(
-      in srgb,
-      var(--sec-bg-color) 12%,
-      var(--color-surface)
-    );
+  /* Faced sections get a full card frame — the section IS the card. */
+  .latent-section--faced {
+    border: 1px solid
+      color-mix(
+        in srgb,
+        var(--sec-accent, var(--color-border)) 55%,
+        var(--color-border)
+      );
+    border-left: 4px solid var(--sec-accent);
+    padding: var(--space-sm);
   }
   .latent-section :global(.sec-bg) {
     position: absolute;
@@ -101,28 +106,64 @@ import Admin from '../../../layouts/Admin.astro';
     width: 100%;
     height: 100%;
     object-fit: cover;
-    opacity: 0.12;
     z-index: 0;
   }
   .latent-section :global(.sec-veil) {
     position: absolute;
     inset: 0;
-    background: color-mix(in srgb, var(--color-surface) 82%, transparent);
     z-index: 1;
     pointer-events: none;
+  }
+  /* scrim — top-anchored (section headers sit at the top; the index cards
+     anchor bottom). */
+  .latent-section--face-scrim :global(.sec-veil) {
+    background: linear-gradient(
+      to bottom,
+      var(--color-overlay),
+      transparent 70%
+    );
+  }
+  .latent-section--face-scrim :global(.latent-band),
+  .latent-section--face-scrim :global(.latent-band h2),
+  .latent-section--face-scrim :global(.latent-band h3) {
+    color: var(--sec-text, var(--color-on-overlay));
+  }
+  /* treat — whole-section duotone. */
+  .latent-section--face-treat :global(.sec-bg) {
+    filter: grayscale(1) brightness(0.45);
+  }
+  .latent-section--face-treat :global(.sec-veil) {
+    background: var(--sec-accent, var(--color-overlay-soft));
+    mix-blend-mode: color;
+    opacity: 0.55;
+  }
+  .latent-section--face-treat :global(.latent-band),
+  .latent-section--face-treat :global(.latent-band h2),
+  .latent-section--face-treat :global(.latent-band h3) {
+    color: var(--sec-text, var(--color-on-overlay));
+  }
+  /* plate — face at full strength, header band on an opaque theme plate. */
+  .latent-section--face-plate :global(.latent-band) {
+    background: var(--color-bg);
+  }
+  /* solid — full-strength color, auto-contrast text on the band. */
+  .latent-section--face-solid {
+    background: var(--sec-bg-color);
+  }
+  .latent-section--face-solid :global(.latent-band),
+  .latent-section--face-solid :global(.latent-band h2),
+  .latent-section--face-solid :global(.latent-band h3) {
+    color: var(--sec-text, var(--sec-face-text, inherit));
   }
   .latent-section > :global(:not(.sec-bg):not(.sec-veil)) {
     position: relative;
     z-index: 2;
   }
-  @media (max-width: 640px) {
-    /* Imagery drops on mobile; spines and tints stay. */
-    .latent-section :global(.sec-bg),
-    .latent-section :global(.sec-veil) {
-      display: none;
-    }
+  /* Title on its own line; entry/options underneath — both breakpoints. */
+  :global(.latent-header .header-title-row) {
+    display: flex;
   }
-  :global(.latent-header .header-row) {
+  :global(.latent-header .header-controls-row) {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
@@ -138,8 +179,7 @@ import Admin from '../../../layouts/Admin.astro';
     font-family: var(--font-mono);
     font-size: var(--text-lg);
     font-weight: 700;
-    flex: 1;
-    min-width: 220px;
+    width: 100%;
   }
   :global(.latent-header .kind-select) {
     background: var(--color-bg);
@@ -314,17 +354,18 @@ import Admin from '../../../layouts/Admin.astro';
     border-color: var(--latent-accent);
     box-shadow: 2px 2px 0 var(--latent-accent);
   }
-  @media (max-width: 640px) {
-    :global(.latent-header .name-input) {
-      min-width: 0;
-      width: 100%;
-    }
-  }
 </style>
 
 <script>
   import { mount, unmount } from 'svelte';
-  import { SECTION_KEYS, safeHex } from '../../../lib/latentStyles.ts';
+  import {
+    SECTION_KEYS,
+    safeHex,
+    effectiveAccent,
+    autoTextColor,
+    currentTheme,
+    watchTheme,
+  } from '../../../lib/latentStyles.ts';
   import LatentHero from '../../../components/LatentHero.svelte';
   import LatentSectionMap from '../../../components/LatentSectionMap.svelte';
   import LatentSlots from '../../../components/LatentSlots.svelte';
@@ -339,6 +380,7 @@ import Admin from '../../../layouts/Admin.astro';
   let initialized = false;
   let styleListener: ((e: Event) => void) | null = null;
   let heroListener: ((e: Event) => void) | null = null;
+  let stopThemeWatch: (() => void) | null = null;
 
   function statusColor(s: string): string {
     return (
@@ -447,8 +489,10 @@ import Admin from '../../../layouts/Admin.astro';
       .join('');
 
     headerEl.innerHTML = `
-      <div class="header-row">
+      <div class="header-title-row">
         <input class="name-input" id="name-input" type="text" value="${escapeHtml(p.name)}" />
+      </div>
+      <div class="header-controls-row">
         <input class="slug-input" id="slug-input" type="text" value="${escapeHtml(p.slug || '')}" title="URL slug" />
         <select class="kind-select" id="kind-select">
           ${['album', 'video', 'zine', 'session', 'other']
@@ -688,13 +732,24 @@ import Admin from '../../../layouts/Admin.astro';
     };
     applyAccent(p.hero_accent || null);
 
-    // Fixed-section style carry. Palette defaults come from CSS; per-latent
-    // overrides land here as inline custom properties + background layers.
-    // Every hex is re-validated before touching a style attribute — the
-    // server regex plus this check is the whole injection defense.
+    // Fixed-section face carry (2026-07-18-latent-faces). Palette defaults
+    // come from CSS; per-latent overrides land here as inline custom
+    // properties + full-strength face layers. Every hex is re-validated
+    // before touching a style attribute — the server regex plus this check
+    // is the whole injection defense.
+    const FACE_CLASSES = [
+      'latent-section--faced',
+      'latent-section--face-scrim',
+      'latent-section--face-plate',
+      'latent-section--face-treat',
+      'latent-section--face-solid',
+    ];
+    let lastSectionStyles: Record<string, Record<string, string>> | null =
+      p.section_styles || null;
     const applySectionStyles = (
       styles: Record<string, Record<string, string>> | null | undefined,
     ) => {
+      lastSectionStyles = styles || null;
       for (const key of SECTION_KEYS) {
         const el = islandsEl.querySelector<HTMLElement>(
           `.latent-section[data-section="${key}"]`,
@@ -702,25 +757,38 @@ import Admin from '../../../layouts/Admin.astro';
         if (!el) continue;
         const st = (styles || {})[key] || {};
         const varMap: Record<string, string | null> = {
-          '--sec-accent': safeHex(st.accent),
-          '--sec-border': safeHex(st.border),
+          '--sec-accent': effectiveAccent(st),
+          // Redefining the border TOKEN recolors every line inside the
+          // section — and cascades into slot cards until a card sets its
+          // own. Intended: the section's linework is one pick.
+          '--color-border': safeHex(st.border),
           '--sec-text': safeHex(st.text),
-          '--sec-head': safeHex(st.head_tint),
         };
         for (const [cssVar, val] of Object.entries(varMap)) {
           if (val) el.style.setProperty(cssVar, val);
           else el.style.removeProperty(cssVar);
         }
-        // Background layers. Sections have no `auto` mode; default is none.
+        // Face layers. Sections have no `auto` mode; default is none.
         el.querySelectorAll(':scope > .sec-bg, :scope > .sec-veil').forEach(
           (n) => n.remove(),
         );
-        el.classList.remove('latent-section--bg-solid');
+        el.classList.remove(...FACE_CLASSES);
         el.style.removeProperty('--sec-bg-color');
+        el.style.removeProperty('--sec-face-text');
         const bgColor = safeHex(st.bg_color);
+        const treatment = ['scrim', 'plate', 'treat'].includes(st.bg_style)
+          ? st.bg_style
+          : 'scrim';
         if (st.bg_mode === 'solid' && bgColor) {
           el.style.setProperty('--sec-bg-color', bgColor);
-          el.classList.add('latent-section--bg-solid');
+          el.style.setProperty(
+            '--sec-face-text',
+            safeHex(st.text) || autoTextColor(bgColor, currentTheme()),
+          );
+          el.classList.add(
+            'latent-section--faced',
+            'latent-section--face-solid',
+          );
         } else if (st.bg_mode === 'image' && st.bg_media_item_id) {
           const img = document.createElement('img');
           img.className = 'sec-bg';
@@ -730,14 +798,22 @@ import Admin from '../../../layouts/Admin.astro';
           img.onerror = () => {
             veil.remove();
             img.remove();
+            el.classList.remove(...FACE_CLASSES);
           };
           const veil = document.createElement('div');
           veil.className = 'sec-veil';
           el.prepend(img, veil);
+          el.classList.add(
+            'latent-section--faced',
+            `latent-section--face-${treatment}`,
+          );
         }
       }
     };
     applySectionStyles(p.section_styles);
+    // Solid-face text is computed for the active theme — recompute when the
+    // viewer toggles it.
+    stopThemeWatch = watchTheme(() => applySectionStyles(lastSectionStyles));
 
     // Header hero backdrop (phase 3b). Rebuilt whenever the hero changes —
     // LatentHero and the loose-files quick action both broadcast
@@ -884,6 +960,10 @@ import Admin from '../../../layouts/Admin.astro';
     if (heroListener) {
       window.removeEventListener('latent-hero-changed', heroListener);
       heroListener = null;
+    }
+    if (stopThemeWatch) {
+      stopThemeWatch();
+      stopThemeWatch = null;
     }
     initialized = false;
   });

@@ -158,7 +158,11 @@ def _slot_summary(
         "metadata": _parse_metadata(s.metadata_json),
         "style": style,
         "accent_auto": s.accent_auto,
-        "accent": style.get("accent") or s.accent_auto,
+        # Effective accent: manual override > solid face color > extracted.
+        # Mirrored client-side in latentStyles.ts effectiveAccent().
+        "accent": style.get("accent")
+        or (style.get("bg_color") if style.get("bg_mode") == "solid" else None)
+        or s.accent_auto,
         "primary_image_media_id": primary_image_media_id,
         "pinned": pin_map,
         "thread_count": int(thread_count),
@@ -239,6 +243,36 @@ def _primary_image_for_slot(db: Session, slot_id: str) -> str | None:
     return _primary_image_map(db, [slot_id]).get(slot_id)
 
 
+def _slot_count_maps(
+    db: Session, project_id: str, slot_ids: list[str],
+) -> tuple[dict[str, int], dict[str, int]]:
+    """(item_counts, thread_counts) per slot, bulk grouped queries.
+
+    Every slot summary must carry real counts — the client full-replaces or
+    spread-merges slot objects from PATCH/reorder responses, so a defaulted
+    0 here becomes a visible "0 files" in the UI.
+    """
+    item_counts: dict[str, int] = {}
+    thread_counts: dict[str, int] = {}
+    if not slot_ids:
+        return item_counts, thread_counts
+    for sid, c in (
+        db.query(ProjectItem.slot_id, func.count(ProjectItem.id))
+        .filter(ProjectItem.project_id == project_id, ProjectItem.slot_id.in_(slot_ids))
+        .group_by(ProjectItem.slot_id)
+        .all()
+    ):
+        item_counts[sid] = int(c)
+    for sid, c in (
+        db.query(Thread.anchor_id, func.count(Thread.id))
+        .filter(Thread.anchor_type == "slot", Thread.anchor_id.in_(slot_ids))
+        .group_by(Thread.anchor_id)
+        .all()
+    ):
+        thread_counts[sid] = int(c)
+    return item_counts, thread_counts
+
+
 def _recompute_slot_accent(db: Session, slot: ProjectSlot) -> None:
     """Refresh a slot's auto accent from its ★ starred image. Best-effort:
     extraction failures leave the accent None, never block the write."""
@@ -304,10 +338,12 @@ VALID_HERO_STYLES = {"scrim", "plate", "treat"}
 # nothing outside this grammar may ever be persisted.
 _HERO_ACCENT_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
-# Section/slot style grammar (2026-07-17-latent-section-styles plan). Every
-# stored value lands in a client `style` attribute, so hex keys share the
-# hero-accent injection stance above.
-_STYLE_HEX_KEYS = {"accent", "bg_color", "border", "text", "head_tint"}
+# Section/slot style grammar (2026-07-18-latent-faces revision of the
+# 07-17 plan). Every stored value lands in a client `style` attribute, so
+# hex keys share the hero-accent injection stance above. `head_tint` was
+# retired by the faces redesign — it now 400s as an unknown key and gets
+# scrubbed from stored styles on the next write.
+_STYLE_HEX_KEYS = {"accent", "bg_color", "border", "text"}
 VALID_SLOT_BG_MODES = {"auto", "image", "solid", "none"}
 VALID_SECTION_BG_MODES = {"image", "solid", "none"}  # sections have no starred image
 VALID_SECTION_KEYS = {"repo", "links", "docs", "slots", "loose", "threads"}
@@ -341,6 +377,16 @@ def _merge_style_patch(
                 merged[key] = value
             else:
                 raise HTTPException(status_code=400, detail=f"Invalid {what}.bg_mode '{value}'")
+        elif key == "bg_style":
+            # Image-face treatment (scrim | plate | treat — the hero-card
+            # vocabulary). Legal in any mode so single-key PATCHes stay
+            # order-independent; solid/none faces simply ignore it.
+            if value == "":
+                merged.pop(key, None)
+            elif value in VALID_HERO_STYLES:
+                merged[key] = value
+            else:
+                raise HTTPException(status_code=400, detail=f"Invalid {what}.bg_style '{value}'")
         elif key == "bg_media_item_id":
             if value == "":
                 merged.pop(key, None)
@@ -355,6 +401,7 @@ def _merge_style_patch(
                 merged[key] = value
         else:
             raise HTTPException(status_code=400, detail=f"Unknown {what} key '{key}'")
+    merged.pop("head_tint", None)  # scrub pre-faces leftovers on any write
     return json.dumps(merged) if merged else None
 
 
@@ -552,24 +599,9 @@ def get_project(
     project_thread_count = db.query(func.count(Thread.id)).filter(
         Thread.anchor_type == "project", Thread.anchor_id == project_id,
     ).scalar() or 0
-    slot_thread_counts: dict[str, int] = {}
-    slot_item_counts: dict[str, int] = {}
-    if slots:
-        slot_ids = [s.id for s in slots]
-        rows = (
-            db.query(Thread.anchor_id, func.count(Thread.id))
-            .filter(Thread.anchor_type == "slot", Thread.anchor_id.in_(slot_ids))
-            .group_by(Thread.anchor_id)
-            .all()
-        )
-        slot_thread_counts = {aid: int(c) for aid, c in rows}
-        item_rows = (
-            db.query(ProjectItem.slot_id, func.count(ProjectItem.id))
-            .filter(ProjectItem.project_id == project_id, ProjectItem.slot_id.in_(slot_ids))
-            .group_by(ProjectItem.slot_id)
-            .all()
-        )
-        slot_item_counts = {sid: int(c) for sid, c in item_rows}
+    slot_item_counts, slot_thread_counts = _slot_count_maps(
+        db, project_id, [s.id for s in slots],
+    )
     primary_images = _primary_image_map(db, [s.id for s in slots])
     return {
         **_project_summary(p),
@@ -723,23 +755,7 @@ def list_slots(
     # get_project so the LatentSlots component can eagerly load files for
     # any slot with items > 0.
     slot_ids = [s.id for s in slots]
-    item_counts: dict[str, int] = {}
-    thread_counts: dict[str, int] = {}
-    if slot_ids:
-        for sid, c in (
-            db.query(ProjectItem.slot_id, func.count(ProjectItem.id))
-            .filter(ProjectItem.project_id == project_id, ProjectItem.slot_id.in_(slot_ids))
-            .group_by(ProjectItem.slot_id)
-            .all()
-        ):
-            item_counts[sid] = int(c)
-        for sid, c in (
-            db.query(Thread.anchor_id, func.count(Thread.id))
-            .filter(Thread.anchor_type == "slot", Thread.anchor_id.in_(slot_ids))
-            .group_by(Thread.anchor_id)
-            .all()
-        ):
-            thread_counts[sid] = int(c)
+    item_counts, thread_counts = _slot_count_maps(db, project_id, slot_ids)
     primary_images = _primary_image_map(db, slot_ids)
     return {
         "slots": [
@@ -776,7 +792,11 @@ def create_slot(
     db.add(slot)
     db.commit()
     db.refresh(slot)
-    return _slot_summary(slot, _pin_map_for_slot(db, slot.id))
+    ic, tc = _slot_count_maps(db, project_id, [slot.id])
+    return _slot_summary(
+        slot, _pin_map_for_slot(db, slot.id),
+        tc.get(slot.id, 0), ic.get(slot.id, 0),
+    )
 
 
 @router.patch("/{project_id}/slots/{slot_id}", summary="Update a slot")
@@ -826,8 +846,10 @@ def update_slot(
             s.style_json = _merge_style_patch(db, s.style_json, body.style, VALID_SLOT_BG_MODES, "style")
     db.commit()
     db.refresh(s)
+    ic, tc = _slot_count_maps(db, project_id, [s.id])
     return _slot_summary(
         s, _pin_map_for_slot(db, s.id),
+        tc.get(s.id, 0), ic.get(s.id, 0),
         primary_image_media_id=_primary_image_for_slot(db, s.id),
     )
 
@@ -865,10 +887,12 @@ def reorder_slots(
         by_id[sid].position = i + 1
     db.commit()
     primary_images = _primary_image_map(db, body.order)
+    ic, tc = _slot_count_maps(db, project_id, body.order)
     return {
         "slots": [
             _slot_summary(
                 by_id[sid], _pin_map_for_slot(db, sid),
+                tc.get(sid, 0), ic.get(sid, 0),
                 primary_image_media_id=primary_images.get(sid),
             )
             for sid in body.order
@@ -1084,14 +1108,10 @@ def set_item_primary(
         # Fresh slot summary rides along (additive) so the card can repaint
         # its auto accent/background without a second request.
         db.refresh(slot)
-        t_count = db.query(func.count(Thread.id)).filter(
-            Thread.anchor_type == "slot", Thread.anchor_id == slot.id,
-        ).scalar() or 0
-        i_count = db.query(func.count(ProjectItem.id)).filter(
-            ProjectItem.slot_id == slot.id,
-        ).scalar() or 0
+        ic, tc = _slot_count_maps(db, project_id, [slot.id])
         out["slot"] = _slot_summary(
-            slot, _pin_map_for_slot(db, slot.id), t_count, i_count,
+            slot, _pin_map_for_slot(db, slot.id),
+            tc.get(slot.id, 0), ic.get(slot.id, 0),
             primary_image_media_id=_primary_image_for_slot(db, slot.id),
         )
     return out
