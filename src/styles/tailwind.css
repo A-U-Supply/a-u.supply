@@ -52,6 +52,18 @@
   --color-overlay: rgba(0, 0, 0, 0.6);
   --color-overlay-soft: rgba(0, 0, 0, 0.35);
   --color-on-overlay: #fff;
+
+  /* Latent detail-page section palette (2026-07-17-latent-section-styles).
+   * One default hue per fixed section, same on every latent, overridable
+   * per latent. Deliberately avoids --color-accent's ochre (= interactive)
+   * and the status greens/reds (= forming/developing/fixing semantics).
+   * Mirrored in THEME_SURFACES-adjacent maps in src/lib/latentStyles.ts. */
+  --latent-sec-repo: #4a6fa5;
+  --latent-sec-links: #2f8f83;
+  --latent-sec-docs: #7d5ba6;
+  --latent-sec-slots: #b05c2f;
+  --latent-sec-loose: #6b8e23;
+  --latent-sec-threads: #8e4a6f;
 }
 
 /*
@@ -87,6 +99,13 @@ html[data-theme='dark'] {
    * mode because the surrounding page is already dark. */
   --color-overlay: rgba(0, 0, 0, 0.7);
   --color-overlay-soft: rgba(0, 0, 0, 0.5);
+  /* Section palette, lightened for dark grounds. */
+  --latent-sec-repo: #7a9cc6;
+  --latent-sec-links: #4fb3a5;
+  --latent-sec-docs: #9b7fc0;
+  --latent-sec-slots: #d07f4f;
+  --latent-sec-loose: #8fb03e;
+  --latent-sec-threads: #b06a92;
 }
 
 /*
