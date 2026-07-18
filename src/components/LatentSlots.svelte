@@ -148,6 +148,7 @@
       if (!res.ok) throw new Error(`Failed (${res.status})`);
       const body = await res.json();
       slots = body.slots || [];
+      announceSlots();
     } catch (e: any) {
       error = e?.message || 'Failed to load slots';
     }
@@ -318,6 +319,7 @@
       if (!res.ok) throw new Error(`Failed (${res.status})`);
       const body = await res.json();
       slots = [...slots, body];
+      announceSlots();
     } catch (e: any) {
       error = e?.message || 'Failed to add slot';
     }
@@ -337,6 +339,7 @@
       if (!res.ok) throw new Error(`Failed (${res.status})`);
       const body = await res.json();
       slots = slots.map((s) => (s.id === slot.id ? body : s));
+      announceSlots();
     } catch (e: any) {
       error = e?.message || 'Failed to update slot';
     }
@@ -376,6 +379,7 @@
       );
       if (!res.ok) throw new Error(`Failed (${res.status})`);
       slots = slots.filter((s) => s.id !== slot.id);
+      announceSlots();
     } catch (e: any) {
       error = e?.message || 'Failed to delete slot';
     }
@@ -487,6 +491,7 @@
         slots = slots.map((s) =>
           s.id === body.slot.id ? { ...s, ...body.slot } : s,
         );
+        announceSlots(); // the auto accent may have changed
       }
     } catch (e: any) {
       error = e?.message || 'Failed to toggle primary';
@@ -545,6 +550,7 @@
       if (!res.ok) throw new Error(`Failed (${res.status})`);
       const body = await res.json();
       slots = body.slots || slots;
+      announceSlots();
     } catch (e: any) {
       error = e?.message || 'Failed to reorder';
       await load(); // resync on failure
@@ -653,6 +659,26 @@
     const veil = img.parentElement?.querySelector(':scope > .slot__veil');
     veil?.remove();
     img.remove();
+  }
+
+  // Tell the section map (and any future listener) what slots exist now —
+  // fired after every mutation that changes the list, an order, a label, or
+  // an accent. The style panel's own edits flow through latent-style-changed
+  // instead, which the map also hears.
+  function announceSlots() {
+    window.dispatchEvent(
+      new CustomEvent('latent-slots-updated', {
+        detail: {
+          projectId,
+          slots: slots.map((s) => ({
+            id: s.id,
+            label: s.label,
+            position: s.position,
+            accent: slotAccent(s),
+          })),
+        },
+      }),
+    );
   }
 
   $effect(() => {
