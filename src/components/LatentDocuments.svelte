@@ -5,11 +5,14 @@
   pane below. Autosave debounces every ~2 seconds. Revision history is a drawer.
 -->
 <script lang="ts">
+  import LatentStyleButton from './LatentStyleButton.svelte';
+
   type Props = {
     projectId: string;
+    styleKey?: string | null;
   };
 
-  let { projectId }: Props = $props();
+  let { projectId, styleKey = null }: Props = $props();
 
   type DocHeader = {
     id: string;
@@ -214,7 +217,7 @@
 </script>
 
 <section class="docs">
-  <header class="docs__head">
+  <header class="docs__head" class:latent-band={!!styleKey}>
     <h2>Documents</h2>
     <div class="docs__tabs">
       {#each docs as d (d.id)}
@@ -229,6 +232,14 @@
         >+ Add</button
       >
     </div>
+    {#if styleKey}
+      <LatentStyleButton
+        {projectId}
+        scope="section"
+        sectionKey={styleKey}
+        push
+      />
+    {/if}
   </header>
 
   {#if error}

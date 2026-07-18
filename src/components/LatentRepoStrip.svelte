@@ -6,12 +6,14 @@
 -->
 <script lang="ts">
   import LinkRepoModal from './LinkRepoModal.svelte';
+  import LatentStyleButton from './LatentStyleButton.svelte';
 
   type Props = {
     projectId: string;
+    styleKey?: string | null;
   };
 
-  let { projectId }: Props = $props();
+  let { projectId, styleKey = null }: Props = $props();
 
   type Repo = {
     id: string;
@@ -157,7 +159,7 @@
   });
 </script>
 
-<section class="repo-strip">
+<section class="repo-strip" class:latent-band={!!styleKey}>
   {#if !loaded}
     <div class="placeholder">…</div>
   {:else if repo}
@@ -193,6 +195,13 @@
           type="button"
           onclick={unlink}>Unlink</button
         >
+        {#if styleKey}
+          <LatentStyleButton
+            {projectId}
+            scope="section"
+            sectionKey={styleKey}
+          />
+        {/if}
       </div>
     </div>
 
@@ -243,6 +252,14 @@
         type="button"
         onclick={() => (modalOpen = true)}>Link a GitHub repo</button
       >
+      {#if styleKey}
+        <LatentStyleButton
+          {projectId}
+          scope="section"
+          sectionKey={styleKey}
+          push
+        />
+      {/if}
     </div>
   {/if}
 
@@ -264,6 +281,17 @@
     border: 1px solid var(--color-border);
     background: var(--color-bg);
     padding: var(--space-sm);
+  }
+  /* The strip has no separate header — the whole row IS the head band, so
+     the band wash applies to the root. Re-declared here (not just the
+     global .latent-band) because this scoped background rule would
+     otherwise win on specificity. Recipe must match global.css. */
+  .repo-strip.latent-band {
+    background: color-mix(
+      in srgb,
+      var(--sec-head, var(--sec-accent, transparent)) 12%,
+      var(--color-surface)
+    );
   }
   .placeholder {
     color: var(--color-muted);
