@@ -314,7 +314,12 @@ label[for] {
 .latent-band {
   background: color-mix(
     in srgb,
-    var(--sec-head, var(--sec-accent, transparent)) 12%,
+    var(--sec-accent, transparent) 12%,
     var(--color-surface)
   );
+}
+/* A face replaces the band — the whole section is the identity zone.
+   (Treatment-specific band styling lives in detail.astro.) */
+.latent-section--faced .latent-band {
+  background: transparent;
 }
