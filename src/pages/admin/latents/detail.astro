@@ -92,7 +92,11 @@ import Admin from '../../../layouts/Admin.astro';
   /* Faced sections get a full card frame — the section IS the card. */
   .latent-section--faced {
     border: 1px solid
-      color-mix(in srgb, var(--sec-accent, var(--color-border)) 55%, var(--color-border));
+      color-mix(
+        in srgb,
+        var(--sec-accent, var(--color-border)) 55%,
+        var(--color-border)
+      );
     border-left: 4px solid var(--sec-accent);
     padding: var(--space-sm);
   }
@@ -155,7 +159,11 @@ import Admin from '../../../layouts/Admin.astro';
     position: relative;
     z-index: 2;
   }
-  :global(.latent-header .header-row) {
+  /* Title on its own line; entry/options underneath — both breakpoints. */
+  :global(.latent-header .header-title-row) {
+    display: flex;
+  }
+  :global(.latent-header .header-controls-row) {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
@@ -171,8 +179,7 @@ import Admin from '../../../layouts/Admin.astro';
     font-family: var(--font-mono);
     font-size: var(--text-lg);
     font-weight: 700;
-    flex: 1;
-    min-width: 220px;
+    width: 100%;
   }
   :global(.latent-header .kind-select) {
     background: var(--color-bg);
@@ -347,12 +354,6 @@ import Admin from '../../../layouts/Admin.astro';
     border-color: var(--latent-accent);
     box-shadow: 2px 2px 0 var(--latent-accent);
   }
-  @media (max-width: 640px) {
-    :global(.latent-header .name-input) {
-      min-width: 0;
-      width: 100%;
-    }
-  }
 </style>
 
 <script>
@@ -488,8 +489,10 @@ import Admin from '../../../layouts/Admin.astro';
       .join('');
 
     headerEl.innerHTML = `
-      <div class="header-row">
+      <div class="header-title-row">
         <input class="name-input" id="name-input" type="text" value="${escapeHtml(p.name)}" />
+      </div>
+      <div class="header-controls-row">
         <input class="slug-input" id="slug-input" type="text" value="${escapeHtml(p.slug || '')}" title="URL slug" />
         <select class="kind-select" id="kind-select">
           ${['album', 'video', 'zine', 'session', 'other']
@@ -782,7 +785,10 @@ import Admin from '../../../layouts/Admin.astro';
             '--sec-face-text',
             safeHex(st.text) || autoTextColor(bgColor, currentTheme()),
           );
-          el.classList.add('latent-section--faced', 'latent-section--face-solid');
+          el.classList.add(
+            'latent-section--faced',
+            'latent-section--face-solid',
+          );
         } else if (st.bg_mode === 'image' && st.bg_media_item_id) {
           const img = document.createElement('img');
           img.className = 'sec-bg';

@@ -667,9 +667,7 @@
     const face = slotFace(slot);
     if (face?.kind === 'solid') {
       vars.push(`--slot-bg-color:${face.color}`);
-      vars.push(
-        `--slot-face-text:${text || autoTextColor(face.color, theme)}`,
-      );
+      vars.push(`--slot-face-text:${text || autoTextColor(face.color, theme)}`);
     }
     return vars.join(';');
   }
@@ -807,73 +805,81 @@
           <div class="slot__veil"></div>
         {/if}
         <div class="slot__head">
-          <button class="slot__drag" type="button" aria-label="Drag to reorder"
-            >⋮⋮</button
-          >
-          <span class="slot__pos">#{slot.position}</span>
-          <button
-            class="slot__label"
-            onclick={() => renameSlot(slot)}
-            type="button"
-            title="Click to rename">{slot.label}</button
-          >
-          <div class="slot__status">
-            {#each ['forming', 'developing', 'fixed'] as st}
-              <button
-                class="status-pill"
-                class:active={slot.status === st}
-                style="--c: {statusColor(st)}"
-                onclick={() => setStatus(slot, st)}
-                type="button">{st}</button
-              >
-            {/each}
+          <!-- Two rows: the title owns its line; controls sit underneath.
+               (One shared row squeezed the label into wrapping.) -->
+          <div class="slot__title-row">
+            <button
+              class="slot__drag"
+              type="button"
+              aria-label="Drag to reorder">⋮⋮</button
+            >
+            <span class="slot__pos">#{slot.position}</span>
+            <button
+              class="slot__label"
+              onclick={() => renameSlot(slot)}
+              type="button"
+              title="Click to rename">{slot.label}</button
+            >
           </div>
-          <div class="slot__actions">
-            <!-- Files are always visible inline below; no Files toggle needed. -->
-            <span class="slot__file-count"
-              >{slot.item_count ?? 0} file{(slot.item_count ?? 0) === 1
-                ? ''
-                : 's'}</span
-            >
-            <button
-              class="action-btn"
-              type="button"
-              onclick={() => toggleSection(slot.id, 'notes')}>Notes</button
-            >
-            <button
-              class="action-btn"
-              type="button"
-              onclick={() => toggleSection(slot.id, 'threads')}
-              >Threads{#if slot.thread_count}
-                ({slot.thread_count}){/if}</button
-            >
-            {#if slot.repo_path}
+          <div class="slot__controls-row">
+            <div class="slot__status">
+              {#each ['forming', 'developing', 'fixed'] as st}
+                <button
+                  class="status-pill"
+                  class:active={slot.status === st}
+                  style="--c: {statusColor(st)}"
+                  onclick={() => setStatus(slot, st)}
+                  type="button">{st}</button
+                >
+              {/each}
+            </div>
+            <div class="slot__actions">
+              <!-- Files are always visible inline below; no Files toggle needed. -->
+              <span class="slot__file-count"
+                >{slot.item_count ?? 0} file{(slot.item_count ?? 0) === 1
+                  ? ''
+                  : 's'}</span
+              >
               <button
                 class="action-btn"
                 type="button"
-                onclick={() => toggleSection(slot.id, 'runs')}>Runs</button
+                onclick={() => toggleSection(slot.id, 'notes')}>Notes</button
               >
-            {/if}
-            {#if (slot.item_count ?? 0) > 0}
+              <button
+                class="action-btn"
+                type="button"
+                onclick={() => toggleSection(slot.id, 'threads')}
+                >Threads{#if slot.thread_count}
+                  ({slot.thread_count}){/if}</button
+              >
+              {#if slot.repo_path}
+                <button
+                  class="action-btn"
+                  type="button"
+                  onclick={() => toggleSection(slot.id, 'runs')}>Runs</button
+                >
+              {/if}
+              {#if (slot.item_count ?? 0) > 0}
+                <button
+                  class="action-btn action-btn--danger"
+                  type="button"
+                  title="Detach + permanently delete every Emulsion file on this slot"
+                  onclick={() => clearSlotItems(slot)}>Clear files</button
+                >
+              {/if}
               <button
                 class="action-btn action-btn--danger"
                 type="button"
-                title="Detach + permanently delete every Emulsion file on this slot"
-                onclick={() => clearSlotItems(slot)}>Clear files</button
+                onclick={() => deleteSlot(slot)}>Delete</button
               >
-            {/if}
-            <button
-              class="action-btn action-btn--danger"
-              type="button"
-              onclick={() => deleteSlot(slot)}>Delete</button
-            >
-            <LatentStyleButton
-              {projectId}
-              scope="slot"
-              slotId={slot.id}
-              accent={slotAccent(slot)}
-              noInherit
-            />
+              <LatentStyleButton
+                {projectId}
+                scope="slot"
+                slotId={slot.id}
+                accent={slotAccent(slot)}
+                noInherit
+              />
+            </div>
           </div>
         </div>
 
@@ -1283,11 +1289,22 @@
   }
   .slot__head {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-sm);
+    flex-direction: column;
+    gap: 4px;
     padding: 6px var(--space-sm);
     border-bottom: 1px dashed var(--color-border);
+  }
+  .slot__title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    min-width: 0;
+  }
+  .slot__controls-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
   }
   .slot__drag {
     background: transparent;
@@ -1315,7 +1332,7 @@
     font-weight: bold;
     cursor: text;
     flex: 1;
-    min-width: 80px;
+    min-width: 0; /* full title row — no squeeze, no wrap */
     text-align: left;
   }
   .slot__status {
@@ -1747,10 +1764,6 @@
     }
     .slot__head {
       gap: 6px;
-    }
-    .slot__actions {
-      flex-basis: 100%;
-      justify-content: flex-end;
     }
     .grid {
       grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
