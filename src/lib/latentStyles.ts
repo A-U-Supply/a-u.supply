@@ -103,8 +103,10 @@ export const THEME_SURFACES = {
 export type ThemeName = keyof typeof THEME_SURFACES;
 
 type Rgb = [number, number, number];
+/** Hue in [0, 360), saturation/value in [0, 1]. */
+type Hsv = [number, number, number];
 
-function hexToRgb(hex: string): Rgb {
+export function hexToRgb(hex: string): Rgb {
   return [
     parseInt(hex.slice(1, 3), 16),
     parseInt(hex.slice(3, 5), 16),
@@ -112,12 +114,48 @@ function hexToRgb(hex: string): Rgb {
   ];
 }
 
-function rgbToHex([r, g, b]: Rgb): string {
+export function rgbToHex([r, g, b]: Rgb): string {
   const c = (n: number) =>
     Math.round(Math.max(0, Math.min(255, n)))
       .toString(16)
       .padStart(2, '0');
   return `#${c(r)}${c(g)}${c(b)}`;
+}
+
+/** For ColorPicker.svelte's saturation/value square + hue slider. */
+export function rgbToHsv([r, g, b]: Rgb): Hsv {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === rn) h = 60 * (((gn - bn) / d) % 6);
+    else if (max === gn) h = 60 * ((bn - rn) / d + 2);
+    else h = 60 * ((rn - gn) / d + 4);
+  }
+  if (h < 0) h += 360;
+  const v = max;
+  const s = max === 0 ? 0 : d / max;
+  return [h, s, v];
+}
+
+export function hsvToRgb([h, s, v]: Hsv): Rgb {
+  const c = v * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = v - c;
+  let rp = 0;
+  let gp = 0;
+  let bp = 0;
+  if (h < 60) [rp, gp, bp] = [c, x, 0];
+  else if (h < 120) [rp, gp, bp] = [x, c, 0];
+  else if (h < 180) [rp, gp, bp] = [0, c, x];
+  else if (h < 240) [rp, gp, bp] = [0, x, c];
+  else if (h < 300) [rp, gp, bp] = [x, 0, c];
+  else [rp, gp, bp] = [c, 0, x];
+  return [(rp + m) * 255, (gp + m) * 255, (bp + m) * 255];
 }
 
 /** JS mirror of `color-mix(in srgb, a <t*100>%, b)` so warning math matches
