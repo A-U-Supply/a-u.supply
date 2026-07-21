@@ -542,6 +542,39 @@
     }
   }
 
+  async function renameMediaItem(slot: Slot, item: Item) {
+    const current = item.media?.filename || '';
+    const name = prompt('Rename file:', current);
+    if (!name || name === current) return;
+    try {
+      const res = await fetch(
+        `/api/media/${encodeURIComponent(item.media_item_id)}`,
+        {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: name }),
+        },
+      );
+      if (!res.ok) {
+        if (res.status === 409)
+          throw new Error('A file with that name already exists');
+        throw new Error(`Failed (${res.status})`);
+      }
+      const body = await res.json();
+      itemsBySlot = {
+        ...itemsBySlot,
+        [slot.id]: (itemsBySlot[slot.id] || []).map((i) =>
+          i.id === item.id && i.media
+            ? { ...i, media: { ...i.media, filename: body.filename } }
+            : i,
+        ),
+      };
+    } catch (e: any) {
+      error = e?.message || 'Failed to rename';
+    }
+  }
+
   async function persistOrder(orderedIds: string[]) {
     try {
       const res = await fetch(
@@ -1031,6 +1064,12 @@
                     >{fmtBytes(it.media?.file_size_bytes)}</span
                   >
                   <div class="file-row__actions">
+                    <button
+                      class="action-btn"
+                      type="button"
+                      title="Rename"
+                      onclick={() => renameMediaItem(slot, it)}>✏️</button
+                    >
                     {#if it.media?.media_type === 'audio' || it.media?.media_type === 'video'}
                       <button
                         class="action-btn"
