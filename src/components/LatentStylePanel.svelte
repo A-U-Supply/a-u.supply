@@ -14,6 +14,7 @@
 -->
 <script lang="ts">
   import PullFromIndex from './PullFromIndex.svelte';
+  import ColorPicker from './ColorPicker.svelte';
   import {
     SECTION_LABELS,
     FACE_TREATMENTS,
@@ -214,11 +215,10 @@
   // Debounced color inputs — optimistic locally so everything wearing the
   // color follows the drag once the PATCH lands (500ms, hero precedent).
   let timers: Record<string, any> = {};
-  function colorInput(key: string, e: Event) {
-    const v = (e.target as HTMLInputElement).value;
-    current = { ...current, [key]: v };
+  function colorInput(key: string, hex: string) {
+    current = { ...current, [key]: hex };
     if (timers[key]) clearTimeout(timers[key]);
-    timers[key] = setTimeout(() => patchStyle({ [key]: v }), 500);
+    timers[key] = setTimeout(() => patchStyle({ [key]: hex }), 500);
   }
 
   function resetKey(key: string) {
@@ -290,10 +290,10 @@
       </div>
     {:else if effBgMode === 'solid'}
       <div class="row row--indent">
-        <input
-          type="color"
+        <ColorPicker
           value={safeHex(current.bg_color) || '#888888'}
-          oninput={(e) => colorInput('bg_color', e)}
+          onInput={(hex) => colorInput('bg_color', hex)}
+          label="Face"
         />
         <span class="muted-note">full-strength card color</span>
       </div>
@@ -322,10 +322,10 @@
 
     <div class="row">
       <span class="row__label">Accent</span>
-      <input
-        type="color"
+      <ColorPicker
         value={effAccent || '#888888'}
-        oninput={(e) => colorInput('accent', e)}
+        onInput={(hex) => colorInput('accent', hex)}
+        label="Accent"
       />
       {#if current.accent}
         <button
@@ -341,10 +341,10 @@
 
     <div class="row">
       <span class="row__label">Lines</span>
-      <input
-        type="color"
+      <ColorPicker
         value={safeHex(current.border) || '#888888'}
-        oninput={(e) => colorInput('border', e)}
+        onInput={(hex) => colorInput('border', hex)}
+        label="Lines"
         title="Recolors this card's linework — box, dividers, file rows"
       />
       {#if current.border}
@@ -359,10 +359,10 @@
 
     <div class="row">
       <span class="row__label">Text</span>
-      <input
-        type="color"
+      <ColorPicker
         value={safeHex(current.text) || '#888888'}
-        oninput={(e) => colorInput('text', e)}
+        onInput={(hex) => colorInput('text', hex)}
+        label="Text"
       />
       {#if current.text}
         <button
@@ -414,6 +414,8 @@
     flex-direction: column;
     gap: 8px;
     font-size: var(--text-sm);
+    max-height: min(600px, 80vh);
+    overflow-y: auto;
   }
   .panel__head {
     display: flex;
@@ -460,14 +462,6 @@
     text-transform: uppercase;
     letter-spacing: 1pt;
     color: var(--color-muted);
-  }
-  input[type='color'] {
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: 1px solid var(--color-border);
-    background: var(--color-bg);
-    cursor: pointer;
   }
   .chips {
     display: flex;
