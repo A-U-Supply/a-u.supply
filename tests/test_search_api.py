@@ -169,6 +169,168 @@ class TestUpdateMedia:
         assert resp.status_code == 404
 
 
+class TestRenameMedia:
+    """Tests for PUT /api/media/{id} with `filename` (rename)."""
+
+    def _write(self, tmp_media_dir, rel_path, data=b"data"):
+        full = os.path.join(tmp_media_dir, rel_path)
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        with open(full, "wb") as f:
+            f.write(data)
+        return full
+
+    def test_rename_updates_db_and_moves_file(self, client, auth_headers, db_session, tmp_media_dir):
+        item = make_media_item(db_session, filename="test.png", file_path="image/2026-04/abcdef12_test.png")
+        self._write(tmp_media_dir, item.file_path)
+
+        resp = client.put(
+            f"/api/media/{item.id}",
+            json={"filename": "new-name.png"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["filename"] == "new-name.png"
+
+        db_session.refresh(item)
+        assert item.file_path == "image/2026-04/abcdef12_new-name.png"
+        assert not os.path.exists(os.path.join(tmp_media_dir, "image/2026-04/abcdef12_test.png"))
+        assert os.path.exists(os.path.join(tmp_media_dir, "image/2026-04/abcdef12_new-name.png"))
+
+    def test_rename_preserves_extension_ignoring_typed_extension(self, client, auth_headers, db_session, tmp_media_dir):
+        item = make_media_item(db_session, filename="test.png", file_path="image/2026-04/abcdef12_test.png")
+        self._write(tmp_media_dir, item.file_path)
+
+        resp = client.put(
+            f"/api/media/{item.id}",
+            json={"filename": "new-name.jpg"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["filename"] == "new-name.png"
+
+    def test_rename_moves_thumbnail_siblings(self, client, auth_headers, db_session, tmp_media_dir):
+        item = make_media_item(db_session, filename="test.png", file_path="image/2026-04/abcdef12_test.png")
+        self._write(tmp_media_dir, item.file_path)
+        self._write(tmp_media_dir, "image/2026-04/abcdef12_test_thumb.webp")
+        self._write(tmp_media_dir, "image/2026-04/abcdef12_test_thumb_sm.webp")
+        self._write(tmp_media_dir, "image/2026-04/abcdef12_test_thumb_lg.webp")
+
+        resp = client.put(
+            f"/api/media/{item.id}",
+            json={"filename": "renamed.png"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+
+        for suffix in ("_thumb.webp", "_thumb_sm.webp", "_thumb_lg.webp"):
+            assert not os.path.exists(
+                os.path.join(tmp_media_dir, f"image/2026-04/abcdef12_test{suffix}")
+            )
+            assert os.path.exists(
+                os.path.join(tmp_media_dir, f"image/2026-04/abcdef12_renamed{suffix}")
+            )
+
+    def test_rename_video_thumbnail_path_updated(self, client, auth_headers, db_session, tmp_media_dir):
+        from server.models import MediaVideoMeta
+
+        item = make_media_item(
+            db_session,
+            filename="clip.mp4",
+            file_path="video/2026-04/abcdef12_clip.mp4",
+            media_type="video",
+            mime_type="video/mp4",
+        )
+        self._write(tmp_media_dir, item.file_path)
+        old_thumb_abs = self._write(tmp_media_dir, "video/2026-04/abcdef12_clip_thumb.webp")
+        db_session.add(MediaVideoMeta(
+            media_item_id=item.id,
+            duration_seconds=1.0,
+            width=100,
+            height=100,
+            thumbnail_path=old_thumb_abs,
+        ))
+        db_session.commit()
+
+        resp = client.put(
+            f"/api/media/{item.id}",
+            json={"filename": "renamed.mp4"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+
+        db_session.refresh(item)
+        new_thumb_abs = os.path.join(tmp_media_dir, "video/2026-04/abcdef12_renamed_thumb.webp")
+        assert item.video_meta.thumbnail_path == new_thumb_abs
+        assert not os.path.exists(old_thumb_abs)
+        assert os.path.exists(new_thumb_abs)
+
+    def test_rename_collision_returns_409(self, client, auth_headers, db_session, tmp_media_dir):
+        item = make_media_item(db_session, filename="test.png", file_path="image/2026-04/abcdef12_test.png")
+        self._write(tmp_media_dir, item.file_path)
+        self._write(tmp_media_dir, "image/2026-04/abcdef12_taken.png")
+
+        resp = client.put(
+            f"/api/media/{item.id}",
+            json={"filename": "taken.png"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 409
+
+    def test_rename_rejects_empty_name(self, client, auth_headers, db_session):
+        item = make_media_item(db_session)
+        resp = client.put(f"/api/media/{item.id}", json={"filename": "   "}, headers=auth_headers)
+        assert resp.status_code == 400
+
+    def test_rename_rejects_path_separators(self, client, auth_headers, db_session):
+        item = make_media_item(db_session)
+        resp = client.put(f"/api/media/{item.id}", json={"filename": "a/b"}, headers=auth_headers)
+        assert resp.status_code == 400
+
+    def test_rename_requires_admin_scope(self, client, member_auth_headers, db_session, tmp_media_dir):
+        item = make_media_item(db_session, filename="test.png", file_path="image/2026-04/abcdef12_test.png")
+        self._write(tmp_media_dir, item.file_path)
+
+        resp = client.put(
+            f"/api/media/{item.id}",
+            json={"filename": "new-name.png"},
+            headers=member_auth_headers,
+        )
+        assert resp.status_code == 403
+
+    def test_description_only_edit_still_allows_write_scope(self, client, member_auth_headers, db_session):
+        item = make_media_item(db_session, description="old")
+        resp = client.put(
+            f"/api/media/{item.id}",
+            json={"description": "new"},
+            headers=member_auth_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["description"] == "new"
+
+    def test_meili_sync_failure_does_not_fail_the_rename(self, client, auth_headers, db_session, tmp_media_dir):
+        item = make_media_item(db_session, filename="test.png", file_path="image/2026-04/abcdef12_test.png")
+        self._write(tmp_media_dir, item.file_path)
+
+        with patch("server.search_api.meili_sync", side_effect=RuntimeError("meili down")):
+            resp = client.put(
+                f"/api/media/{item.id}",
+                json={"filename": "new-name.png"},
+                headers=auth_headers,
+            )
+        assert resp.status_code == 200
+
+        from server.models import ExtractionFailure
+
+        failure = (
+            db_session.query(ExtractionFailure)
+            .filter(ExtractionFailure.media_item_id == item.id)
+            .first()
+        )
+        assert failure is not None
+        assert failure.extraction_type == "meilisearch_sync"
+
+
 class TestDeleteMedia:
     """Tests for DELETE /api/media/{id}."""
 

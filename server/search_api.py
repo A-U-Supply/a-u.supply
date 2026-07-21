@@ -7,6 +7,7 @@ import json
 import logging
 import mimetypes
 import os
+import re
 import subprocess
 import tempfile
 import uuid
@@ -146,6 +147,15 @@ class SearchRequest(BaseModel):
 class MediaUpdateRequest(BaseModel):
     """Update a media item's metadata."""
     description: str | None = Field(None, description="New description/notes for the media item. Set to empty string to clear.")
+    filename: str | None = Field(
+        None,
+        max_length=200,
+        description=(
+            "New display filename. The extension is preserved automatically from the "
+            "existing filename — only the name before it is replaced. Also renames the "
+            "file on disk and its thumbnail(s) to match. Requires admin."
+        ),
+    )
 
 
 class TagsRequest(BaseModel):
@@ -2186,22 +2196,120 @@ async def slack_share_media(
     return {"already_shared": False, "channel": channel_name, "sent_at": share.sent_at}
 
 
-@router.put("/media/{media_id}", tags=["Media Items"], summary="Update media description")
+_RENAME_PREFIX_RE = re.compile(r"^[0-9a-f]{8}_")
+_RENAME_FORBIDDEN_RE = re.compile(r"[/\\\x00]")
+
+
+def _normalize_rename(raw: str, current_filename: str) -> str:
+    """Validate a user-submitted filename and re-attach the existing extension.
+
+    The extension is always taken from `current_filename`, never from `raw` —
+    typing a different extension in the rename prompt can't change what the
+    file actually is, since `mime_type`/`media_type` are set once at upload
+    and never re-derived from the filename.
+    """
+    stripped = raw.strip()
+    if not stripped:
+        raise HTTPException(status_code=400, detail="Filename cannot be empty")
+    if _RENAME_FORBIDDEN_RE.search(stripped):
+        raise HTTPException(status_code=400, detail="Filename cannot contain / \\ or null bytes")
+
+    current_ext = Path(current_filename).suffix
+    new_stem = Path(stripped).stem if current_ext else stripped
+    if not new_stem:
+        raise HTTPException(status_code=400, detail="Filename cannot be empty")
+    new_filename = new_stem + current_ext
+    if len(new_filename) > 200:
+        raise HTTPException(status_code=400, detail="Filename is too long")
+    return new_filename
+
+
+def _rename_media_file_on_disk(
+    item: MediaItem, new_filename: str
+) -> list[tuple[Path, Path]]:
+    """Rename the item's physical file and its thumbnail siblings to match a
+    new display filename, preserving the existing `{media_type}/{date_dir}/`
+    directory and `{sha8}_` prefix so the file stays in its original
+    upload-month folder rather than jumping to today's date.
+
+    Returns every `(old_path, new_path)` pair actually moved, so the caller
+    can unwind them if the DB commit that follows fails.
+    """
+    from server.extraction import (
+        _image_thumbnail_path,
+        _image_thumbnail_sm_path,
+        _image_thumbnail_lg_path,
+    )
+
+    media_dir = _get_search_media_dir()
+    old_rel = Path(item.file_path)
+    old_abs = media_dir / old_rel
+
+    prefix_match = _RENAME_PREFIX_RE.match(old_rel.name)
+    prefix = prefix_match.group(0) if prefix_match else ""
+    new_rel = old_rel.with_name(prefix + new_filename)
+    new_abs = media_dir / new_rel
+
+    if new_abs != old_abs and new_abs.exists():
+        raise HTTPException(status_code=409, detail="A file with that name already exists")
+
+    moved: list[tuple[Path, Path]] = []
+    try:
+        if new_abs != old_abs:
+            old_abs.rename(new_abs)
+            moved.append((old_abs, new_abs))
+
+        if item.media_type == "image":
+            for thumb_fn in (_image_thumbnail_path, _image_thumbnail_sm_path, _image_thumbnail_lg_path):
+                old_thumb = Path(thumb_fn(str(old_abs)))
+                if not old_thumb.exists():
+                    continue
+                new_thumb = Path(thumb_fn(str(new_abs)))
+                old_thumb.rename(new_thumb)
+                moved.append((old_thumb, new_thumb))
+        elif item.media_type == "video" and item.video_meta and item.video_meta.thumbnail_path:
+            # Video thumbnails live at an explicit, absolute DB path (not a
+            # sibling derived from `filename`) — update it regardless of
+            # whether the on-disk move below actually happens, so the column
+            # never points at a stale path.
+            old_video_thumb = Path(item.video_meta.thumbnail_path)
+            new_video_thumb = new_abs.with_name(new_abs.stem + "_thumb.webp")
+            if old_video_thumb.exists():
+                old_video_thumb.rename(new_video_thumb)
+                moved.append((old_video_thumb, new_video_thumb))
+            item.video_meta.thumbnail_path = str(new_video_thumb)
+    except OSError:
+        for old_path, new_path in reversed(moved):
+            try:
+                new_path.rename(old_path)
+            except OSError:
+                pass
+        raise HTTPException(status_code=500, detail="Failed to rename file on disk")
+
+    item.file_path = str(new_rel)
+    return moved
+
+
+@router.put("/media/{media_id}", tags=["Media Items"], summary="Update media description or filename")
 def update_media(
     media_id: str,
     body: MediaUpdateRequest,
-    _auth=Depends(require_scope("write")),
+    auth=Depends(require_scope("write")),
     db: Session = Depends(get_db),
 ):
-    """Update a media item's description/notes.
+    """Update a media item's description/notes, or rename it.
 
-    Currently only the `description` field can be updated. Other metadata (tags, sources)
-    have their own dedicated endpoints.
+    Description edits require `write` scope, same as before. Renaming also
+    moves the physical file and its thumbnail(s) on disk to match, so it
+    requires `admin` — checked here rather than at the route level, so
+    existing `write`-scope callers doing description-only edits are
+    unaffected.
 
-    The search index is automatically updated after the change.
+    The search index is automatically updated after either change.
 
-    **Scope required:** `write`
+    **Scope required:** `write` (description), `admin` (filename)
     """
+    user, scope = auth
     item = db.query(MediaItem).filter(MediaItem.id == media_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Media item not found")
@@ -2209,9 +2317,33 @@ def update_media(
     if body.description is not None:
         item.description = body.description
 
-    db.commit()
+    moved: list[tuple[Path, Path]] = []
+    if body.filename is not None:
+        if scope != "admin" and user.role != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required to rename files")
+        new_filename = _normalize_rename(body.filename, item.filename)
+        if new_filename != item.filename:
+            moved = _rename_media_file_on_disk(item, new_filename)
+            item.filename = new_filename
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        for old_path, new_path in reversed(moved):
+            try:
+                new_path.rename(old_path)
+            except OSError:
+                pass
+        raise HTTPException(status_code=500, detail="Failed to save changes")
+
     db.refresh(item)
-    meili_sync(db, item)
+    try:
+        meili_sync(db, item)
+    except Exception as exc:
+        from server.extraction import record_extraction_failure
+
+        record_extraction_failure(db, item.id, "meilisearch_sync", exc)
 
     return _media_item_response(_get_media_item_or_404(db, media_id))
 
