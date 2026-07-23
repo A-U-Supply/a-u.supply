@@ -96,6 +96,8 @@ Multi-part DAW bundle uploads (`.logicx` etc.) stage under `{SEARCH_MEDIA_DIR}/.
 | `BUNDLE_STALE_HOURS` | `24` | Staging TTL before the startup reaper deletes it |
 | `WHISPER_MAX_SECONDS` | `900` | Skip speech transcription for media longer than this (0 = transcribe everything) |
 | `SESSION_LOGIC_PARSE` | unset (off) | `1` enables the experimental Logic `ProjectData` marker parser (best-effort, log-only — see `server/session_extract/logic_markers.py`) |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | Endpoint for audio AI text tagging. In prod this points at SiliconFlow (`https://api.siliconflow.com/v1`) with `DEEPSEEK_MODEL=deepseek-ai/DeepSeek-V4-Flash`, because the direct DeepSeek key is invalid (audio tagging silently no-ops on 401s — check this first if tags stop appearing) |
+| `DEEPSEEK_MODEL` | `deepseek-v4-flash` | Model id for audio text tagging (namespaced when using SiliconFlow) |
 
 Session bundles are stored **unpacked** (directory tree + `manifest.json`); downloads are zipped on the fly by `GET /api/media/{id}/file`. Bundle parts stream through nginx, so `client_max_body_size` must cover the largest single file inside a bundle (see [`deployment.md`](deployment.md#nginx)).
 
