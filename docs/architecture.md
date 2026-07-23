@@ -10,7 +10,7 @@ High-level tour of how the pieces fit together. For setup and workflow, see [`de
 | Styling  | [Tailwind 4](https://tailwindcss.com/) + [bits-ui](https://bits-ui.com/) + brutalist tokens | Tailwind utilities, headless primitives, and a single `.brutalist-control` class — no rounded corners, hard shadows |
 | Backend  | [FastAPI](https://fastapi.tiangolo.com/) (Python 3.12+), SQLAlchemy    | REST API, auth, webhooks, static-file serving |
 | Database | SQLite (WAL mode)                                                       | Primary store; persists on a Dokku mounted volume |
-| Search   | [Meilisearch](https://www.meilisearch.com/)                             | Indices: `images`, `audio`, `video`, `emulsion` (user-uploaded WIP) |
+| Search   | [Meilisearch](https://www.meilisearch.com/)                             | Indices: `images`, `audio`, `video`, `emulsion` (user-uploaded WIP), `samples-bored`, `puke-box`, `marginalia` (timestamped comments/cues) |
 | Discussion | [Lemmy](https://join-lemmy.org/) instance at `fold.a-u.supply`        | Backs Latents and Stacks threads. Local-only, federation disabled. Proxied through FastAPI; the browser never talks to fold directly. |
 | Workers  | `worker.py` + Docker bot images                                         | Pulls Docker images to process media jobs |
 | Auth     | JWT (httpOnly cookies) + API key Bearer tokens                          | Browser sessions + programmatic access |
@@ -143,6 +143,12 @@ Each indexed document carries denormalized vote aggregates (`up_count`, `down_co
 - All Lemmy reads/writes go through FastAPI `/api/threads` — the browser never sees Lemmy.
 
 See the [latents plan](plans/2026-05-15-latents.md) for the data model, API surface, and Lemmy auto-provisioning sequence. See [`operations.md`](operations.md) for the fold Let's Encrypt gotcha and version notes.
+
+## Session bundles and Marginalia
+
+DAW session bundles (`.logicx`) upload multi-part via `/api/media/bundles` and are stored unpacked; `server/session_extract/` harvests audio (→ `audio` child items), MIDI (→ playable `midi` items with synthesized previews), and embedded cue markers (WAV/AIFF cue chunks, MIDI marker meta-events, experimental Logic `ProjectData` parse behind `SESSION_LOGIC_PARSE=1`). Children link to the parent session via `media_items.parent_media_item_id` and attach to the same Latent slot.
+
+Timestamped comments and cue markers on media items (**Marginalia**) live in the `annotations` table and mirror into the `marginalia` Meilisearch index for search. Session-level cues are inherited by extracted children. See [`plans/2026-07-22-latents-sessions-marginalia.md`](plans/2026-07-22-latents-sessions-marginalia.md).
 
 ## Tests
 
