@@ -90,6 +90,11 @@ import Admin from '../../../layouts/Admin.astro';
          already exists as the .single chrome itself. -->
     <div id="threads-island"></div>
 
+    <!-- COMMENTS & MARKERS (Marginalia): timestamped annotations on the
+         audio timeline. MarginaliaList renders its own brutal-card
+         chrome, same pattern as the Threads island above. -->
+    <div id="marginalia-island"></div>
+
     <!-- PROVENANCE -->
     <section class="brutal-card provenance-card" aria-labelledby="prov-h">
       <div class="brutal-card__head">
@@ -750,10 +755,12 @@ import Admin from '../../../layouts/Admin.astro';
   import Threads from '../../../components/Threads.svelte';
   import LatentLinks from '../../../components/LatentLinks.svelte';
   import VoteChip from '../../../components/VoteChip.svelte';
+  import MarginaliaList from '../../../components/MarginaliaList.svelte';
 
   let threadsInstance: any = null;
   let latentLinksInstance: any = null;
   let voteChipInstance: any = null;
+  let marginaliaInstance: any = null;
   // Monotonic counter — every `mountVoteChip` call bumps this and
   // captures the value; after its async fetch returns, the call
   // bails if the counter has moved on (another mount started). Without
@@ -768,6 +775,12 @@ import Admin from '../../../layouts/Admin.astro';
         unmount(threadsInstance);
       } catch {}
       threadsInstance = null;
+    }
+    if (marginaliaInstance) {
+      try {
+        unmount(marginaliaInstance);
+      } catch {}
+      marginaliaInstance = null;
     }
     if (latentLinksInstance) {
       try {
@@ -828,6 +841,31 @@ import Admin from '../../../layouts/Admin.astro';
           singleThread: true,
           defaultTitle: `Discussion: ${filename || 'untitled'}`,
           currentUserId: user?.id ?? null,
+        },
+      });
+    }
+
+    // Marginalia island — timestamped comments + markers for this item.
+    // Seeking inside queues the item in the player with a start_time
+    // (midi streams its synthesized /audio preview, per the shared
+    // queueMediaTrack helper).
+    function mountMarginalia(item: any) {
+      const target = document.getElementById('marginalia-island');
+      if (!target) return;
+      if (marginaliaInstance) {
+        try {
+          unmount(marginaliaInstance);
+        } catch {}
+        marginaliaInstance = null;
+      }
+      target.innerHTML = '';
+      marginaliaInstance = mount(MarginaliaList, {
+        target,
+        props: {
+          mediaId,
+          mediaType: item.media_type || '',
+          filename: item.filename || '',
+          showComposer: true,
         },
       });
     }
@@ -944,6 +982,7 @@ import Admin from '../../../layouts/Admin.astro';
         contentEl.style.display = 'flex';
         renderDetail();
         mountThreads(currentItem.filename || 'untitled');
+        mountMarginalia(currentItem);
         mountVoteChip(currentItem);
         // Bookmark star
         const bm = (window as any).__bookmarks;

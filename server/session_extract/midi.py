@@ -149,6 +149,13 @@ def register_midi_item(db, item, file_path: Path, search_media_dir: Path) -> dic
     preview_abs = file_path.with_suffix(file_path.suffix + ".preview.wav")
     if render_midi_preview(file_path, preview_abs):
         preview_rel = preview_abs.relative_to(search_media_dir).as_posix()
+        # Waveform peaks for the player UI (best-effort).
+        try:
+            from server.extraction import generate_peaks
+
+            generate_peaks(str(preview_abs))
+        except Exception:
+            logger.info("peaks generation failed for MIDI preview %s", preview_abs)
 
     meta = MediaMidiMeta(
         media_item_id=item.id,

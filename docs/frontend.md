@@ -98,6 +98,9 @@ All under `src/components/`. Each is mounted directly from `.astro` pages as an 
 | `LatentRepoStrip.svelte`  | Strip view of Latent contents — emits `latent:slots-changed`                                                                                                                                                     | `client:visible`                                                                                                  |
 | `PullFromIndex.svelte`    | Modal that searches all four Meilisearch indices for files to attach to a Latent                                                                                                                                 | `client:visible`                                                                                                  |
 | `IndexFilter.svelte`      | bits-ui Select (multi) for filtering by media-type index. Emits a bubbling `index-change` CustomEvent                                                                                                            | `client:visible`                                                                                                  |
+| `MarginaliaList.svelte`   | Timestamped comments + cue markers for one media item (list, composer, reply/resolve/edit/delete, seek links). Shared helpers live in `marginalia.ts`.                                                           | Mounted imperatively (search detail)                                                                              |
+| `MarginaliaBadge.svelte`  | Compact "💬 n" count chip + popover for slot rows / loose tiles; seeks via `player:queue` + `start_time` or bare `player:seek`                                                                                   | Inside LatentSlots / LatentLooseFiles rows                                                                        |
+| `MarginaliaRecent.svelte` | "Latest comments & markers" strip for a Latent (reads the `marginalia` index by `project_id`)                                                                                                                    | Mounted imperatively (Latent detail)                                                                              |
 
 ### Event-bus pattern
 
@@ -105,7 +108,9 @@ Pages and components talk to each other through DOM custom events on `document`.
 
 | Event                  | Detail                            | Who fires                                      | Who listens                     |
 | ---------------------- | --------------------------------- | ---------------------------------------------- | ------------------------------- |
-| `player:queue`         | `{ tracks: Track[], startIndex }` | Any page or component                          | `Player.svelte`                 |
+| `player:queue`         | `{ tracks: Track[], startIndex, start_time? }` | Any page or component                          | `Player.svelte`                 |
+| `player:seek`          | `{ seconds }`                     | Marginalia components (item already playing)   | `Player.svelte`                 |
+| `player:time-request`  | `{}`                              | Marginalia composers                           | `Player.svelte` → re-fires `player:time` synchronously |
 | `latent:slots-changed` | `{}`                              | `LatentRepoStrip.svelte` after a slot mutation | Host page reloads its slot data |
 | `index-change`         | `{ value }`                       | `IndexFilter.svelte`                           | Whatever page hosts the filter  |
 

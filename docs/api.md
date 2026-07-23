@@ -32,7 +32,7 @@ Session-cookie scope is derived from role: `admin` → `admin`, `member` → `wr
 | **Cover Art** | `POST/GET /api/releases/{code}/cover` | Cover art upload and serving (auto-thumbnails) |
 | **Media Search** | `POST /api/search`, `GET /api/search/facets` | Full-text search with filters and facets |
 | **Media Votes** | `POST /api/search/{id}/vote`, `GET /api/search/{id}/voters`, `GET /api/search/votes/mine` | Per-user acclaim/disavow on search items ([#318](https://github.com/A-U-Supply/a-u.supply/issues/318)) |
-| **Media Items** | `GET/POST/PUT/DELETE /api/media` | Media CRUD, upload, file download, thumbnails, session children |
+| **Media Items** | `GET/POST/PUT/DELETE /api/media` | Media CRUD, upload, file download, thumbnails, waveform peaks, session children |
 | **Tagging** | `POST/DELETE /api/media/{id}/tags`, `GET /api/tags` | Tag management and autocomplete |
 | **Batch Ops** | `POST /api/media/batch/*` | Bulk tag, delete, re-extract, ZIP export |
 | **Slack Sync** | `POST /api/ingest/slack/*` | Scrape, sync, dry-run, reaction refresh |
@@ -43,7 +43,7 @@ Session-cookie scope is derived from role: `admin` → `admin`, `member` → `wr
 | **Admin Dashboard** | `GET /api/admin/stats`, `action-queue`, `activity-feed`, `altar` | Auspices dashboard data |
 | **Latents** | `GET/POST/PATCH/DELETE /api/projects[/...]` | Latents, slots, items, documents (see [`plans/2026-05-15-latents.md`](plans/2026-05-15-latents.md)) |
 | **Bundles** | `POST/GET/DELETE /api/media/bundles[/...]` | Multi-part DAW session bundle uploads (`.logicx`): start → streamed parts → complete. Completion harvests audio into child media items attached to the same Latent/slot (see [`plans/2026-07-22-latents-sessions-marginalia.md`](plans/2026-07-22-latents-sessions-marginalia.md)) |
-| **Marginalia** | `GET /api/media/{id}/annotations`, `GET /api/media/annotations/counts` | Timestamped comments + cue markers on media items, incl. markers imported from session bundles (WAV/AIFF/MIDI/Logic). Comments/replies/resolve arrive with the player UI (see [`plans/2026-07-22-latents-sessions-marginalia.md`](plans/2026-07-22-latents-sessions-marginalia.md)) |
+| **Marginalia** | `GET/POST /api/media/{id}/annotations`, `PATCH/POST/DELETE /api/annotations/{id}[/resolve]`, `GET /api/annotations`, `GET /api/media/annotations/counts` | Timestamped comments + cue markers on media items — create, reply (one level), edit, resolve, delete, search the `marginalia` index. Markers are also imported from session bundles (WAV/AIFF/MIDI/Logic). See [`plans/2026-07-22-latents-sessions-marginalia.md`](plans/2026-07-22-latents-sessions-marginalia.md) |
 | **Threads** | `GET/POST/PATCH/DELETE /api/threads[/...]` | Lemmy-backed discussion threads anchored to projects / slots / media items |
 
 ### Samples-bored (Music 2000 sample library)

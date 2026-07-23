@@ -11,6 +11,11 @@
   import PullFromIndex from './PullFromIndex.svelte';
   import LatentLinks from './LatentLinks.svelte';
   import LatentStyleButton from './LatentStyleButton.svelte';
+  import MarginaliaBadge from './MarginaliaBadge.svelte';
+  import {
+    fetchAnnotationCounts,
+    type AnnotationCounts,
+  } from './marginalia.ts';
   import { fileExt } from '../lib/fileExt.ts';
   import {
     safeHex,
@@ -147,6 +152,16 @@
 
   let pullOpenForSlot = $state<string | null>(null);
   let pullOpen = $state(false);
+
+  // Marginalia badge counts, merged per media id as slots/children load.
+  let annotationCounts = $state<AnnotationCounts>({});
+
+  async function loadAnnotationCounts(mediaIds: string[]) {
+    const fresh = await fetchAnnotationCounts(mediaIds);
+    if (Object.keys(fresh).length) {
+      annotationCounts = { ...annotationCounts, ...fresh };
+    }
+  }
 
   function openPull(slotId: string) {
     pullOpenForSlot = slotId;
@@ -322,6 +337,10 @@
       const body = await res.json();
       itemsBySlot = { ...itemsBySlot, [slotId]: body.items || [] };
       watchSessions(slotId);
+      // One batched counts request for every visible item in this slot.
+      loadAnnotationCounts(
+        (body.items || []).map((i: Item) => i.media_item_id),
+      );
     } catch (e: any) {
       error = e?.message || 'Failed to load items';
     }
@@ -443,6 +462,11 @@
       if (!res.ok) throw new Error(`Failed (${res.status})`);
       const body = await res.json();
       childrenByMedia = { ...childrenByMedia, [mediaId]: body.children || [] };
+      // Extracted children can carry their own annotations (+ inherited
+      // session cues) — badge them too.
+      loadAnnotationCounts(
+        (body.children || []).map((c: SessionChild) => c.id),
+      );
     } catch (e: any) {
       error = e?.message || 'Failed to load extracted files';
     } finally {
@@ -1285,6 +1309,14 @@
                     >{fmtBytes(it.media?.file_size_bytes)}</span
                   >
                   <div class="file-row__actions">
+                    {#if it.media}
+                      <MarginaliaBadge
+                        mediaId={it.media_item_id}
+                        mediaType={it.media.media_type}
+                        filename={it.media.filename || ''}
+                        counts={annotationCounts[it.media_item_id] || null}
+                      />
+                    {/if}
                     <button
                       class="action-btn"
                       type="button"
@@ -1343,6 +1375,12 @@
                             <span class="child-row__size"
                               >{fmtBytes(child.file_size_bytes)}</span
                             >
+                            <MarginaliaBadge
+                              mediaId={child.id}
+                              mediaType={child.media_type}
+                              filename={child.filename || ''}
+                              counts={annotationCounts[child.id] || null}
+                            />
                             {#if child.media_type === 'audio' || child.media_type === 'midi'}
                               <button
                                 class="action-btn"
@@ -1841,7 +1879,7 @@
   }
   .child-row {
     display: grid;
-    grid-template-columns: 1fr auto auto auto;
+    grid-template-columns: 1fr auto auto auto auto;
     align-items: center;
     gap: 8px;
     padding: 3px 0;
@@ -1894,7 +1932,7 @@
       padding-left: 12px;
     }
     .child-row {
-      grid-template-columns: 1fr auto;
+      grid-template-columns: 1fr auto auto;
     }
     .child-row__dur,
     .child-row__size {

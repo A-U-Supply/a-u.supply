@@ -2103,6 +2103,51 @@ def get_media_children(
     return {"children": result}
 
 
+@router.get("/media/{media_id}/peaks", tags=["Media Items"], summary="Waveform peaks for the player")
+def get_media_peaks(
+    media_id: str,
+    _auth=Depends(require_scope("read")),
+    db: Session = Depends(get_db),
+):
+    """Return cached min/max waveform peaks JSON for the player waveform.
+
+    Peaks are generated during extraction for audio (and for MIDI preview
+    renders). For items uploaded before this existed, they're generated
+    on demand here and cached beside the media file. 404 when no playable
+    audio exists or generation fails.
+
+    **Scope required:** `read`
+    """
+    from server.extraction import generate_peaks, peaks_path_for
+
+    item = _get_media_item_or_404(db, media_id)
+    media_dir = _get_search_media_dir()
+
+    source_path: Path | None = None
+    if item.media_type in ("audio", "video"):
+        candidate = media_dir / item.file_path
+        source_path = candidate if candidate.is_file() else None
+    elif item.media_type == "midi" and item.midi_meta and item.midi_meta.preview_path:
+        candidate = media_dir / item.midi_meta.preview_path
+        source_path = candidate if candidate.is_file() else None
+
+    if source_path is None:
+        db.close()
+        raise HTTPException(status_code=404, detail="No playable audio for this item")
+
+    peaks_path = peaks_path_for(source_path)
+    db.close()  # don't pin the pool during a potential on-demand render
+
+    if not peaks_path.exists():
+        if not generate_peaks(str(source_path), str(peaks_path)):
+            raise HTTPException(status_code=404, detail="Peaks unavailable")
+    return FileResponse(
+        peaks_path,
+        media_type="application/json",
+        headers={"Cache-Control": "private, max-age=86400"},
+    )
+
+
 @router.get("/media/{media_id}/file", tags=["Media Items"], summary="Download media file")
 def get_media_file(
     media_id: str,

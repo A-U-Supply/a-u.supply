@@ -395,7 +395,12 @@ class Annotation(Base):
 
     media_item = relationship("MediaItem", back_populates="annotations")
     author = relationship("User", foreign_keys=[author_id])
-    replies = relationship("Annotation", backref=backref("parent", remote_side=[id]))
+    replies = relationship(
+        "Annotation",
+        cascade="all, delete-orphan",
+        single_parent=True,
+        backref=backref("parent", remote_side=[id]),
+    )
 
     __table_args__ = (
         Index("ix_annotations_media_item_position", "media_item_id", "position_seconds"),

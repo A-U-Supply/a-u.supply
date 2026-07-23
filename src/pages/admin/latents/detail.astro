@@ -22,6 +22,12 @@ import Admin from '../../../layouts/Admin.astro';
     </section>
     <section id="threads-island" class="latent-section" data-section="threads">
     </section>
+    <section
+      id="marginalia-island"
+      class="latent-section"
+      data-section="marginalia"
+    >
+    </section>
   </div>
 
   <div id="style-panel-island"></div>
@@ -87,6 +93,12 @@ import Admin from '../../../layouts/Admin.astro';
     --sec-accent: var(--latent-sec-loose);
   }
   .latent-section[data-section='threads'] {
+    --sec-accent: var(--latent-sec-threads);
+  }
+  /* Marginalia is not a styleable section (not in the server's
+     VALID_SECTION_KEYS) — it borrows the threads accent and is skipped by
+     applySectionStyles(), which only iterates SECTION_KEYS. */
+  .latent-section[data-section='marginalia'] {
     --sec-accent: var(--latent-sec-threads);
   }
   /* Faced sections get a full card frame — the section IS the card. */
@@ -375,6 +387,7 @@ import Admin from '../../../layouts/Admin.astro';
   import LatentLinks from '../../../components/LatentLinks.svelte';
   import LatentStylePanel from '../../../components/LatentStylePanel.svelte';
   import Threads from '../../../components/Threads.svelte';
+  import MarginaliaRecent from '../../../components/MarginaliaRecent.svelte';
 
   let mounted: any[] = [];
   let initialized = false;
@@ -931,6 +944,12 @@ import Admin from '../../../layouts/Admin.astro';
           title: 'Latent threads',
           styleKey: 'threads',
         },
+      }),
+    );
+    mounted.push(
+      mount(MarginaliaRecent, {
+        target: document.getElementById('marginalia-island')!,
+        props: { projectId: id },
       }),
     );
     // Single style-settings host for every Style button on the page.
