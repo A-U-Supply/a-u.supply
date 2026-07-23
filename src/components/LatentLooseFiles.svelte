@@ -7,6 +7,11 @@
   import Uploader from './Uploader.svelte';
   import PullFromIndex from './PullFromIndex.svelte';
   import LatentStyleButton from './LatentStyleButton.svelte';
+  import MarginaliaBadge from './MarginaliaBadge.svelte';
+  import {
+    fetchAnnotationCounts,
+    type AnnotationCounts,
+  } from './marginalia.ts';
   import { fileExt } from '../lib/fileExt.ts';
 
   type Props = {
@@ -36,6 +41,7 @@
   let error = $state<string | null>(null);
   let pullOpen = $state(false);
   let rootEl: HTMLElement | null = $state(null);
+  let annotationCounts = $state<AnnotationCounts>({});
 
   async function load() {
     loading = true;
@@ -48,6 +54,13 @@
       if (!res.ok) throw new Error(`Failed (${res.status})`);
       const body = await res.json();
       items = body.items || [];
+      // One batched counts request for every visible loose item.
+      const fresh = await fetchAnnotationCounts(
+        items.map((i) => i.media_item_id),
+      );
+      if (Object.keys(fresh).length) {
+        annotationCounts = { ...annotationCounts, ...fresh };
+      }
     } catch (e: any) {
       error = e?.message || 'Failed to load files';
     } finally {
@@ -274,6 +287,16 @@
                 · {formatSize(it.media.file_size_bytes)}
               {/if}
             </div>
+            {#if it.media}
+              <div class="tile__badges">
+                <MarginaliaBadge
+                  mediaId={it.media_item_id}
+                  mediaType={it.media.media_type}
+                  filename={it.media.filename || ''}
+                  counts={annotationCounts[it.media_item_id] || null}
+                />
+              </div>
+            {/if}
           </div>
           <div class="tile__actions">
             <button class="action-btn" type="button" onclick={() => rename(it)}
@@ -407,6 +430,12 @@
   .tile__meta {
     color: var(--color-muted);
     font-size: 0.7rem;
+  }
+  .tile__badges {
+    margin-top: 2px;
+  }
+  .tile__badges:empty {
+    display: none;
   }
   .session-chip {
     display: inline-block;

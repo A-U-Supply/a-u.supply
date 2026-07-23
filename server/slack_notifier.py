@@ -574,6 +574,22 @@ def _format_fold_post_created(u: str, d: dict) -> dict:
     return {"text": text, "unfurl_links": False}
 
 
+def _format_latent_annotation_created(u: str, d: dict) -> dict:
+    filename = d.get("filename") or "a file"
+    project_name = d.get("project_name")
+    timestamp = d.get("timestamp") or ""
+    excerpt = (d.get("excerpt") or "").strip()
+    media_item_id = d.get("media_item_id") or ""
+    where = f" in *{project_name}*" if project_name else ""
+    at = f" at `{timestamp}`" if timestamp else ""
+    snip = f' — _"{excerpt}"_' if excerpt else ""
+    text = (
+        f"💬 *{u}* commented{where} on *{filename}*{at}{snip}\n"
+        f"<{_search_detail_link(media_item_id)}|open file>"
+    )
+    return {"text": text, "unfurl_links": False}
+
+
 def _format_latent_thread_created(u: str, d: dict) -> dict:
     anchor_type = d.get("anchor_type") or "project"
     anchor_id = d.get("anchor_id") or ""
@@ -628,6 +644,7 @@ _IMMEDIATE_FORMATTERS = {
     "latent.abandoned": _format_latent_abandoned,
     "latent.thread_created": _format_latent_thread_created,
     "latent.thread_reply": _format_latent_thread_reply,
+    "latent.annotation_created": _format_latent_annotation_created,
     "fold.community_created": _format_fold_community_created,
     "fold.post_created": _format_fold_post_created,
 }

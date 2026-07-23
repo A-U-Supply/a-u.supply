@@ -24,6 +24,52 @@ SEARCH_MEDIA_DIR = os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data")
 # Set to 0 to transcribe everything regardless of length.
 WHISPER_MAX_SECONDS = float(os.environ.get("WHISPER_MAX_SECONDS", "900"))
 
+# Number of min/max peak bins generated for the player's waveform display.
+PEAKS_BINS = 1500
+
+
+def peaks_path_for(file_path: str | Path) -> Path:
+    """The cached waveform-peaks JSON path for a media file."""
+    p = Path(file_path)
+    return p.parent / f"{p.stem}.peaks.json"
+
+
+def generate_peaks(file_path: str, peaks_path: str | None = None, bins: int = PEAKS_BINS, timeout: int = 180) -> bool:
+    """Generate min/max waveform peaks JSON via ffmpeg PCM decode + numpy.
+
+    Writes ``{"bins": N, "peaks": [[min, max], ...]}`` — the data the player
+    canvas draws. Returns True on success; failures are logged, never raised.
+    """
+    import numpy as np
+
+    out = peaks_path or str(peaks_path_for(file_path))
+    try:
+        proc = subprocess.run(
+            ["ffmpeg", "-v", "error", "-i", file_path, "-ac", "1", "-f", "f32le", "-"],
+            capture_output=True,
+            timeout=timeout,
+        )
+        if proc.returncode != 0:
+            logger.warning("peaks: ffmpeg failed for %s: %s", file_path, proc.stderr[:200])
+            return False
+        samples = np.frombuffer(proc.stdout, dtype=np.float32)
+        if samples.size == 0:
+            return False
+        chunk = int(np.ceil(samples.size / bins))
+        peaks = []
+        for i in range(bins):
+            seg = samples[i * chunk : (i + 1) * chunk]
+            if seg.size == 0:
+                peaks.append([0.0, 0.0])
+            else:
+                peaks.append([round(float(seg.min()), 4), round(float(seg.max()), 4)])
+        with open(out, "w") as f:
+            json.dump({"bins": bins, "peaks": peaks}, f)
+        return True
+    except Exception as exc:
+        logger.warning("peaks: generation failed for %s: %s", file_path, exc)
+        return False
+
 # Teach Pillow how to open .heic files (iPhone format). Safe no-op if the
 # plugin isn't installed; OCR will just log an "cannot identify" error for
 # those items as before.
@@ -851,6 +897,14 @@ def _run_audio_extraction(db, media_item_id: str, file_path: str, MediaAudioMeta
     except Exception as exc:
         logger.error("Audio metadata extraction failed for %s: %s", media_item_id, exc)
         _log_failure(db, media_item_id, "ffprobe", exc)
+
+    # Step 1b: Waveform peaks for the player UI (cached JSON beside the file).
+    try:
+        if not generate_peaks(file_path):
+            raise RuntimeError("peaks generation returned False")
+    except Exception as exc:
+        logger.error("Peaks generation failed for %s: %s", media_item_id, exc)
+        _log_failure(db, media_item_id, "peaks", exc)
 
     # Step 2: Transcription (skipped for long files — a transcript of an
     # hour-long jam is useless for search and very expensive on CPU).
