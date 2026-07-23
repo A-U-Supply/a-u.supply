@@ -1,7 +1,7 @@
 # Latents — session bundles, extraction & Marginalia (timestamped comments/markers)
 
-**Branch:** `latents-sessions-marginalia` (plan PR) → implementation PRs linked below
-**Status:** plan-only
+**Branch:** `latents-sessions-marginalia` (plan PR #555) → implementation PRs linked below
+**Status:** shipped — PR 1 [#556](https://github.com/A-U-Supply/a-u.supply/pull/556), PR 2 [#557](https://github.com/A-U-Supply/a-u.supply/pull/557)+[#559](https://github.com/A-U-Supply/a-u.supply/pull/559), PR 3 [#558](https://github.com/A-U-Supply/a-u.supply/pull/558), all live 2026-07-23. Deferred: AI listening [#554](https://github.com/A-U-Supply/a-u.supply/issues/554).
 
 Implementation PRs (in order):
 
