@@ -219,7 +219,7 @@ def revoke_apikey(prefix: str):
 
 def reindex_search():
     from server.models import MediaItem
-    from server.search_client import configure_indexes, sync_media_item
+    from server.search_client import configure_indexes, sync_all_annotations, sync_media_item
 
     db = SessionLocal()
     configure_indexes()
@@ -230,6 +230,8 @@ def reindex_search():
         if (i + 1) % 100 == 0:
             print(f"  {i + 1}/{len(items)}")
     print(f"Done! Re-indexed {len(items)} items.")
+    n = sync_all_annotations(db)
+    print(f"Re-indexed {n} annotations (marginalia).")
     db.close()
 
 

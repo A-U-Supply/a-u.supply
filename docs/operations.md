@@ -95,6 +95,7 @@ Multi-part DAW bundle uploads (`.logicx` etc.) stage under `{SEARCH_MEDIA_DIR}/.
 | `MAX_UPLOAD_PART_BYTES` | `2147483648` (2 GiB) | Per-file size cap for bundle parts (413 above) |
 | `BUNDLE_STALE_HOURS` | `24` | Staging TTL before the startup reaper deletes it |
 | `WHISPER_MAX_SECONDS` | `900` | Skip speech transcription for media longer than this (0 = transcribe everything) |
+| `SESSION_LOGIC_PARSE` | unset (off) | `1` enables the experimental Logic `ProjectData` marker parser (best-effort, log-only — see `server/session_extract/logic_markers.py`) |
 
 Session bundles are stored **unpacked** (directory tree + `manifest.json`); downloads are zipped on the fly by `GET /api/media/{id}/file`. Bundle parts stream through nginx, so `client_max_body_size` must cover the largest single file inside a bundle (see [`deployment.md`](deployment.md#nginx)).
 

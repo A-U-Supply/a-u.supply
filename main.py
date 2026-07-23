@@ -38,6 +38,7 @@ from server.github_api import router as github_router
 from server.jobs_api import router as jobs_router
 from server.latents_api import router as latents_router, links_for_media_router
 from server.lemmy_api import router as lemmy_router
+from server.marginalia_api import router as marginalia_router
 from server.notifications_api import router as notifications_router
 from server.fold_subs_api import router as fold_subs_router
 from server.search_api import router as search_router
@@ -219,6 +220,13 @@ for _col, _ddl in (
     if _col not in _session_meta_cols:
         with engine.begin() as _conn:
             _conn.execute(_sa_text(_ddl))
+
+# Migrate existing DB: Marginalia (annotations) + MIDI metadata tables
+# (2026-07-22-latents-sessions-marginalia, PR 2)
+from server.models import Annotation as _Annotation, MediaMidiMeta as _MediaMidiMeta
+for _model in (_Annotation, _MediaMidiMeta):
+    if _model.__tablename__ not in _sa_inspect(engine).get_table_names():
+        _model.__table__.create(bind=engine)
 
 # Migrate existing DB: AI vision-model enrichment fields on media_image_meta
 # (see docs/ai-image-descriptions.md).
@@ -602,6 +610,14 @@ TAGS_METADATA = [
                        "(durations, AI tags).",
     },
     {
+        "name": "Marginalia",
+        "description": "Timestamped comments and cue markers on media items — SoundCloud-style "
+                       "discussion anchored to playback positions, plus imported markers (WAV/AIFF "
+                       "cue chunks, MIDI marker meta-events, experimental Logic project markers). "
+                       "SQLite holds the truth; the `marginalia` Meilisearch index mirrors it for "
+                       "search. Session-level cues are inherited by extracted child files.",
+    },
+    {
         "name": "Tagging",
         "description": "Add and remove tags on media items. Tags are normalized (lowercased, trimmed) "
                        "and deduplicated. A shared vocabulary tracks all known tags with usage counts "
@@ -739,6 +755,9 @@ app.include_router(jobs_router)
 app.include_router(latents_router)
 app.include_router(links_for_media_router)
 app.include_router(lemmy_router)
+# marginalia_router must precede search_router so /api/media/annotations/*
+# isn't captured by search_api's /media/{media_id} routes.
+app.include_router(marginalia_router)
 app.include_router(notifications_router)
 app.include_router(fold_subs_router)
 app.include_router(search_router)

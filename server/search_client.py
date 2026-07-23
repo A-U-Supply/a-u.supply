@@ -44,6 +44,11 @@ SAMPLES_INDEX = "samples-bored"
 # MediaItem (OGG preview) with structured musical metadata in MediaPukeBoxMeta.
 PUKE_BOX_INDEX = "puke-box"
 
+# Marginalia is the timestamped comments + cue markers index (one doc per
+# annotation; SQLite `annotations` table is the source of truth).
+# See docs/plans/2026-07-22-latents-sessions-marginalia.md.
+MARGINALIA_INDEX = "marginalia"
+
 STACKS_COMMUNITY_NAME = "stacks"
 
 # Shared index configuration
@@ -157,6 +162,26 @@ SORTABLE_ATTRIBUTES = [
     "up_count",
 ]
 
+# Marginalia (annotations) index settings — a different document shape from
+# the media indexes, so it is configured separately in configure_indexes().
+MARGINALIA_SETTINGS = {
+    "searchableAttributes": ["label", "body", "filename", "author_name"],
+    "filterableAttributes": [
+        "media_item_id",
+        "project_ids",
+        "kind",
+        "source",
+        "author_id",
+        "resolved",
+        "media_type",
+        "created_at",
+    ],
+    "sortableAttributes": ["created_at", "position_seconds"],
+    "faceting": {"maxValuesPerFacet": 200},
+    "pagination": {"maxTotalHits": 10000},
+    "displayedAttributes": ["*"],
+}
+
 
 def get_client() -> meilisearch.Client:
     """Return a singleton Meilisearch client."""
@@ -200,18 +225,27 @@ def configure_indexes() -> None:
         client.index(index_name).update_settings(settings)
         logger.info("Configured Meilisearch index: %s", index_name)
 
+    # Marginalia has its own document shape and settings.
+    try:
+        client.create_index(MARGINALIA_INDEX, {"primaryKey": "id"})
+    except meilisearch.errors.MeilisearchApiError:
+        pass
+    client.index(MARGINALIA_INDEX).update_settings(MARGINALIA_SETTINGS)
+    logger.info("Configured Meilisearch index: %s", MARGINALIA_INDEX)
+
 
 def _index_for_media_item(media_item: MediaItem) -> str | None:
     """Decide which Meilisearch index a media item belongs in.
 
     - `session` media type always goes to Emulsion.
+    - `midi` media type always goes to Emulsion (MIDIs only ever come from users).
     - Items with a `session_extract` source (files harvested from a bundle) go to Emulsion.
     - Items whose only sources are `manual_upload` go to Emulsion (user uploads).
     - Items with a `sample_library` source type go to the Samples index.
     - Items with `output_index == "puke-box"` go to the Puke Box index.
     - Everything else routes by media_type via INDEX_NAMES.
     """
-    if media_item.media_type == "session":
+    if media_item.media_type in ("session", "midi"):
         return EMULSION_INDEX
     if getattr(media_item, "output_index", None) == PUKE_BOX_INDEX:
         return PUKE_BOX_INDEX
@@ -565,6 +599,19 @@ def _build_document(db: Session, media_item: MediaItem) -> dict:
     if media_item.parent_media_item_id:
         doc["parent_media_item_id"] = media_item.parent_media_item_id
 
+    if media_item.media_type == "midi" and media_item.midi_meta:
+        mm = media_item.midi_meta
+        doc["tempo"] = mm.tempo
+        doc["time_sig"] = mm.time_sig
+        doc["note_count"] = mm.note_count
+        if mm.duration_seconds:
+            doc["duration_seconds"] = mm.duration_seconds
+        if mm.track_names:
+            try:
+                doc["track_names"] = json.loads(mm.track_names)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
     # Puke Box musical metadata (Daily MIDI entries)
     if media_item.puke_box_meta:
         pbm = media_item.puke_box_meta
@@ -657,6 +704,69 @@ def sync_media_item(db: Session, media_item: MediaItem) -> None:
         client.index(index_name).add_documents([doc])
     except Exception:
         logger.exception("Failed to sync media item %s to Meilisearch", media_item.id)
+
+
+# ---------------------------------------------------------------------------
+# Marginalia (annotations) index
+# ---------------------------------------------------------------------------
+
+
+def build_annotation_doc(db: Session, annotation) -> dict:
+    """Flatten an Annotation row into its marginalia-index document."""
+    item = db.query(MediaItem).filter(MediaItem.id == annotation.media_item_id).first()
+    project_ids = [
+        pi.project_id
+        for pi in db.query(ProjectItem).filter(ProjectItem.media_item_id == annotation.media_item_id).all()
+    ]
+    author_name = None
+    if annotation.author_id:
+        user = db.query(User).filter(User.id == annotation.author_id).first()
+        author_name = user.name if user else None
+    return {
+        "id": annotation.id,
+        "media_item_id": annotation.media_item_id,
+        "project_ids": sorted(set(project_ids)),
+        "parent_id": annotation.parent_id,
+        "kind": annotation.kind,
+        "source": annotation.source,
+        "position_seconds": annotation.position_seconds,
+        "label": annotation.label,
+        "body": annotation.body,
+        "author_id": annotation.author_id,
+        "author_name": author_name,
+        "resolved": annotation.resolved_at is not None,
+        "media_type": item.media_type if item else None,
+        "filename": item.filename if item else None,
+        "created_at": int(annotation.created_at.timestamp()) if annotation.created_at else None,
+        "updated_at": int(annotation.updated_at.timestamp()) if annotation.updated_at else None,
+    }
+
+
+def sync_annotation(db: Session, annotation) -> None:
+    """Upsert one annotation into the marginalia index. Never raises."""
+    try:
+        doc = build_annotation_doc(db, annotation)
+        get_client().index(MARGINALIA_INDEX).add_documents([doc])
+    except Exception:
+        logger.exception("Failed to sync annotation %s to Meilisearch", annotation.id)
+
+
+def delete_annotation_doc(annotation_id: str) -> None:
+    """Remove one annotation from the marginalia index. Never raises."""
+    try:
+        get_client().index(MARGINALIA_INDEX).delete_document(annotation_id)
+    except Exception:
+        logger.exception("Failed to delete annotation %s from Meilisearch", annotation_id)
+
+
+def sync_all_annotations(db: Session) -> int:
+    """Rebuild the whole marginalia index from SQLite (used by manage.py reindex)."""
+    from server.models import Annotation
+
+    annotations = db.query(Annotation).all()
+    for annotation in annotations:
+        sync_annotation(db, annotation)
+    return len(annotations)
 
 
 def delete_media_item(

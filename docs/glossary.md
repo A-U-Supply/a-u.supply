@@ -44,6 +44,9 @@ The `current=` slug is what `<Admin current="…">` expects in each page's front
 | **Tribute** | The act of uploading. The Tribute page is where user uploads enter Emulsion. |
 | **Acclaim / Disavow** | Per-user up/down votes on Stacks items. Internal identifiers stay `vote`, `vote_score`, `up_count`, `down_count`. Sortable, filterable, and surfaced as `▲N▼M` chips with hover voter lists. Independent signal from passive Slack reactions. See [`plans/2026-05-20-search-votes.md`](plans/2026-05-20-search-votes.md). |
 | **Punctum / Photism / Bullet Hole** | Atelier tools. See [`atelier.md`](atelier.md). Spectralize was folded into Photism (2026-05-18). |
+| **Marginalia** | Timestamped comments + cue markers on media items — notes in the margin of the timeline. Also the name of the seventh Meilisearch index (`marginalia`), which mirrors the `annotations` table for search. Human discussion rows are `comment`s; imported/AI markers (WAV/AIFF cue chunks, MIDI marker meta-events, Logic project markers) are `cue`s. See [`plans/2026-07-22-latents-sessions-marginalia.md`](plans/2026-07-22-latents-sessions-marginalia.md). |
+| **Bundle** | An uploaded DAW project package (e.g. a `.logicx`), stored as the `session` media type. Uploaded multi-part (the browser walks the package directory); the server harvests audio/MIDI out of it into child media items. |
+| **Cue** | An imported or AI-generated timeline marker (kind `cue` in `annotations`), as opposed to a human `comment`. Sources: `wav_cue`, `aiff_cue`, `midi`, `logic`, `ai_listen` (reserved). |
 
 ## Project codes
 
