@@ -32,6 +32,7 @@ from server.auth import (
 )
 from server.admin_api import router as admin_router
 from server.bookmarks_api import router as bookmarks_router
+from server.bundles_api import router as bundles_router
 from server.catalog import router as catalog_router
 from server.github_api import router as github_router
 from server.jobs_api import router as jobs_router
@@ -201,6 +202,23 @@ _track_cols = [c["name"] for c in _sa_inspect(engine).get_columns("tracks")]
 if "web_audio_file_path" not in _track_cols:
     with engine.begin() as _conn:
         _conn.execute(_sa_text("ALTER TABLE tracks ADD COLUMN web_audio_file_path TEXT"))
+
+# Migrate existing DB: session-bundle extraction (2026-07-22-latents-sessions-marginalia)
+_item_cols_v2 = [c["name"] for c in _sa_inspect(engine).get_columns("media_items")]
+if "parent_media_item_id" not in _item_cols_v2:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE media_items ADD COLUMN parent_media_item_id TEXT REFERENCES media_items(id) ON DELETE SET NULL"))
+        _conn.execute(_sa_text("CREATE INDEX IF NOT EXISTS ix_media_items_parent_media_item_id ON media_items(parent_media_item_id)"))
+
+_session_meta_cols = [c["name"] for c in _sa_inspect(engine).get_columns("media_session_meta")]
+for _col, _ddl in (
+    ("extraction_status", "ALTER TABLE media_session_meta ADD COLUMN extraction_status TEXT"),
+    ("extracted_count",   "ALTER TABLE media_session_meta ADD COLUMN extracted_count INTEGER NOT NULL DEFAULT 0"),
+    ("extraction_error",  "ALTER TABLE media_session_meta ADD COLUMN extraction_error TEXT"),
+):
+    if _col not in _session_meta_cols:
+        with engine.begin() as _conn:
+            _conn.execute(_sa_text(_ddl))
 
 # Migrate existing DB: AI vision-model enrichment fields on media_image_meta
 # (see docs/ai-image-descriptions.md).
@@ -419,6 +437,9 @@ async def lifespan(app: FastAPI):
     from server.fold_watcher import watcher_loop as _fold_watcher_loop
     tasks.append(asyncio.create_task(_fold_watcher_loop()))
 
+    from server.bundles_api import reap_stale_bundles
+    reap_stale_bundles()
+
     yield
 
     for task in tasks:
@@ -570,6 +591,17 @@ TAGS_METADATA = [
                        "- **Video**: duration, dimensions, FPS, speech transcript",
     },
     {
+        "name": "Bundles",
+        "description": "Multi-part upload of DAW session bundles (e.g. Logic `.logicx`). A bundle is "
+                       "a macOS package directory: the client walks it and uploads each contained file "
+                       "as an individual streamed part, then calls `complete` to register the bundle as "
+                       "a single `session` media item.\n\n"
+                       "On completion, audio files (WAV/AIFF/…) are harvested from the bundle into "
+                       "first-class media items linked to the parent session via `parent_media_item_id`, "
+                       "attached to the same Latent/slot, and run through the extraction pipeline "
+                       "(durations, AI tags).",
+    },
+    {
         "name": "Tagging",
         "description": "Add and remove tags on media items. Tags are normalized (lowercased, trimmed) "
                        "and deduplicated. A shared vocabulary tracks all known tags with usage counts "
@@ -698,6 +730,9 @@ app.add_middleware(
 
 app.include_router(admin_router)
 app.include_router(bookmarks_router)
+# bundles_router must precede search_router so /api/media/bundles/* isn't
+# captured by search_api's /media/{media_id} routes.
+app.include_router(bundles_router)
 app.include_router(catalog_router)
 app.include_router(github_router)
 app.include_router(jobs_router)

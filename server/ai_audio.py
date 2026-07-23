@@ -26,6 +26,87 @@ DEEPSEEK_TIMEOUT = 90
 BATCH_SIZE = 20
 
 
+def _deepseek_chat(prompt: str, api_key: str) -> str:
+    """Single DeepSeek chat completion; returns the stripped message content."""
+    payload = {
+        "model": DEEPSEEK_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.2,
+        "max_tokens": 16384,
+    }
+    try:
+        with httpx.Client(timeout=DEEPSEEK_TIMEOUT) as client:
+            resp = client.post(
+                f"{DEEPSEEK_BASE_URL}/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json=payload,
+            )
+    except httpx.RequestError as exc:
+        raise RuntimeError(f"DeepSeek transport error: {exc}") from exc
+
+    if resp.status_code >= 400:
+        raise RuntimeError(f"DeepSeek HTTP {resp.status_code}: {resp.text[:200]}")
+    return _strip_fences(resp.json()["choices"][0]["message"]["content"].strip())
+
+
+def generate_wip_description(
+    filename: str,
+    *,
+    project_name: str | None = None,
+    slot_label: str | None = None,
+    dir_name: str | None = None,
+    api_key: str | None = None,
+) -> dict:
+    """Generate description + tags for a work-in-progress studio file via DeepSeek.
+
+    Used for Latents audio (session bounces, stems, demos, takes) where the
+    one-shot-sample prompt doesn't fit. Returns the same schema as the sample
+    pipeline: {"description": str, "tags": [...], "voice": str|None,
+    "instrument": str|None}.
+    """
+    key = api_key or DEEPSEEK_API_KEY
+    if not key:
+        logger.warning("DEEPSEEK_API_KEY not set, skipping WIP AI tagging")
+        return {"description": "", "tags": [], "voice": None, "instrument": None}
+
+    context_lines = []
+    if project_name:
+        context_lines.append(f'Project (Latent): "{project_name}".')
+    if slot_label:
+        context_lines.append(f'Track/slot: "{slot_label}".')
+    if dir_name:
+        context_lines.append(f'Directory: "{dir_name}".')
+    context = " ".join(context_lines)
+
+    prompt = f"""You are tagging a work-in-progress studio audio file in a band's private pre-release workspace. These are DAW session files — bounces, stems, demos, and takes — not finished releases or one-shot samples.{(" " + context) if context else ""}
+
+Filename: {filename}
+
+Return ONLY a JSON object, no preamble:
+{{
+  "description": "5-15 words: what this file likely is — instrument/role, mix state, take nature",
+  "tags": ["3-6 tags: instrument, role (bounce|stem|mix|demo|take|reference), mood, technique"],
+  "voice": "single word — pick from: kick, snare, hi-hat, tom, cymbal, percussion, clap, bass, guitar, synth, vox, fx, melody, pad, organ, vinyl, noise, drums, keys, strings, full-mix, other",
+  "instrument": "specific instrument, device, or source (or null)"
+}}"""
+
+    try:
+        text = _deepseek_chat(prompt, key)
+        entry = json.loads(text)
+    except (RuntimeError, json.JSONDecodeError) as exc:
+        logger.error("WIP AI tagging failed for %s: %s", filename, exc)
+        return {"description": "", "tags": [], "voice": None, "instrument": None}
+
+    if not isinstance(entry, dict):
+        return {"description": "", "tags": [], "voice": None, "instrument": None}
+    return {
+        "description": (entry.get("description") or "").strip(),
+        "tags": [t.strip().lower() for t in (entry.get("tags") or []) if t.strip()],
+        "voice": (entry.get("voice") or "").strip().lower() or None,
+        "instrument": (entry.get("instrument") or "").strip().lower() or None,
+    }
+
+
 def generate_audio_ai_description(
     filename: str,
     dir_name: str | None = None,

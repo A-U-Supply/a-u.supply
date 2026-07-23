@@ -19,6 +19,11 @@ logger = logging.getLogger(__name__)
 
 SEARCH_MEDIA_DIR = os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data")
 
+# Skip speech transcription for media longer than this many seconds. Long
+# uploads (jam sessions, mixes) produce useless transcripts at huge CPU cost.
+# Set to 0 to transcribe everything regardless of length.
+WHISPER_MAX_SECONDS = float(os.environ.get("WHISPER_MAX_SECONDS", "900"))
+
 # Teach Pillow how to open .heic files (iPhone format). Safe no-op if the
 # plugin isn't installed; OCR will just log an "cannot identify" error for
 # those items as before.
@@ -847,25 +852,39 @@ def _run_audio_extraction(db, media_item_id: str, file_path: str, MediaAudioMeta
         logger.error("Audio metadata extraction failed for %s: %s", media_item_id, exc)
         _log_failure(db, media_item_id, "ffprobe", exc)
 
-    # Step 2: Transcription
-    try:
-        transcript_result = transcribe_audio(file_path)
-        if transcript_result:
-            meta_kwargs["transcript"] = transcript_result["transcript"]
-            meta_kwargs["transcript_confidence"] = transcript_result["confidence"]
-        else:
-            meta_kwargs["transcript"] = ""
-            meta_kwargs["transcript_confidence"] = 0.0
-    except Exception as exc:
-        logger.error("Audio transcription failed for %s: %s", media_item_id, exc)
-        _log_failure(db, media_item_id, "whisper", exc)
+    # Step 2: Transcription (skipped for long files — a transcript of an
+    # hour-long jam is useless for search and very expensive on CPU).
+    duration = meta_kwargs.get("duration_seconds")
+    if duration and duration > WHISPER_MAX_SECONDS:
+        logger.info(
+            "Skipping transcription for %s: %.0fs exceeds WHISPER_MAX_SECONDS=%s",
+            media_item_id,
+            duration,
+            WHISPER_MAX_SECONDS,
+        )
+        meta_kwargs["transcript"] = ""
+        meta_kwargs["transcript_confidence"] = 0.0
+    else:
+        try:
+            transcript_result = transcribe_audio(file_path)
+            if transcript_result:
+                meta_kwargs["transcript"] = transcript_result["transcript"]
+                meta_kwargs["transcript_confidence"] = transcript_result["confidence"]
+            else:
+                meta_kwargs["transcript"] = ""
+                meta_kwargs["transcript_confidence"] = 0.0
+        except Exception as exc:
+            logger.error("Audio transcription failed for %s: %s", media_item_id, exc)
+            _log_failure(db, media_item_id, "whisper", exc)
 
     # Step 3: AI description + tagging from filename context.
     # Derive context from MediaSource.source_metadata.dir when available
     # (sample libraries store drum-machine / sample-category info there),
-    # otherwise fall back to the filesystem directory name.
+    # otherwise fall back to the filesystem directory name. Audio attached to
+    # a Latent gets the WIP-session prompt (project/slot context) instead of
+    # the one-shot-sample prompt.
     try:
-        from server.ai_audio import generate_audio_ai_description
+        from server.ai_audio import generate_audio_ai_description, generate_wip_description
         from server.models import MediaItem as _MediaItem, MediaSource as _MediaSource, MediaTag as _MediaTag
 
         filename = os.path.basename(file_path)
@@ -886,10 +905,38 @@ def _run_audio_extraction(db, media_item_id: str, file_path: str, MediaAudioMeta
         if not dir_name:
             dir_name = os.path.basename(os.path.dirname(file_path))
 
-        ai = generate_audio_ai_description(filename, dir_name=dir_name)
+        wip_context = None
+        try:
+            from server.models import Project as _Project, ProjectItem as _ProjectItem, ProjectSlot as _ProjectSlot
+
+            _pi = db.query(_ProjectItem).filter(_ProjectItem.media_item_id == media_item_id).first()
+            if _pi:
+                _proj = db.query(_Project).filter(_Project.id == _pi.project_id).first()
+                _slot = (
+                    db.query(_ProjectSlot).filter(_ProjectSlot.id == _pi.slot_id).first()
+                    if _pi.slot_id
+                    else None
+                )
+                wip_context = {
+                    "project_name": _proj.name if _proj else None,
+                    "slot_label": _slot.label if _slot else None,
+                }
+        except Exception:
+            wip_context = None
+
+        if wip_context:
+            ai = generate_wip_description(
+                filename,
+                project_name=wip_context["project_name"],
+                slot_label=wip_context["slot_label"],
+                dir_name=dir_name,
+            )
+        else:
+            ai = generate_audio_ai_description(filename, dir_name=dir_name)
         if ai.get("description"):
             media_item = db.query(_MediaItem).filter(_MediaItem.id == media_item_id).first()
-            if media_item:
+            # Never clobber a human-written description from the upload form.
+            if media_item and not media_item.description:
                 media_item.description = ai["description"]
         ai_tags = ai.get("tags", [])
         ai_voice = ai.get("voice")
@@ -973,8 +1020,18 @@ def _run_video_extraction(db, media_item_id: str, file_path: str, MediaVideoMeta
         _log_failure(db, media_item_id, "thumbnail", exc)
 
     # Step 3: Audio transcription from extracted audio track
+    _duration = meta_kwargs.get("duration_seconds")
     if not _has_audio_stream(file_path):
         logger.info("No audio stream in %s, marking as no audio.", media_item_id)
+        meta_kwargs["audio_transcript"] = ""
+        meta_kwargs["transcript_confidence"] = 0.0
+    elif _duration and _duration > WHISPER_MAX_SECONDS:
+        logger.info(
+            "Skipping transcription for %s: %.0fs exceeds WHISPER_MAX_SECONDS=%s",
+            media_item_id,
+            _duration,
+            WHISPER_MAX_SECONDS,
+        )
         meta_kwargs["audio_transcript"] = ""
         meta_kwargs["transcript_confidence"] = 0.0
     else:

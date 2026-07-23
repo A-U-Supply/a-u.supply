@@ -401,6 +401,7 @@ def _get_media_item_or_404(db: Session, media_id: str) -> MediaItem:
             joinedload(MediaItem.image_meta),
             joinedload(MediaItem.audio_meta),
             joinedload(MediaItem.video_meta),
+            joinedload(MediaItem.session_meta),
             joinedload(MediaItem.extraction_failures),
         )
         .filter(MediaItem.id == media_id)
@@ -465,10 +466,12 @@ def _media_item_response(item: MediaItem) -> dict:
         "updated_at": item.updated_at.isoformat() if item.updated_at else None,
         "tags": [t.tag for t in item.tags],
         "output_index": item.output_index,
+        "parent_media_item_id": item.parent_media_item_id,
         "sources": [_source_response(s) for s in item.sources],
         "image_meta": None,
         "audio_meta": None,
         "video_meta": None,
+        "session_meta": None,
         "extraction_failures": [
             {
                 "id": f.id,
@@ -540,6 +543,18 @@ def _media_item_response(item: MediaItem) -> dict:
             "height": m.height,
             "fps": m.fps,
             "audio_transcript": m.audio_transcript,
+        }
+    if item.session_meta:
+        m = item.session_meta
+        data["session_meta"] = {
+            "tool": m.tool,
+            "tool_version": m.tool_version,
+            "original_bundle_name": m.original_bundle_name,
+            "bundle_size_bytes": m.bundle_size_bytes,
+            "notes": m.notes,
+            "extraction_status": m.extraction_status,
+            "extracted_count": m.extracted_count,
+            "extraction_error": m.extraction_error,
         }
     return data
 
@@ -1626,6 +1641,7 @@ async def upload_media(
         _update_vocabulary(db, tag, 1)
 
     # Session metadata sidecar
+    session_meta = None
     if is_session:
         from server.models import MediaSessionMeta
         session_meta = MediaSessionMeta(
@@ -1663,6 +1679,20 @@ async def upload_media(
     db.commit()
     db.refresh(media_item)
     meili_sync(db, media_item)
+
+    # Run metadata extraction on upload so durations, thumbnails, and AI tags
+    # land without a manual batch re-extract. Zipped session bundles go
+    # through the bundle extraction path (harvest audio → child items).
+    if media_type in ("image", "audio", "video"):
+        from server.extraction import run_extraction_async
+
+        run_extraction_async(item_id, str(full_path), media_type)
+    elif is_session and session_meta is not None:
+        session_meta.extraction_status = "pending"
+        db.commit()
+        from server.session_extract.jobs import run_session_extraction_async
+
+        run_session_extraction_async(item_id)
 
     item = _get_media_item_or_404(db, item_id)
     return _media_item_response(item)
@@ -1947,6 +1977,101 @@ def _related_item(db: Session, item: MediaItem) -> dict:
     }
 
 
+class _UnseekableZipSink:
+    """Write-only sink for streaming a zip archive without a seekable file.
+
+    zipfile needs ``tell()`` for offsets and uses data descriptors when the
+    sink isn't seekable; we count bytes and drain produced chunks downstream.
+    """
+
+    def __init__(self):
+        self._chunks: list[bytes] = []
+        self._pos = 0
+
+    def write(self, data: bytes) -> int:
+        self._pos += len(data)
+        self._chunks.append(data)
+        return len(data)
+
+    def tell(self) -> int:
+        return self._pos
+
+    def flush(self) -> None:
+        pass
+
+    def seekable(self) -> bool:
+        return False
+
+    def drain(self) -> bytes:
+        if not self._chunks:
+            return b""
+        out = b"".join(self._chunks)
+        self._chunks.clear()
+        return out
+
+
+def _zip_dir_stream(root: Path, arc_root: str):
+    """Yield a zip archive of `root`'s contents, built incrementally.
+
+    Uncompressed (ZIP_STORED): bundle payloads are mostly WAV/AIFF, which
+    don't compress meaningfully — skipping DEFLATE keeps multi-GB downloads
+    cheap on CPU and fast to start (no temp file, no double storage).
+    """
+    sink = _UnseekableZipSink()
+    archive = zipfile.ZipFile(sink, "w", zipfile.ZIP_STORED, allowZip64=True)
+    for path in sorted(root.rglob("*")):
+        if not path.is_file():
+            continue
+        arcname = f"{arc_root}/{path.relative_to(root).as_posix()}"
+        archive.write(path, arcname)
+        chunk = sink.drain()
+        if chunk:
+            yield chunk
+    archive.close()
+    tail = sink.drain()
+    if tail:
+        yield tail
+
+
+@router.get("/media/{media_id}/children", tags=["Media Items"], summary="List files extracted from a session bundle")
+def get_media_children(
+    media_id: str,
+    _auth=Depends(require_scope("read")),
+    db: Session = Depends(get_db),
+):
+    """List media items extracted from this session bundle (child files).
+
+    Children are first-class media items — audio files harvested from an
+    uploaded DAW bundle — linked back via `parent_media_item_id`.
+
+    **Scope required:** `read`
+    """
+    item = _get_media_item_or_404(db, media_id)
+    children = (
+        db.query(MediaItem)
+        .filter(MediaItem.parent_media_item_id == item.id)
+        .options(joinedload(MediaItem.audio_meta), joinedload(MediaItem.tags))
+        .order_by(MediaItem.filename)
+        .all()
+    )
+    result = [
+        {
+            "id": child.id,
+            "filename": child.filename,
+            "media_type": child.media_type,
+            "file_size_bytes": child.file_size_bytes,
+            "mime_type": child.mime_type,
+            "description": child.description,
+            "duration_seconds": child.audio_meta.duration_seconds if child.audio_meta else None,
+            "tags": [t.tag for t in child.tags],
+            "created_at": child.created_at.isoformat() if child.created_at else None,
+        }
+        for child in children
+    ]
+    db.close()
+    return {"children": result}
+
+
 @router.get("/media/{media_id}/file", tags=["Media Items"], summary="Download media file")
 def get_media_file(
     media_id: str,
@@ -1970,6 +2095,17 @@ def get_media_file(
     db.close()
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found on disk")
+    if file_path.is_dir():
+        # Directory-backed session bundle (multi-part upload) — stream it as a
+        # zip built on the fly so the original directory is the only copy.
+        return StreamingResponse(
+            _zip_dir_stream(file_path, arc_root=item.filename),
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": content_disposition("attachment", f"{item.filename}.zip"),
+                "Cache-Control": "private, max-age=86400",
+            },
+        )
     # Serve inline so clicking a media URL opens full-size in the browser
     # instead of forcing a download. Explicit Download UI uses <a download>.
     # `private` because the endpoint is authed; the browser can cache per-user

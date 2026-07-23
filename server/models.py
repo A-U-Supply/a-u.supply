@@ -189,11 +189,17 @@ class MediaItem(Base):
     sha256 = Column(String, unique=True, nullable=False)
     filename = Column(String, nullable=False)
     file_path = Column(String, nullable=False)
-    media_type = Column(String, nullable=False)  # image, audio, video
+    media_type = Column(String, nullable=False)  # image, audio, video, session, document
     file_size_bytes = Column(Integer, nullable=False)
     mime_type = Column(String, nullable=False)
     description = Column(String, nullable=True)
     output_index = Column(String, nullable=True)
+    parent_media_item_id = Column(
+        String,
+        ForeignKey("media_items.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )  # set for files extracted from a session bundle (e.g. WAVs out of a .logicx)
     created_at = Column(DateTime, nullable=False, default=_utcnow)
     updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
 
@@ -205,6 +211,7 @@ class MediaItem(Base):
     session_meta = relationship("MediaSessionMeta", uselist=False, cascade="all, delete-orphan", back_populates="media_item")
     puke_box_meta = relationship("MediaPukeBoxMeta", uselist=False, cascade="all, delete-orphan", back_populates="media_item")
     extraction_failures = relationship("ExtractionFailure", back_populates="media_item", cascade="all, delete-orphan")
+    parent = relationship("MediaItem", remote_side=[id], backref="children")
 
 
 class MediaSource(Base):
@@ -321,6 +328,11 @@ class MediaSessionMeta(Base):
     original_bundle_name = Column(String, nullable=False)
     bundle_size_bytes = Column(Integer, nullable=False)
     notes = Column(String, nullable=True)
+    # Bundle extraction bookkeeping (server/session_extract/). NULL status means
+    # extraction never ran (e.g. legacy zip uploads that predate the pipeline).
+    extraction_status = Column(String, nullable=True)  # pending | processing | done | failed
+    extracted_count = Column(Integer, nullable=False, default=0)
+    extraction_error = Column(String, nullable=True)
 
     media_item = relationship("MediaItem", back_populates="session_meta")
 
