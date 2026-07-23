@@ -35,6 +35,7 @@ It is **not**: bot/tool code, audio CLIs, search-engine internals, or anything e
 | API auth + endpoint groups | [`docs/api.md`](docs/api.md) |
 | Bots / App Runner / TOML manifests | [`docs/bots.md`](docs/bots.md) |
 | Persistent audio player events | [`docs/player.md`](docs/player.md) |
+| Session bundles, extraction, Marginalia (comments/markers) | [`docs/marginalia.md`](docs/marginalia.md) |
 | Latents (pre-release workspace) + fold/Lemmy threads | [`docs/plans/2026-05-15-latents.md`](docs/plans/2026-05-15-latents.md) |
 | Deploy mechanics, Dokku, SSH, legacy routing | [`docs/deployment.md`](docs/deployment.md) |
 | `manage.py` subcommands + server-side ops | [`docs/operations.md`](docs/operations.md) |
