@@ -207,6 +207,9 @@ def _item_summary(pi: ProjectItem) -> dict:
             "media_type": mi.media_type,
             "mime_type": mi.mime_type,
             "file_size_bytes": mi.file_size_bytes,
+            "parent_media_item_id": mi.parent_media_item_id,
+            "session_extraction_status": mi.session_meta.extraction_status if mi.session_meta else None,
+            "session_extracted_count": mi.session_meta.extracted_count if mi.session_meta else None,
         } if mi else None,
     }
 

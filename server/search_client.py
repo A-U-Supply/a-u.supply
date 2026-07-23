@@ -100,6 +100,8 @@ FILTERABLE_ATTRIBUTES = [
     "has_text",
     "project_ids",
     "tool",
+    "extraction_status",
+    "parent_media_item_id",
     # Votes (issue #318) — counts for range filters, parallel ID arrays for "my votes"
     "up_count",
     "down_count",
@@ -203,6 +205,7 @@ def _index_for_media_item(media_item: MediaItem) -> str | None:
     """Decide which Meilisearch index a media item belongs in.
 
     - `session` media type always goes to Emulsion.
+    - Items with a `session_extract` source (files harvested from a bundle) go to Emulsion.
     - Items whose only sources are `manual_upload` go to Emulsion (user uploads).
     - Items with a `sample_library` source type go to the Samples index.
     - Items with `output_index == "puke-box"` go to the Puke Box index.
@@ -213,6 +216,9 @@ def _index_for_media_item(media_item: MediaItem) -> str | None:
     if getattr(media_item, "output_index", None) == PUKE_BOX_INDEX:
         return PUKE_BOX_INDEX
     sources = list(media_item.sources or [])
+    for src in sources:
+        if getattr(src, "source_type", None) == "session_extract":
+            return EMULSION_INDEX
     if sources and all(getattr(s, "source_type", None) == "manual_upload" for s in sources):
         return EMULSION_INDEX
     for src in sources:
@@ -553,6 +559,11 @@ def _build_document(db: Session, media_item: MediaItem) -> dict:
         doc["original_bundle_name"] = meta.original_bundle_name
         doc["bundle_size_bytes"] = meta.bundle_size_bytes
         doc["notes"] = meta.notes
+        doc["extraction_status"] = meta.extraction_status
+        doc["extracted_count"] = meta.extracted_count
+
+    if media_item.parent_media_item_id:
+        doc["parent_media_item_id"] = media_item.parent_media_item_id
 
     # Puke Box musical metadata (Daily MIDI entries)
     if media_item.puke_box_meta:

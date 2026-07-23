@@ -86,6 +86,20 @@ The worker additionally mounts a **model cache** at `/var/lib/dokku/data/storage
 
 If the app is ever rebuilt from scratch, re-run `.github/workflows/setup-storage.yml` to re-establish the mount and env var. Likewise `setup-legacy.yml` re-establishes the legacy-site volume.
 
+## Session bundles (Latents)
+
+Multi-part DAW bundle uploads (`.logicx` etc.) stage under `{SEARCH_MEDIA_DIR}/.bundles/{uuid}/` and are moved into `session/YYYY-MM/` on completion. Abandoned staging dirs older than **24h** are reaped on app startup. Relevant env vars:
+
+| Var | Default | Purpose |
+|---|---|---|
+| `MAX_UPLOAD_PART_BYTES` | `2147483648` (2 GiB) | Per-file size cap for bundle parts (413 above) |
+| `BUNDLE_STALE_HOURS` | `24` | Staging TTL before the startup reaper deletes it |
+| `WHISPER_MAX_SECONDS` | `900` | Skip speech transcription for media longer than this (0 = transcribe everything) |
+
+Session bundles are stored **unpacked** (directory tree + `manifest.json`); downloads are zipped on the fly by `GET /api/media/{id}/file`. Bundle parts stream through nginx, so `client_max_body_size` must cover the largest single file inside a bundle (see [`deployment.md`](deployment.md#nginx)).
+
+Disk sizing note: a 5 GB bundle stays 5 GB on disk (extraction hard-links children out of the bundle when possible), but the *parts* of an upload count against the volume while staging. Watch the search-media volume on big upload days.
+
 ## fold.a-u.supply (Lemmy)
 
 The private Lemmy instance that backs Latents discussion and the `stacks` global community. Runs on a separate Dokku app. Local-only — no federation.

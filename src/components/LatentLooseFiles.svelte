@@ -27,6 +27,7 @@
       media_type: string;
       mime_type: string;
       file_size_bytes: number;
+      parent_media_item_id?: string | null;
     } | null;
   };
 
@@ -34,6 +35,7 @@
   let loading = $state(false);
   let error = $state<string | null>(null);
   let pullOpen = $state(false);
+  let rootEl: HTMLElement | null = $state(null);
 
   async function load() {
     loading = true;
@@ -111,6 +113,50 @@
     return `/api/media/${encodeURIComponent(mediaId)}/file`;
   }
 
+  function playInPlayer(mediaId: string, mediaType: string, title: string) {
+    document.dispatchEvent(
+      new CustomEvent('player:queue', {
+        detail: {
+          tracks: [
+            {
+              track_id: mediaId,
+              title: title || 'Untitled',
+              release_title: '',
+              release_code: '',
+              media_type: mediaType,
+              stream_url: `/api/media/${encodeURIComponent(mediaId)}/file`,
+              cover_url:
+                mediaType === 'image' || mediaType === 'video'
+                  ? `/api/media/${encodeURIComponent(mediaId)}/thumbnail`
+                  : '/assets/default-cover.jpg',
+              duration: 0,
+              entity_name: '',
+            },
+          ],
+          startIndex: 0,
+        },
+      }),
+    );
+  }
+
+  // Extracted session children land here as loose peers of the bundle — the
+  // chip jumps back to the parent tile when it's in this list.
+  function parentOf(item: Item): Item | undefined {
+    const pid = item.media?.parent_media_item_id;
+    if (!pid) return undefined;
+    return items.find((i) => i.media_item_id === pid);
+  }
+
+  function scrollToParent(mediaId: string) {
+    const el = rootEl?.querySelector(
+      `[data-media-id="${CSS.escape(mediaId)}"]`,
+    );
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('tile--flash');
+    setTimeout(() => el.classList.remove('tile--flash'), 1600);
+  }
+
   // Cover art naturally lands here via the Uploader — upload-then-click
   // is the whole hero journey. The LatentHero island listens for the
   // broadcast and updates itself (and the header accent).
@@ -139,7 +185,7 @@
   });
 </script>
 
-<section class="loose">
+<section class="loose" bind:this={rootEl}>
   <header class="loose__head" class:latent-band={!!styleKey}>
     <h2>Loose files</h2>
     <span class="muted">{items.length}</span>
@@ -173,7 +219,11 @@
     <ul class="grid">
       {#each items as it (it.id)}
         {@const ext = fileExt(it.media?.filename)}
-        <li class="tile" data-type={it.media?.media_type}>
+        <li
+          class="tile"
+          data-type={it.media?.media_type}
+          data-media-id={it.media_item_id}
+        >
           <a
             class="tile__thumb"
             href={`/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
@@ -197,6 +247,23 @@
             <div class="tile__name" title={it.media?.filename}>
               {it.media?.filename || '(unknown)'}
             </div>
+            {#if it.media?.parent_media_item_id}
+              {@const parent = parentOf(it)}
+              {#if parent}
+                <button
+                  class="session-chip"
+                  type="button"
+                  title={`Extracted from ${parent.media?.filename || 'session bundle'} — click to jump to it`}
+                  onclick={() => scrollToParent(parent.media_item_id)}
+                  >from session</button
+                >
+              {:else}
+                <span
+                  class="session-chip"
+                  title="Extracted from a session bundle">extracted</span
+                >
+              {/if}
+            {/if}
             <div class="tile__meta" title={it.media?.mime_type}>
               {ext || it.media?.media_type || ''}
               {#if it.media?.file_size_bytes}
@@ -208,6 +275,19 @@
             <button class="action-btn" type="button" onclick={() => rename(it)}
               >Rename</button
             >
+            {#if it.media?.media_type === 'audio' || it.media?.media_type === 'video'}
+              <button
+                class="action-btn"
+                type="button"
+                title="Play (queues in the persistent Player)"
+                onclick={() =>
+                  playInPlayer(
+                    it.media_item_id,
+                    it.media!.media_type,
+                    it.media?.filename || '',
+                  )}>▶ Play</button
+              >
+            {/if}
             {#if it.media?.media_type === 'image'}
               <button
                 class="action-btn"
@@ -324,6 +404,37 @@
     color: var(--color-muted);
     font-size: 0.7rem;
   }
+  .session-chip {
+    display: inline-block;
+    margin-top: 2px;
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-muted);
+    font: inherit;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    padding: 1px 6px;
+    white-space: nowrap;
+  }
+  button.session-chip {
+    cursor: pointer;
+  }
+  button.session-chip:hover {
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+  .tile--flash {
+    animation: tile-flash 1.6s ease-out;
+  }
+  @keyframes tile-flash {
+    0% {
+      background: rgba(184, 134, 11, 0.35);
+    }
+    100% {
+      background: transparent;
+    }
+  }
   .tile__actions {
     display: flex;
     flex-wrap: wrap;
@@ -352,6 +463,14 @@
     }
     .loose__actions {
       margin-left: 0;
+    }
+    .session-chip {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+    }
+    .tile__actions .action-btn {
+      min-height: 44px;
     }
   }
 </style>

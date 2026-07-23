@@ -71,7 +71,22 @@
       media_type: string;
       mime_type: string;
       file_size_bytes: number;
+      parent_media_item_id?: string | null;
+      session_extraction_status?: string | null;
+      session_extracted_count?: number | null;
     } | null;
+  };
+
+  type SessionChild = {
+    id: string;
+    filename: string;
+    media_type: string;
+    file_size_bytes: number;
+    mime_type: string;
+    description: string | null;
+    duration_seconds: number | null;
+    tags: string[];
+    created_at: string | null;
   };
 
   let slots = $state<Slot[]>([]);
@@ -306,9 +321,157 @@
       if (!res.ok) throw new Error(`Failed (${res.status})`);
       const body = await res.json();
       itemsBySlot = { ...itemsBySlot, [slotId]: body.items || [] };
+      watchSessions(slotId);
     } catch (e: any) {
       error = e?.message || 'Failed to load items';
     }
+  }
+
+  // --- Session bundles: extraction status + extracted children -------------
+  // Session rows poll while extraction is pending/processing; once done, the
+  // harvested audio appears both as an expandable child list on the session
+  // row and as peer rows carrying a "from session" chip.
+  let expandedSessions = $state<Record<string, boolean>>({});
+  let childrenByMedia = $state<Record<string, SessionChild[]>>({});
+  let childrenLoading = $state<Record<string, boolean>>({});
+  let sessionErrors = $state<Record<string, string>>({});
+  let slotsRootEl: HTMLElement | null = $state(null);
+  const sessionPollers = new Set<string>();
+  const sessionErrorFetches = new Set<string>();
+
+  function watchSessions(slotId: string) {
+    for (const it of itemsBySlot[slotId] || []) {
+      if (it.media?.media_type !== 'session') continue;
+      const st = it.media.session_extraction_status;
+      if (st === 'pending' || st === 'processing') {
+        ensureSessionPoll(slotId, it.media_item_id);
+      } else if (st === 'failed' && !sessionErrors[it.media_item_id]) {
+        void fetchSessionError(it.media_item_id);
+      }
+    }
+  }
+
+  function ensureSessionPoll(slotId: string, mediaId: string) {
+    if (sessionPollers.has(mediaId)) return;
+    sessionPollers.add(mediaId);
+    void pollSession(slotId, mediaId);
+  }
+
+  async function pollSession(slotId: string, mediaId: string) {
+    try {
+      // ~30 min at 3s — extraction of a big bundle can take a while.
+      for (let attempt = 0; attempt < 600; attempt++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const res = await fetch(`/api/media/${encodeURIComponent(mediaId)}`, {
+          credentials: 'include',
+        });
+        if (!res.ok) return;
+        const body = await res.json();
+        const meta = body?.session_meta;
+        const st = meta?.extraction_status ?? null;
+        if (st === 'done' || st === 'failed') {
+          if (st === 'failed' && meta?.extraction_error) {
+            sessionErrors = {
+              ...sessionErrors,
+              [mediaId]: meta.extraction_error,
+            };
+          }
+          updateSessionItem(slotId, mediaId, st, meta?.extracted_count ?? 0);
+          // Children attach as slot peers — refetch so they (and the slot's
+          // file count) show up without a manual reload.
+          await loadItems(slotId);
+          await load();
+          return;
+        }
+      }
+    } catch {
+    } finally {
+      sessionPollers.delete(mediaId);
+    }
+  }
+
+  function updateSessionItem(
+    slotId: string,
+    mediaId: string,
+    status: string,
+    count: number,
+  ) {
+    itemsBySlot = {
+      ...itemsBySlot,
+      [slotId]: (itemsBySlot[slotId] || []).map((i) =>
+        i.media_item_id === mediaId && i.media
+          ? {
+              ...i,
+              media: {
+                ...i.media,
+                session_extraction_status: status,
+                session_extracted_count: count,
+              },
+            }
+          : i,
+      ),
+    };
+  }
+
+  async function fetchSessionError(mediaId: string) {
+    if (sessionErrorFetches.has(mediaId)) return;
+    sessionErrorFetches.add(mediaId);
+    try {
+      const res = await fetch(`/api/media/${encodeURIComponent(mediaId)}`, {
+        credentials: 'include',
+      });
+      if (!res.ok) return;
+      const body = await res.json();
+      const msg = body?.session_meta?.extraction_error;
+      if (msg) sessionErrors = { ...sessionErrors, [mediaId]: msg };
+    } catch {
+    } finally {
+      sessionErrorFetches.delete(mediaId);
+    }
+  }
+
+  async function toggleSessionChildren(mediaId: string) {
+    const open = !expandedSessions[mediaId];
+    expandedSessions = { ...expandedSessions, [mediaId]: open };
+    if (!open || childrenByMedia[mediaId]) return;
+    childrenLoading = { ...childrenLoading, [mediaId]: true };
+    try {
+      const res = await fetch(
+        `/api/media/${encodeURIComponent(mediaId)}/children`,
+        { credentials: 'include' },
+      );
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      const body = await res.json();
+      childrenByMedia = { ...childrenByMedia, [mediaId]: body.children || [] };
+    } catch (e: any) {
+      error = e?.message || 'Failed to load extracted files';
+    } finally {
+      childrenLoading = { ...childrenLoading, [mediaId]: false };
+    }
+  }
+
+  function parentInSlot(slotId: string, parentId: string): Item | undefined {
+    return (itemsBySlot[slotId] || []).find(
+      (i) => i.media_item_id === parentId,
+    );
+  }
+
+  function scrollToParent(mediaId: string) {
+    const el = slotsRootEl?.querySelector(
+      `[data-media-id="${CSS.escape(mediaId)}"]`,
+    );
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('file-row--flash');
+    setTimeout(() => el.classList.remove('file-row--flash'), 1600);
+  }
+
+  function fmtDuration(s: number | null | undefined): string {
+    if (s == null || !isFinite(s)) return '';
+    const total = Math.round(s);
+    const mins = Math.floor(total / 60);
+    const secs = total % 60;
+    return `${mins}:${String(secs).padStart(2, '0')}`;
   }
 
   async function addSlot() {
@@ -796,7 +959,7 @@
   });
 </script>
 
-<section class="slots">
+<section class="slots" bind:this={slotsRootEl}>
   <header class="slots__head" class:latent-band={!!styleKey}>
     <h2>Slots ({projectKind})</h2>
     <span class="muted">{slots.length}</span>
@@ -1021,6 +1184,7 @@
                   class="file-row"
                   class:file-row--primary={it.is_primary}
                   data-type={it.media?.media_type}
+                  data-media-id={it.media_item_id}
                 >
                   <button
                     class="file-row__star"
@@ -1048,13 +1212,66 @@
                       >
                     {/if}
                   </a>
-                  <a
-                    class="file-row__name"
-                    href={`/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
-                    title={it.media?.filename}
-                  >
-                    {it.media?.filename || '(unknown)'}
-                  </a>
+                  <span class="file-row__name-wrap">
+                    <a
+                      class="file-row__name"
+                      href={`/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
+                      title={it.media?.filename}
+                    >
+                      {it.media?.filename || '(unknown)'}
+                    </a>
+                    {#if it.media?.media_type === 'session'}
+                      {@const st = it.media.session_extraction_status}
+                      {@const count = it.media.session_extracted_count ?? 0}
+                      {#if st === 'pending' || st === 'processing'}
+                        <span class="session-pill session-pill--busy"
+                          >Extracting audio…</span
+                        >
+                      {:else if st === 'failed'}
+                        <span
+                          class="session-pill session-pill--error"
+                          title={sessionErrors[it.media_item_id] ||
+                            'Audio extraction failed'}>Extraction failed</span
+                        >
+                      {:else if count > 0}
+                        <button
+                          class="session-pill session-pill--toggle"
+                          type="button"
+                          aria-expanded={!!expandedSessions[it.media_item_id]}
+                          onclick={() =>
+                            toggleSessionChildren(it.media_item_id)}
+                          >{expandedSessions[it.media_item_id] ? '▾' : '▸'}
+                          {count} extracted file{count === 1 ? '' : 's'}</button
+                        >
+                      {:else if st === 'done'}
+                        <span
+                          class="session-pill"
+                          title="No audio files found in this bundle"
+                          >0 extracted</span
+                        >
+                      {/if}
+                    {:else if it.media?.parent_media_item_id}
+                      {@const parent = parentInSlot(
+                        slot.id,
+                        it.media.parent_media_item_id,
+                      )}
+                      {#if parent}
+                        <button
+                          class="session-chip"
+                          type="button"
+                          title={`Extracted from ${parent.media?.filename || 'session bundle'} — click to jump to it`}
+                          onclick={() => scrollToParent(parent.media_item_id)}
+                          >from session</button
+                        >
+                      {:else}
+                        <span
+                          class="session-chip"
+                          title="Extracted from a session bundle"
+                          >extracted</span
+                        >
+                      {/if}
+                    {/if}
+                  </span>
                   <span class="file-row__type" title={it.media?.mime_type}
                     >{fileExt(it.media?.filename) ||
                       it.media?.media_type ||
@@ -1097,6 +1314,50 @@
                     >
                   </div>
                 </li>
+                {#if it.media?.media_type === 'session' && expandedSessions[it.media_item_id]}
+                  <li class="session-children">
+                    {#if childrenLoading[it.media_item_id]}
+                      <div class="muted session-children__status">
+                        Loading extracted files…
+                      </div>
+                    {:else if (childrenByMedia[it.media_item_id] || []).length === 0}
+                      <div class="muted session-children__status">
+                        No extracted files found.
+                      </div>
+                    {:else}
+                      <ul class="session-children__list">
+                        {#each childrenByMedia[it.media_item_id] || [] as child (child.id)}
+                          <li class="child-row">
+                            <a
+                              class="child-row__name"
+                              href={`/admin/search/detail?id=${encodeURIComponent(child.id)}`}
+                              title={child.filename}>{child.filename}</a
+                            >
+                            <span class="child-row__dur"
+                              >{fmtDuration(child.duration_seconds)}</span
+                            >
+                            <span class="child-row__size"
+                              >{fmtBytes(child.file_size_bytes)}</span
+                            >
+                            {#if child.media_type === 'audio'}
+                              <button
+                                class="action-btn"
+                                type="button"
+                                title="Play (queues in the persistent Player)"
+                                onclick={() =>
+                                  playInPlayer(
+                                    child.id,
+                                    child.media_type,
+                                    child.filename,
+                                  )}>▶</button
+                              >
+                            {/if}
+                          </li>
+                        {/each}
+                      </ul>
+                    {/if}
+                  </li>
+                {/if}
               {/each}
             </ul>
           {/if}
@@ -1511,6 +1772,103 @@
     padding: 2px 6px;
     font-size: 0.75rem;
   }
+  .file-row__name-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .file-row__name-wrap .file-row__name {
+    flex: 0 1 auto;
+  }
+  .session-pill,
+  .session-chip {
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-muted);
+    font: inherit;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    padding: 1px 6px;
+    white-space: nowrap;
+  }
+  .session-pill--busy {
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+  .session-pill--error {
+    color: #c00;
+    border-color: #c00;
+  }
+  button.session-pill,
+  button.session-chip {
+    cursor: pointer;
+  }
+  button.session-pill:hover,
+  button.session-chip:hover {
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+  .file-row--flash {
+    animation: row-flash 1.6s ease-out;
+  }
+  @keyframes row-flash {
+    0% {
+      background: rgba(184, 134, 11, 0.35);
+    }
+    100% {
+      background: transparent;
+    }
+  }
+  .session-children {
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+    padding: 2px 8px 2px 80px;
+  }
+  .session-children__status {
+    padding: 4px 0;
+    font-size: var(--text-sm);
+  }
+  .session-children__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .child-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+    font-size: var(--text-sm);
+    border-bottom: 1px dashed var(--color-border);
+  }
+  .child-row:last-child {
+    border-bottom: 0;
+  }
+  .child-row__name {
+    color: var(--color-text);
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .child-row__name:hover {
+    color: var(--color-accent);
+  }
+  .child-row__dur,
+  .child-row__size {
+    color: var(--color-muted);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+  .child-row .action-btn {
+    padding: 2px 6px;
+    font-size: 0.75rem;
+  }
   @media (max-width: 640px) {
     .file-row {
       grid-template-columns: 24px 32px 1fr auto;
@@ -1518,6 +1876,29 @@
     .file-row__type,
     .file-row__size {
       display: none;
+    }
+    .file-row__name-wrap {
+      flex-wrap: wrap;
+    }
+    .session-pill,
+    .session-chip {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+    }
+    .session-children {
+      padding-left: 12px;
+    }
+    .child-row {
+      grid-template-columns: 1fr auto;
+    }
+    .child-row__dur,
+    .child-row__size {
+      display: none;
+    }
+    .child-row .action-btn {
+      min-height: 44px;
+      min-width: 44px;
     }
   }
 
