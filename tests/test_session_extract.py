@@ -70,6 +70,7 @@ def patched_jobs(monkeypatch, db_engine, tmp_media_dir):
             db.close()
 
     monkeypatch.setattr(jobs, "run_extraction", stub_run_extraction)
+    monkeypatch.setattr("server.extraction._sync_to_search", lambda db, item: None)
     return TestSession
 
 
@@ -269,6 +270,58 @@ class TestRunSessionExtraction:
         assert existing.parent_media_item_id == parent.id
         children = db_session.query(MediaItem).filter_by(parent_media_item_id=parent.id).all()
         assert len(children) == 2  # existing kick + new bass
+
+    def test_midi_child_end_to_end(self, db_session, tmp_media_dir, patched_jobs, test_user):
+        from tests.test_cues import _midi_with_markers
+
+        bundle = _make_bundle_dir(Path(tmp_media_dir) / "session" / "2026-07")
+        _midi_with_markers(bundle / "notes.mid")
+        rel = bundle.relative_to(tmp_media_dir).as_posix()
+        parent = _make_session_item(db_session, rel)
+        project, slot = _make_project_with_slot(db_session, user_id=test_user.id)
+        db_session.add(
+            ProjectItem(project_id=project.id, slot_id=slot.id, media_item_id=parent.id, added_by=test_user.id)
+        )
+        db_session.commit()
+
+        jobs.run_session_extraction(parent.id)
+
+        db_session.expire_all()
+        meta = db_session.query(MediaSessionMeta).filter_by(media_item_id=parent.id).one()
+        assert meta.extraction_status == "done"
+        assert meta.extracted_count == 3  # 2 audio + 1 midi
+
+        midi_child = (
+            db_session.query(MediaItem)
+            .filter_by(parent_media_item_id=parent.id, media_type="midi")
+            .one()
+        )
+        assert midi_child.filename == "notes.mid"
+        assert midi_child.midi_meta is not None
+        assert midi_child.midi_meta.tempo == pytest.approx(120.0)
+        assert midi_child.midi_meta.note_count == 1
+        assert midi_child.midi_meta.duration_seconds == pytest.approx(0.5)
+        assert midi_child.midi_meta.preview_path
+        assert (Path(tmp_media_dir) / midi_child.midi_meta.preview_path).exists()
+        # attached to the same slot as the parent
+        attach = (
+            db_session.query(ProjectItem)
+            .filter_by(project_id=project.id, slot_id=slot.id, media_item_id=midi_child.id)
+            .one_or_none()
+        )
+        assert attach is not None
+
+        # MIDI markers anchored to the SESSION item as cue annotations
+        from server.models import Annotation
+
+        annos = (
+            db_session.query(Annotation)
+            .filter_by(media_item_id=parent.id, source="midi")
+            .order_by(Annotation.position_seconds)
+            .all()
+        )
+        assert [a.label for a in annos] == ["Intro", "Verse"]
+        assert all(a.kind == "cue" for a in annos)
 
     def test_missing_bundle_marks_failed(self, db_session, tmp_media_dir, patched_jobs):
         parent = _make_session_item(db_session, "session/2026-07/nope.logicx")

@@ -17,7 +17,7 @@ from sqlalchemy import (
     create_engine,
     event,
 )
-from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, backref, relationship, sessionmaker
 
 
 DATABASE_URL = "sqlite:///data/au.db"
@@ -209,8 +209,10 @@ class MediaItem(Base):
     audio_meta = relationship("MediaAudioMeta", back_populates="media_item", uselist=False, cascade="all, delete-orphan")
     video_meta = relationship("MediaVideoMeta", back_populates="media_item", uselist=False, cascade="all, delete-orphan")
     session_meta = relationship("MediaSessionMeta", uselist=False, cascade="all, delete-orphan", back_populates="media_item")
+    midi_meta = relationship("MediaMidiMeta", uselist=False, cascade="all, delete-orphan", back_populates="media_item")
     puke_box_meta = relationship("MediaPukeBoxMeta", uselist=False, cascade="all, delete-orphan", back_populates="media_item")
     extraction_failures = relationship("ExtractionFailure", back_populates="media_item", cascade="all, delete-orphan")
+    annotations = relationship("Annotation", back_populates="media_item", cascade="all, delete-orphan")
     parent = relationship("MediaItem", remote_side=[id], backref="children")
 
 
@@ -335,6 +337,69 @@ class MediaSessionMeta(Base):
     extraction_error = Column(String, nullable=True)
 
     media_item = relationship("MediaItem", back_populates="session_meta")
+
+
+class MediaMidiMeta(Base):
+    """Per-item metadata for MIDI files (media_type='midi').
+
+    Parsed from the file with pretty_midi at ingest time. The synthesized
+    preview (pukebox-style sine synth) makes MIDIs playable in the player.
+    """
+
+    __tablename__ = "media_midi_meta"
+
+    media_item_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True, unique=True)
+    tempo = Column(Float, nullable=True)
+    time_sig = Column(String, nullable=True)
+    track_names = Column(String, nullable=True)  # JSON array
+    note_count = Column(Integer, nullable=True)
+    duration_seconds = Column(Float, nullable=True)
+    preview_path = Column(String, nullable=True)  # WAV preview, relative to SEARCH_MEDIA_DIR
+
+    media_item = relationship("MediaItem", back_populates="midi_meta")
+
+
+class Annotation(Base):
+    """A timestamped comment or cue marker on a media item (Marginalia).
+
+    kind='comment' rows are human discussion anchored to a playback position;
+    kind='cue' rows are imported/AI markers (WAV/AIFF cue chunks, MIDI marker
+    meta-events, Logic project markers, future AI listening observations).
+    SQLite is the source of truth; the `marginalia` Meilisearch index holds a
+    rebuildable projection (server/search_client.sync_annotation).
+
+    Replies are one level deep via parent_id. Human edits set touched_by_user,
+    which re-extraction respects: imports only ever add missing rows.
+    """
+
+    __tablename__ = "annotations"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    media_item_id = Column(
+        String, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    parent_id = Column(
+        String, ForeignKey("annotations.id", ondelete="CASCADE"), nullable=True
+    )
+    kind = Column(String, nullable=False)  # comment | cue
+    source = Column(String, nullable=False)  # user | wav_cue | aiff_cue | midi | logic | ai_listen
+    position_seconds = Column(Float, nullable=False)
+    label = Column(String, nullable=True)  # cue text ("Verse", "WAV cue 3")
+    body = Column(String, nullable=True)  # comment markdown
+    author_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    touched_by_user = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+    updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
+
+    media_item = relationship("MediaItem", back_populates="annotations")
+    author = relationship("User", foreign_keys=[author_id])
+    replies = relationship("Annotation", backref=backref("parent", remote_side=[id]))
+
+    __table_args__ = (
+        Index("ix_annotations_media_item_position", "media_item_id", "position_seconds"),
+    )
 
 
 class MediaPukeBoxMeta(Base):

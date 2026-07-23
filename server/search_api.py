@@ -402,6 +402,7 @@ def _get_media_item_or_404(db: Session, media_id: str) -> MediaItem:
             joinedload(MediaItem.audio_meta),
             joinedload(MediaItem.video_meta),
             joinedload(MediaItem.session_meta),
+            joinedload(MediaItem.midi_meta),
             joinedload(MediaItem.extraction_failures),
         )
         .filter(MediaItem.id == media_id)
@@ -472,6 +473,7 @@ def _media_item_response(item: MediaItem) -> dict:
         "audio_meta": None,
         "video_meta": None,
         "session_meta": None,
+        "midi_meta": None,
         "extraction_failures": [
             {
                 "id": f.id,
@@ -555,6 +557,20 @@ def _media_item_response(item: MediaItem) -> dict:
             "extraction_status": m.extraction_status,
             "extracted_count": m.extracted_count,
             "extraction_error": m.extraction_error,
+        }
+    if item.midi_meta:
+        m = item.midi_meta
+        try:
+            track_names = json.loads(m.track_names) if m.track_names else []
+        except (json.JSONDecodeError, TypeError):
+            track_names = []
+        data["midi_meta"] = {
+            "tempo": m.tempo,
+            "time_sig": m.time_sig,
+            "track_names": track_names,
+            "note_count": m.note_count,
+            "duration_seconds": m.duration_seconds,
+            "has_preview": bool(m.preview_path),
         }
     return data
 
@@ -1550,6 +1566,10 @@ async def upload_media(
     if is_session:
         media_type = "session"
         session_tool = (tool or detected_tool or "other").lower()
+    elif file.filename and file.filename.lower().endswith((".mid", ".midi")):
+        # MIDI is its own media type (parsed metadata + synthesized preview).
+        media_type = "midi"
+        session_tool = None
     else:
         media_type = _media_type_from_mime(mime)
         session_tool = None
@@ -1652,6 +1672,16 @@ async def upload_media(
         )
         db.add(session_meta)
 
+    # MIDI sidecar: parse + synthesize the preview inline (small files, fast).
+    if media_type == "midi":
+        db.flush()  # media_item needs an id before the meta row references it
+        try:
+            from server.session_extract.midi import register_midi_item
+
+            register_midi_item(db, media_item, full_path, _get_search_media_dir())
+        except Exception:
+            logger.exception("MIDI registration failed for %s (non-fatal)", item_id)
+
     # Auto-attach to a Latent (and optional slot) when project_id provided
     if project_id:
         from server.models import Project, ProjectItem, ProjectSlot
@@ -1682,7 +1712,8 @@ async def upload_media(
 
     # Run metadata extraction on upload so durations, thumbnails, and AI tags
     # land without a manual batch re-extract. Zipped session bundles go
-    # through the bundle extraction path (harvest audio → child items).
+    # through the bundle extraction path (harvest audio → child items). MIDI
+    # items were fully registered inline above.
     if media_type in ("image", "audio", "video"):
         from server.extraction import run_extraction_async
 
@@ -2129,6 +2160,7 @@ async def get_media_audio(
     """Return the audio track of a media file.
 
     For **audio** files, returns the original file directly.
+    For **midi** files, returns the synthesized WAV preview.
     For **video** files, extracts the audio track using ffmpeg and returns it
     as a WAV. This lets browser-side audio tools (waveform viewers, Web Audio
     decoders) work with video inputs.
@@ -2137,7 +2169,24 @@ async def get_media_audio(
     """
     item = _get_media_item_or_404(db, media_id)
     file_path = _get_search_media_dir() / item.file_path
+    midi_preview = (
+        (_get_search_media_dir() / item.midi_meta.preview_path)
+        if item.media_type == "midi" and item.midi_meta and item.midi_meta.preview_path
+        else None
+    )
     db.close()
+
+    if item.media_type == "midi":
+        if midi_preview is None or not midi_preview.exists():
+            raise HTTPException(status_code=404, detail="MIDI preview not available")
+        return FileResponse(
+            midi_preview,
+            media_type="audio/wav",
+            headers={
+                "Content-Disposition": content_disposition("inline", f"{item.filename}.preview.wav"),
+                "Cache-Control": "private, max-age=86400",
+            },
+        )
 
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found on disk")

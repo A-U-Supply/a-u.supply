@@ -124,7 +124,11 @@
               release_title: '',
               release_code: '',
               media_type: mediaType,
-              stream_url: `/api/media/${encodeURIComponent(mediaId)}/file`,
+              // MIDI items stream their synthesized WAV preview.
+              stream_url:
+                mediaType === 'midi'
+                  ? `/api/media/${encodeURIComponent(mediaId)}/audio`
+                  : `/api/media/${encodeURIComponent(mediaId)}/file`,
               cover_url:
                 mediaType === 'image' || mediaType === 'video'
                   ? `/api/media/${encodeURIComponent(mediaId)}/thumbnail`
@@ -275,7 +279,7 @@
             <button class="action-btn" type="button" onclick={() => rename(it)}
               >Rename</button
             >
-            {#if it.media?.media_type === 'audio' || it.media?.media_type === 'video'}
+            {#if it.media?.media_type === 'audio' || it.media?.media_type === 'video' || it.media?.media_type === 'midi'}
               <button
                 class="action-btn"
                 type="button"
