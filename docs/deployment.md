@@ -29,17 +29,15 @@ Auto-managed via Let's Encrypt. No manual renewal needed.
 
 ## nginx
 
-Session-bundle uploads (Latents) stream individual files of potentially several GB through nginx as bundle parts. Two settings matter on the `au-supply` app:
+Session-bundle uploads (Latents) stream individual files of potentially several GB through nginx as bundle parts. Applied 2026-07-23 on the `au-supply` app:
 
 ```bash
-# Allow multi-GB request bodies (covers the largest single file inside a .logicx)
-ssh dokku nginx:set au-supply client-max-body-size 2500m
-
-# Give slow uploads room before nginx times the request out
-ssh dokku nginx:set au-supply proxy-read-timeout 600
+ssh dokku nginx:set au-supply client-max-body-size 20g   # applied
+ssh dokku nginx:set au-supply proxy-read-timeout 900     # applied
+ssh dokku config:set au-supply MAX_UPLOAD_PART_BYTES=21474836480  # applied (app-level cap, 20 GiB)
 ```
 
-The app additionally enforces `MAX_UPLOAD_PART_BYTES` (default 2 GiB) per part server-side — keep the nginx value at or above that. Plain media uploads and API calls are unaffected.
+The limit exists as an accident/disk guard, not a trust one — a typo'd path or a dropped drive shouldn't fill the search-media volume mid-upload. Raise both sides together if it ever needs to go higher; nginx `client_max_body_size 0` disables the check entirely. Plain media uploads and API calls are unaffected.
 
 ## SSH access
 
