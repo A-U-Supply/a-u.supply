@@ -2136,6 +2136,7 @@
     padding: 0 4px;
     line-height: 1;
     letter-spacing: -1px;
+    touch-action: none;
   }
   .slot__drag:active {
     cursor: grabbing;
@@ -2589,6 +2590,11 @@
   }
 
   @media (max-width: 640px) {
+    /* The card's own grip had no touch target at any width. */
+    .slot__drag {
+      min-height: 44px;
+      min-width: 32px;
+    }
     /* Two lines: identity up top, actions underneath. The reorder block
        (RowMove) is 76px wide and spans both, grip over paired arrows. */
     .file-row {

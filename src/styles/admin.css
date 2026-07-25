@@ -213,7 +213,11 @@
 /* Main content */
 .admin-main {
   padding: var(--space-lg);
-  padding-bottom: calc(var(--space-lg) + 96px);
+  /* Room for the persistent player, but only while it is actually on screen.
+     This used to be unconditional, so every page ended in ~96px of dead space
+     (~137px on a phone) with no player in sight. The player adds its own
+     spacer element on top of this, so the two must not both be permanent. */
+  padding-bottom: var(--space-lg);
   max-width: 960px;
   min-width: 0;
   /* Brutalist card chrome uses `box-shadow: 4px 4px 0` which extends
@@ -260,6 +264,16 @@
   .admin-main {
     padding: var(--space-md);
     padding-top: calc(var(--space-md) + 2.5rem);
+    padding-bottom: var(--space-md);
+  }
+}
+
+body.player-active .admin-main {
+  padding-bottom: calc(var(--space-lg) + 96px);
+}
+
+@media (max-width: 900px) {
+  body.player-active .admin-main {
     padding-bottom: calc(var(--space-md) + 120px);
   }
 }
