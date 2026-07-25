@@ -26,6 +26,8 @@ from server.models import (
     ProjectDocumentRevision,
     ProjectItem,
     ProjectLink,
+    ProjectPlaylist,
+    ProjectPlaylistItem,
     ProjectSlot,
     SlotPrimaryPin,
     Thread,
@@ -201,6 +203,7 @@ def _item_summary(pi: ProjectItem) -> dict:
         "added_by": pi.added_by,
         "added_at": pi.added_at.isoformat() if pi.added_at else None,
         "is_primary": bool(pi.is_primary),
+        "position": pi.position or 0,
         "media": {
             "id": mi.id,
             "filename": mi.filename,
@@ -208,10 +211,83 @@ def _item_summary(pi: ProjectItem) -> dict:
             "mime_type": mi.mime_type,
             "file_size_bytes": mi.file_size_bytes,
             "parent_media_item_id": mi.parent_media_item_id,
+            # Playlists show running times without a second round-trip. Populated
+            # for audio since extraction-on-upload shipped with Marginalia.
+            "duration_seconds": mi.audio_meta.duration_seconds if mi.audio_meta else None,
             "session_extraction_status": mi.session_meta.extraction_status if mi.session_meta else None,
             "session_extracted_count": mi.session_meta.extracted_count if mi.session_meta else None,
         } if mi else None,
     }
+
+
+def _item_order(q):
+    """Apply the canonical item ordering: manual position, newest first within ties."""
+    return q.order_by(ProjectItem.position.asc(), ProjectItem.added_at.desc())
+
+
+def _next_item_position(db: Session, project_id: str, slot_id: str | None) -> int:
+    """One past the last position in a slot (or the loose pile). Attachments append."""
+    q = db.query(func.max(ProjectItem.position)).filter(ProjectItem.project_id == project_id)
+    q = q.filter(ProjectItem.slot_id.is_(None) if slot_id is None else ProjectItem.slot_id == slot_id)
+    return int(q.scalar() or 0) + 1
+
+
+def _track_summary(pi: ProjectItem) -> dict:
+    """A playlist row: enough for the player queue and the running-time readout."""
+    mi = pi.media_item
+    return {
+        "item_id": pi.id,
+        "media_item_id": pi.media_item_id,
+        "slot_id": pi.slot_id,
+        "filename": mi.filename if mi else None,
+        "media_type": mi.media_type if mi else None,
+        "duration_seconds": mi.audio_meta.duration_seconds if mi and mi.audio_meta else None,
+    }
+
+
+def _slot_audio_items(db: Session, project_id: str, slot_id: str) -> list[ProjectItem]:
+    """The slot's audio attachments in file order — the playlist's membership."""
+    q = (
+        db.query(ProjectItem)
+        .options(joinedload(ProjectItem.media_item).joinedload(MediaItem.audio_meta))
+        .join(MediaItem, MediaItem.id == ProjectItem.media_item_id)
+        .filter(
+            ProjectItem.project_id == project_id,
+            ProjectItem.slot_id == slot_id,
+            MediaItem.media_type == "audio",
+        )
+    )
+    return _item_order(q).all()
+
+
+def _slot_playlist(slot: ProjectSlot, audio_items: list[ProjectItem]) -> list[ProjectItem]:
+    """Reconcile the stored order hint against what's actually in the slot.
+
+    Stored ids that are still audio in this slot keep their sequence; anything
+    else (a new upload, a file moved in) appends in file order. Ids that have
+    left are ignored, not deleted — a file that comes back keeps its old place.
+    Read-only: never writes during a GET.
+    """
+    by_media = {pi.media_item_id: pi for pi in audio_items}
+    try:
+        stored = json.loads(slot.playlist_json) if slot.playlist_json else []
+    except (ValueError, TypeError):
+        stored = []
+    ordered: list[ProjectItem] = []
+    seen: set[str] = set()
+    for mid in stored if isinstance(stored, list) else []:
+        pi = by_media.get(mid)
+        if pi is not None and mid not in seen:
+            ordered.append(pi)
+            seen.add(mid)
+    ordered.extend(pi for pi in audio_items if pi.media_item_id not in seen)
+    return ordered
+
+
+def _playlist_payload(tracks: list[ProjectItem]) -> dict:
+    summaries = [_track_summary(pi) for pi in tracks]
+    total = sum(t["duration_seconds"] or 0 for t in summaries)
+    return {"tracks": summaries, "total_seconds": total}
 
 
 def _pin_map_for_slot(db: Session, slot_id: str) -> dict[str, str]:
@@ -349,7 +425,7 @@ _HERO_ACCENT_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 _STYLE_HEX_KEYS = {"accent", "bg_color", "border", "text"}
 VALID_SLOT_BG_MODES = {"auto", "image", "solid", "none"}
 VALID_SECTION_BG_MODES = {"image", "solid", "none"}  # sections have no starred image
-VALID_SECTION_KEYS = {"repo", "links", "docs", "slots", "loose", "threads"}
+VALID_SECTION_KEYS = {"repo", "links", "docs", "slots", "playlists", "loose", "threads"}
 
 
 def _merge_style_patch(
@@ -494,6 +570,30 @@ class UpdateDocumentBody(BaseModel):
 
 class ReorderDocumentsBody(BaseModel):
     order: list[str]
+
+
+class ReorderItemsBody(BaseModel):
+    order: list[str]  # project_item ids, every item in the slot exactly once
+
+
+class SetSlotPlaylistBody(BaseModel):
+    order: list[str]  # media_item_ids; may be a subset — the rest append on read
+
+
+class CreatePlaylistBody(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+
+
+class UpdatePlaylistBody(BaseModel):
+    name: str | None = None
+
+
+class AddPlaylistTracksBody(BaseModel):
+    media_item_ids: list[str]
+
+
+class ReorderPlaylistBody(BaseModel):
+    order: list[str]  # playlist_item ids; omitted rows keep their order at the end
 
 
 # ---------------------------------------------------------------------------
@@ -972,12 +1072,16 @@ def list_items(
     db: Session = Depends(get_db),
 ):
     _project_or_404(db, project_id)
-    q = db.query(ProjectItem).options(joinedload(ProjectItem.media_item)).filter(ProjectItem.project_id == project_id)
+    q = (
+        db.query(ProjectItem)
+        .options(joinedload(ProjectItem.media_item).joinedload(MediaItem.audio_meta))
+        .filter(ProjectItem.project_id == project_id)
+    )
     if loose_only:
         q = q.filter(ProjectItem.slot_id.is_(None))
     elif slot_id:
         q = q.filter(ProjectItem.slot_id == slot_id)
-    items = q.order_by(ProjectItem.added_at.desc()).all()
+    items = _item_order(q).all()
     # Self-heal: any ProjectItem whose media_item vanished (cascade failed
     # before PRAGMA foreign_keys=ON shipped) gets purged on read so the UI
     # never has to render "(unknown)" placeholders.
@@ -1003,6 +1107,7 @@ def attach_items(
         resolved_slot_id = slot.id
 
     attached = []
+    next_position = _next_item_position(db, project_id, resolved_slot_id)
     for mid in body.media_item_ids:
         mi = db.query(MediaItem).filter(MediaItem.id == mid).first()
         if not mi:
@@ -1020,7 +1125,9 @@ def attach_items(
             slot_id=resolved_slot_id,
             media_item_id=mid,
             added_by=user.id,
+            position=next_position,
         )
+        next_position += 1
         db.add(pi)
         attached.append(pi)
     db.commit()
@@ -1068,6 +1175,10 @@ def move_item(
         slot = _slot_or_404(db, project_id, body.slot_id)
         new_slot_id = slot.id
     old_slot_id = pi.slot_id
+    if new_slot_id != old_slot_id:
+        # Land at the end of wherever it's going — it has no claim on a
+        # position in a group it was never ordered into.
+        pi.position = _next_item_position(db, project_id, new_slot_id)
     pi.slot_id = new_slot_id
     if pi.is_primary and pi.media_item and pi.media_item.media_type == "image":
         for sid in {old_slot_id, new_slot_id} - {None}:
@@ -1213,6 +1324,288 @@ def detach_item(
             from server.extraction import record_extraction_failure
             record_extraction_failure(db, mi_id, "meilisearch_sync", exc)
     return None
+
+
+@router.post("/{project_id}/slots/{slot_id}/items/reorder", summary="Reorder a slot's files")
+def reorder_slot_items(
+    project_id: str,
+    slot_id: str,
+    body: ReorderItemsBody,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Set the manual file order for one slot.
+
+    Deliberately does NOT touch the slot's playlist: the two orders are
+    independent by design (see docs/plans/2026-07-24-latent-playlists.md).
+    """
+    _slot_or_404(db, project_id, slot_id)
+    q = (
+        db.query(ProjectItem)
+        .options(joinedload(ProjectItem.media_item).joinedload(MediaItem.audio_meta))
+        .filter(ProjectItem.project_id == project_id, ProjectItem.slot_id == slot_id)
+    )
+    items = _item_order(q).all()
+    by_id = {pi.id: pi for pi in items}
+    if len(set(body.order)) != len(body.order) or set(body.order) != set(by_id.keys()):
+        raise HTTPException(status_code=400, detail="Order must contain every item in the slot exactly once")
+    for i, item_id in enumerate(body.order):
+        by_id[item_id].position = i + 1
+    db.commit()
+    return {"items": [_item_summary(by_id[i]) for i in body.order]}
+
+
+# ---------------------------------------------------------------------------
+# Slot playlist — audio only, order stored as a hint, membership derived
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{project_id}/slots/{slot_id}/playlist", summary="A slot's playlist")
+def get_slot_playlist(
+    project_id: str,
+    slot_id: str,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    s = _slot_or_404(db, project_id, slot_id)
+    return _playlist_payload(_slot_playlist(s, _slot_audio_items(db, project_id, slot_id)))
+
+
+@router.put("/{project_id}/slots/{slot_id}/playlist", summary="Set a slot's playlist order")
+def set_slot_playlist(
+    project_id: str,
+    slot_id: str,
+    body: SetSlotPlaylistBody,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Store the order hint. A partial list is fine — anything left out appends
+    on read, which is what keeps a concurrent upload from 400-ing a drag."""
+    s = _slot_or_404(db, project_id, slot_id)
+    audio_items = _slot_audio_items(db, project_id, slot_id)
+    valid = {pi.media_item_id for pi in audio_items}
+    if len(set(body.order)) != len(body.order):
+        raise HTTPException(status_code=400, detail="Order contains duplicate media_item_ids")
+    unknown = [mid for mid in body.order if mid not in valid]
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Not audio attached to this slot: {unknown[0]}")
+    s.playlist_json = json.dumps(list(body.order))
+    db.commit()
+    return _playlist_payload(_slot_playlist(s, audio_items))
+
+
+# ---------------------------------------------------------------------------
+# Latent running orders — several per Latent, curated
+# ---------------------------------------------------------------------------
+
+
+def _playlist_or_404(db: Session, project_id: str, playlist_id: str) -> ProjectPlaylist:
+    pl = db.query(ProjectPlaylist).filter(
+        ProjectPlaylist.id == playlist_id,
+        ProjectPlaylist.project_id == project_id,
+    ).first()
+    if not pl:
+        raise HTTPException(status_code=404, detail=f"Playlist {playlist_id} not found")
+    return pl
+
+
+def _project_audio_items(db: Session, project_id: str) -> dict[str, ProjectItem]:
+    """media_item_id -> attachment, for every audio file anywhere in the Latent.
+
+    A media item attached twice (a slot and loose) resolves to its first
+    attachment in canonical order; a running order only cares that it's a
+    member of the Latent.
+    """
+    q = (
+        db.query(ProjectItem)
+        .options(joinedload(ProjectItem.media_item).joinedload(MediaItem.audio_meta))
+        .join(MediaItem, MediaItem.id == ProjectItem.media_item_id)
+        .filter(ProjectItem.project_id == project_id, MediaItem.media_type == "audio")
+    )
+    out: dict[str, ProjectItem] = {}
+    for pi in _item_order(q).all():
+        out.setdefault(pi.media_item_id, pi)
+    return out
+
+
+def _playlist_summary(pl: ProjectPlaylist, members: dict[str, ProjectItem]) -> dict:
+    """Serialize a running order, dropping tracks that have left the Latent.
+
+    Rows for departed tracks stay in the table — reattaching the file restores
+    its place rather than losing it.
+    """
+    tracks = []
+    total = 0.0
+    for row in sorted(pl.items, key=lambda r: (r.position, r.added_at)):
+        pi = members.get(row.media_item_id)
+        if pi is None:
+            continue
+        t = _track_summary(pi)
+        t["playlist_item_id"] = row.id
+        tracks.append(t)
+        total += t["duration_seconds"] or 0
+    return {
+        "id": pl.id,
+        "project_id": pl.project_id,
+        "name": pl.name,
+        "position": pl.position,
+        "tracks": tracks,
+        "total_seconds": total,
+        "created_at": pl.created_at.isoformat() if pl.created_at else None,
+        "updated_at": pl.updated_at.isoformat() if pl.updated_at else None,
+    }
+
+
+@router.get("/{project_id}/playlists", summary="List a Latent's running orders")
+def list_playlists(
+    project_id: str,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    _project_or_404(db, project_id)
+    members = _project_audio_items(db, project_id)
+    pls = (
+        db.query(ProjectPlaylist)
+        .options(joinedload(ProjectPlaylist.items))
+        .filter(ProjectPlaylist.project_id == project_id)
+        .order_by(ProjectPlaylist.position, ProjectPlaylist.created_at)
+        .all()
+    )
+    return {"playlists": [_playlist_summary(pl, members) for pl in pls]}
+
+
+@router.post("/{project_id}/playlists", status_code=201, summary="Create a running order")
+def create_playlist(
+    project_id: str,
+    body: CreatePlaylistBody,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    _project_or_404(db, project_id)
+    max_pos = db.query(func.max(ProjectPlaylist.position)).filter(
+        ProjectPlaylist.project_id == project_id
+    ).scalar() or 0
+    pl = ProjectPlaylist(
+        project_id=project_id,
+        name=body.name.strip() or "Untitled",
+        position=max_pos + 1,
+        created_by=user.id,
+    )
+    db.add(pl)
+    db.commit()
+    db.refresh(pl)
+    return _playlist_summary(pl, _project_audio_items(db, project_id))
+
+
+@router.patch("/{project_id}/playlists/{playlist_id}", summary="Rename a running order")
+def update_playlist(
+    project_id: str,
+    playlist_id: str,
+    body: UpdatePlaylistBody,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    pl = _playlist_or_404(db, project_id, playlist_id)
+    if body.name is not None:
+        name = body.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Name cannot be empty")
+        pl.name = name[:120]
+    db.commit()
+    db.refresh(pl)
+    return _playlist_summary(pl, _project_audio_items(db, project_id))
+
+
+@router.delete("/{project_id}/playlists/{playlist_id}", status_code=204, summary="Delete a running order")
+def delete_playlist(
+    project_id: str,
+    playlist_id: str,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    pl = _playlist_or_404(db, project_id, playlist_id)
+    db.delete(pl)
+    db.commit()
+    return None
+
+
+@router.post("/{project_id}/playlists/{playlist_id}/items", summary="Add tracks to a running order")
+def add_playlist_tracks(
+    project_id: str,
+    playlist_id: str,
+    body: AddPlaylistTracksBody,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Append audio to the end. Non-members, non-audio and duplicates are
+    skipped rather than rejected — same forgiving contract as attach_items."""
+    pl = _playlist_or_404(db, project_id, playlist_id)
+    members = _project_audio_items(db, project_id)
+    already = {r.media_item_id for r in pl.items}
+    max_pos = max((r.position for r in pl.items), default=0)
+    for mid in body.media_item_ids:
+        if mid not in members or mid in already:
+            continue
+        max_pos += 1
+        db.add(ProjectPlaylistItem(playlist_id=pl.id, media_item_id=mid, position=max_pos))
+        already.add(mid)
+    db.commit()
+    db.refresh(pl)
+    return _playlist_summary(pl, members)
+
+
+@router.delete(
+    "/{project_id}/playlists/{playlist_id}/items/{playlist_item_id}",
+    summary="Remove a track from a running order",
+)
+def remove_playlist_track(
+    project_id: str,
+    playlist_id: str,
+    playlist_item_id: str,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    pl = _playlist_or_404(db, project_id, playlist_id)
+    row = db.query(ProjectPlaylistItem).filter(
+        ProjectPlaylistItem.id == playlist_item_id,
+        ProjectPlaylistItem.playlist_id == pl.id,
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Track not in this playlist")
+    db.delete(row)
+    db.commit()
+    db.refresh(pl)
+    return _playlist_summary(pl, _project_audio_items(db, project_id))
+
+
+@router.post("/{project_id}/playlists/{playlist_id}/items/reorder", summary="Reorder a running order")
+def reorder_playlist(
+    project_id: str,
+    playlist_id: str,
+    body: ReorderPlaylistBody,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """A partial order is accepted: rows the client couldn't see (tracks
+    currently detached from the Latent) keep their relative order at the end."""
+    pl = _playlist_or_404(db, project_id, playlist_id)
+    by_id = {r.id: r for r in pl.items}
+    if len(set(body.order)) != len(body.order):
+        raise HTTPException(status_code=400, detail="Order contains duplicate ids")
+    unknown = [i for i in body.order if i not in by_id]
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Not a track in this playlist: {unknown[0]}")
+    listed = set(body.order)
+    pos = 0
+    for row_id in body.order:
+        pos += 1
+        by_id[row_id].position = pos
+    for row in sorted((r for r in pl.items if r.id not in listed), key=lambda r: (r.position, r.added_at)):
+        pos += 1
+        row.position = pos
+    db.commit()
+    db.refresh(pl)
+    return _playlist_summary(pl, _project_audio_items(db, project_id))
 
 
 # ---------------------------------------------------------------------------

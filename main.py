@@ -178,6 +178,34 @@ if "is_primary" not in _item_cols:
     with engine.begin() as _conn:
         _conn.execute(_sa_text("ALTER TABLE project_items ADD COLUMN is_primary BOOLEAN NOT NULL DEFAULT 0"))
 
+# Migrate existing DB: manual file order within a slot / the loose pile
+# (2026-07-24-latent-playlists). Backfilled newest-first so the order on screen
+# is unchanged by the deploy; new attachments append from there.
+if "position" not in _item_cols:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE project_items ADD COLUMN position INTEGER NOT NULL DEFAULT 0"))
+        _conn.execute(_sa_text("""
+            UPDATE project_items SET position = (
+                SELECT COUNT(*) FROM project_items p2
+                 WHERE p2.project_id = project_items.project_id
+                   AND p2.slot_id IS project_items.slot_id
+                   AND (p2.added_at > project_items.added_at
+                        OR (p2.added_at = project_items.added_at AND p2.id >= project_items.id))
+            )
+        """))
+
+# Migrate existing DB: slot playlist order hint + Latent running orders
+# (2026-07-24-latent-playlists).
+_slot_cols_v3 = [c["name"] for c in _sa_inspect(engine).get_columns("project_slots")]
+if "playlist_json" not in _slot_cols_v3:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE project_slots ADD COLUMN playlist_json TEXT"))
+
+from server.models import ProjectPlaylist as _ProjectPlaylist, ProjectPlaylistItem as _ProjectPlaylistItem
+for _model in (_ProjectPlaylist, _ProjectPlaylistItem):
+    if _model.__tablename__ not in _sa_inspect(engine).get_table_names():
+        _model.__table__.create(bind=engine)
+
 # Migrate existing DB: create GitHub + ProjectLink tables if missing
 _existing_tables_g = set(_sa_inspect(engine).get_table_names())
 from server.models import (
