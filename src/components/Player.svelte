@@ -21,6 +21,10 @@
 
   let currentTime = $state(0);
   let duration = $state(0);
+  /* Why a track isn't playing. Previously play() rejections and media errors
+     were both swallowed, so a missing file or a blocked autoplay looked
+     identical to "the button does nothing". */
+  let mediaError = $state(null);
   let paused = $state(true);
   let volume = $state(0.8);
   let visible = $state(false);
@@ -115,13 +119,52 @@
     if (idx < 0 || idx >= queue.length) return;
     currentIndex = idx;
     pipOpen = true;
+    mediaError = null;
     live(`Now playing: ${queue[idx]?.title || ''}`);
+    const url = queue[idx]?.stream_url;
+    if (mediaEl && url) {
+      /* Set src and play in THIS task, not a later frame: iOS Safari only
+         honours play() while the user gesture is still active, and a
+         requestAnimationFrame callback is too late. Svelte's own src binding
+         lands on the same URL a moment later, so this is a no-op for it. */
+      mediaEl.src = url;
+      mediaEl.load();
+      startPlayback();
+      return;
+    }
+    // First queue of the session: the element doesn't exist until `visible`
+    // renders it, so wait a frame.
     requestAnimationFrame(() => {
       if (mediaEl) {
         mediaEl.load();
-        mediaEl.play().catch(() => {});
+        startPlayback();
       }
     });
+  }
+
+  function startPlayback() {
+    if (!mediaEl) return;
+    mediaEl.play().catch((err) => {
+      if (err?.name === 'NotAllowedError') {
+        // Autoplay policy — the gesture didn't carry. The track is loaded, so
+        // the transport button works.
+        mediaError = 'Tap play to start';
+      } else if (err?.name !== 'AbortError') {
+        mediaError = 'Playback failed';
+      }
+      if (mediaError) live(mediaError);
+    });
+  }
+
+  function onMediaError() {
+    // The element couldn't fetch/decode the source at all — most often the
+    // file is missing on disk behind an otherwise-valid media item.
+    mediaError = "Couldn't load this file";
+    live(mediaError);
+  }
+
+  function onPlaying() {
+    mediaError = null;
   }
 
   // Visually-hidden aria-live announcer. Clear-then-set so identical
@@ -866,6 +909,8 @@
         bind:volume
         onended={onEnded}
         onloadedmetadata={onMediaLoaded}
+        onerror={onMediaError}
+        onplaying={onPlaying}
         ondblclick={toggleFullscreen}
         src={currentTrack?.stream_url}
         poster={currentTrack?.cover_url}
@@ -884,6 +929,8 @@
         bind:volume
         onended={onEnded}
         onloadedmetadata={onMediaLoaded}
+        onerror={onMediaError}
+        onplaying={onPlaying}
         src={currentTrack?.stream_url}
         preload="auto"
       ></audio>
@@ -928,8 +975,12 @@
         <div class="player__meta">
           <div class="player__title">{currentTrack?.title ?? ''}</div>
           <div class="player__sub">
-            {currentTrack?.release_title ?? ''}
-            {#if currentTrack?.entity_name}&mdash; {currentTrack.entity_name}{/if}
+            {#if mediaError}
+              <span class="player__error">{mediaError}</span>
+            {:else}
+              {currentTrack?.release_title ?? ''}
+              {#if currentTrack?.entity_name}&mdash; {currentTrack.entity_name}{/if}
+            {/if}
           </div>
         </div>
         {#if hasBookmarks}
@@ -1657,6 +1708,9 @@
     overflow: hidden;
   }
 
+  .player__error {
+    color: var(--color-status-fail);
+  }
   .player__title {
     white-space: nowrap;
     overflow: hidden;

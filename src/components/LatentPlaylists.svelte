@@ -199,6 +199,33 @@
     }
   }
 
+  /** Send an order. Shared by the drag handles and the arrow buttons. */
+  async function sendOrder(order: string[]) {
+    if (!selected || !order.length) return;
+    try {
+      merge(
+        await send(`/${encodeURIComponent(selected.id)}/items/reorder`, {
+          method: 'POST',
+          body: JSON.stringify({ order }),
+        }),
+      );
+    } catch (e: any) {
+      error = e?.message || 'Failed to reorder';
+      load(); // resync on failure
+    }
+  }
+
+  /** Move one track a step (the arrow-button path, for touch). */
+  async function nudge(index: number, delta: number) {
+    if (!selected) return;
+    const target = index + delta;
+    if (target < 0 || target >= selected.tracks.length) return;
+    const tracks = [...selected.tracks];
+    [tracks[index], tracks[target]] = [tracks[target], tracks[index]];
+    merge({ ...selected, tracks });
+    await sendOrder(tracks.map((t) => t.playlist_item_id));
+  }
+
   async function persistOrder(list: HTMLElement) {
     if (!selected) return;
     const order = Array.from(
@@ -214,17 +241,7 @@
       ...selected,
       tracks: order.map((id) => byId.get(id)!).filter(Boolean),
     });
-    try {
-      merge(
-        await send(`/${encodeURIComponent(selected.id)}/items/reorder`, {
-          method: 'POST',
-          body: JSON.stringify({ order }),
-        }),
-      );
-    } catch (e: any) {
-      error = e?.message || 'Failed to reorder';
-      load(); // resync on failure
-    }
+    await sendOrder(order);
   }
 
   function play(startIndex = 0) {
@@ -452,6 +469,22 @@
               title="Open in Stacks">{t.filename || '—'}</a
             >
             <span class="track-row__dur">{fmtDuration(t.duration_seconds)}</span
+            >
+            <button
+              class="action-btn track-row__up"
+              type="button"
+              title="Move up"
+              aria-label={`Move ${t.filename || 'track'} up`}
+              disabled={i === 0}
+              onclick={() => nudge(i, -1)}>↑ Up</button
+            >
+            <button
+              class="action-btn track-row__down"
+              type="button"
+              title="Move down"
+              aria-label={`Move ${t.filename || 'track'} down`}
+              disabled={i === selected.tracks.length - 1}
+              onclick={() => nudge(i, 1)}>↓ Down</button
             >
             <button
               class="action-btn track-row__play"
@@ -683,6 +716,12 @@
     padding: 2px 6px;
     font-size: 0.75rem;
   }
+  /* Arrows are the touch alternative to dragging — mobile only, where a
+     long-press drag competes with the page scroll. */
+  .track-row__up,
+  .track-row__down {
+    display: none;
+  }
 
   /* --- Add-tracks sheet -------------------------------------------------- */
   .sheet-backdrop {
@@ -787,10 +826,26 @@
     .track-row {
       grid-template-columns: 44px 3ch 1fr auto;
       grid-template-areas:
-        'drag pos name name'
-        'drag dur play remove';
+        'drag pos  name name'
+        'drag dur  up   down'
+        'drag play play remove';
       row-gap: 4px;
       padding: 6px 8px;
+    }
+    .track-row__up,
+    .track-row__down {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      min-width: 44px;
+      justify-self: end;
+    }
+    .track-row__up {
+      grid-area: up;
+    }
+    .track-row__down {
+      grid-area: down;
     }
     .track-row__drag {
       grid-area: drag;
@@ -808,8 +863,8 @@
     }
     .track-row__play {
       grid-area: play;
+      justify-self: stretch;
       min-height: 44px;
-      min-width: 44px;
     }
     .track-row__remove {
       grid-area: remove;
