@@ -744,3 +744,462 @@ class TestSlotAccentAuto:
         row = next(s for s in resp.json()["slots"] if s["id"] == slot["id"])
         assert row["primary_image_media_id"] == item.id
         assert row["accent_auto"] == "#ff0000"
+
+
+# ---------------------------------------------------------------------------
+# Playlists (2026-07-24-latent-playlists): manual file order, slot playlists,
+# Latent running orders.
+# ---------------------------------------------------------------------------
+
+
+def make_audio(db_session, name, seconds=None):
+    """An audio media item, optionally with a duration in its audio_meta."""
+    from server.models import MediaAudioMeta
+
+    item = make_media_item(
+        db_session,
+        filename=name,
+        media_type="audio",
+        mime_type="audio/wav",
+        file_path=f"audio/2026-07/abcdef12_{name}",
+    )
+    if seconds is not None:
+        db_session.add(MediaAudioMeta(
+            media_item_id=item.id, duration_seconds=seconds, sample_rate=44100, channels=2,
+        ))
+        db_session.commit()
+    return item
+
+
+def list_items(client, auth_headers, project_id, slot_id):
+    resp = client.get(
+        f"/api/projects/{project_id}/items", params={"slot_id": slot_id}, headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    return resp.json()["items"]
+
+
+def reorder_items(client, auth_headers, project_id, slot_id, order):
+    return client.post(
+        f"/api/projects/{project_id}/slots/{slot_id}/items/reorder",
+        json={"order": order}, headers=auth_headers,
+    )
+
+
+def get_playlist(client, auth_headers, project_id, slot_id):
+    resp = client.get(
+        f"/api/projects/{project_id}/slots/{slot_id}/playlist", headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    return resp.json()
+
+
+def put_playlist(client, auth_headers, project_id, slot_id, order):
+    return client.put(
+        f"/api/projects/{project_id}/slots/{slot_id}/playlist",
+        json={"order": order}, headers=auth_headers,
+    )
+
+
+def attach_audio(client, auth_headers, db_session, project_id, slot_id, names):
+    """Attach fresh audio files to a slot in order; return (items, media)."""
+    media = [make_audio(db_session, n) for n in names]
+    items = [attach_item(client, auth_headers, project_id, m.id, slot_id) for m in media]
+    return items, media
+
+
+class TestItemOrder:
+    def test_attach_appends(self, client, auth_headers, db_session, project, slot):
+        items, media = attach_audio(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.wav", "b.wav", "c.wav"],
+        )
+        listed = list_items(client, auth_headers, project["id"], slot["id"])
+        assert [i["media_item_id"] for i in listed] == [m.id for m in media]
+        assert [i["position"] for i in listed] == [1, 2, 3]
+
+    def test_reorder_persists(self, client, auth_headers, db_session, project, slot):
+        items, media = attach_audio(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.wav", "b.wav", "c.wav"],
+        )
+        order = [items[2]["id"], items[0]["id"], items[1]["id"]]
+        resp = reorder_items(client, auth_headers, project["id"], slot["id"], order)
+        assert resp.status_code == 200
+        assert [i["id"] for i in resp.json()["items"]] == order
+        assert [i["id"] for i in list_items(client, auth_headers, project["id"], slot["id"])] == order
+
+    def test_upload_after_reorder_lands_last(self, client, auth_headers, db_session, project, slot):
+        items, _ = attach_audio(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.wav", "b.wav"],
+        )
+        reorder_items(client, auth_headers, project["id"], slot["id"], [items[1]["id"], items[0]["id"]])
+        late = make_audio(db_session, "late.wav")
+        attach_item(client, auth_headers, project["id"], late.id, slot["id"])
+        listed = list_items(client, auth_headers, project["id"], slot["id"])
+        assert listed[-1]["media_item_id"] == late.id
+
+    def test_reorder_rejects_partial_order(self, client, auth_headers, db_session, project, slot):
+        items, _ = attach_audio(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.wav", "b.wav"],
+        )
+        assert reorder_items(
+            client, auth_headers, project["id"], slot["id"], [items[0]["id"]],
+        ).status_code == 400
+
+    def test_reorder_rejects_duplicates(self, client, auth_headers, db_session, project, slot):
+        items, _ = attach_audio(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.wav", "b.wav"],
+        )
+        assert reorder_items(
+            client, auth_headers, project["id"], slot["id"], [items[0]["id"], items[0]["id"]],
+        ).status_code == 400
+
+    def test_reorder_rejects_foreign_item(self, client, auth_headers, db_session, project, slot):
+        items, _ = attach_audio(client, auth_headers, db_session, project["id"], slot["id"], ["a.wav"])
+        loose = make_audio(db_session, "loose.wav")
+        loose_item = attach_item(client, auth_headers, project["id"], loose.id)
+        assert reorder_items(
+            client, auth_headers, project["id"], slot["id"], [items[0]["id"], loose_item["id"]],
+        ).status_code == 400
+
+    def test_loose_pile_numbers_independently(self, client, auth_headers, db_session, project, slot):
+        attach_audio(client, auth_headers, db_session, project["id"], slot["id"], ["a.wav"])
+        loose = make_audio(db_session, "loose.wav")
+        item = attach_item(client, auth_headers, project["id"], loose.id)
+        assert item["position"] == 1
+
+    def test_reorder_rejects_member(self, client, auth_headers, member_auth_headers, db_session, project, slot):
+        items, _ = attach_audio(client, auth_headers, db_session, project["id"], slot["id"], ["a.wav"])
+        resp = client.post(
+            f"/api/projects/{project['id']}/slots/{slot['id']}/items/reorder",
+            json={"order": [items[0]["id"]]}, headers=member_auth_headers,
+        )
+        assert resp.status_code == 403
+
+
+class TestSlotPlaylist:
+    def test_seeded_from_file_order(self, client, auth_headers, db_session, project, slot):
+        _, media = attach_audio(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.wav", "b.wav"],
+        )
+        pl = get_playlist(client, auth_headers, project["id"], slot["id"])
+        assert [t["media_item_id"] for t in pl["tracks"]] == [m.id for m in media]
+
+    def test_audio_only(self, client, auth_headers, db_session, project, slot):
+        audio = make_audio(db_session, "a.wav")
+        image = make_media_item(db_session)
+        attach_item(client, auth_headers, project["id"], audio.id, slot["id"])
+        attach_item(client, auth_headers, project["id"], image.id, slot["id"])
+        pl = get_playlist(client, auth_headers, project["id"], slot["id"])
+        assert [t["media_item_id"] for t in pl["tracks"]] == [audio.id]
+
+    def test_total_seconds(self, client, auth_headers, db_session, project, slot):
+        for name, secs in (("a.wav", 61.5), ("b.wav", 30.0)):
+            m = make_audio(db_session, name, seconds=secs)
+            attach_item(client, auth_headers, project["id"], m.id, slot["id"])
+        assert get_playlist(client, auth_headers, project["id"], slot["id"])["total_seconds"] == 91.5
+
+    def test_untouched_playlist_survives_a_file_reorder(self, client, auth_headers, db_session, project, slot):
+        """Dragging files must not move tracks even before the playlist is arranged.
+
+        An untouched playlist mirrors the file order, so the file reorder has
+        to pin it first or the tracks come along for the ride.
+        """
+        items, media = attach_audio(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.wav", "b.wav", "c.wav"],
+        )
+        before = [t["media_item_id"] for t in
+                  get_playlist(client, auth_headers, project["id"], slot["id"])["tracks"]]
+        reorder_items(client, auth_headers, project["id"], slot["id"],
+                      [items[2]["id"], items[1]["id"], items[0]["id"]])
+        after = [t["media_item_id"] for t in
+                 get_playlist(client, auth_headers, project["id"], slot["id"])["tracks"]]
+        assert after == before
+
+    def test_pinned_playlist_still_appends_new_audio(self, client, auth_headers, db_session, project, slot):
+        """Pinning on file-reorder must not turn the playlist into a closed set."""
+        items, media = attach_audio(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.wav", "b.wav"],
+        )
+        reorder_items(client, auth_headers, project["id"], slot["id"],
+                      [items[1]["id"], items[0]["id"]])
+        late = make_audio(db_session, "late.wav")
+        attach_item(client, auth_headers, project["id"], late.id, slot["id"])
+        pl = get_playlist(client, auth_headers, project["id"], slot["id"])
+        assert [t["media_item_id"] for t in pl["tracks"]] == [media[0].id, media[1].id, late.id]
+
+    def test_order_survives_a_file_reorder(self, client, auth_headers, db_session, project, slot):
+        """The two orders are independent — dragging files must not move tracks."""
+        items, media = attach_audio(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.wav", "b.wav", "c.wav"],
+        )
+        put_playlist(client, auth_headers, project["id"], slot["id"],
+                     [media[2].id, media[0].id, media[1].id])
+        reorder_items(client, auth_headers, project["id"], slot["id"],
+                      [items[1]["id"], items[2]["id"], items[0]["id"]])
+        pl = get_playlist(client, auth_headers, project["id"], slot["id"])
+        assert [t["media_item_id"] for t in pl["tracks"]] == [media[2].id, media[0].id, media[1].id]
+
+    def test_file_order_survives_a_playlist_reorder(self, client, auth_headers, db_session, project, slot):
+        """…and the reverse: dragging tracks must not move the file rows."""
+        items, media = attach_audio(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.wav", "b.wav"],
+        )
+        put_playlist(client, auth_headers, project["id"], slot["id"], [media[1].id, media[0].id])
+        listed = list_items(client, auth_headers, project["id"], slot["id"])
+        assert [i["id"] for i in listed] == [items[0]["id"], items[1]["id"]]
+
+    def test_new_upload_appends(self, client, auth_headers, db_session, project, slot):
+        _, media = attach_audio(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.wav", "b.wav"],
+        )
+        put_playlist(client, auth_headers, project["id"], slot["id"], [media[1].id, media[0].id])
+        late = make_audio(db_session, "late.wav")
+        attach_item(client, auth_headers, project["id"], late.id, slot["id"])
+        pl = get_playlist(client, auth_headers, project["id"], slot["id"])
+        assert [t["media_item_id"] for t in pl["tracks"]] == [media[1].id, media[0].id, late.id]
+
+    def test_detached_file_drops_out(self, client, auth_headers, db_session, project, slot):
+        items, media = attach_audio(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.wav", "b.wav"],
+        )
+        client.delete(
+            f"/api/projects/{project['id']}/items/{items[0]['id']}", headers=auth_headers,
+        )
+        pl = get_playlist(client, auth_headers, project["id"], slot["id"])
+        assert [t["media_item_id"] for t in pl["tracks"]] == [media[1].id]
+
+    def test_moved_file_follows_its_slot(self, client, auth_headers, db_session, project, slot):
+        items, media = attach_audio(client, auth_headers, db_session, project["id"], slot["id"], ["a.wav"])
+        other = client.post(
+            f"/api/projects/{project['id']}/slots", json={}, headers=auth_headers,
+        ).json()
+        client.patch(
+            f"/api/projects/{project['id']}/items/{items[0]['id']}",
+            json={"slot_id": other["id"]}, headers=auth_headers,
+        )
+        assert get_playlist(client, auth_headers, project["id"], slot["id"])["tracks"] == []
+        moved = get_playlist(client, auth_headers, project["id"], other["id"])
+        assert [t["media_item_id"] for t in moved["tracks"]] == [media[0].id]
+
+    def test_returning_file_keeps_its_place(self, client, auth_headers, db_session, project, slot):
+        """Stored ids are a hint, not a membership list — a round trip is lossless."""
+        items, media = attach_audio(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.wav", "b.wav", "c.wav"],
+        )
+        put_playlist(client, auth_headers, project["id"], slot["id"],
+                     [media[2].id, media[1].id, media[0].id])
+        client.delete(f"/api/projects/{project['id']}/items/{items[1]['id']}", headers=auth_headers)
+        attach_item(client, auth_headers, project["id"], media[1].id, slot["id"])
+        pl = get_playlist(client, auth_headers, project["id"], slot["id"])
+        assert [t["media_item_id"] for t in pl["tracks"]] == [media[2].id, media[1].id, media[0].id]
+
+    def test_put_accepts_partial_order(self, client, auth_headers, db_session, project, slot):
+        _, media = attach_audio(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.wav", "b.wav", "c.wav"],
+        )
+        resp = put_playlist(client, auth_headers, project["id"], slot["id"], [media[2].id])
+        assert resp.status_code == 200
+        assert [t["media_item_id"] for t in resp.json()["tracks"]] == [media[2].id, media[0].id, media[1].id]
+
+    def test_put_rejects_non_audio(self, client, auth_headers, db_session, project, slot):
+        image = make_media_item(db_session)
+        attach_item(client, auth_headers, project["id"], image.id, slot["id"])
+        assert put_playlist(
+            client, auth_headers, project["id"], slot["id"], [image.id],
+        ).status_code == 400
+
+    def test_put_rejects_foreign_audio(self, client, auth_headers, db_session, project, slot):
+        elsewhere = make_audio(db_session, "elsewhere.wav")
+        assert put_playlist(
+            client, auth_headers, project["id"], slot["id"], [elsewhere.id],
+        ).status_code == 400
+
+    def test_put_rejects_duplicates(self, client, auth_headers, db_session, project, slot):
+        _, media = attach_audio(client, auth_headers, db_session, project["id"], slot["id"], ["a.wav"])
+        assert put_playlist(
+            client, auth_headers, project["id"], slot["id"], [media[0].id, media[0].id],
+        ).status_code == 400
+
+    def test_corrupt_hint_falls_back_to_file_order(self, client, auth_headers, db_session, project, slot):
+        from server.models import ProjectSlot
+
+        _, media = attach_audio(client, auth_headers, db_session, project["id"], slot["id"], ["a.wav"])
+        row = db_session.query(ProjectSlot).filter(ProjectSlot.id == slot["id"]).first()
+        row.playlist_json = "{not json"
+        db_session.commit()
+        pl = get_playlist(client, auth_headers, project["id"], slot["id"])
+        assert [t["media_item_id"] for t in pl["tracks"]] == [media[0].id]
+
+    def test_playlist_rejects_member(self, client, member_auth_headers, project, slot):
+        resp = client.get(
+            f"/api/projects/{project['id']}/slots/{slot['id']}/playlist", headers=member_auth_headers,
+        )
+        assert resp.status_code == 403
+
+
+class TestLatentPlaylists:
+    def create(self, client, auth_headers, project_id, name="Album seq"):
+        resp = client.post(
+            f"/api/projects/{project_id}/playlists", json={"name": name}, headers=auth_headers,
+        )
+        assert resp.status_code == 201
+        return resp.json()
+
+    def add(self, client, auth_headers, project_id, playlist_id, media_ids):
+        return client.post(
+            f"/api/projects/{project_id}/playlists/{playlist_id}/items",
+            json={"media_item_ids": media_ids}, headers=auth_headers,
+        )
+
+    def test_create_and_list(self, client, auth_headers, project):
+        self.create(client, auth_headers, project["id"], "v1")
+        self.create(client, auth_headers, project["id"], "v2")
+        resp = client.get(f"/api/projects/{project['id']}/playlists", headers=auth_headers)
+        assert [p["name"] for p in resp.json()["playlists"]] == ["v1", "v2"]
+
+    def test_starts_empty(self, client, auth_headers, db_session, project, slot):
+        """Curated: nothing enters a running order uninvited."""
+        attach_audio(client, auth_headers, db_session, project["id"], slot["id"], ["a.wav"])
+        pl = self.create(client, auth_headers, project["id"])
+        assert pl["tracks"] == []
+
+    def test_add_tracks_across_slots(self, client, auth_headers, db_session, project, slot):
+        other = client.post(
+            f"/api/projects/{project['id']}/slots", json={}, headers=auth_headers,
+        ).json()
+        _, first = attach_audio(client, auth_headers, db_session, project["id"], slot["id"], ["a.wav"])
+        _, second = attach_audio(client, auth_headers, db_session, project["id"], other["id"], ["b.wav"])
+        pl = self.create(client, auth_headers, project["id"])
+        resp = self.add(client, auth_headers, project["id"], pl["id"], [second[0].id, first[0].id])
+        assert [t["media_item_id"] for t in resp.json()["tracks"]] == [second[0].id, first[0].id]
+
+    def test_add_skips_dupes_non_audio_and_non_members(self, client, auth_headers, db_session, project, slot):
+        _, media = attach_audio(client, auth_headers, db_session, project["id"], slot["id"], ["a.wav"])
+        image = make_media_item(db_session)
+        attach_item(client, auth_headers, project["id"], image.id, slot["id"])
+        stranger = make_audio(db_session, "stranger.wav")
+        pl = self.create(client, auth_headers, project["id"])
+        self.add(client, auth_headers, project["id"], pl["id"], [media[0].id])
+        resp = self.add(
+            client, auth_headers, project["id"], pl["id"],
+            [media[0].id, image.id, stranger.id, "no-such-id"],
+        )
+        assert [t["media_item_id"] for t in resp.json()["tracks"]] == [media[0].id]
+
+    def test_reorder(self, client, auth_headers, db_session, project, slot):
+        _, media = attach_audio(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.wav", "b.wav", "c.wav"],
+        )
+        pl = self.create(client, auth_headers, project["id"])
+        tracks = self.add(
+            client, auth_headers, project["id"], pl["id"], [m.id for m in media],
+        ).json()["tracks"]
+        order = [tracks[2]["playlist_item_id"], tracks[0]["playlist_item_id"], tracks[1]["playlist_item_id"]]
+        resp = client.post(
+            f"/api/projects/{project['id']}/playlists/{pl['id']}/items/reorder",
+            json={"order": order}, headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert [t["playlist_item_id"] for t in resp.json()["tracks"]] == order
+
+    def test_reorder_rejects_foreign_row(self, client, auth_headers, db_session, project, slot):
+        pl = self.create(client, auth_headers, project["id"])
+        resp = client.post(
+            f"/api/projects/{project['id']}/playlists/{pl['id']}/items/reorder",
+            json={"order": ["nope"]}, headers=auth_headers,
+        )
+        assert resp.status_code == 400
+
+    def test_remove_track(self, client, auth_headers, db_session, project, slot):
+        _, media = attach_audio(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.wav", "b.wav"],
+        )
+        pl = self.create(client, auth_headers, project["id"])
+        tracks = self.add(
+            client, auth_headers, project["id"], pl["id"], [m.id for m in media],
+        ).json()["tracks"]
+        resp = client.delete(
+            f"/api/projects/{project['id']}/playlists/{pl['id']}/items/{tracks[0]['playlist_item_id']}",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert [t["media_item_id"] for t in resp.json()["tracks"]] == [media[1].id]
+
+    def test_detached_track_hidden_then_restored(self, client, auth_headers, db_session, project, slot):
+        items, media = attach_audio(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.wav", "b.wav"],
+        )
+        pl = self.create(client, auth_headers, project["id"])
+        self.add(client, auth_headers, project["id"], pl["id"], [m.id for m in media])
+        client.delete(f"/api/projects/{project['id']}/items/{items[0]['id']}", headers=auth_headers)
+
+        resp = client.get(f"/api/projects/{project['id']}/playlists", headers=auth_headers)
+        assert [t["media_item_id"] for t in resp.json()["playlists"][0]["tracks"]] == [media[1].id]
+
+        attach_item(client, auth_headers, project["id"], media[0].id, slot["id"])
+        resp = client.get(f"/api/projects/{project['id']}/playlists", headers=auth_headers)
+        assert [t["media_item_id"] for t in resp.json()["playlists"][0]["tracks"]] == [
+            media[0].id, media[1].id,
+        ]
+
+    def test_deleted_media_cascades_out(self, client, auth_headers, db_session, project, slot):
+        from server.models import MediaItem, ProjectPlaylistItem
+
+        _, media = attach_audio(client, auth_headers, db_session, project["id"], slot["id"], ["a.wav"])
+        pl = self.create(client, auth_headers, project["id"])
+        self.add(client, auth_headers, project["id"], pl["id"], [media[0].id])
+        db_session.query(ProjectPlaylistItem).filter(
+            ProjectPlaylistItem.media_item_id == media[0].id,
+        ).delete(synchronize_session=False)
+        db_session.query(MediaItem).filter(MediaItem.id == media[0].id).delete()
+        db_session.commit()
+        resp = client.get(f"/api/projects/{project['id']}/playlists", headers=auth_headers)
+        assert resp.json()["playlists"][0]["tracks"] == []
+
+    def test_rename(self, client, auth_headers, project):
+        pl = self.create(client, auth_headers, project["id"], "draft")
+        resp = client.patch(
+            f"/api/projects/{project['id']}/playlists/{pl['id']}",
+            json={"name": "for Tube"}, headers=auth_headers,
+        )
+        assert resp.json()["name"] == "for Tube"
+
+    def test_rename_rejects_blank(self, client, auth_headers, project):
+        pl = self.create(client, auth_headers, project["id"])
+        resp = client.patch(
+            f"/api/projects/{project['id']}/playlists/{pl['id']}",
+            json={"name": "   "}, headers=auth_headers,
+        )
+        assert resp.status_code == 400
+
+    def test_delete(self, client, auth_headers, project):
+        pl = self.create(client, auth_headers, project["id"])
+        assert client.delete(
+            f"/api/projects/{project['id']}/playlists/{pl['id']}", headers=auth_headers,
+        ).status_code == 204
+        resp = client.get(f"/api/projects/{project['id']}/playlists", headers=auth_headers)
+        assert resp.json()["playlists"] == []
+
+    def test_foreign_playlist_404s(self, client, auth_headers, project):
+        other = client.post(
+            "/api/projects", json={"name": "Other"}, headers=auth_headers,
+        ).json()
+        pl = self.create(client, auth_headers, other["id"])
+        resp = client.patch(
+            f"/api/projects/{project['id']}/playlists/{pl['id']}",
+            json={"name": "x"}, headers=auth_headers,
+        )
+        assert resp.status_code == 404
+
+    def test_rejects_member(self, client, member_auth_headers, project):
+        resp = client.get(f"/api/projects/{project['id']}/playlists", headers=member_auth_headers)
+        assert resp.status_code == 403
+
+
+class TestPlaylistsSectionStyle:
+    def test_playlists_is_a_styleable_section(self, client, auth_headers, project):
+        resp = patch_project(
+            client, auth_headers, project["id"], {"section_styles": {"playlists": {"accent": "#ff0000"}}},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["section_styles"]["playlists"]["accent"] == "#ff0000"

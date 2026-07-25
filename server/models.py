@@ -646,6 +646,7 @@ class Project(Base):
     slots = relationship("ProjectSlot", back_populates="project", order_by="ProjectSlot.position", cascade="all, delete-orphan")
     items = relationship("ProjectItem", back_populates="project", cascade="all, delete-orphan")
     documents = relationship("ProjectDocument", back_populates="project", order_by="ProjectDocument.position", cascade="all, delete-orphan")
+    playlists = relationship("ProjectPlaylist", back_populates="project", order_by="ProjectPlaylist.position", cascade="all, delete-orphan")
 
 
 class ProjectSlot(Base):
@@ -672,6 +673,11 @@ class ProjectSlot(Base):
     repo_path = Column(String, nullable=True)
     repo_ref = Column(String, nullable=True)         # commit SHA, branch, or tag
     run_command = Column(String, nullable=True)      # override for sandboxed runs
+    # JSON array of media_item_ids — the slot playlist's ORDER, not its membership.
+    # Membership is always derived from the slot's audio items, so uploads append,
+    # deletes drop out and slot moves take care of themselves. See
+    # docs/plans/2026-07-24-latent-playlists.md.
+    playlist_json = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=_utcnow)
     updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
 
@@ -693,11 +699,60 @@ class ProjectItem(Base):
     added_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     added_at = Column(DateTime, nullable=False, default=_utcnow)
     is_primary = Column(Boolean, nullable=False, default=False)  # star toggle — replaces the rigid per-type pin grid
+    # Manual order within its group (a slot, or the loose pile when slot_id is
+    # NULL). Listed `position ASC, added_at DESC`; new attachments land at the
+    # end. No unique constraint — gaps and ties are harmless.
+    position = Column(Integer, nullable=False, default=0)
 
     project = relationship("Project", back_populates="items")
     slot = relationship("ProjectSlot", back_populates="items")
     media_item = relationship("MediaItem")
     adder = relationship("User")
+
+
+class ProjectPlaylist(Base):
+    """A named, hand-assembled running order of audio across a Latent.
+
+    Unlike a slot playlist (which is derived from the slot's audio and only
+    stores an order), these are curated: nothing enters one without being added.
+    Tracks that leave the Latent are filtered out on read rather than deleted,
+    so re-attaching a file restores its place.
+    """
+
+    __tablename__ = "project_playlists"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    project_id = Column(String, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    position = Column(Integer, nullable=False, default=0)
+    name = Column(String, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+    updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
+
+    project = relationship("Project", back_populates="playlists")
+    items = relationship(
+        "ProjectPlaylistItem",
+        back_populates="playlist",
+        order_by="ProjectPlaylistItem.position",
+        cascade="all, delete-orphan",
+    )
+    creator = relationship("User")
+
+
+class ProjectPlaylistItem(Base):
+    """One track in a Latent running order."""
+
+    __tablename__ = "project_playlist_items"
+    __table_args__ = (UniqueConstraint("playlist_id", "media_item_id"),)
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    playlist_id = Column(String, ForeignKey("project_playlists.id", ondelete="CASCADE"), nullable=False, index=True)
+    media_item_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False, index=True)
+    position = Column(Integer, nullable=False, default=0)
+    added_at = Column(DateTime, nullable=False, default=_utcnow)
+
+    playlist = relationship("ProjectPlaylist", back_populates="items")
+    media_item = relationship("MediaItem")
 
 
 class SlotPrimaryPin(Base):

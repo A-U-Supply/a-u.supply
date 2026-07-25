@@ -137,6 +137,14 @@ Reconciliation happens on read and never writes during a GET. `PUT` replaces
 the array wholesale, after validating that every id is an audio item attached
 to that slot.
 
+**Pinning on file reorder.** An untouched playlist has no stored order — it
+just mirrors the file order — so a file reorder would drag the playlist along
+with it right up until the first time the playlist itself was arranged. The
+file-reorder endpoint therefore snapshots the playlist as it currently reads
+*before* renumbering. The rule the user sees is then absolute: dragging files
+never moves tracks, from the first drag onward. Pinning stores an order, not a
+membership list, so new uploads still append.
+
 ### 3. Latent running orders — two new tables
 
 ```python
