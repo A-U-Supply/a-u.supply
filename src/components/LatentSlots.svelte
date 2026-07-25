@@ -12,11 +12,15 @@
   import LatentLinks from './LatentLinks.svelte';
   import LatentStyleButton from './LatentStyleButton.svelte';
   import MarginaliaBadge from './MarginaliaBadge.svelte';
+  import RowMove from './RowMove.svelte';
+  import RowActions from './RowActions.svelte';
   import {
     fetchAnnotationCounts,
     type AnnotationCounts,
   } from './marginalia.ts';
   import { fileExt } from '../lib/fileExt.ts';
+  import { DRAG_OPTS } from '../lib/dragOptions.ts';
+  import { isPhone } from '../lib/viewport.svelte.ts';
   import { queueMedia } from '../lib/playerQueue.ts';
   import {
     safeHex,
@@ -25,26 +29,6 @@
     currentTheme,
     watchTheme,
   } from '../lib/latentStyles.ts';
-
-  /*
-   * Shared drag config. On touch a vertical drag and a page scroll are the
-   * same gesture, so every Sortable here requires a long-press that only
-   * applies to touch (mouse drags stay instant), tolerates a shaky finger,
-   * and auto-scrolls near the viewport edges — a slot with twenty takes is
-   * taller than a phone screen. `chosenClass` is what acknowledges the press
-   * before anything moves; without that feedback a touch drag feels broken.
-   */
-  const DRAG_OPTS = {
-    animation: 120,
-    delay: 180,
-    delayOnTouchOnly: true,
-    touchStartThreshold: 6,
-    scroll: true,
-    bubbleScroll: true,
-    scrollSensitivity: 60,
-    scrollSpeed: 12,
-    chosenClass: 'drag-chosen',
-  } as const;
 
   type Props = {
     projectId: string;
@@ -1436,30 +1420,14 @@
                   data-media-id={it.media_item_id}
                   data-item-id={it.id}
                 >
-                  <span class="row-move">
-                    <button
-                      class="row-move__arrow file-row__up"
-                      type="button"
-                      title="Move up"
-                      aria-label={`Move ${it.media?.filename || 'file'} up`}
-                      disabled={i === 0}
-                      onclick={() => nudgeFile(slot.id, i, -1)}>↑</button
-                    >
-                    <button
-                      class="file-row__drag drag-handle"
-                      type="button"
-                      aria-label={`Drag to reorder ${it.media?.filename || 'file'}`}
-                      title="Drag to reorder">⠿</button
-                    >
-                    <button
-                      class="row-move__arrow file-row__down"
-                      type="button"
-                      title="Move down"
-                      aria-label={`Move ${it.media?.filename || 'file'} down`}
-                      disabled={i === (itemsBySlot[slot.id] || []).length - 1}
-                      onclick={() => nudgeFile(slot.id, i, 1)}>↓</button
-                    >
-                  </span>
+                  <RowMove
+                    label={it.media?.filename || 'file'}
+                    handleClass="file-row__drag"
+                    upDisabled={i === 0}
+                    downDisabled={i === (itemsBySlot[slot.id] || []).length - 1}
+                    onUp={() => nudgeFile(slot.id, i, -1)}
+                    onDown={() => nudgeFile(slot.id, i, 1)}
+                  />
                   <button
                     class="file-row__star"
                     type="button"
@@ -1563,37 +1531,61 @@
                         counts={annotationCounts[it.media_item_id] || null}
                       />
                     {/if}
-                    <button
-                      class="action-btn"
-                      type="button"
-                      title="Rename"
-                      onclick={() => renameMediaItem(slot, it)}>✏️</button
-                    >
                     {#if it.media?.media_type === 'audio' || it.media?.media_type === 'video' || it.media?.media_type === 'midi'}
                       <button
-                        class="action-btn"
+                        class="action-btn file-row__play"
                         type="button"
+                        aria-label={`Play ${it.media?.filename || 'file'}`}
                         title="Play (queues in the persistent Player)"
                         onclick={() =>
                           playInPlayer(
                             it.media_item_id,
                             it.media!.media_type,
                             it.media?.filename || '',
-                          )}>▶</button
+                          )}>{isPhone() ? '▶ Play' : '▶'}</button
                       >
                     {/if}
-                    <button
-                      class="action-btn"
-                      type="button"
-                      title="Remove from slot. File stays in Emulsion."
-                      onclick={() => detachItem(slot, it)}>×</button
-                    >
-                    <button
-                      class="action-btn action-btn--danger"
-                      type="button"
-                      title="Permanently delete from Emulsion. Cannot be undone."
-                      onclick={() => deleteMediaItem(slot, it)}>🗑</button
-                    >
+                    <RowActions
+                      label={it.media?.filename || 'this file'}
+                      meta={[
+                        fileExt(it.media?.filename) ||
+                          it.media?.media_type ||
+                          'file',
+                        fmtBytes(it.media?.file_size_bytes),
+                        fmtDuration(it.media?.duration_seconds),
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                      actions={[
+                        {
+                          label: 'Rename',
+                          title: 'Rename this file',
+                          onClick: () => renameMediaItem(slot, it),
+                        },
+                        {
+                          label: 'Download',
+                          href: `/api/media/${encodeURIComponent(it.media_item_id)}/file`,
+                          download: it.media?.filename || undefined,
+                        },
+                        {
+                          label: 'Open in Stacks',
+                          href: `/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`,
+                        },
+                        {
+                          label: 'Remove from slot',
+                          danger: true,
+                          title: 'Remove from slot. File stays in Emulsion.',
+                          onClick: () => detachItem(slot, it),
+                        },
+                        {
+                          label: 'Delete permanently',
+                          danger: true,
+                          title:
+                            'Permanently delete from Emulsion. Cannot be undone.',
+                          onClick: () => deleteMediaItem(slot, it),
+                        },
+                      ]}
+                    />
                   </div>
                 </li>
                 {#if it.media?.media_type === 'session' && expandedSessions[it.media_item_id]}
@@ -1685,30 +1677,14 @@
                 <ul class="playlist__list" use:sortableTracks={slot.id}>
                   {#each pl.tracks as t, i (t.media_item_id)}
                     <li class="track-row" data-media-id={t.media_item_id}>
-                      <span class="row-move">
-                        <button
-                          class="row-move__arrow track-row__up"
-                          type="button"
-                          title="Move up"
-                          aria-label={`Move ${t.filename || 'track'} up`}
-                          disabled={i === 0}
-                          onclick={() => nudgeTrack(slot.id, i, -1)}>↑</button
-                        >
-                        <button
-                          class="track-row__drag drag-handle"
-                          type="button"
-                          aria-label={`Drag to reorder ${t.filename || 'track'}`}
-                          title="Drag to reorder">⠿</button
-                        >
-                        <button
-                          class="row-move__arrow track-row__down"
-                          type="button"
-                          title="Move down"
-                          aria-label={`Move ${t.filename || 'track'} down`}
-                          disabled={i === pl.tracks.length - 1}
-                          onclick={() => nudgeTrack(slot.id, i, 1)}>↓</button
-                        >
-                      </span>
+                      <RowMove
+                        label={t.filename || 'track'}
+                        handleClass="track-row__drag"
+                        upDisabled={i === 0}
+                        downDisabled={i === pl.tracks.length - 1}
+                        onUp={() => nudgeTrack(slot.id, i, -1)}
+                        onDown={() => nudgeTrack(slot.id, i, 1)}
+                      />
                       <span class="track-row__pos">{i + 1}</span>
                       <span class="track-row__name">{t.filename || '—'}</span>
                       <span class="track-row__dur"
@@ -1717,9 +1693,17 @@
                       <button
                         class="action-btn track-row__play"
                         type="button"
+                        aria-label={`Play ${t.filename || 'track'} from here`}
                         title="Play from here"
-                        onclick={() => playPlaylist(slot.id, i)}>▶</button
+                        onclick={() => playPlaylist(slot.id, i)}
+                        >{isPhone() ? '▶ Play' : '▶'}</button
                       >
+                      <MarginaliaBadge
+                        mediaId={t.media_item_id}
+                        mediaType={t.media_type || 'audio'}
+                        filename={t.filename || ''}
+                        counts={annotationCounts[t.media_item_id] || null}
+                      />
                     </li>
                   {/each}
                 </ul>
@@ -2235,31 +2219,6 @@
     padding: 2px 6px;
     font-size: 0.75rem;
   }
-  /* One vertical control column per row: ↑ above the grip, ↓ below it. The
-     arrows are the touch alternative to dragging and appear at <=640px only,
-     where a long-press drag competes with the page scroll; on desktop the
-     stack collapses to the grip alone and rows stay dense. */
-  .row-move {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-  }
-  .row-move__arrow {
-    background: transparent;
-    border: 0;
-    color: var(--color-muted);
-    cursor: pointer;
-    font: inherit;
-    font-size: 0.9rem;
-    line-height: 1;
-    padding: 0;
-    display: none;
-  }
-  .row-move__arrow:disabled {
-    opacity: 0.3;
-    cursor: default;
-  }
   .playlist {
     /* Cleared past the sticky section map when scrolled into view on open. */
     scroll-margin-top: 72px;
@@ -2353,44 +2312,41 @@
     font-size: 0.75rem;
   }
   @media (max-width: 640px) {
-    /* Two lines: identity up top, actions underneath, with the drag handle a
-       full-height 44px target down the left so a drag is never a mis-tap. */
+    /* Two lines: identity up top, actions underneath. The reorder block
+       (RowMove) is 76px wide and spans both, grip over paired arrows. */
     .file-row {
-      grid-template-columns: 44px 24px 32px 1fr;
+      grid-template-columns: 76px 20px 20px 1fr;
       row-gap: 4px;
       padding: 6px 8px;
+      align-items: start;
     }
-    .row-move {
+    :global(.file-row .row-move) {
       grid-row: 1 / -1;
-      align-self: stretch;
-    }
-    .row-move__arrow {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      /* Three stacked targets in a 44px-wide column: the arrows take 36px each
-         so the whole control stays thumb-sized without a giant row. */
-      min-height: 36px;
-      width: 100%;
-      font-size: 1.15rem;
-    }
-    .file-row__drag,
-    .track-row__drag {
-      min-height: 40px;
-      font-size: 1.1rem;
-      width: 100%;
     }
     .file-row__actions {
       grid-column: 2 / -1;
       flex-wrap: wrap;
       gap: 4px;
+      align-items: center;
     }
     .file-row__actions .action-btn {
       min-height: 44px;
-      min-width: 44px;
     }
+    /* The star used to carry a 44px minimum, which set the height of the
+       whole identity line. Size it to the text instead. */
     .file-row__star {
-      min-height: 44px;
+      min-height: 0;
+      min-width: 0;
+      padding: 0 3px;
+      line-height: 1.25;
+    }
+    /* Same reason: the 32px square was taller than the line it sat in. */
+    .file-row__thumb {
+      width: 20px;
+      height: 20px;
+    }
+    .file-row__thumb .icon {
+      font-size: 0.5rem;
     }
     .file-row__type,
     .file-row__size {
@@ -2410,16 +2366,16 @@
       overflow-wrap: anywhere;
     }
     .track-row {
-      grid-template-columns: 44px 3ch 1fr auto;
+      grid-template-columns: 76px 3ch 1fr auto;
       grid-template-areas:
         'move pos  name name'
         'move dur  play play';
       row-gap: 4px;
       padding: 6px 8px;
+      align-items: start;
     }
-    .track-row .row-move {
+    :global(.track-row .row-move) {
       grid-area: move;
-      align-self: stretch;
     }
     .track-row__pos {
       grid-area: pos;
