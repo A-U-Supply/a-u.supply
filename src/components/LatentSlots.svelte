@@ -2492,37 +2492,52 @@
     font-size: 0.75rem;
   }
   /* ── Phone card chrome (summary, menus, tabs) ───────────────────────── */
+  /* The label owns its own line — the same lesson as .slot__title-row above.
+     On one shared row a long slot name got squeezed between the caret, the
+     counts and the status chip and wrapped into several lines. */
   .slot__summary {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      'caret label label'
+      '.     meta  state';
+    column-gap: 6px;
+    row-gap: 2px;
     align-items: center;
-    gap: 6px;
     flex: 1 1 auto;
     min-width: 0;
     font: inherit;
     background: none;
     border: 0;
     color: var(--color-text);
-    padding: 0;
+    padding: 4px 0;
     min-height: 44px;
     text-align: left;
     cursor: pointer;
   }
   .slot__caret {
+    grid-area: caret;
     color: var(--color-muted);
-    flex: 0 0 auto;
+    align-self: start;
+    padding-top: 2px;
   }
   .slot__label-text {
+    grid-area: label;
     font-weight: 700;
+    /* Wraps only when the name genuinely needs two lines, not because a chip
+       is competing for the same row. */
     overflow-wrap: anywhere;
+    line-height: 1.25;
   }
   .slot__summary-meta {
+    grid-area: meta;
     font-size: 0.65rem;
     color: var(--color-muted);
     white-space: nowrap;
   }
   .slot__summary-state {
-    margin-left: auto;
-    flex: 0 0 auto;
+    grid-area: state;
+    justify-self: end;
     font-size: 0.6rem;
     text-transform: uppercase;
     letter-spacing: 0.5pt;
