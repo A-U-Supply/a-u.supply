@@ -62,6 +62,10 @@
   --latent-sec-links: #2f8f83;
   --latent-sec-docs: #7d5ba6;
   --latent-sec-slots: #b05c2f;
+  /* Blue-violet: the one gap left in the wheel — green reads as status-ok and
+   * ochre is --color-accent (interactive). Closest neighbours are repo (blue)
+   * and docs (violet); per-latent overrides exist if it reads too near them. */
+  --latent-sec-playlists: #5b4fae;
   --latent-sec-loose: #6b8e23;
   --latent-sec-threads: #8e4a6f;
 }
@@ -104,6 +108,7 @@ html[data-theme='dark'] {
   --latent-sec-links: #4fb3a5;
   --latent-sec-docs: #9b7fc0;
   --latent-sec-slots: #d07f4f;
+  --latent-sec-playlists: #9a8fd8;
   --latent-sec-loose: #8fb03e;
   --latent-sec-threads: #b06a92;
 }

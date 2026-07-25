@@ -18,6 +18,12 @@ import Admin from '../../../layouts/Admin.astro';
     </section>
     <section id="slots-island" class="latent-section" data-section="slots">
     </section>
+    <section
+      id="playlists-island"
+      class="latent-section"
+      data-section="playlists"
+    >
+    </section>
     <section id="loose-island" class="latent-section" data-section="loose">
     </section>
     <section id="threads-island" class="latent-section" data-section="threads">
@@ -88,6 +94,9 @@ import Admin from '../../../layouts/Admin.astro';
   }
   .latent-section[data-section='slots'] {
     --sec-accent: var(--latent-sec-slots);
+  }
+  .latent-section[data-section='playlists'] {
+    --sec-accent: var(--latent-sec-playlists);
   }
   .latent-section[data-section='loose'] {
     --sec-accent: var(--latent-sec-loose);
@@ -381,6 +390,7 @@ import Admin from '../../../layouts/Admin.astro';
   import LatentHero from '../../../components/LatentHero.svelte';
   import LatentSectionMap from '../../../components/LatentSectionMap.svelte';
   import LatentSlots from '../../../components/LatentSlots.svelte';
+  import LatentPlaylists from '../../../components/LatentPlaylists.svelte';
   import LatentDocuments from '../../../components/LatentDocuments.svelte';
   import LatentLooseFiles from '../../../components/LatentLooseFiles.svelte';
   import LatentRepoStrip from '../../../components/LatentRepoStrip.svelte';
@@ -927,6 +937,12 @@ import Admin from '../../../layouts/Admin.astro';
       mount(LatentSlots, {
         target: document.getElementById('slots-island')!,
         props: { projectId: id, projectKind: p.kind, styleKey: 'slots' },
+      }),
+    );
+    mounted.push(
+      mount(LatentPlaylists, {
+        target: document.getElementById('playlists-island')!,
+        props: { projectId: id, styleKey: 'playlists' },
       }),
     );
     mounted.push(
