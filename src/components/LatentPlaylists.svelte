@@ -482,27 +482,30 @@
               onUp={() => nudge(i, -1)}
               onDown={() => nudge(i, 1)}
             />
-            <span class="track-row__pos">{i + 1}</span>
-            <a
-              class="track-row__name"
-              href={`/admin/search/detail?id=${encodeURIComponent(t.media_item_id)}`}
-              title="Open in Stacks">{t.filename || '—'}</a
-            >
-            <span class="track-row__dur">{fmtDuration(t.duration_seconds)}</span
-            >
-            <button
-              class="action-btn track-row__play"
-              type="button"
-              aria-label={`Play ${t.filename || 'track'} from here`}
-              title="Play from here"
-              onclick={() => play(i)}>▶</button
-            >
-            <button
-              class="action-btn track-row__remove"
-              type="button"
-              title="Remove from this running order. File stays in the Latent."
-              onclick={() => removeTrack(t)}>Remove</button
-            >
+            <div class="track-row__main">
+              <span class="track-row__pos">{i + 1}</span>
+              <a
+                class="track-row__name"
+                href={`/admin/search/detail?id=${encodeURIComponent(t.media_item_id)}`}
+                title="Open in Stacks">{t.filename || '—'}</a
+              >
+              <span class="track-row__dur"
+                >{fmtDuration(t.duration_seconds)}</span
+              >
+              <button
+                class="action-btn track-row__play"
+                type="button"
+                aria-label={`Play ${t.filename || 'track'} from here`}
+                title="Play from here"
+                onclick={() => play(i)}>▶</button
+              >
+              <button
+                class="action-btn track-row__remove"
+                type="button"
+                title="Remove from this running order. File stays in the Latent."
+                onclick={() => removeTrack(t)}>Remove</button
+              >
+            </div>
           </li>
         {/each}
       </ul>
@@ -701,6 +704,10 @@
     outline-offset: -2px;
     box-shadow: 0 2px 8px var(--color-overlay-soft);
   }
+  /* Transparent on desktop: children stay direct grid items of .track-row. */
+  .track-row__main {
+    display: contents;
+  }
   .track-row__pos {
     font-family: var(--font-mono);
     color: var(--color-muted);
@@ -861,35 +868,41 @@
       min-height: 44px;
     }
     /* Two lines: identity up top, controls under, drag handle full-height. */
+    /* Content sits beside the reorder block, so a row is the taller of the
+       two rather than the sum — the same fix .file-row needed. */
     .track-row {
-      grid-template-columns: 76px 3ch 1fr auto;
-      grid-template-areas:
-        'move pos  name name'
-        'move dur  play remove';
-      row-gap: 4px;
+      display: flex;
+      align-items: flex-start;
+      column-gap: 6px;
       padding: 6px 8px;
     }
-    .track-row__pos {
-      grid-area: pos;
+    :global(.track-row .row-move) {
+      flex: 0 0 68px;
+    }
+    .track-row__main {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      flex: 1 1 0;
+      min-width: 0;
+      gap: 4px 6px;
+    }
+    .track-row__pos,
+    .track-row__dur {
+      flex: 0 0 auto;
     }
     .track-row__name {
-      grid-area: name;
-    }
-    .track-row__dur {
-      grid-area: dur;
+      flex: 1 1 140px;
+      min-width: 0;
     }
     .track-row__play {
-      grid-area: play;
-      justify-self: stretch;
+      flex: 1 1 auto;
       min-height: 44px;
     }
     .track-row__remove {
-      grid-area: remove;
-      justify-self: end;
+      flex: 0 0 auto;
       min-height: 44px;
     }
-    /* Bottom sheet: header and footer pinned, body scrolls, footer clear of
-       the home indicator. */
     .sheet {
       left: 0;
       top: auto;

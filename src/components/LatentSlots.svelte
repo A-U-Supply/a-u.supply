@@ -1874,26 +1874,30 @@
                           onUp={() => nudgeTrack(slot.id, i, -1)}
                           onDown={() => nudgeTrack(slot.id, i, 1)}
                         />
-                        <span class="track-row__pos">{i + 1}</span>
-                        <span class="track-row__name">{t.filename || '—'}</span>
-                        <span class="track-row__dur"
-                          >{fmtDuration(t.duration_seconds)}</span
-                        >
-                        <button
-                          class="action-btn track-row__play"
-                          type="button"
-                          aria-label={`Play ${t.filename || 'track'} from here`}
-                          title="Play from here"
-                          onclick={() => playPlaylist(slot.id, i)}
-                          >{isPhone() ? '▶ Play' : '▶'}</button
-                        >
-                        <MarginaliaBadge
-                          mediaId={t.media_item_id}
-                          mediaType={t.media_type || 'audio'}
-                          filename={t.filename || ''}
-                          counts={annotationCounts[t.media_item_id] || null}
-                          showEmpty={isPhone()}
-                        />
+                        <div class="track-row__main">
+                          <span class="track-row__pos">{i + 1}</span>
+                          <span class="track-row__name"
+                            >{t.filename || '—'}</span
+                          >
+                          <span class="track-row__dur"
+                            >{fmtDuration(t.duration_seconds)}</span
+                          >
+                          <button
+                            class="action-btn track-row__play"
+                            type="button"
+                            aria-label={`Play ${t.filename || 'track'} from here`}
+                            title="Play from here"
+                            onclick={() => playPlaylist(slot.id, i)}
+                            >{isPhone() ? '▶ Play' : '▶'}</button
+                          >
+                          <MarginaliaBadge
+                            mediaId={t.media_item_id}
+                            mediaType={t.media_type || 'audio'}
+                            filename={t.filename || ''}
+                            counts={annotationCounts[t.media_item_id] || null}
+                            showEmpty={isPhone()}
+                          />
+                        </div>
                       </li>
                     {/each}
                   </ul>
@@ -2336,8 +2340,9 @@
     font-size: 0.7rem;
     white-space: nowrap;
   }
-  /* Transparent on desktop: children stay direct grid items of .file-row. */
-  .file-row__main {
+  /* Transparent on desktop: children stay direct grid items of the row. */
+  .file-row__main,
+  .track-row__main {
     display: contents;
   }
   .file-row__actions {
@@ -2717,30 +2722,36 @@
       text-overflow: clip;
       overflow-wrap: anywhere;
     }
-    /* Same failure, same fix as .file-row above. */
+    /* Same failure and same fix as .file-row above: the content sits in a
+       block *beside* the reorder control, so the row is the taller of the two
+       rather than the sum of them. */
     .track-row {
       display: flex;
-      flex-wrap: wrap;
       align-items: flex-start;
       column-gap: 6px;
-      row-gap: 4px;
       padding: 6px 8px;
     }
     :global(.track-row .row-move) {
       flex: 0 0 68px;
     }
-    .track-row__pos {
+    .track-row__main {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      flex: 1 1 0;
+      min-width: 0;
+      gap: 4px 6px;
+    }
+    .track-row__pos,
+    .track-row__dur {
       flex: 0 0 auto;
     }
     .track-row__name {
       flex: 1 1 140px;
       min-width: 0;
     }
-    .track-row__dur {
-      flex: 0 0 auto;
-    }
     .track-row__play {
-      flex: 1 0 100%;
+      flex: 1 1 auto;
       min-height: 44px;
     }
     .playlist__play-all,
