@@ -17,6 +17,7 @@
     type AnnotationCounts,
   } from './marginalia.ts';
   import { fileExt } from '../lib/fileExt.ts';
+  import { queueMedia } from '../lib/playerQueue.ts';
   import {
     safeHex,
     effectiveAccent,
@@ -24,6 +25,26 @@
     currentTheme,
     watchTheme,
   } from '../lib/latentStyles.ts';
+
+  /*
+   * Shared drag config. On touch a vertical drag and a page scroll are the
+   * same gesture, so every Sortable here requires a long-press that only
+   * applies to touch (mouse drags stay instant), tolerates a shaky finger,
+   * and auto-scrolls near the viewport edges — a slot with twenty takes is
+   * taller than a phone screen. `chosenClass` is what acknowledges the press
+   * before anything moves; without that feedback a touch drag feels broken.
+   */
+  const DRAG_OPTS = {
+    animation: 120,
+    delay: 180,
+    delayOnTouchOnly: true,
+    touchStartThreshold: 6,
+    scroll: true,
+    bubbleScroll: true,
+    scrollSensitivity: 60,
+    scrollSpeed: 12,
+    chosenClass: 'drag-chosen',
+  } as const;
 
   type Props = {
     projectId: string;
@@ -77,10 +98,22 @@
       mime_type: string;
       file_size_bytes: number;
       parent_media_item_id?: string | null;
+      duration_seconds?: number | null;
       session_extraction_status?: string | null;
       session_extracted_count?: number | null;
     } | null;
   };
+
+  type Track = {
+    item_id: string;
+    media_item_id: string;
+    slot_id: string | null;
+    filename: string | null;
+    media_type: string | null;
+    duration_seconds: number | null;
+  };
+
+  type Playlist = { tracks: Track[]; total_seconds: number };
 
   type SessionChild = {
     id: string;
@@ -96,6 +129,11 @@
 
   let slots = $state<Slot[]>([]);
   let itemsBySlot = $state<Record<string, Item[]>>({});
+  // Playlists are per slot and independent of the panels above — a playlist
+  // can stay open while notes or threads are.
+  let playlistOpen = $state<Record<string, boolean>>({});
+  let playlistBySlot = $state<Record<string, Playlist>>({});
+  let playlistLoading = $state<Record<string, boolean>>({});
   let openSlot = $state<string | null>(null);
   let openSection = $state<'files' | 'notes' | 'threads' | 'runs' | null>(null);
   let error = $state<string | null>(null);
@@ -341,9 +379,154 @@
       loadAnnotationCounts(
         (body.items || []).map((i: Item) => i.media_item_id),
       );
+      // An upload or detach changes what's in the playlist; keep an open one honest.
+      if (playlistOpen[slotId]) loadPlaylist(slotId);
     } catch (e: any) {
       error = e?.message || 'Failed to load items';
     }
+  }
+
+  // --- File order + playlists ----------------------------------------------
+  // Two independent orders per slot: the file rows (project_items.position)
+  // and the playlist (an order hint on the slot). Dragging one never moves
+  // the other — see docs/plans/2026-07-24-latent-playlists.md.
+
+  function audioCount(slotId: string): number {
+    return (itemsBySlot[slotId] || []).filter(
+      (i) => i.media?.media_type === 'audio',
+    ).length;
+  }
+
+  /** Read the DOM order Sortable just produced, from a given row selector. */
+  function domOrder(
+    list: HTMLElement,
+    selector: string,
+    attr: string,
+  ): string[] {
+    return Array.from(list.querySelectorAll<HTMLElement>(selector))
+      .map((el) => el.dataset[attr])
+      .filter((v): v is string => !!v);
+  }
+
+  async function persistFileOrder(slotId: string, list: HTMLElement) {
+    const order = domOrder(list, '.file-row[data-item-id]', 'itemId');
+    if (!order.length) return;
+    // Match state to the DOM Sortable already rearranged, so the keyed each
+    // block doesn't fight the drop while the request is in flight.
+    const byId = new Map((itemsBySlot[slotId] || []).map((i) => [i.id, i]));
+    itemsBySlot = {
+      ...itemsBySlot,
+      [slotId]: order.map((id) => byId.get(id)!).filter(Boolean),
+    };
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/slots/${encodeURIComponent(slotId)}/items/reorder`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order }),
+        },
+      );
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      const body = await res.json();
+      itemsBySlot = { ...itemsBySlot, [slotId]: body.items || [] };
+    } catch (e: any) {
+      error = e?.message || 'Failed to reorder files';
+      loadItems(slotId); // resync on failure
+    }
+  }
+
+  async function loadPlaylist(slotId: string) {
+    playlistLoading = { ...playlistLoading, [slotId]: true };
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/slots/${encodeURIComponent(slotId)}/playlist`,
+        { credentials: 'include' },
+      );
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      playlistBySlot = { ...playlistBySlot, [slotId]: await res.json() };
+    } catch (e: any) {
+      error = e?.message || 'Failed to load playlist';
+    } finally {
+      playlistLoading = { ...playlistLoading, [slotId]: false };
+    }
+  }
+
+  function togglePlaylist(slotId: string) {
+    const open = !playlistOpen[slotId];
+    playlistOpen = { ...playlistOpen, [slotId]: open };
+    if (open) loadPlaylist(slotId);
+  }
+
+  async function persistPlaylistOrder(slotId: string, list: HTMLElement) {
+    const order = domOrder(list, '.track-row[data-media-id]', 'mediaId');
+    if (!order.length) return;
+    const current = playlistBySlot[slotId];
+    if (current) {
+      const byMedia = new Map(current.tracks.map((t) => [t.media_item_id, t]));
+      playlistBySlot = {
+        ...playlistBySlot,
+        [slotId]: {
+          ...current,
+          tracks: order.map((id) => byMedia.get(id)!).filter(Boolean),
+        },
+      };
+    }
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/slots/${encodeURIComponent(slotId)}/playlist`,
+        {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order }),
+        },
+      );
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      playlistBySlot = { ...playlistBySlot, [slotId]: await res.json() };
+    } catch (e: any) {
+      error = e?.message || 'Failed to reorder playlist';
+      loadPlaylist(slotId); // resync on failure
+    }
+  }
+
+  function playPlaylist(slotId: string, startIndex = 0) {
+    const pl = playlistBySlot[slotId];
+    if (!pl?.tracks.length) return;
+    queueMedia(
+      pl.tracks.map((t) => ({
+        id: t.media_item_id,
+        media_type: t.media_type || 'audio',
+        filename: t.filename,
+        duration_seconds: t.duration_seconds,
+      })),
+      startIndex,
+    );
+  }
+
+  /** Sortable over a slot's file rows. */
+  function sortableFiles(node: HTMLElement, slotId: string) {
+    const s = Sortable.create(node, {
+      ...DRAG_OPTS,
+      handle: '.file-row__drag',
+      draggable: '.file-row', // never the expanded session-children row
+      ghostClass: 'file-row--ghost',
+      onEnd: () => persistFileOrder(slotId, node),
+    });
+    return { destroy: () => s.destroy() };
+  }
+
+  /** Sortable over a slot's playlist rows. */
+  function sortableTracks(node: HTMLElement, slotId: string) {
+    const s = Sortable.create(node, {
+      ...DRAG_OPTS,
+      handle: '.track-row__drag',
+      draggable: '.track-row',
+      ghostClass: 'track-row--ghost',
+      onEnd: () => persistPlaylistOrder(slotId, node),
+    });
+    return { destroy: () => s.destroy() };
   }
 
   // --- Session bundles: extraction status + extracted children -------------
@@ -796,33 +979,7 @@
   }
 
   function playInPlayer(mediaId: string, mediaType: string, title: string) {
-    document.dispatchEvent(
-      new CustomEvent('player:queue', {
-        detail: {
-          tracks: [
-            {
-              track_id: mediaId,
-              title: title || 'Untitled',
-              release_title: '',
-              release_code: '',
-              media_type: mediaType,
-              // MIDI items stream their synthesized WAV preview.
-              stream_url:
-                mediaType === 'midi'
-                  ? `/api/media/${encodeURIComponent(mediaId)}/audio`
-                  : `/api/media/${encodeURIComponent(mediaId)}/file`,
-              cover_url:
-                mediaType === 'image' || mediaType === 'video'
-                  ? `/api/media/${encodeURIComponent(mediaId)}/thumbnail`
-                  : '/assets/default-cover.jpg',
-              duration: 0,
-              entity_name: '',
-            },
-          ],
-          startIndex: 0,
-        },
-      }),
-    );
+    queueMedia([{ id: mediaId, media_type: mediaType, filename: title }]);
   }
 
   function statusColor(s: string): string {
@@ -971,8 +1128,8 @@
     if (!slotListEl) return;
     sortable?.destroy();
     sortable = Sortable.create(slotListEl, {
+      ...DRAG_OPTS,
       handle: '.slot__drag',
-      animation: 120,
       ghostClass: 'slot--ghost',
       onEnd: () => {
         if (!slotListEl) return;
@@ -1064,6 +1221,18 @@
                   ? ''
                   : 's'}</span
               >
+              {#if audioCount(slot.id) > 0}
+                <button
+                  class="action-btn playlist-toggle"
+                  type="button"
+                  aria-expanded={!!playlistOpen[slot.id]}
+                  title="The audio in this slot, in an order you set"
+                  onclick={() => togglePlaylist(slot.id)}
+                  >{playlistOpen[slot.id] ? '▾' : '▶'} Playlist ({audioCount(
+                    slot.id,
+                  )})</button
+                >
+              {/if}
               <button
                 class="action-btn"
                 type="button"
@@ -1206,14 +1375,21 @@
         -->
         <div class="slot__panel">
           {#if (itemsBySlot[slot.id] || []).length > 0}
-            <ul class="file-list">
+            <ul class="file-list" use:sortableFiles={slot.id}>
               {#each itemsBySlot[slot.id] as it (it.id)}
                 <li
                   class="file-row"
                   class:file-row--primary={it.is_primary}
                   data-type={it.media?.media_type}
                   data-media-id={it.media_item_id}
+                  data-item-id={it.id}
                 >
+                  <button
+                    class="file-row__drag drag-handle"
+                    type="button"
+                    aria-label={`Drag to reorder ${it.media?.filename || 'file'}`}
+                    title="Drag to reorder">⠿</button
+                  >
                   <button
                     class="file-row__star"
                     type="button"
@@ -1402,6 +1578,65 @@
                 {/if}
               {/each}
             </ul>
+          {/if}
+          <!--
+            The playlist: this slot's audio, in an order of its own. Expands
+            inline (the ColorPicker accordion technique) rather than as a
+            popover, so it inherits the card's layout on every width.
+          -->
+          {#if playlistOpen[slot.id]}
+            {@const pl = playlistBySlot[slot.id]}
+            <div class="playlist">
+              <div class="playlist__head">
+                <button
+                  class="action-btn playlist__play-all"
+                  type="button"
+                  disabled={!pl?.tracks.length}
+                  onclick={() => playPlaylist(slot.id)}>▷ Play all</button
+                >
+                {#if pl}
+                  <span class="muted playlist__meta"
+                    >{pl.tracks.length} track{pl.tracks.length === 1
+                      ? ''
+                      : 's'}{pl.total_seconds
+                      ? ` · ${fmtDuration(pl.total_seconds)}`
+                      : ''}</span
+                  >
+                {/if}
+              </div>
+              {#if playlistLoading[slot.id] && !pl}
+                <div class="muted playlist__status">Loading playlist…</div>
+              {:else if pl && pl.tracks.length === 0}
+                <div class="muted playlist__status">
+                  No audio in this slot yet. Uploaded audio joins the playlist
+                  automatically.
+                </div>
+              {:else if pl}
+                <ul class="playlist__list" use:sortableTracks={slot.id}>
+                  {#each pl.tracks as t, i (t.media_item_id)}
+                    <li class="track-row" data-media-id={t.media_item_id}>
+                      <button
+                        class="track-row__drag drag-handle"
+                        type="button"
+                        aria-label={`Drag to reorder ${t.filename || 'track'}`}
+                        title="Drag to reorder">⠿</button
+                      >
+                      <span class="track-row__pos">{i + 1}</span>
+                      <span class="track-row__name">{t.filename || '—'}</span>
+                      <span class="track-row__dur"
+                        >{fmtDuration(t.duration_seconds)}</span
+                      >
+                      <button
+                        class="action-btn track-row__play"
+                        type="button"
+                        title="Play from here"
+                        onclick={() => playPlaylist(slot.id, i)}>▶</button
+                      >
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </div>
           {/if}
           <LatentLinks
             {projectId}
@@ -1734,12 +1969,39 @@
   }
   .file-row {
     display: grid;
-    grid-template-columns: 24px 32px 1fr auto auto auto;
+    grid-template-columns: 20px 24px 32px 1fr auto auto auto;
     align-items: center;
     gap: 8px;
     padding: 4px 8px;
     border-bottom: 1px solid var(--color-border);
     font-size: var(--text-sm);
+  }
+  /* Drag handles: the ONLY element that swallows touch gestures. Putting
+     `touch-action: none` on the row would stop the list scrolling. */
+  .drag-handle {
+    background: transparent;
+    border: 0;
+    color: var(--color-muted);
+    cursor: grab;
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 0 2px;
+    touch-action: none;
+    align-self: stretch;
+  }
+  .drag-handle:active {
+    cursor: grabbing;
+  }
+  /* Acknowledge a long-press before anything moves — without this a touch
+     drag reads as a dead tap. Applied by Sortable's chosenClass. */
+  :global(.drag-chosen) {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -2px;
+    box-shadow: 0 2px 8px var(--color-overlay-soft);
+  }
+  .file-row--ghost,
+  .track-row--ghost {
+    opacity: 0.4;
   }
   .file-row:last-child {
     border-bottom: 0;
@@ -1822,6 +2084,68 @@
   }
   .file-row__name-wrap .file-row__name {
     flex: 0 1 auto;
+  }
+  /* --- Playlist accordion ------------------------------------------------ */
+  .playlist {
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    margin-top: var(--space-sm);
+  }
+  .playlist__head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+  .playlist__meta {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+  }
+  .playlist__status {
+    padding: 8px;
+    font-size: var(--text-sm);
+  }
+  .playlist__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .track-row {
+    display: grid;
+    grid-template-columns: 20px 2ch 1fr auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--color-border);
+    font-size: var(--text-sm);
+  }
+  .track-row:last-child {
+    border-bottom: 0;
+  }
+  .track-row:hover {
+    background: var(--color-surface);
+  }
+  .track-row__pos {
+    font-family: var(--font-mono);
+    color: var(--color-muted);
+    font-size: 0.7rem;
+  }
+  .track-row__name {
+    min-width: 0;
+    overflow-wrap: anywhere; /* session filenames are long; never truncate */
+  }
+  .track-row__dur {
+    color: var(--color-muted);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+  .track-row__play {
+    padding: 2px 6px;
+    font-size: 0.75rem;
   }
   .session-pill,
   .session-chip {
@@ -1912,8 +2236,29 @@
     font-size: 0.75rem;
   }
   @media (max-width: 640px) {
+    /* Two lines: identity up top, actions underneath, with the drag handle a
+       full-height 44px target down the left so a drag is never a mis-tap. */
     .file-row {
-      grid-template-columns: 24px 32px 1fr auto;
+      grid-template-columns: 44px 24px 32px 1fr;
+      row-gap: 4px;
+      padding: 6px 8px;
+    }
+    .file-row__drag {
+      grid-row: 1 / -1;
+      min-height: 44px;
+      font-size: 1.1rem;
+    }
+    .file-row__actions {
+      grid-column: 2 / -1;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .file-row__actions .action-btn {
+      min-height: 44px;
+      min-width: 44px;
+    }
+    .file-row__star {
+      min-height: 44px;
     }
     .file-row__type,
     .file-row__size {
@@ -1921,6 +2266,48 @@
     }
     .file-row__name-wrap {
       flex-wrap: wrap;
+    }
+    /* With the extension chip and size hidden, a truncated name loses its own
+       tail too — wrap instead. (Reverses the desktop-dense choice in #541,
+       which doesn't hold at this width.) */
+    .file-row__name,
+    .file-row__name-wrap .file-row__name {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+      overflow-wrap: anywhere;
+    }
+    .track-row {
+      grid-template-columns: 44px 3ch 1fr;
+      grid-template-areas:
+        'drag pos name'
+        'drag dur play';
+      row-gap: 4px;
+      padding: 6px 8px;
+    }
+    .track-row__drag {
+      grid-area: drag;
+      min-height: 44px;
+      font-size: 1.1rem;
+    }
+    .track-row__pos {
+      grid-area: pos;
+    }
+    .track-row__name {
+      grid-area: name;
+    }
+    .track-row__dur {
+      grid-area: dur;
+    }
+    .track-row__play {
+      grid-area: play;
+      justify-self: end;
+      min-height: 44px;
+      min-width: 44px;
+    }
+    .playlist__play-all,
+    .playlist-toggle {
+      min-height: 44px;
     }
     .session-pill,
     .session-chip {
