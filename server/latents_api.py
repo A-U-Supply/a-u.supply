@@ -1336,10 +1336,14 @@ def reorder_slot_items(
 ):
     """Set the manual file order for one slot.
 
-    Deliberately does NOT touch the slot's playlist: the two orders are
+    Deliberately does NOT move the slot's playlist: the two orders are
     independent by design (see docs/plans/2026-07-24-latent-playlists.md).
+    An untouched playlist has no stored order — it just mirrors the file
+    order — so this pins it as it currently reads *before* renumbering.
+    Without that snapshot, dragging files would drag the playlist along with
+    them right up until the first time the playlist itself was arranged.
     """
-    _slot_or_404(db, project_id, slot_id)
+    s = _slot_or_404(db, project_id, slot_id)
     q = (
         db.query(ProjectItem)
         .options(joinedload(ProjectItem.media_item).joinedload(MediaItem.audio_meta))
@@ -1349,6 +1353,10 @@ def reorder_slot_items(
     by_id = {pi.id: pi for pi in items}
     if len(set(body.order)) != len(body.order) or set(body.order) != set(by_id.keys()):
         raise HTTPException(status_code=400, detail="Order must contain every item in the slot exactly once")
+    if not s.playlist_json:
+        audio = [pi for pi in items if pi.media_item and pi.media_item.media_type == "audio"]
+        if audio:
+            s.playlist_json = json.dumps([pi.media_item_id for pi in _slot_playlist(s, audio)])
     for i, item_id in enumerate(body.order):
         by_id[item_id].position = i + 1
     db.commit()

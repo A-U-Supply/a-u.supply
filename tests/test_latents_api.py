@@ -898,6 +898,35 @@ class TestSlotPlaylist:
             attach_item(client, auth_headers, project["id"], m.id, slot["id"])
         assert get_playlist(client, auth_headers, project["id"], slot["id"])["total_seconds"] == 91.5
 
+    def test_untouched_playlist_survives_a_file_reorder(self, client, auth_headers, db_session, project, slot):
+        """Dragging files must not move tracks even before the playlist is arranged.
+
+        An untouched playlist mirrors the file order, so the file reorder has
+        to pin it first or the tracks come along for the ride.
+        """
+        items, media = attach_audio(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.wav", "b.wav", "c.wav"],
+        )
+        before = [t["media_item_id"] for t in
+                  get_playlist(client, auth_headers, project["id"], slot["id"])["tracks"]]
+        reorder_items(client, auth_headers, project["id"], slot["id"],
+                      [items[2]["id"], items[1]["id"], items[0]["id"]])
+        after = [t["media_item_id"] for t in
+                 get_playlist(client, auth_headers, project["id"], slot["id"])["tracks"]]
+        assert after == before
+
+    def test_pinned_playlist_still_appends_new_audio(self, client, auth_headers, db_session, project, slot):
+        """Pinning on file-reorder must not turn the playlist into a closed set."""
+        items, media = attach_audio(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.wav", "b.wav"],
+        )
+        reorder_items(client, auth_headers, project["id"], slot["id"],
+                      [items[1]["id"], items[0]["id"]])
+        late = make_audio(db_session, "late.wav")
+        attach_item(client, auth_headers, project["id"], late.id, slot["id"])
+        pl = get_playlist(client, auth_headers, project["id"], slot["id"])
+        assert [t["media_item_id"] for t in pl["tracks"]] == [media[0].id, media[1].id, late.id]
+
     def test_order_survives_a_file_reorder(self, client, auth_headers, db_session, project, slot):
         """The two orders are independent — dragging files must not move tracks."""
         items, media = attach_audio(
