@@ -569,6 +569,45 @@
   // Session rows poll while extraction is pending/processing; once done, the
   // harvested audio appears both as an expandable child list on the session
   // row and as peer rows carrying a "from session" chip.
+  /* Phone only. A slot card arrives collapsed to its summary line and opens
+     one tab at a time; desktop still shows everything stacked, so both are the
+     same markup with different visibility conditions. */
+  let cardOpen = $state<Record<string, boolean>>({});
+  let statusOpen = $state<Record<string, boolean>>({});
+  let toolsOpen = $state<Record<string, boolean>>({});
+  let slotTab = $state<Record<string, string>>({});
+  const TAB_FILES = 'files';
+  function tabOf(id: string): string {
+    return slotTab[id] || TAB_FILES;
+  }
+  /** True when a block should render: always on desktop, per-tab on a phone. */
+  function shows(id: string, tab: string): boolean {
+    return !isPhone() || tabOf(id) === tab;
+  }
+  function isOpen(id: string): boolean {
+    return !isPhone() || !!cardOpen[id];
+  }
+  /** Counts live in the label so a closed tab still reports its contents. */
+  function tabsFor(slot: Slot): { key: string; label: string }[] {
+    const audio = audioCount(slot.id);
+    const tabs = [{ key: 'files', label: `Files(${slot.item_count ?? 0})` }];
+    if (audio > 0) tabs.push({ key: 'playlist', label: `Playlist(${audio})` });
+    tabs.push({ key: 'add', label: 'Add files' });
+    tabs.push({ key: 'links', label: 'Links' });
+    tabs.push({ key: 'notes', label: 'Notes' });
+    tabs.push({
+      key: 'threads',
+      label: slot.thread_count ? `Threads(${slot.thread_count})` : 'Threads',
+    });
+    if (slot.repo_path) tabs.push({ key: 'runs', label: 'Runs' });
+    return tabs;
+  }
+
+  function pickTab(id: string, tab: string) {
+    slotTab[id] = tab;
+    if (tab === 'playlist' && !playlistBySlot[id]) loadPlaylist(id);
+  }
+
   let expandedSessions = $state<Record<string, boolean>>({});
   let childrenByMedia = $state<Record<string, SessionChild[]>>({});
   let childrenLoading = $state<Record<string, boolean>>({});
@@ -1231,88 +1270,211 @@
               aria-label="Drag to reorder">⋮⋮</button
             >
             <span class="slot__pos">#{slot.position}</span>
-            <button
-              class="slot__label"
-              onclick={() => renameSlot(slot)}
-              type="button"
-              title="Click to rename">{slot.label}</button
-            >
+            {#if isPhone()}
+              <!-- Collapsed, the summary IS the status: label, counts, state.
+                   Renaming moves into Slot tools so the whole line can be the
+                   open/close target. -->
+              <button
+                class="slot__summary"
+                type="button"
+                aria-expanded={!!cardOpen[slot.id]}
+                onclick={() => (cardOpen[slot.id] = !cardOpen[slot.id])}
+              >
+                <span class="slot__caret" aria-hidden="true"
+                  >{cardOpen[slot.id] ? '▾' : '▸'}</span
+                >
+                <span class="slot__label-text">{slot.label}</span>
+                <span class="slot__summary-meta">
+                  {slot.item_count ?? 0} file{(slot.item_count ?? 0) === 1
+                    ? ''
+                    : 's'}{#if audioCount(slot.id) > 0}
+                    · {audioCount(slot.id)} audio{/if}
+                </span>
+                <span
+                  class="slot__summary-state"
+                  style="--c: {statusColor(slot.status)}">{slot.status}</span
+                >
+              </button>
+            {:else}
+              <button
+                class="slot__label"
+                onclick={() => renameSlot(slot)}
+                type="button"
+                title="Click to rename">{slot.label}</button
+              >
+            {/if}
           </div>
           <div class="slot__controls-row">
-            <div class="slot__status">
-              {#each ['forming', 'developing', 'fixed'] as st}
+            {#if isPhone()}
+              {#if cardOpen[slot.id]}
+                <!-- One control that says its own value, instead of three
+                     0.7rem pills that never met the touch rule. -->
                 <button
-                  class="status-pill"
-                  class:active={slot.status === st}
-                  style="--c: {statusColor(st)}"
-                  onclick={() => setStatus(slot, st)}
-                  type="button">{st}</button
-                >
-              {/each}
-            </div>
-            <div class="slot__actions">
-              <!-- Files are always visible inline below; no Files toggle needed. -->
-              <span class="slot__file-count"
-                >{slot.item_count ?? 0} file{(slot.item_count ?? 0) === 1
-                  ? ''
-                  : 's'}</span
-              >
-              {#if audioCount(slot.id) > 0}
-                <button
-                  class="action-btn playlist-toggle"
+                  class="action-btn slot__tool-btn"
                   type="button"
-                  aria-expanded={!!playlistOpen[slot.id]}
-                  title="The audio in this slot, in an order you set"
-                  onclick={() => togglePlaylist(slot.id)}
-                  >{playlistOpen[slot.id] ? '▾' : '▶'} Playlist ({audioCount(
-                    slot.id,
-                  )})</button
+                  aria-expanded={!!statusOpen[slot.id]}
+                  onclick={() => (statusOpen[slot.id] = !statusOpen[slot.id])}
+                  >Status: {slot.status}
+                  {statusOpen[slot.id] ? '▴' : '▾'}</button
+                >
+                <LatentStyleButton
+                  {projectId}
+                  scope="slot"
+                  slotId={slot.id}
+                  accent={slotAccent(slot)}
+                  noInherit
+                />
+                <button
+                  class="action-btn slot__tool-btn"
+                  type="button"
+                  aria-expanded={!!toolsOpen[slot.id]}
+                  onclick={() => (toolsOpen[slot.id] = !toolsOpen[slot.id])}
+                  >Slot tools {toolsOpen[slot.id] ? '▴' : '▾'}</button
                 >
               {/if}
-              <button
-                class="action-btn"
-                type="button"
-                onclick={() => toggleSection(slot.id, 'notes')}>Notes</button
-              >
-              <button
-                class="action-btn"
-                type="button"
-                onclick={() => toggleSection(slot.id, 'threads')}
-                >Threads{#if slot.thread_count}
-                  ({slot.thread_count}){/if}</button
-              >
-              {#if slot.repo_path}
+            {:else}
+              <div class="slot__status">
+                {#each ['forming', 'developing', 'fixed'] as st}
+                  <button
+                    class="status-pill"
+                    class:active={slot.status === st}
+                    style="--c: {statusColor(st)}"
+                    onclick={() => setStatus(slot, st)}
+                    type="button">{st}</button
+                  >
+                {/each}
+              </div>
+              <div class="slot__actions">
+                <!-- Files are always visible inline below; no Files toggle needed. -->
+                <span class="slot__file-count"
+                  >{slot.item_count ?? 0} file{(slot.item_count ?? 0) === 1
+                    ? ''
+                    : 's'}</span
+                >
+                {#if audioCount(slot.id) > 0}
+                  <button
+                    class="action-btn playlist-toggle"
+                    type="button"
+                    aria-expanded={!!playlistOpen[slot.id]}
+                    title="The audio in this slot, in an order you set"
+                    onclick={() => togglePlaylist(slot.id)}
+                    >{playlistOpen[slot.id] ? '▾' : '▶'} Playlist ({audioCount(
+                      slot.id,
+                    )})</button
+                  >
+                {/if}
                 <button
                   class="action-btn"
                   type="button"
-                  onclick={() => toggleSection(slot.id, 'runs')}>Runs</button
+                  onclick={() => toggleSection(slot.id, 'notes')}>Notes</button
                 >
-              {/if}
-              {#if (slot.item_count ?? 0) > 0}
+                <button
+                  class="action-btn"
+                  type="button"
+                  onclick={() => toggleSection(slot.id, 'threads')}
+                  >Threads{#if slot.thread_count}
+                    ({slot.thread_count}){/if}</button
+                >
+                {#if slot.repo_path}
+                  <button
+                    class="action-btn"
+                    type="button"
+                    onclick={() => toggleSection(slot.id, 'runs')}>Runs</button
+                  >
+                {/if}
+                {#if (slot.item_count ?? 0) > 0}
+                  <button
+                    class="action-btn action-btn--danger"
+                    type="button"
+                    title="Detach + permanently delete every Emulsion file on this slot"
+                    onclick={() => clearSlotItems(slot)}>Clear files</button
+                  >
+                {/if}
                 <button
                   class="action-btn action-btn--danger"
                   type="button"
-                  title="Detach + permanently delete every Emulsion file on this slot"
-                  onclick={() => clearSlotItems(slot)}>Clear files</button
+                  onclick={() => deleteSlot(slot)}>Delete</button
                 >
-              {/if}
-              <button
-                class="action-btn action-btn--danger"
-                type="button"
-                onclick={() => deleteSlot(slot)}>Delete</button
-              >
-              <LatentStyleButton
-                {projectId}
-                scope="slot"
-                slotId={slot.id}
-                accent={slotAccent(slot)}
-                noInherit
-              />
-            </div>
+                <LatentStyleButton
+                  {projectId}
+                  scope="slot"
+                  slotId={slot.id}
+                  accent={slotAccent(slot)}
+                  noInherit
+                />
+              </div>
+            {/if}
           </div>
+
+          {#if isPhone() && cardOpen[slot.id]}
+            {#if statusOpen[slot.id]}
+              <div class="slot__menu" role="group" aria-label="Slot status">
+                {#each ['forming', 'developing', 'fixed'] as st}
+                  <button
+                    class="slot__menu-item"
+                    type="button"
+                    aria-pressed={slot.status === st}
+                    onclick={() => {
+                      setStatus(slot, st);
+                      statusOpen[slot.id] = false;
+                    }}>{st}{slot.status === st ? ' · current' : ''}</button
+                  >
+                {/each}
+              </div>
+            {/if}
+            {#if toolsOpen[slot.id]}
+              <div class="slot__menu" role="group" aria-label="Slot tools">
+                <button
+                  class="slot__menu-item"
+                  type="button"
+                  onclick={() => {
+                    toolsOpen[slot.id] = false;
+                    renameSlot(slot);
+                  }}>Rename slot</button
+                >
+                {#if (slot.item_count ?? 0) > 0}
+                  <button
+                    class="slot__menu-item slot__menu-item--danger"
+                    type="button"
+                    title="Detach + permanently delete every Emulsion file on this slot"
+                    onclick={() => {
+                      toolsOpen[slot.id] = false;
+                      clearSlotItems(slot);
+                    }}>Clear all files</button
+                  >
+                {/if}
+                <button
+                  class="slot__menu-item slot__menu-item--danger"
+                  type="button"
+                  onclick={() => {
+                    toolsOpen[slot.id] = false;
+                    deleteSlot(slot);
+                  }}>Delete slot</button
+                >
+              </div>
+            {/if}
+
+            <!-- Every job keeps a visible, labeled, counted door. Boxed and
+                 wrapping — never a scroll strip, never shrink-to-fit. -->
+            <div
+              class="slot__tabs"
+              role="tablist"
+              aria-label={`${slot.label} sections`}
+            >
+              {#each tabsFor(slot) as t (t.key)}
+                <button
+                  class="slot__tab"
+                  type="button"
+                  role="tab"
+                  aria-selected={tabOf(slot.id) === t.key}
+                  onclick={() => pickTab(slot.id, t.key)}>{t.label}</button
+                >
+              {/each}
+            </div>
+          {/if}
         </div>
 
-        {#if repoMeta}
+        {#if repoMeta && !isPhone()}
           <div class="slot__repo">
             {#if linkingSlot === slot.id}
               <input
@@ -1409,330 +1571,340 @@
           a hidden affordance. Drag-and-drop / +Upload dropzone sits at the
           bottom of the panel; "+ Pull from index" is right next to it.
         -->
-        <div class="slot__panel">
-          {#if (itemsBySlot[slot.id] || []).length > 0}
-            <ul class="file-list" use:sortableFiles={slot.id}>
-              {#each itemsBySlot[slot.id] as it, i (it.id)}
-                <li
-                  class="file-row"
-                  class:file-row--primary={it.is_primary}
-                  data-type={it.media?.media_type}
-                  data-media-id={it.media_item_id}
-                  data-item-id={it.id}
-                >
-                  <RowMove
-                    label={it.media?.filename || 'file'}
-                    handleClass="file-row__drag"
-                    upDisabled={i === 0}
-                    downDisabled={i === (itemsBySlot[slot.id] || []).length - 1}
-                    onUp={() => nudgeFile(slot.id, i, -1)}
-                    onDown={() => nudgeFile(slot.id, i, 1)}
-                  />
-                  <button
-                    class="file-row__star"
-                    type="button"
-                    title={it.is_primary
-                      ? 'Primary (click to unstar)'
-                      : 'Mark as primary'}
-                    onclick={() => togglePrimary(slot, it)}
-                    aria-pressed={it.is_primary}
-                    >{it.is_primary ? '★' : '☆'}</button
+        {#if isOpen(slot.id) && shows(slot.id, 'files')}
+          <div class="slot__panel">
+            {#if (itemsBySlot[slot.id] || []).length > 0}
+              <ul class="file-list" use:sortableFiles={slot.id}>
+                {#each itemsBySlot[slot.id] as it, i (it.id)}
+                  <li
+                    class="file-row"
+                    class:file-row--primary={it.is_primary}
+                    data-type={it.media?.media_type}
+                    data-media-id={it.media_item_id}
+                    data-item-id={it.id}
                   >
-                  <a
-                    class="file-row__thumb"
-                    href={`/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
-                    title="Open in Stacks"
-                  >
-                    {#if it.media?.media_type === 'image'}
-                      <img
-                        src={thumbUrl(it.media_item_id)}
-                        alt={it.media?.filename}
-                      />
-                    {:else}
-                      <span class="icon"
-                        >{it.media?.media_type?.[0]?.toUpperCase() || '?'}</span
-                      >
-                    {/if}
-                  </a>
-                  <span class="file-row__name-wrap">
-                    <a
-                      class="file-row__name"
-                      href={`/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
-                      title={it.media?.filename}
-                    >
-                      {it.media?.filename || '(unknown)'}
-                    </a>
-                    {#if it.media?.media_type === 'session'}
-                      {@const st = it.media.session_extraction_status}
-                      {@const count = it.media.session_extracted_count ?? 0}
-                      {#if st === 'pending' || st === 'processing'}
-                        <span class="session-pill session-pill--busy"
-                          >Extracting audio…</span
-                        >
-                      {:else if st === 'failed'}
-                        <span
-                          class="session-pill session-pill--error"
-                          title={sessionErrors[it.media_item_id] ||
-                            'Audio extraction failed'}>Extraction failed</span
-                        >
-                      {:else if count > 0}
-                        <button
-                          class="session-pill session-pill--toggle"
-                          type="button"
-                          aria-expanded={!!expandedSessions[it.media_item_id]}
-                          onclick={() =>
-                            toggleSessionChildren(it.media_item_id)}
-                          >{expandedSessions[it.media_item_id] ? '▾' : '▸'}
-                          {count} extracted file{count === 1 ? '' : 's'}</button
-                        >
-                      {:else if st === 'done'}
-                        <span
-                          class="session-pill"
-                          title="No audio files found in this bundle"
-                          >0 extracted</span
-                        >
-                      {/if}
-                    {:else if it.media?.parent_media_item_id}
-                      {@const parent = parentInSlot(
-                        slot.id,
-                        it.media.parent_media_item_id,
-                      )}
-                      {#if parent}
-                        <button
-                          class="session-chip"
-                          type="button"
-                          title={`Extracted from ${parent.media?.filename || 'session bundle'} — click to jump to it`}
-                          onclick={() => scrollToParent(parent.media_item_id)}
-                          >from session</button
-                        >
-                      {:else}
-                        <span
-                          class="session-chip"
-                          title="Extracted from a session bundle"
-                          >extracted</span
-                        >
-                      {/if}
-                    {/if}
-                  </span>
-                  <span class="file-row__type" title={it.media?.mime_type}
-                    >{fileExt(it.media?.filename) ||
-                      it.media?.media_type ||
-                      'file'}</span
-                  >
-                  <span class="file-row__size"
-                    >{fmtBytes(it.media?.file_size_bytes)}</span
-                  >
-                  <div class="file-row__actions">
-                    {#if it.media}
-                      <MarginaliaBadge
-                        mediaId={it.media_item_id}
-                        mediaType={it.media.media_type}
-                        filename={it.media.filename || ''}
-                        counts={annotationCounts[it.media_item_id] || null}
-                      />
-                    {/if}
-                    {#if it.media?.media_type === 'audio' || it.media?.media_type === 'video' || it.media?.media_type === 'midi'}
-                      <button
-                        class="action-btn file-row__play"
-                        type="button"
-                        aria-label={`Play ${it.media?.filename || 'file'}`}
-                        title="Play (queues in the persistent Player)"
-                        onclick={() =>
-                          playInPlayer(
-                            it.media_item_id,
-                            it.media!.media_type,
-                            it.media?.filename || '',
-                          )}>{isPhone() ? '▶ Play' : '▶'}</button
-                      >
-                    {/if}
-                    <RowActions
-                      label={it.media?.filename || 'this file'}
-                      meta={[
-                        fileExt(it.media?.filename) ||
-                          it.media?.media_type ||
-                          'file',
-                        fmtBytes(it.media?.file_size_bytes),
-                        fmtDuration(it.media?.duration_seconds),
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                      actions={[
-                        {
-                          label: 'Rename',
-                          title: 'Rename this file',
-                          onClick: () => renameMediaItem(slot, it),
-                        },
-                        {
-                          label: 'Download',
-                          href: `/api/media/${encodeURIComponent(it.media_item_id)}/file`,
-                          download: it.media?.filename || undefined,
-                        },
-                        {
-                          label: 'Open in Stacks',
-                          href: `/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`,
-                        },
-                        {
-                          label: 'Remove from slot',
-                          danger: true,
-                          title: 'Remove from slot. File stays in Emulsion.',
-                          onClick: () => detachItem(slot, it),
-                        },
-                        {
-                          label: 'Delete permanently',
-                          danger: true,
-                          title:
-                            'Permanently delete from Emulsion. Cannot be undone.',
-                          onClick: () => deleteMediaItem(slot, it),
-                        },
-                      ]}
+                    <RowMove
+                      label={it.media?.filename || 'file'}
+                      handleClass="file-row__drag"
+                      upDisabled={i === 0}
+                      downDisabled={i ===
+                        (itemsBySlot[slot.id] || []).length - 1}
+                      onUp={() => nudgeFile(slot.id, i, -1)}
+                      onDown={() => nudgeFile(slot.id, i, 1)}
                     />
-                  </div>
-                </li>
-                {#if it.media?.media_type === 'session' && expandedSessions[it.media_item_id]}
-                  <li class="session-children">
-                    {#if childrenLoading[it.media_item_id]}
-                      <div class="muted session-children__status">
-                        Loading extracted files…
-                      </div>
-                    {:else if (childrenByMedia[it.media_item_id] || []).length === 0}
-                      <div class="muted session-children__status">
-                        No extracted files found.
-                      </div>
-                    {:else}
-                      <ul class="session-children__list">
-                        {#each childrenByMedia[it.media_item_id] || [] as child (child.id)}
-                          <li class="child-row">
-                            <a
-                              class="child-row__name"
-                              href={`/admin/search/detail?id=${encodeURIComponent(child.id)}`}
-                              title={child.filename}>{child.filename}</a
-                            >
-                            <span class="child-row__dur"
-                              >{fmtDuration(child.duration_seconds)}</span
-                            >
-                            <span class="child-row__size"
-                              >{fmtBytes(child.file_size_bytes)}</span
-                            >
-                            <MarginaliaBadge
-                              mediaId={child.id}
-                              mediaType={child.media_type}
-                              filename={child.filename || ''}
-                              counts={annotationCounts[child.id] || null}
-                            />
-                            {#if child.media_type === 'audio' || child.media_type === 'midi'}
-                              <button
-                                class="action-btn"
-                                type="button"
-                                title="Play (queues in the persistent Player)"
-                                onclick={() =>
-                                  playInPlayer(
-                                    child.id,
-                                    child.media_type,
-                                    child.filename,
-                                  )}>▶</button
-                              >
-                            {/if}
-                          </li>
-                        {/each}
-                      </ul>
-                    {/if}
+                    <button
+                      class="file-row__star"
+                      type="button"
+                      title={it.is_primary
+                        ? 'Primary (click to unstar)'
+                        : 'Mark as primary'}
+                      onclick={() => togglePrimary(slot, it)}
+                      aria-pressed={it.is_primary}
+                      >{it.is_primary ? '★' : '☆'}</button
+                    >
+                    <a
+                      class="file-row__thumb"
+                      href={`/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
+                      title="Open in Stacks"
+                    >
+                      {#if it.media?.media_type === 'image'}
+                        <img
+                          src={thumbUrl(it.media_item_id)}
+                          alt={it.media?.filename}
+                        />
+                      {:else}
+                        <span class="icon"
+                          >{it.media?.media_type?.[0]?.toUpperCase() ||
+                            '?'}</span
+                        >
+                      {/if}
+                    </a>
+                    <span class="file-row__name-wrap">
+                      <a
+                        class="file-row__name"
+                        href={`/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
+                        title={it.media?.filename}
+                      >
+                        {it.media?.filename || '(unknown)'}
+                      </a>
+                      {#if it.media?.media_type === 'session'}
+                        {@const st = it.media.session_extraction_status}
+                        {@const count = it.media.session_extracted_count ?? 0}
+                        {#if st === 'pending' || st === 'processing'}
+                          <span class="session-pill session-pill--busy"
+                            >Extracting audio…</span
+                          >
+                        {:else if st === 'failed'}
+                          <span
+                            class="session-pill session-pill--error"
+                            title={sessionErrors[it.media_item_id] ||
+                              'Audio extraction failed'}>Extraction failed</span
+                          >
+                        {:else if count > 0}
+                          <button
+                            class="session-pill session-pill--toggle"
+                            type="button"
+                            aria-expanded={!!expandedSessions[it.media_item_id]}
+                            onclick={() =>
+                              toggleSessionChildren(it.media_item_id)}
+                            >{expandedSessions[it.media_item_id] ? '▾' : '▸'}
+                            {count} extracted file{count === 1
+                              ? ''
+                              : 's'}</button
+                          >
+                        {:else if st === 'done'}
+                          <span
+                            class="session-pill"
+                            title="No audio files found in this bundle"
+                            >0 extracted</span
+                          >
+                        {/if}
+                      {:else if it.media?.parent_media_item_id}
+                        {@const parent = parentInSlot(
+                          slot.id,
+                          it.media.parent_media_item_id,
+                        )}
+                        {#if parent}
+                          <button
+                            class="session-chip"
+                            type="button"
+                            title={`Extracted from ${parent.media?.filename || 'session bundle'} — click to jump to it`}
+                            onclick={() => scrollToParent(parent.media_item_id)}
+                            >from session</button
+                          >
+                        {:else}
+                          <span
+                            class="session-chip"
+                            title="Extracted from a session bundle"
+                            >extracted</span
+                          >
+                        {/if}
+                      {/if}
+                    </span>
+                    <span class="file-row__type" title={it.media?.mime_type}
+                      >{fileExt(it.media?.filename) ||
+                        it.media?.media_type ||
+                        'file'}</span
+                    >
+                    <span class="file-row__size"
+                      >{fmtBytes(it.media?.file_size_bytes)}</span
+                    >
+                    <div class="file-row__actions">
+                      {#if it.media}
+                        <MarginaliaBadge
+                          mediaId={it.media_item_id}
+                          mediaType={it.media.media_type}
+                          filename={it.media.filename || ''}
+                          counts={annotationCounts[it.media_item_id] || null}
+                        />
+                      {/if}
+                      {#if it.media?.media_type === 'audio' || it.media?.media_type === 'video' || it.media?.media_type === 'midi'}
+                        <button
+                          class="action-btn file-row__play"
+                          type="button"
+                          aria-label={`Play ${it.media?.filename || 'file'}`}
+                          title="Play (queues in the persistent Player)"
+                          onclick={() =>
+                            playInPlayer(
+                              it.media_item_id,
+                              it.media!.media_type,
+                              it.media?.filename || '',
+                            )}>{isPhone() ? '▶ Play' : '▶'}</button
+                        >
+                      {/if}
+                      <RowActions
+                        label={it.media?.filename || 'this file'}
+                        meta={[
+                          fileExt(it.media?.filename) ||
+                            it.media?.media_type ||
+                            'file',
+                          fmtBytes(it.media?.file_size_bytes),
+                          fmtDuration(it.media?.duration_seconds),
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                        actions={[
+                          {
+                            label: 'Rename',
+                            title: 'Rename this file',
+                            onClick: () => renameMediaItem(slot, it),
+                          },
+                          {
+                            label: 'Download',
+                            href: `/api/media/${encodeURIComponent(it.media_item_id)}/file`,
+                            download: it.media?.filename || undefined,
+                          },
+                          {
+                            label: 'Open in Stacks',
+                            href: `/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`,
+                          },
+                          {
+                            label: 'Remove from slot',
+                            danger: true,
+                            title: 'Remove from slot. File stays in Emulsion.',
+                            onClick: () => detachItem(slot, it),
+                          },
+                          {
+                            label: 'Delete permanently',
+                            danger: true,
+                            title:
+                              'Permanently delete from Emulsion. Cannot be undone.',
+                            onClick: () => deleteMediaItem(slot, it),
+                          },
+                        ]}
+                      />
+                    </div>
                   </li>
-                {/if}
-              {/each}
-            </ul>
-          {/if}
-          <!--
+                  {#if it.media?.media_type === 'session' && expandedSessions[it.media_item_id]}
+                    <li class="session-children">
+                      {#if childrenLoading[it.media_item_id]}
+                        <div class="muted session-children__status">
+                          Loading extracted files…
+                        </div>
+                      {:else if (childrenByMedia[it.media_item_id] || []).length === 0}
+                        <div class="muted session-children__status">
+                          No extracted files found.
+                        </div>
+                      {:else}
+                        <ul class="session-children__list">
+                          {#each childrenByMedia[it.media_item_id] || [] as child (child.id)}
+                            <li class="child-row">
+                              <a
+                                class="child-row__name"
+                                href={`/admin/search/detail?id=${encodeURIComponent(child.id)}`}
+                                title={child.filename}>{child.filename}</a
+                              >
+                              <span class="child-row__dur"
+                                >{fmtDuration(child.duration_seconds)}</span
+                              >
+                              <span class="child-row__size"
+                                >{fmtBytes(child.file_size_bytes)}</span
+                              >
+                              <MarginaliaBadge
+                                mediaId={child.id}
+                                mediaType={child.media_type}
+                                filename={child.filename || ''}
+                                counts={annotationCounts[child.id] || null}
+                              />
+                              {#if child.media_type === 'audio' || child.media_type === 'midi'}
+                                <button
+                                  class="action-btn"
+                                  type="button"
+                                  title="Play (queues in the persistent Player)"
+                                  onclick={() =>
+                                    playInPlayer(
+                                      child.id,
+                                      child.media_type,
+                                      child.filename,
+                                    )}>▶</button
+                                >
+                              {/if}
+                            </li>
+                          {/each}
+                        </ul>
+                      {/if}
+                    </li>
+                  {/if}
+                {/each}
+              </ul>
+            {/if}
+            <!--
             The playlist: this slot's audio, in an order of its own. Expands
             inline (the ColorPicker accordion technique) rather than as a
             popover, so it inherits the card's layout on every width.
           -->
-          {#if playlistOpen[slot.id]}
-            {@const pl = playlistBySlot[slot.id]}
-            <div class="playlist" data-slot-id={slot.id}>
-              <div class="playlist__head">
-                <button
-                  class="action-btn playlist__play-all"
-                  type="button"
-                  disabled={!pl?.tracks.length}
-                  onclick={() => playPlaylist(slot.id)}>▷ Play all</button
-                >
-                {#if pl}
-                  <span class="muted playlist__meta"
-                    >{pl.tracks.length} track{pl.tracks.length === 1
-                      ? ''
-                      : 's'}{pl.total_seconds
-                      ? ` · ${fmtDuration(pl.total_seconds)}`
-                      : ''}</span
+            {#if isPhone() ? shows(slot.id, 'playlist') : playlistOpen[slot.id]}
+              {@const pl = playlistBySlot[slot.id]}
+              <div class="playlist" data-slot-id={slot.id}>
+                <div class="playlist__head">
+                  <button
+                    class="action-btn playlist__play-all"
+                    type="button"
+                    disabled={!pl?.tracks.length}
+                    onclick={() => playPlaylist(slot.id)}>▷ Play all</button
                   >
+                  {#if pl}
+                    <span class="muted playlist__meta"
+                      >{pl.tracks.length} track{pl.tracks.length === 1
+                        ? ''
+                        : 's'}{pl.total_seconds
+                        ? ` · ${fmtDuration(pl.total_seconds)}`
+                        : ''}</span
+                    >
+                  {/if}
+                </div>
+                {#if playlistLoading[slot.id] && !pl}
+                  <div class="muted playlist__status">Loading playlist…</div>
+                {:else if pl && pl.tracks.length === 0}
+                  <div class="muted playlist__status">
+                    No audio in this slot yet. Uploaded audio joins the playlist
+                    automatically.
+                  </div>
+                {:else if pl}
+                  <ul class="playlist__list" use:sortableTracks={slot.id}>
+                    {#each pl.tracks as t, i (t.media_item_id)}
+                      <li class="track-row" data-media-id={t.media_item_id}>
+                        <RowMove
+                          label={t.filename || 'track'}
+                          handleClass="track-row__drag"
+                          upDisabled={i === 0}
+                          downDisabled={i === pl.tracks.length - 1}
+                          onUp={() => nudgeTrack(slot.id, i, -1)}
+                          onDown={() => nudgeTrack(slot.id, i, 1)}
+                        />
+                        <span class="track-row__pos">{i + 1}</span>
+                        <span class="track-row__name">{t.filename || '—'}</span>
+                        <span class="track-row__dur"
+                          >{fmtDuration(t.duration_seconds)}</span
+                        >
+                        <button
+                          class="action-btn track-row__play"
+                          type="button"
+                          aria-label={`Play ${t.filename || 'track'} from here`}
+                          title="Play from here"
+                          onclick={() => playPlaylist(slot.id, i)}
+                          >{isPhone() ? '▶ Play' : '▶'}</button
+                        >
+                        <MarginaliaBadge
+                          mediaId={t.media_item_id}
+                          mediaType={t.media_type || 'audio'}
+                          filename={t.filename || ''}
+                          counts={annotationCounts[t.media_item_id] || null}
+                        />
+                      </li>
+                    {/each}
+                  </ul>
                 {/if}
               </div>
-              {#if playlistLoading[slot.id] && !pl}
-                <div class="muted playlist__status">Loading playlist…</div>
-              {:else if pl && pl.tracks.length === 0}
-                <div class="muted playlist__status">
-                  No audio in this slot yet. Uploaded audio joins the playlist
-                  automatically.
-                </div>
-              {:else if pl}
-                <ul class="playlist__list" use:sortableTracks={slot.id}>
-                  {#each pl.tracks as t, i (t.media_item_id)}
-                    <li class="track-row" data-media-id={t.media_item_id}>
-                      <RowMove
-                        label={t.filename || 'track'}
-                        handleClass="track-row__drag"
-                        upDisabled={i === 0}
-                        downDisabled={i === pl.tracks.length - 1}
-                        onUp={() => nudgeTrack(slot.id, i, -1)}
-                        onDown={() => nudgeTrack(slot.id, i, 1)}
-                      />
-                      <span class="track-row__pos">{i + 1}</span>
-                      <span class="track-row__name">{t.filename || '—'}</span>
-                      <span class="track-row__dur"
-                        >{fmtDuration(t.duration_seconds)}</span
-                      >
-                      <button
-                        class="action-btn track-row__play"
-                        type="button"
-                        aria-label={`Play ${t.filename || 'track'} from here`}
-                        title="Play from here"
-                        onclick={() => playPlaylist(slot.id, i)}
-                        >{isPhone() ? '▶ Play' : '▶'}</button
-                      >
-                      <MarginaliaBadge
-                        mediaId={t.media_item_id}
-                        mediaType={t.media_type || 'audio'}
-                        filename={t.filename || ''}
-                        counts={annotationCounts[t.media_item_id] || null}
-                      />
-                    </li>
-                  {/each}
-                </ul>
-              {/if}
-            </div>
-          {/if}
-          <LatentLinks
-            {projectId}
-            slotId={slot.id}
-            title="Slot links"
-            compact={true}
-          />
-          <div class="slot__add">
-            <Uploader
-              destination="project"
-              {projectId}
-              slotId={slot.id}
-              compact={true}
-              onUploaded={() => loadItems(slot.id)}
-            />
-            <button
-              class="action-btn"
-              type="button"
-              onclick={() => openPull(slot.id)}>+ Pull from index</button
-            >
+            {/if}
+            {#if shows(slot.id, 'links')}
+              <LatentLinks
+                {projectId}
+                slotId={slot.id}
+                title="Slot links"
+                compact={true}
+              />
+            {/if}
+            {#if shows(slot.id, 'add')}
+              <div class="slot__add">
+                <Uploader
+                  destination="project"
+                  {projectId}
+                  slotId={slot.id}
+                  compact={true}
+                  onUploaded={() => loadItems(slot.id)}
+                />
+                <button
+                  class="action-btn"
+                  type="button"
+                  onclick={() => openPull(slot.id)}>+ Pull from index</button
+                >
+              </div>
+            {/if}
           </div>
-        </div>
+        {/if}
 
-        {#if openSlot === slot.id && openSection === 'notes'}
+        {#if isPhone() ? isOpen(slot.id) && shows(slot.id, 'notes') : openSlot === slot.id && openSection === 'notes'}
           <div class="slot__panel">
             <textarea
               rows="6"
@@ -1743,7 +1915,7 @@
           </div>
         {/if}
 
-        {#if openSlot === slot.id && openSection === 'threads'}
+        {#if isPhone() ? isOpen(slot.id) && shows(slot.id, 'threads') : openSlot === slot.id && openSection === 'threads'}
           <div class="slot__panel">
             <Threads
               anchorType="slot"
@@ -1754,7 +1926,7 @@
           </div>
         {/if}
 
-        {#if openSlot === slot.id && openSection === 'runs'}
+        {#if isPhone() ? isOpen(slot.id) && shows(slot.id, 'runs') : openSlot === slot.id && openSection === 'runs'}
           <div class="slot__panel">
             {#if (runsBySlot[slot.id] || []).length === 0}
               <div class="muted">No runs yet — hit ▶ Run above.</div>
@@ -2311,6 +2483,111 @@
     padding: 2px 6px;
     font-size: 0.75rem;
   }
+  /* ── Phone card chrome (summary, menus, tabs) ───────────────────────── */
+  .slot__summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1 1 auto;
+    min-width: 0;
+    font: inherit;
+    background: none;
+    border: 0;
+    color: var(--color-text);
+    padding: 0;
+    min-height: 44px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .slot__caret {
+    color: var(--color-muted);
+    flex: 0 0 auto;
+  }
+  .slot__label-text {
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+  .slot__summary-meta {
+    font-size: 0.65rem;
+    color: var(--color-muted);
+    white-space: nowrap;
+  }
+  .slot__summary-state {
+    margin-left: auto;
+    flex: 0 0 auto;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    border: 1px solid var(--c);
+    color: var(--c);
+    padding: 0 5px;
+  }
+  .slot__tool-btn {
+    min-height: 44px;
+  }
+  .slot__menu {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    margin-top: 4px;
+  }
+  .slot__menu-item {
+    font: inherit;
+    font-size: 0.75rem;
+    text-align: left;
+    background: none;
+    border: 0;
+    border-bottom: 1px dotted var(--color-border);
+    color: var(--color-text);
+    padding: 0 8px;
+    min-height: 44px;
+    cursor: pointer;
+  }
+  .slot__menu-item:last-child {
+    border-bottom: 0;
+  }
+  .slot__menu-item--danger {
+    color: var(--color-status-fail);
+  }
+  /* Boxed and wrapping: a scroll strip hides tabs off the card edge, and
+     letting them shrink below their labels made them overlap. */
+  .slot__tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    border-bottom: 2px solid var(--color-text);
+    margin-top: 6px;
+    padding-bottom: 4px;
+  }
+  .slot__tab {
+    font: inherit;
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-bottom: 3px solid var(--color-border);
+    color: var(--color-muted);
+    padding: 3px 5px;
+    line-height: 1.3;
+    white-space: nowrap;
+    flex: 0 0 auto;
+    cursor: pointer;
+  }
+  .slot__tab[aria-selected='true'] {
+    background: var(--color-text);
+    color: var(--color-bg);
+    font-weight: 700;
+    border-color: var(--color-text);
+    border-bottom-color: var(--color-accent);
+  }
+  .slot__summary:focus-visible,
+  .slot__tab:focus-visible,
+  .slot__menu-item:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -2px;
+  }
+
   @media (max-width: 640px) {
     /* Two lines: identity up top, actions underneath. The reorder block
        (RowMove) is 76px wide and spans both, grip over paired arrows. */
