@@ -5,6 +5,7 @@
   small "Link a GitHub repo" CTA that opens the modal.
 -->
 <script lang="ts">
+  import { isPhone } from '../lib/viewport.svelte.ts';
   import LinkRepoModal from './LinkRepoModal.svelte';
   import LatentStyleButton from './LatentStyleButton.svelte';
 
@@ -37,6 +38,7 @@
   let newTracks = $state<any[]>([]);
   let applying = $state(false);
   let webhookOpen = $state(false);
+  let open = $state(false);
 
   async function load() {
     try {
@@ -163,38 +165,25 @@
   {#if !loaded}
     <div class="placeholder">…</div>
   {:else if repo}
-    <div class="row">
-      <div class="left">
-        <span class="icon" aria-hidden="true">⛬</span>
-        <a class="repo-link" href={repo.url} target="_blank" rel="noopener">
-          {repo.owner}/{repo.repo_name}
-        </a>
-        <span class="branch">{repo.default_branch}</span>
-        {#if repo.visibility === 'private'}
-          <span class="vis-pill">private</span>
-        {/if}
-        <span class="sep">·</span>
-        <span class="muted">synced {fmtTime(repo.last_synced_at)}</span>
-        {#if repo.last_sha}
-          <span class="sha" title={repo.last_sha}
-            >{repo.last_sha.slice(0, 7)}</span
+    {#if isPhone()}
+      <!-- Collapsed, the summary is the whole status: which repo, how fresh. -->
+      <div class="row row--summary">
+        <button
+          class="sec-summary"
+          type="button"
+          aria-expanded={open}
+          onclick={() => (open = !open)}
+        >
+          <span class="sec-summary__caret" aria-hidden="true"
+            >{open ? '▾' : '▸'}</span
           >
-        {/if}
-      </div>
-      <div class="right">
-        <button class="action-btn" type="button" onclick={sync} disabled={busy}
-          >{busy ? 'Syncing…' : 'Sync'}</button
-        >
-        <button
-          class="action-btn"
-          type="button"
-          onclick={() => (webhookOpen = !webhookOpen)}>Webhook</button
-        >
-        <button
-          class="action-btn action-btn--danger"
-          type="button"
-          onclick={unlink}>Unlink</button
-        >
+          <span class="sec-summary__label">Repo</span>
+          <span class="sec-summary__meta"
+            >{repo.owner}/{repo.repo_name} · synced {fmtTime(
+              repo.last_synced_at,
+            )}</span
+          >
+        </button>
         {#if styleKey}
           <LatentStyleButton
             {projectId}
@@ -203,7 +192,53 @@
           />
         {/if}
       </div>
-    </div>
+    {/if}
+    {#if !isPhone() || open}
+      <div class="row">
+        <div class="left">
+          <span class="icon" aria-hidden="true">⛬</span>
+          <a class="repo-link" href={repo.url} target="_blank" rel="noopener">
+            {repo.owner}/{repo.repo_name}
+          </a>
+          <span class="branch">{repo.default_branch}</span>
+          {#if repo.visibility === 'private'}
+            <span class="vis-pill">private</span>
+          {/if}
+          <span class="sep">·</span>
+          <span class="muted">synced {fmtTime(repo.last_synced_at)}</span>
+          {#if repo.last_sha}
+            <span class="sha" title={repo.last_sha}
+              >{repo.last_sha.slice(0, 7)}</span
+            >
+          {/if}
+        </div>
+        <div class="right">
+          <button
+            class="action-btn"
+            type="button"
+            onclick={sync}
+            disabled={busy}>{busy ? 'Syncing…' : 'Sync'}</button
+          >
+          <button
+            class="action-btn"
+            type="button"
+            onclick={() => (webhookOpen = !webhookOpen)}>Webhook</button
+          >
+          <button
+            class="action-btn action-btn--danger"
+            type="button"
+            onclick={unlink}>Unlink</button
+          >
+          {#if styleKey && !isPhone()}
+            <LatentStyleButton
+              {projectId}
+              scope="section"
+              sectionKey={styleKey}
+            />
+          {/if}
+        </div>
+      </div>
+    {/if}
 
     {#if newTracks.length}
       <div class="banner">
@@ -274,6 +309,9 @@
 </section>
 
 <style>
+  .row--summary {
+    gap: var(--space-sm);
+  }
   .repo-strip {
     display: flex;
     flex-direction: column;

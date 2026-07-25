@@ -278,6 +278,47 @@ body.player-active .admin-main {
   }
 }
 
+/* Collapsible page sections (phone only).
+ * A section's head becomes a summary line that carries its own state, so a
+ * collapsed page reads as a status board rather than a wall of open panels.
+ * The controls stay in the head; only the body collapses. */
+.sec-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  background: none;
+  border: 0;
+  color: var(--color-text);
+  padding: 0;
+  min-height: 44px;
+  text-align: left;
+  cursor: pointer;
+}
+.sec-summary__caret {
+  color: var(--color-muted);
+  flex: 0 0 auto;
+}
+.sec-summary__label {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1pt;
+  font-size: var(--text-sm);
+}
+.sec-summary__meta {
+  font-size: 0.65rem;
+  color: var(--color-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sec-summary:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
 /* Page loading indicator */
 .page-loading {
   padding: var(--space-md) 0;
