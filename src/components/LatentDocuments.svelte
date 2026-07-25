@@ -429,6 +429,13 @@
     color: var(--color-muted);
   }
   @media (max-width: 640px) {
+    /* rows="18" is ~330px — the tallest fixed block on the page. Half that on
+       a phone; the field still scrolls and still grows with the window. */
+    textarea {
+      min-height: 40vh;
+      height: 40vh;
+    }
+
     .docs__tabs {
       margin-left: 0;
       width: 100%;
