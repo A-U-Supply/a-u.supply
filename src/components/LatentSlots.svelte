@@ -2617,19 +2617,34 @@
       min-height: 44px;
       min-width: 32px;
     }
-    /* Two lines: identity up top, actions underneath. The reorder block
-       (RowMove) is 76px wide and spans both, grip over paired arrows. */
+    /* Flex, not grid: as a grid the reorder block spanned both rows, and the
+       browser split its leftover height between them — filename pinned to the
+       top, actions pushed to the bottom, ~60px of dead air in between. As a
+       wrapping flex row the identity line and the actions line simply stack
+       at their own heights next to the block. */
     .file-row {
-      grid-template-columns: 76px 20px 20px 1fr;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      column-gap: 6px;
       row-gap: 4px;
       padding: 6px 8px;
-      align-items: start;
     }
     :global(.file-row .row-move) {
-      grid-row: 1 / -1;
+      flex: 0 0 68px;
     }
+    .file-row__star,
+    .file-row__thumb {
+      flex: 0 0 auto;
+    }
+    .file-row__name-wrap {
+      flex: 1 1 140px;
+      min-width: 0;
+    }
+    /* Full width on its own line — indenting it under the name only made the
+       buttons narrower for no gain. */
     .file-row__actions {
-      grid-column: 2 / -1;
+      flex: 1 0 100%;
       flex-wrap: wrap;
       gap: 4px;
       align-items: center;
@@ -2670,30 +2685,30 @@
       text-overflow: clip;
       overflow-wrap: anywhere;
     }
+    /* Same failure, same fix as .file-row above. */
     .track-row {
-      grid-template-columns: 76px 3ch 1fr auto;
-      grid-template-areas:
-        'move pos  name name'
-        'move dur  play play';
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      column-gap: 6px;
       row-gap: 4px;
       padding: 6px 8px;
-      align-items: start;
     }
     :global(.track-row .row-move) {
-      grid-area: move;
+      flex: 0 0 68px;
     }
     .track-row__pos {
-      grid-area: pos;
+      flex: 0 0 auto;
     }
     .track-row__name {
-      grid-area: name;
+      flex: 1 1 140px;
+      min-width: 0;
     }
     .track-row__dur {
-      grid-area: dur;
+      flex: 0 0 auto;
     }
     .track-row__play {
-      grid-area: play;
-      justify-self: stretch;
+      flex: 1 0 100%;
       min-height: 44px;
     }
     .playlist__play-all,
