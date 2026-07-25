@@ -1701,6 +1701,7 @@
                             mediaType={it.media.media_type}
                             filename={it.media.filename || ''}
                             counts={annotationCounts[it.media_item_id] || null}
+                            showEmpty={isPhone()}
                           />
                         {/if}
                         {#if it.media?.media_type === 'audio' || it.media?.media_type === 'video' || it.media?.media_type === 'midi'}
@@ -1877,6 +1878,7 @@
                           mediaType={t.media_type || 'audio'}
                           filename={t.filename || ''}
                           counts={annotationCounts[t.media_item_id] || null}
+                          showEmpty={isPhone()}
                         />
                       </li>
                     {/each}

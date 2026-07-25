@@ -14,6 +14,7 @@
   } from './marginalia.ts';
   import { fileExt } from '../lib/fileExt.ts';
   import RowActions from './RowActions.svelte';
+  import { isPhone } from '../lib/viewport.svelte.ts';
 
   type Props = {
     projectId: string;
@@ -295,6 +296,7 @@
                   mediaType={it.media.media_type}
                   filename={it.media.filename || ''}
                   counts={annotationCounts[it.media_item_id] || null}
+                  showEmpty={isPhone()}
                 />
               </div>
             {/if}
