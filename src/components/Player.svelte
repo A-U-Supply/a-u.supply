@@ -115,35 +115,65 @@
     shuffledIndices = remaining;
   }
 
+  /* The media element's `src` is owned by this code, never by the template.
+     A `src={...}` attribute in the markup looked harmless but broke every
+     automatic track change: Svelte's attribute cache still held the previous
+     URL, so one microtask after loadTrack() had already set src + called
+     play(), Svelte re-set the attribute — which re-runs the media load
+     algorithm, aborts the in-flight play() (AbortError, swallowed below) and
+     leaves the element sitting on the next track, loaded and paused. That is
+     exactly "it loads the next song but you have to hit play".
+     `appliedSrc`/`srcEl` are non-reactive: what is on which element. */
+  let appliedSrc = null;
+  let srcEl = null;
+  /* Whether playback is *wanted*, which the element can't tell us — it reads
+     as paused while a new src is still loading. Used when the element is
+     swapped out (audio ⇄ video PiP) to decide whether to resume. */
+  let wantPlaying = false;
+
+  // Returns true if the source actually changed (i.e. a load has started).
+  function applySrc(el, url) {
+    if (!el || !url) return false;
+    if (srcEl === el && appliedSrc === url) return false;
+    srcEl = el;
+    appliedSrc = url;
+    el.src = url;
+    el.load();
+    return true;
+  }
+
   function loadTrack(idx) {
     if (idx < 0 || idx >= queue.length) return;
     currentIndex = idx;
     pipOpen = true;
     mediaError = null;
+    wantPlaying = true;
     live(`Now playing: ${queue[idx]?.title || ''}`);
     const url = queue[idx]?.stream_url;
     if (mediaEl && url) {
       /* Set src and play in THIS task, not a later frame: iOS Safari only
          honours play() while the user gesture is still active, and a
-         requestAnimationFrame callback is too late. Svelte's own src binding
-         lands on the same URL a moment later, so this is a no-op for it. */
-      mediaEl.src = url;
-      mediaEl.load();
+         requestAnimationFrame callback is too late. */
+      if (!applySrc(mediaEl, url)) {
+        /* Already the loaded file (re-picking the current track): no
+           loadedmetadata will fire, so honour the seek target — or restart
+           from the top — here instead. */
+        const t = pendingSeek ?? 0;
+        pendingSeek = null;
+        mediaEl.currentTime = t;
+      }
       startPlayback();
       return;
     }
     // First queue of the session: the element doesn't exist until `visible`
-    // renders it, so wait a frame.
-    requestAnimationFrame(() => {
-      if (mediaEl) {
-        mediaEl.load();
-        startPlayback();
-      }
-    });
+    // renders it. The $effect below sets src and plays as soon as it mounts,
+    // which for a click is still inside the same task (Svelte flushes in a
+    // microtask), so the gesture survives on iOS.
   }
 
   function startPlayback() {
     if (!mediaEl) return;
+    wantPlaying = true;
     mediaEl.play().catch((err) => {
       if (err?.name === 'NotAllowedError') {
         // Autoplay policy — the gesture didn't carry. The track is loaded, so
@@ -167,6 +197,24 @@
     mediaError = null;
   }
 
+  /* `paused` is one-way: the element tells us, we never tell it (see the
+     transport handlers, which call play()/pause() directly). `bind:paused`
+     used to do both, and its write-back was the second half of the broken
+     auto-advance: the `pause` event at end of track set the state to true, so
+     when Svelte flushed a microtask later it saw state=true vs element
+     playing and dutifully paused the track next() had just started. */
+  function onPlay() {
+    paused = false;
+    wantPlaying = true;
+  }
+
+  function onPause() {
+    paused = true;
+    // End of track is transient — onEnded is about to advance. Any other
+    // pause is the user (transport, lock screen, native video controls).
+    if (mediaEl && !mediaEl.ended) wantPlaying = false;
+  }
+
   // Visually-hidden aria-live announcer. Clear-then-set so identical
   // consecutive messages ("Marker resolved" twice in a row) re-announce.
   function live(msg) {
@@ -177,9 +225,12 @@
 
   function togglePlay() {
     if (!mediaEl || !currentTrack) return;
-    if (paused) {
-      mediaEl.play().catch(() => {});
+    // Ask the element, not `paused`: mid-load it is paused while the state
+    // may not have caught up yet.
+    if (mediaEl.paused) {
+      startPlayback();
     } else {
+      wantPlaying = false;
       mediaEl.pause();
     }
   }
@@ -255,7 +306,7 @@
     if (repeatMode === 'one') {
       if (mediaEl) {
         mediaEl.currentTime = 0;
-        mediaEl.play().catch(() => {});
+        startPlayback();
       }
     } else {
       next();
@@ -270,6 +321,7 @@
       currentIndex = -1;
       visible = false;
       queueOpen = false;
+      wantPlaying = false;
       if (mediaEl) mediaEl.pause();
       return;
     }
@@ -287,6 +339,7 @@
     currentIndex = -1;
     visible = false;
     queueOpen = false;
+    wantPlaying = false;
     if (mediaEl) mediaEl.pause();
   }
 
@@ -654,6 +707,21 @@
     bookmarked = await bm.toggle(info.type, info.id);
   }
 
+  /* The only other place src is set: a media element that has just mounted or
+     been swapped (first queue of the session, audio ⇄ video, closing the PiP)
+     starts out blank, so give it the current track — and, when the swap
+     interrupted playback, put it back where it was and keep it running. */
+  $effect(() => {
+    const el = mediaEl;
+    const url = currentTrack?.stream_url;
+    if (!el || !url) return;
+    if (srcEl === el && appliedSrc === url) return;
+    const resumeAt = currentTime;
+    applySrc(el, url);
+    if (resumeAt > 0 && pendingSeek == null) pendingSeek = resumeAt;
+    if (wantPlaying) startPlayback();
+  });
+
   $effect(() => {
     if (currentTrack) checkBookmark();
   });
@@ -826,10 +894,9 @@
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('fullscreenchange', onFullscreenChange);
     if ('mediaSession' in navigator) {
-      navigator.mediaSession.setActionHandler('play', () => {
-        if (mediaEl) mediaEl.play();
-      });
+      navigator.mediaSession.setActionHandler('play', () => startPlayback());
       navigator.mediaSession.setActionHandler('pause', () => {
+        wantPlaying = false;
         if (mediaEl) mediaEl.pause();
       });
       navigator.mediaSession.setActionHandler('previoustrack', prev);
@@ -901,18 +968,19 @@
         >
       </div>
       <!-- svelte-ignore a11y_media_has_caption -->
+      <!-- No src= here on purpose: loadTrack owns it. See applySrc. -->
       <video
         bind:this={mediaEl}
         bind:currentTime
         bind:duration
-        bind:paused
         bind:volume
         onended={onEnded}
         onloadedmetadata={onMediaLoaded}
         onerror={onMediaError}
         onplaying={onPlaying}
+        onplay={onPlay}
+        onpause={onPause}
         ondblclick={toggleFullscreen}
-        src={currentTrack?.stream_url}
         poster={currentTrack?.cover_url}
         preload="auto"
       ></video>
@@ -921,17 +989,18 @@
 
   <div class="player">
     {#if !isVideo || !pipOpen}
+      <!-- No src= here on purpose: loadTrack owns it. See applySrc. -->
       <audio
         bind:this={mediaEl}
         bind:currentTime
         bind:duration
-        bind:paused
         bind:volume
         onended={onEnded}
         onloadedmetadata={onMediaLoaded}
         onerror={onMediaError}
         onplaying={onPlaying}
-        src={currentTrack?.stream_url}
+        onplay={onPlay}
+        onpause={onPause}
         preload="auto"
       ></audio>
       {#if nextAudioUrl}
