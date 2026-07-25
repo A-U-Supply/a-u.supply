@@ -408,16 +408,9 @@
       .filter((v): v is string => !!v);
   }
 
-  async function persistFileOrder(slotId: string, list: HTMLElement) {
-    const order = domOrder(list, '.file-row[data-item-id]', 'itemId');
+  /** Send a file order. Shared by the drag handles and the arrow buttons. */
+  async function postFileOrder(slotId: string, order: string[]) {
     if (!order.length) return;
-    // Match state to the DOM Sortable already rearranged, so the keyed each
-    // block doesn't fight the drop while the request is in flight.
-    const byId = new Map((itemsBySlot[slotId] || []).map((i) => [i.id, i]));
-    itemsBySlot = {
-      ...itemsBySlot,
-      [slotId]: order.map((id) => byId.get(id)!).filter(Boolean),
-    };
     try {
       const res = await fetch(
         `/api/projects/${encodeURIComponent(projectId)}/slots/${encodeURIComponent(slotId)}/items/reorder`,
@@ -435,6 +428,19 @@
       error = e?.message || 'Failed to reorder files';
       loadItems(slotId); // resync on failure
     }
+  }
+
+  async function persistFileOrder(slotId: string, list: HTMLElement) {
+    const order = domOrder(list, '.file-row[data-item-id]', 'itemId');
+    if (!order.length) return;
+    // Match state to the DOM Sortable already rearranged, so the keyed each
+    // block doesn't fight the drop while the request is in flight.
+    const byId = new Map((itemsBySlot[slotId] || []).map((i) => [i.id, i]));
+    itemsBySlot = {
+      ...itemsBySlot,
+      [slotId]: order.map((id) => byId.get(id)!).filter(Boolean),
+    };
+    await postFileOrder(slotId, order);
   }
 
   async function loadPlaylist(slotId: string) {
@@ -456,23 +462,52 @@
   function togglePlaylist(slotId: string) {
     const open = !playlistOpen[slotId];
     playlistOpen = { ...playlistOpen, [slotId]: open };
-    if (open) loadPlaylist(slotId);
+    if (!open) return;
+    loadPlaylist(slotId);
+    // On a phone the button that opens the playlist is above a screenful of
+    // file rows, so the playlist lands off-screen. Bring its top into view
+    // once it exists (scroll-margin-top clears the sticky section map).
+    if (window.matchMedia('(max-width: 640px)').matches) {
+      requestAnimationFrame(() => {
+        document
+          .querySelector(`.playlist[data-slot-id="${slotId}"]`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
   }
 
-  async function persistPlaylistOrder(slotId: string, list: HTMLElement) {
-    const order = domOrder(list, '.track-row[data-media-id]', 'mediaId');
+  /** Move one track a step through the playlist (the arrow-button path). */
+  async function nudgeTrack(slotId: string, index: number, delta: number) {
+    const pl = playlistBySlot[slotId];
+    if (!pl) return;
+    const target = index + delta;
+    if (target < 0 || target >= pl.tracks.length) return;
+    const tracks = [...pl.tracks];
+    [tracks[index], tracks[target]] = [tracks[target], tracks[index]];
+    playlistBySlot = { ...playlistBySlot, [slotId]: { ...pl, tracks } };
+    await putPlaylistOrder(
+      slotId,
+      tracks.map((t) => t.media_item_id),
+    );
+  }
+
+  /** Move one file row a step through the slot's file order. */
+  async function nudgeFile(slotId: string, index: number, delta: number) {
+    const items = itemsBySlot[slotId] || [];
+    const target = index + delta;
+    if (target < 0 || target >= items.length) return;
+    const next = [...items];
+    [next[index], next[target]] = [next[target], next[index]];
+    itemsBySlot = { ...itemsBySlot, [slotId]: next };
+    await postFileOrder(
+      slotId,
+      next.map((i) => i.id),
+    );
+  }
+
+  /** Send a playlist order. Shared by the drag handles and the arrow buttons. */
+  async function putPlaylistOrder(slotId: string, order: string[]) {
     if (!order.length) return;
-    const current = playlistBySlot[slotId];
-    if (current) {
-      const byMedia = new Map(current.tracks.map((t) => [t.media_item_id, t]));
-      playlistBySlot = {
-        ...playlistBySlot,
-        [slotId]: {
-          ...current,
-          tracks: order.map((id) => byMedia.get(id)!).filter(Boolean),
-        },
-      };
-    }
     try {
       const res = await fetch(
         `/api/projects/${encodeURIComponent(projectId)}/slots/${encodeURIComponent(slotId)}/playlist`,
@@ -489,6 +524,23 @@
       error = e?.message || 'Failed to reorder playlist';
       loadPlaylist(slotId); // resync on failure
     }
+  }
+
+  async function persistPlaylistOrder(slotId: string, list: HTMLElement) {
+    const order = domOrder(list, '.track-row[data-media-id]', 'mediaId');
+    if (!order.length) return;
+    const current = playlistBySlot[slotId];
+    if (current) {
+      const byMedia = new Map(current.tracks.map((t) => [t.media_item_id, t]));
+      playlistBySlot = {
+        ...playlistBySlot,
+        [slotId]: {
+          ...current,
+          tracks: order.map((id) => byMedia.get(id)!).filter(Boolean),
+        },
+      };
+    }
+    await putPlaylistOrder(slotId, order);
   }
 
   function playPlaylist(slotId: string, startIndex = 0) {
@@ -1376,7 +1428,7 @@
         <div class="slot__panel">
           {#if (itemsBySlot[slot.id] || []).length > 0}
             <ul class="file-list" use:sortableFiles={slot.id}>
-              {#each itemsBySlot[slot.id] as it (it.id)}
+              {#each itemsBySlot[slot.id] as it, i (it.id)}
                 <li
                   class="file-row"
                   class:file-row--primary={it.is_primary}
@@ -1494,6 +1546,22 @@
                       />
                     {/if}
                     <button
+                      class="action-btn file-row__up"
+                      type="button"
+                      title="Move up"
+                      aria-label={`Move ${it.media?.filename || 'file'} up`}
+                      disabled={i === 0}
+                      onclick={() => nudgeFile(slot.id, i, -1)}>↑</button
+                    >
+                    <button
+                      class="action-btn file-row__down"
+                      type="button"
+                      title="Move down"
+                      aria-label={`Move ${it.media?.filename || 'file'} down`}
+                      disabled={i === (itemsBySlot[slot.id] || []).length - 1}
+                      onclick={() => nudgeFile(slot.id, i, 1)}>↓</button
+                    >
+                    <button
                       class="action-btn"
                       type="button"
                       title="Rename"
@@ -1586,7 +1654,7 @@
           -->
           {#if playlistOpen[slot.id]}
             {@const pl = playlistBySlot[slot.id]}
-            <div class="playlist">
+            <div class="playlist" data-slot-id={slot.id}>
               <div class="playlist__head">
                 <button
                   class="action-btn playlist__play-all"
@@ -1625,6 +1693,22 @@
                       <span class="track-row__name">{t.filename || '—'}</span>
                       <span class="track-row__dur"
                         >{fmtDuration(t.duration_seconds)}</span
+                      >
+                      <button
+                        class="action-btn track-row__up"
+                        type="button"
+                        title="Move up"
+                        aria-label={`Move ${t.filename || 'track'} up`}
+                        disabled={i === 0}
+                        onclick={() => nudgeTrack(slot.id, i, -1)}>↑ Up</button
+                      >
+                      <button
+                        class="action-btn track-row__down"
+                        type="button"
+                        title="Move down"
+                        aria-label={`Move ${t.filename || 'track'} down`}
+                        disabled={i === pl.tracks.length - 1}
+                        onclick={() => nudgeTrack(slot.id, i, 1)}>↓ Down</button
                       >
                       <button
                         class="action-btn track-row__play"
@@ -2147,6 +2231,19 @@
     padding: 2px 6px;
     font-size: 0.75rem;
   }
+  /* Arrow buttons are the touch alternative to dragging: shown at <=640px
+     only, where a long-press drag competes with the page scroll. Desktop keeps
+     the drag handle and stays dense. */
+  .track-row__up,
+  .track-row__down,
+  .file-row__up,
+  .file-row__down {
+    display: none;
+  }
+  .playlist {
+    /* Cleared past the sticky section map when scrolled into view on open. */
+    scroll-margin-top: 72px;
+  }
   .session-pill,
   .session-chip {
     border: 1px solid var(--color-border);
@@ -2278,12 +2375,31 @@
       overflow-wrap: anywhere;
     }
     .track-row {
-      grid-template-columns: 44px 3ch 1fr;
+      grid-template-columns: 44px 3ch 1fr auto;
       grid-template-areas:
-        'drag pos name'
-        'drag dur play';
+        'drag pos  name name'
+        'drag dur  up   down'
+        'drag play play play';
       row-gap: 4px;
       padding: 6px 8px;
+    }
+    .track-row__up,
+    .track-row__down,
+    .file-row__up,
+    .file-row__down {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      min-width: 44px;
+    }
+    .track-row__up {
+      grid-area: up;
+      justify-self: end;
+    }
+    .track-row__down {
+      grid-area: down;
+      justify-self: end;
     }
     .track-row__drag {
       grid-area: drag;
@@ -2301,9 +2417,8 @@
     }
     .track-row__play {
       grid-area: play;
-      justify-self: end;
+      justify-self: stretch;
       min-height: 44px;
-      min-width: 44px;
     }
     .playlist__play-all,
     .playlist-toggle {
