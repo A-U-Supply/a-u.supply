@@ -1436,12 +1436,30 @@
                   data-media-id={it.media_item_id}
                   data-item-id={it.id}
                 >
-                  <button
-                    class="file-row__drag drag-handle"
-                    type="button"
-                    aria-label={`Drag to reorder ${it.media?.filename || 'file'}`}
-                    title="Drag to reorder">⠿</button
-                  >
+                  <span class="row-move">
+                    <button
+                      class="row-move__arrow file-row__up"
+                      type="button"
+                      title="Move up"
+                      aria-label={`Move ${it.media?.filename || 'file'} up`}
+                      disabled={i === 0}
+                      onclick={() => nudgeFile(slot.id, i, -1)}>↑</button
+                    >
+                    <button
+                      class="file-row__drag drag-handle"
+                      type="button"
+                      aria-label={`Drag to reorder ${it.media?.filename || 'file'}`}
+                      title="Drag to reorder">⠿</button
+                    >
+                    <button
+                      class="row-move__arrow file-row__down"
+                      type="button"
+                      title="Move down"
+                      aria-label={`Move ${it.media?.filename || 'file'} down`}
+                      disabled={i === (itemsBySlot[slot.id] || []).length - 1}
+                      onclick={() => nudgeFile(slot.id, i, 1)}>↓</button
+                    >
+                  </span>
                   <button
                     class="file-row__star"
                     type="button"
@@ -1545,22 +1563,6 @@
                         counts={annotationCounts[it.media_item_id] || null}
                       />
                     {/if}
-                    <button
-                      class="action-btn file-row__up"
-                      type="button"
-                      title="Move up"
-                      aria-label={`Move ${it.media?.filename || 'file'} up`}
-                      disabled={i === 0}
-                      onclick={() => nudgeFile(slot.id, i, -1)}>↑</button
-                    >
-                    <button
-                      class="action-btn file-row__down"
-                      type="button"
-                      title="Move down"
-                      aria-label={`Move ${it.media?.filename || 'file'} down`}
-                      disabled={i === (itemsBySlot[slot.id] || []).length - 1}
-                      onclick={() => nudgeFile(slot.id, i, 1)}>↓</button
-                    >
                     <button
                       class="action-btn"
                       type="button"
@@ -1683,32 +1685,34 @@
                 <ul class="playlist__list" use:sortableTracks={slot.id}>
                   {#each pl.tracks as t, i (t.media_item_id)}
                     <li class="track-row" data-media-id={t.media_item_id}>
-                      <button
-                        class="track-row__drag drag-handle"
-                        type="button"
-                        aria-label={`Drag to reorder ${t.filename || 'track'}`}
-                        title="Drag to reorder">⠿</button
-                      >
+                      <span class="row-move">
+                        <button
+                          class="row-move__arrow track-row__up"
+                          type="button"
+                          title="Move up"
+                          aria-label={`Move ${t.filename || 'track'} up`}
+                          disabled={i === 0}
+                          onclick={() => nudgeTrack(slot.id, i, -1)}>↑</button
+                        >
+                        <button
+                          class="track-row__drag drag-handle"
+                          type="button"
+                          aria-label={`Drag to reorder ${t.filename || 'track'}`}
+                          title="Drag to reorder">⠿</button
+                        >
+                        <button
+                          class="row-move__arrow track-row__down"
+                          type="button"
+                          title="Move down"
+                          aria-label={`Move ${t.filename || 'track'} down`}
+                          disabled={i === pl.tracks.length - 1}
+                          onclick={() => nudgeTrack(slot.id, i, 1)}>↓</button
+                        >
+                      </span>
                       <span class="track-row__pos">{i + 1}</span>
                       <span class="track-row__name">{t.filename || '—'}</span>
                       <span class="track-row__dur"
                         >{fmtDuration(t.duration_seconds)}</span
-                      >
-                      <button
-                        class="action-btn track-row__up"
-                        type="button"
-                        title="Move up"
-                        aria-label={`Move ${t.filename || 'track'} up`}
-                        disabled={i === 0}
-                        onclick={() => nudgeTrack(slot.id, i, -1)}>↑ Up</button
-                      >
-                      <button
-                        class="action-btn track-row__down"
-                        type="button"
-                        title="Move down"
-                        aria-label={`Move ${t.filename || 'track'} down`}
-                        disabled={i === pl.tracks.length - 1}
-                        onclick={() => nudgeTrack(slot.id, i, 1)}>↓ Down</button
                       >
                       <button
                         class="action-btn track-row__play"
@@ -2231,14 +2235,30 @@
     padding: 2px 6px;
     font-size: 0.75rem;
   }
-  /* Arrow buttons are the touch alternative to dragging: shown at <=640px
-     only, where a long-press drag competes with the page scroll. Desktop keeps
-     the drag handle and stays dense. */
-  .track-row__up,
-  .track-row__down,
-  .file-row__up,
-  .file-row__down {
+  /* One vertical control column per row: ↑ above the grip, ↓ below it. The
+     arrows are the touch alternative to dragging and appear at <=640px only,
+     where a long-press drag competes with the page scroll; on desktop the
+     stack collapses to the grip alone and rows stay dense. */
+  .row-move {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .row-move__arrow {
+    background: transparent;
+    border: 0;
+    color: var(--color-muted);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 0;
     display: none;
+  }
+  .row-move__arrow:disabled {
+    opacity: 0.3;
+    cursor: default;
   }
   .playlist {
     /* Cleared past the sticky section map when scrolled into view on open. */
@@ -2340,10 +2360,25 @@
       row-gap: 4px;
       padding: 6px 8px;
     }
-    .file-row__drag {
+    .row-move {
       grid-row: 1 / -1;
-      min-height: 44px;
+      align-self: stretch;
+    }
+    .row-move__arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      /* Three stacked targets in a 44px-wide column: the arrows take 36px each
+         so the whole control stays thumb-sized without a giant row. */
+      min-height: 36px;
+      width: 100%;
+      font-size: 1.15rem;
+    }
+    .file-row__drag,
+    .track-row__drag {
+      min-height: 40px;
       font-size: 1.1rem;
+      width: 100%;
     }
     .file-row__actions {
       grid-column: 2 / -1;
@@ -2377,34 +2412,14 @@
     .track-row {
       grid-template-columns: 44px 3ch 1fr auto;
       grid-template-areas:
-        'drag pos  name name'
-        'drag dur  up   down'
-        'drag play play play';
+        'move pos  name name'
+        'move dur  play play';
       row-gap: 4px;
       padding: 6px 8px;
     }
-    .track-row__up,
-    .track-row__down,
-    .file-row__up,
-    .file-row__down {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 44px;
-      min-width: 44px;
-    }
-    .track-row__up {
-      grid-area: up;
-      justify-self: end;
-    }
-    .track-row__down {
-      grid-area: down;
-      justify-self: end;
-    }
-    .track-row__drag {
-      grid-area: drag;
-      min-height: 44px;
-      font-size: 1.1rem;
+    .track-row .row-move {
+      grid-area: move;
+      align-self: stretch;
     }
     .track-row__pos {
       grid-area: pos;
