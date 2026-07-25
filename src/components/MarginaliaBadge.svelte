@@ -1,7 +1,10 @@
 <!--
   MarginaliaBadge — compact "💬 n" count chip for slot rows / loose tiles.
 
-  Renders nothing when the item has no annotations. Clicking opens a
+  Renders nothing when the item has no annotations, unless `showEmpty` is set
+  — on a phone the badge is the only visible door to a file's comments, and
+  hiding it at zero means a file can never get its first one from there.
+  Clicking opens a
   popover (bottom sheet on mobile) listing the item's annotations +
   inherited session cues via MarginaliaList in compact read-only mode —
   each row's [mm:ss] button queues the item in the player at that
@@ -19,6 +22,8 @@
     mediaType?: string;
     filename?: string;
     counts?: { comments: number; cues: number; unresolved: number } | null;
+    /** Show a "💬 +" affordance when the item has no annotations yet. */
+    showEmpty?: boolean;
   };
 
   let {
@@ -26,6 +31,7 @@
     mediaType = '',
     filename = '',
     counts = null,
+    showEmpty = false,
   }: Props = $props();
 
   let open = $state(false);
@@ -50,7 +56,18 @@
   }
 </script>
 
-{#if counts && total > 0}
+{#if !(counts && total > 0) && showEmpty}
+  <button
+    class="mgl-badge mgl-badge--empty"
+    type="button"
+    onclick={toggle}
+    aria-expanded={open}
+    aria-label={`Comments and markers for ${filename || 'this file'} — none yet`}
+    title="Comments and markers — none yet"
+  >
+    💬 +
+  </button>
+{:else if counts && total > 0}
   <button
     class="mgl-badge"
     type="button"
@@ -103,6 +120,9 @@
 {/if}
 
 <style>
+  .mgl-badge--empty {
+    color: var(--color-muted);
+  }
   .mgl-badge {
     position: relative;
     border: 1px solid var(--color-border);

@@ -67,8 +67,8 @@
   }
   .row-move--phone {
     grid-template-columns: 1fr 1fr;
-    width: 76px;
-    flex: 0 0 76px;
+    width: 68px;
+    flex: 0 0 68px;
   }
   .row-move__grip {
     grid-column: 1 / -1;
@@ -81,7 +81,7 @@
     touch-action: none;
   }
   .row-move--phone .row-move__grip {
-    min-height: 40px;
+    min-height: 36px;
     width: 100%;
     border: 1px solid var(--color-border);
     background: var(--color-bg);
@@ -96,7 +96,7 @@
     justify-content: center;
     font-family: inherit;
     font-size: 1.1rem;
-    min-height: 36px;
+    min-height: 32px;
     width: 100%;
     background: var(--color-bg);
     border: 1px solid var(--color-border);

@@ -283,31 +283,40 @@ body.player-active .admin-main {
  * collapsed page reads as a status board rather than a wall of open panels.
  * The controls stay in the head; only the body collapses. */
 .sec-summary {
-  display: flex;
+  /* Label on its own line: on one shared row a long repo path or document
+     name squeezed the section's name into wrapping. */
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    'caret label'
+    '.     meta';
+  column-gap: 6px;
+  row-gap: 1px;
   align-items: center;
-  gap: 6px;
   flex: 1 1 auto;
   min-width: 0;
   font: inherit;
   background: none;
   border: 0;
   color: var(--color-text);
-  padding: 0;
+  padding: 4px 0;
   min-height: 44px;
   text-align: left;
   cursor: pointer;
 }
 .sec-summary__caret {
+  grid-area: caret;
   color: var(--color-muted);
-  flex: 0 0 auto;
 }
 .sec-summary__label {
+  grid-area: label;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1pt;
   font-size: var(--text-sm);
 }
 .sec-summary__meta {
+  grid-area: meta;
   font-size: 0.65rem;
   color: var(--color-muted);
   overflow: hidden;
