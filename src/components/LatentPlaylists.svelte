@@ -522,7 +522,12 @@
   <div class="sheet" role="dialog" aria-modal="true" aria-label="Add tracks">
     <header class="sheet__head">
       <strong>Add tracks</strong>
-      <button class="action-btn" type="button" onclick={closeAdd}>✕</button>
+      <button
+        class="action-btn"
+        type="button"
+        aria-label="Close add tracks"
+        onclick={closeAdd}>✕</button
+      >
       <input
         class="sheet__filter"
         placeholder="Filter by name or slot…"

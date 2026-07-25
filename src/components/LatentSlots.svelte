@@ -599,7 +599,11 @@
       key: 'threads',
       label: slot.thread_count ? `Threads(${slot.thread_count})` : 'Threads',
     });
-    if (slot.repo_path) tabs.push({ key: 'runs', label: 'Runs' });
+    /* Shown whenever the latent has a repo, not just when this slot is
+       already linked: the link/run/unlink controls live in this tab, so
+       gating it on repo_path left no way to link a slot from a phone. */
+    if (repoMeta)
+      tabs.push({ key: 'runs', label: slot.repo_path ? 'Runs' : 'Repo' });
     return tabs;
   }
 
@@ -1474,7 +1478,7 @@
           {/if}
         </div>
 
-        {#if repoMeta && !isPhone()}
+        {#if repoMeta && (!isPhone() || (isOpen(slot.id) && shows(slot.id, 'runs')))}
           <div class="slot__repo">
             {#if linkingSlot === slot.id}
               <input
@@ -1596,6 +1600,9 @@
                       <button
                         class="file-row__star"
                         type="button"
+                        aria-label={it.is_primary
+                          ? `${it.media?.filename || 'This file'} is the card image — tap to unstar`
+                          : `Use ${it.media?.filename || 'this file'} as the card image`}
                         title={it.is_primary
                           ? 'Primary (click to unstar)'
                           : 'Mark as primary'}
@@ -1797,6 +1804,7 @@
                                   <button
                                     class="action-btn"
                                     type="button"
+                                    aria-label={`Play ${child.filename || 'extracted file'}`}
                                     title="Play (queues in the persistent Player)"
                                     onclick={() =>
                                       playInPlayer(

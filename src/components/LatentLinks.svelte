@@ -319,12 +319,14 @@
                 class="chip__edit-btn"
                 type="button"
                 title="Edit"
+                aria-label={`Edit link ${link.label || link.url}`}
                 onclick={() => beginEdit(link)}>✎</button
               >
               <button
                 class="chip__remove"
                 type="button"
                 title="Remove"
+                aria-label={`Remove link ${link.label || link.url}`}
                 onclick={() => removeLink(link)}>×</button
               >
             {/if}
