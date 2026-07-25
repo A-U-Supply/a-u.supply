@@ -12,6 +12,7 @@
   Dropbox are similarly badged. Anything else is a generic link chip.
 -->
 <script lang="ts">
+  import { isPhone } from '../lib/viewport.svelte.ts';
   import LatentStyleButton from './LatentStyleButton.svelte';
 
   type Props = {
@@ -56,6 +57,10 @@
   let adding = $state(false);
   let addUrl = $state('');
   let addLabel = $state('');
+  let open = $state(false);
+  /* Only the page-level Links section collapses. The per-slot instance is
+     already inside a slot's Links tab; a second layer there is a trap. */
+  let collapsible = $derived(isPhone() && !compact && !!title);
   let editingId = $state<string | null>(null);
   let editUrl = $state('');
   let editLabel = $state('');
@@ -226,8 +231,25 @@
 <section class="links" class:compact>
   {#if title}
     <header class="links__head" class:latent-band={!!styleKey}>
-      <h3>{title}</h3>
-      <span class="muted">{links.length}</span>
+      {#if collapsible}
+        <button
+          class="sec-summary"
+          type="button"
+          aria-expanded={open}
+          onclick={() => (open = !open)}
+        >
+          <span class="sec-summary__caret" aria-hidden="true"
+            >{open ? '▾' : '▸'}</span
+          >
+          <span class="sec-summary__label">{title}</span>
+          <span class="sec-summary__meta"
+            >{links.length} link{links.length === 1 ? '' : 's'}</span
+          >
+        </button>
+      {:else}
+        <h3>{title}</h3>
+        <span class="muted">{links.length}</span>
+      {/if}
       {#if styleKey && projectId}
         <LatentStyleButton
           {projectId}
@@ -239,7 +261,9 @@
     </header>
   {/if}
 
-  {#if loading && links.length === 0}
+  {#if collapsible && !open}
+    <!-- collapsed: the summary above carries the count -->
+  {:else if loading && links.length === 0}
     <span class="muted">…</span>
   {:else if links.length === 0 && readOnly}
     <span class="muted">No related Latent links.</span>

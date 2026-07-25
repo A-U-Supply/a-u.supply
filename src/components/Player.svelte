@@ -2638,17 +2638,17 @@
 
     .player__pip {
       width: 200px;
-      bottom: 96px;
+      bottom: 100px;
     }
 
     .queue-panel {
-      max-height: calc(100vh - 96px);
-      bottom: 96px;
+      max-height: calc(100vh - 100px);
+      bottom: 100px;
     }
 
     /* Marginalia panel → bottom sheet. */
     .marginalia {
-      bottom: 96px;
+      bottom: 100px;
       max-height: 70vh;
     }
     /* ≥44px hit areas without blowing up the visuals. */

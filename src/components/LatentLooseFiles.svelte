@@ -13,6 +13,7 @@
     type AnnotationCounts,
   } from './marginalia.ts';
   import { fileExt } from '../lib/fileExt.ts';
+  import RowActions from './RowActions.svelte';
 
   type Props = {
     projectId: string;
@@ -299,13 +300,11 @@
             {/if}
           </div>
           <div class="tile__actions">
-            <button class="action-btn" type="button" onclick={() => rename(it)}
-              >Rename</button
-            >
             {#if it.media?.media_type === 'audio' || it.media?.media_type === 'video' || it.media?.media_type === 'midi'}
               <button
                 class="action-btn"
                 type="button"
+                aria-label={`Play ${it.media?.filename || 'file'}`}
                 title="Play (queues in the persistent Player)"
                 onclick={() =>
                   playInPlayer(
@@ -315,23 +314,43 @@
                   )}>▶ Play</button
               >
             {/if}
-            {#if it.media?.media_type === 'image'}
-              <button
-                class="action-btn"
-                type="button"
-                onclick={() => setAsHero(it)}>Set as card image</button
-              >
-            {/if}
-            <a
-              class="action-btn"
-              href={fileUrl(it.media_item_id)}
-              download={it.media?.filename}>Download</a
-            >
-            <button
-              class="action-btn action-btn--danger"
-              type="button"
-              onclick={() => detach(it)}>Detach</button
-            >
+            <RowActions
+              label={it.media?.filename || 'this file'}
+              meta={[
+                fileExt(it.media?.filename) || it.media?.media_type || 'file',
+                it.media?.file_size_bytes
+                  ? formatSize(it.media.file_size_bytes)
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+              actions={[
+                { label: 'Rename', onClick: () => rename(it) },
+                ...(it.media?.media_type === 'image'
+                  ? [
+                      {
+                        label: 'Set as card image',
+                        onClick: () => setAsHero(it),
+                      },
+                    ]
+                  : []),
+                {
+                  label: 'Download',
+                  href: fileUrl(it.media_item_id),
+                  download: it.media?.filename || undefined,
+                },
+                {
+                  label: 'Open in Stacks',
+                  href: `/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`,
+                },
+                {
+                  label: 'Detach',
+                  danger: true,
+                  title: 'Remove from this Latent. File stays in Emulsion.',
+                  onClick: () => detach(it),
+                },
+              ]}
+            />
           </div>
         </li>
       {/each}

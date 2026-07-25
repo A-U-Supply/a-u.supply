@@ -178,18 +178,28 @@
     text-overflow: ellipsis;
   }
   @media (max-width: 640px) {
-    /* Mobile: the map is the primary navigation — sticky, one scrollable
-       row so a long slot list can't bury the page. */
+    /* Mobile: the map is the primary navigation — sticky, and wrapping rather
+       than scrolling. A scroll strip hid the later sections off the edge, and
+       this is the only nav on the page. */
     .map {
       position: sticky;
       top: 0;
       z-index: 30;
       background: var(--color-bg);
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      border-bottom: 1px solid var(--color-border);
-      padding: 6px 0;
+      flex-wrap: wrap;
+      gap: 3px;
+      border-bottom: 2px solid var(--color-text);
+      padding: 5px 0;
+    }
+    /* Was 0.66rem with 2px padding — under the touch guidance the rest of the
+       page respects, for the control you navigate with. */
+    .map__chip {
+      border: 1px solid var(--color-border);
+      padding: 5px 6px;
+      min-height: 32px;
+    }
+    .map__name {
+      max-width: 92px;
     }
   }
 </style>

@@ -16,6 +16,7 @@
     - currentUserId: local user id, used to gate the edit/delete affordances.
 -->
 <script lang="ts">
+  import { isPhone } from '../lib/viewport.svelte.ts';
   import LatentStyleButton from './LatentStyleButton.svelte';
 
   type Props = {
@@ -101,6 +102,10 @@
   let savingTitle = $state(false);
 
   let useCompactHeader = $derived(compact || singleThread);
+  let open = $state(false);
+  /* Only the page-level section collapses; the slot instance already sits
+     inside a slot's Threads tab. */
+  let collapsed = $derived(isPhone() && !useCompactHeader && !open);
 
   let primaryThread = $derived(
     singleThread && threads.length > 0
@@ -382,7 +387,24 @@
 <section class="threads" class:compact={useCompactHeader}>
   {#if !useCompactHeader}
     <header class="threads__head" class:latent-band={!!styleKey}>
-      <h2>{title}</h2>
+      {#if isPhone()}
+        <button
+          class="sec-summary"
+          type="button"
+          aria-expanded={open}
+          onclick={() => (open = !open)}
+        >
+          <span class="sec-summary__caret" aria-hidden="true"
+            >{open ? '▾' : '▸'}</span
+          >
+          <span class="sec-summary__label">{title}</span>
+          <span class="sec-summary__meta"
+            >{threads.length} thread{threads.length === 1 ? '' : 's'}</span
+          >
+        </button>
+      {:else}
+        <h2>{title}</h2>
+      {/if}
       {#if !singleThread}
         <button
           class="action-btn"
@@ -413,290 +435,301 @@
     </div>
   {/if}
 
-  <!-- Skip the community label when rendering as a single thread: the
+  {#if collapsed}
+    <!-- collapsed on a phone: the summary above carries the thread count -->
+  {:else}
+    <!-- Skip the community label when rendering as a single thread: the
        `↗ fold` link inside `.single__head` already deep-links to the
        discussion (and from there to its community), and the label was
        floating outside the brutal-card chrome on the media detail
        page. -->
-  {#if communityLabel && !singleThread}
-    <div class="threads__community">
-      in
-      {#if communityUrl}
-        <a href={communityUrl} target="_blank" rel="noopener"
-          >c/{communityLabel} ↗</a
-        >
-      {:else}
-        <span>c/{communityLabel}</span>
-      {/if}
-    </div>
-  {/if}
-
-  {#if !lemmyConfigured}
-    <div class="notice notice--warn">Discussion temporarily unavailable.</div>
-  {:else if !lemmyLinked}
-    <div class="notice notice--warn">
-      Link your fold account in <a href="/admin/settings">Settings</a> to post.
-    </div>
-  {/if}
-
-  {#if error}
-    <div class="notice notice--error">{error}</div>
-  {/if}
-
-  {#if composerOpen && !singleThread}
-    <form
-      class="composer"
-      onsubmit={(e) => {
-        e.preventDefault();
-        createThread();
-      }}
-    >
-      <input
-        type="text"
-        placeholder="Thread title"
-        bind:value={composerTitle}
-        required
-      />
-      <textarea
-        rows="3"
-        placeholder="Body (markdown, optional)"
-        bind:value={composerBody}
-      ></textarea>
-      <input
-        type="url"
-        placeholder="Paste a SoundCloud / Drive / YouTube URL for a link post (optional)"
-        bind:value={composerUrl}
-      />
-      <div class="composer__help">
-        Posts as you in c/{communityLabel || 'stacks'}.
+    {#if communityLabel && !singleThread}
+      <div class="threads__community">
+        in
+        {#if communityUrl}
+          <a href={communityUrl} target="_blank" rel="noopener"
+            >c/{communityLabel} ↗</a
+          >
+        {:else}
+          <span>c/{communityLabel}</span>
+        {/if}
       </div>
-      <div class="composer__actions">
-        <button class="btn-primary" type="submit" disabled={posting}
-          >{posting ? 'Posting…' : 'Post thread'}</button
-        >
-      </div>
-    </form>
-  {/if}
+    {/if}
 
-  {#if singleThread}
-    {#if loading && !primaryThread}
-      <div class="muted">Loading discussion…</div>
-    {:else if primaryThread}
-      <div class="single">
-        <div class="single__head">
-          {#if editingTitle}
-            <!-- Edit mode reveals the underlying thread title in an
+    {#if !lemmyConfigured}
+      <div class="notice notice--warn">Discussion temporarily unavailable.</div>
+    {:else if !lemmyLinked}
+      <div class="notice notice--warn">
+        Link your fold account in <a href="/admin/settings">Settings</a> to post.
+      </div>
+    {/if}
+
+    {#if error}
+      <div class="notice notice--error">{error}</div>
+    {/if}
+
+    {#if composerOpen && !singleThread}
+      <form
+        class="composer"
+        onsubmit={(e) => {
+          e.preventDefault();
+          createThread();
+        }}
+      >
+        <input
+          type="text"
+          placeholder="Thread title"
+          bind:value={composerTitle}
+          required
+        />
+        <textarea
+          rows="3"
+          placeholder="Body (markdown, optional)"
+          bind:value={composerBody}
+        ></textarea>
+        <input
+          type="url"
+          placeholder="Paste a SoundCloud / Drive / YouTube URL for a link post (optional)"
+          bind:value={composerUrl}
+        />
+        <div class="composer__help">
+          Posts as you in c/{communityLabel || 'stacks'}.
+        </div>
+        <div class="composer__actions">
+          <button class="btn-primary" type="submit" disabled={posting}
+            >{posting ? 'Posting…' : 'Post thread'}</button
+          >
+        </div>
+      </form>
+    {/if}
+
+    {#if singleThread}
+      {#if loading && !primaryThread}
+        <div class="muted">Loading discussion…</div>
+      {:else if primaryThread}
+        <div class="single">
+          <div class="single__head">
+            {#if editingTitle}
+              <!-- Edit mode reveals the underlying thread title in an
                  input so the user can rename it. Default mode just
                  shows the static section label "Comments" — the
                  auto-generated thread title isn't surfaced because it's
                  noise (it always says "Discussion: <filename>" until
                  someone bothers to rename, and the section already
                  lives under that filename in the page). -->
-            <input
-              class="single__title-input"
-              type="text"
-              bind:value={editTitleDraft}
-            />
-            <button
-              class="action-btn"
-              type="button"
-              disabled={savingTitle || !editTitleDraft.trim()}
-              onclick={saveTitle}>{savingTitle ? 'Saving…' : 'Save'}</button
-            >
-            <button
-              class="action-btn"
-              type="button"
-              onclick={() => (editingTitle = false)}>Cancel</button
-            >
-          {:else}
-            <h3 class="single__title">Comments</h3>
-            {#if canEditPrimary}
+              <input
+                class="single__title-input"
+                type="text"
+                bind:value={editTitleDraft}
+              />
               <button
-                class="icon-btn"
+                class="action-btn"
                 type="button"
-                title="Rename thread"
-                onclick={startTitleEdit}>✏️</button
+                disabled={savingTitle || !editTitleDraft.trim()}
+                onclick={saveTitle}>{savingTitle ? 'Saving…' : 'Save'}</button
               >
-            {/if}
-            {#if primaryThread.lemmy_url}
-              <a
-                class="single__lemmy"
-                href={primaryThread.lemmy_url}
-                target="_blank"
-                rel="noopener"
-                title="View on fold">↗ fold</a
+              <button
+                class="action-btn"
+                type="button"
+                onclick={() => (editingTitle = false)}>Cancel</button
               >
+            {:else}
+              <h3 class="single__title">Comments</h3>
+              {#if canEditPrimary}
+                <button
+                  class="icon-btn"
+                  type="button"
+                  title="Rename thread"
+                  onclick={startTitleEdit}>✏️</button
+                >
+              {/if}
+              {#if primaryThread.lemmy_url}
+                <a
+                  class="single__lemmy"
+                  href={primaryThread.lemmy_url}
+                  target="_blank"
+                  rel="noopener"
+                  title="View on fold">↗ fold</a
+                >
+              {/if}
             {/if}
-          {/if}
-        </div>
-        {#if primaryThread.url}
-          <a
-            class="link-card"
-            href={primaryThread.url}
-            target="_blank"
-            rel="noopener">{primaryThread.url}</a
-          >
-        {/if}
-        {#if primaryThread.body}
-          <div class="markdown">{primaryThread.body}</div>
-        {/if}
-        <ul class="comments">
-          {#each nestedSingle as { c, depth } (c.id)}
-            <li
-              class="comment"
-              style="margin-left: {Math.min(depth, 6) * 16}px"
+          </div>
+          {#if primaryThread.url}
+            <a
+              class="link-card"
+              href={primaryThread.url}
+              target="_blank"
+              rel="noopener">{primaryThread.url}</a
             >
-              <div class="comment__meta">
-                <span>{commentAuthor(c)}</span>
-                <span>{fmtTime(c.published)}</span>
-              </div>
-              <div class="comment__body">
-                {c.deleted ? '(deleted)' : c.content}
-              </div>
-            </li>
-          {/each}
-          {#if nestedSingle.length === 0}
-            <li class="muted">No replies yet.</li>
           {/if}
-        </ul>
-        <form
-          class="reply"
-          onsubmit={(e) => {
-            e.preventDefault();
-            postSingleReply();
-          }}
-        >
-          <textarea
-            rows="2"
-            placeholder="Reply…"
-            bind:value={singleReply}
-            disabled={!lemmyConfigured || !lemmyLinked}
-          ></textarea>
-          <button
-            class="action-btn"
-            type="submit"
-            disabled={!singleReply.trim() || singlePosting || !lemmyLinked}
-            >{singlePosting ? 'Posting…' : 'Post reply'}</button
+          {#if primaryThread.body}
+            <div class="markdown">{primaryThread.body}</div>
+          {/if}
+          <ul class="comments">
+            {#each nestedSingle as { c, depth } (c.id)}
+              <li
+                class="comment"
+                style="margin-left: {Math.min(depth, 6) * 16}px"
+              >
+                <div class="comment__meta">
+                  <span>{commentAuthor(c)}</span>
+                  <span>{fmtTime(c.published)}</span>
+                </div>
+                <div class="comment__body">
+                  {c.deleted ? '(deleted)' : c.content}
+                </div>
+              </li>
+            {/each}
+            {#if nestedSingle.length === 0}
+              <li class="muted">No replies yet.</li>
+            {/if}
+          </ul>
+          <form
+            class="reply"
+            onsubmit={(e) => {
+              e.preventDefault();
+              postSingleReply();
+            }}
           >
-        </form>
-      </div>
-    {:else}
-      <div class="single single--empty">
-        <!-- Section label "Comments" matches the populated card head;
+            <textarea
+              rows="2"
+              placeholder="Reply…"
+              bind:value={singleReply}
+              disabled={!lemmyConfigured || !lemmyLinked}
+            ></textarea>
+            <button
+              class="action-btn"
+              type="submit"
+              disabled={!singleReply.trim() || singlePosting || !lemmyLinked}
+              >{singlePosting ? 'Posting…' : 'Post reply'}</button
+            >
+          </form>
+        </div>
+      {:else}
+        <div class="single single--empty">
+          <!-- Section label "Comments" matches the populated card head;
              the auto-generated thread title is not surfaced here for
              the same reason as the populated state (noise until
              someone renames). -->
-        <div class="single__empty-head">Comments</div>
-        <form
-          class="reply"
-          onsubmit={(e) => {
-            e.preventDefault();
-            postSingleReply();
-          }}
-        >
-          <textarea
-            rows="2"
-            placeholder="Leave the first comment…"
-            bind:value={singleReply}
-            disabled={!lemmyConfigured || !lemmyLinked}
-          ></textarea>
-          <div class="composer__help">
-            Posts as you in c/{communityLabel || 'stacks'}. Thread auto-titled “{defaultTitle}”
-            — you can rename it after.
-          </div>
-          <button
-            class="action-btn"
-            type="submit"
-            disabled={!singleReply.trim() || singlePosting || !lemmyLinked}
-            >{singlePosting ? 'Posting…' : 'Post first comment'}</button
+          <div class="single__empty-head">Comments</div>
+          <form
+            class="reply"
+            onsubmit={(e) => {
+              e.preventDefault();
+              postSingleReply();
+            }}
           >
-        </form>
-      </div>
-    {/if}
-  {:else if loading && threads.length === 0}
-    <div class="muted">Loading threads…</div>
-  {:else if threads.length === 0}
-    <div class="muted">No threads yet.</div>
-  {:else}
-    <ul class="thread-list">
-      {#each threads as t (t.id)}
-        <li class="thread" class:expanded={expandedId === t.id}>
-          <button class="thread__head" onclick={() => expand(t)} type="button">
-            <span class="thread__title">{t.title || '(untitled)'}</span>
-            <span class="thread__meta">{fmtTime(t.created_at)}</span>
-          </button>
-          {#if expandedId === t.id}
-            <div class="thread__body">
-              {#if t.lemmy_url}
-                <a
-                  class="thread__lemmy"
-                  href={t.lemmy_url}
-                  target="_blank"
-                  rel="noopener">↗ View on fold</a
-                >
-              {/if}
-              {#if t.url}
-                <a class="link-card" href={t.url} target="_blank" rel="noopener"
-                  >{t.url}</a
-                >
-              {/if}
-              {#if t.body}
-                <div class="markdown">{t.body}</div>
-              {/if}
-              <ul class="comments">
-                {#each nested as { c, depth } (c.id)}
-                  <li
-                    class="comment"
-                    style="margin-left: {Math.min(depth, 6) * 16}px"
+            <textarea
+              rows="2"
+              placeholder="Leave the first comment…"
+              bind:value={singleReply}
+              disabled={!lemmyConfigured || !lemmyLinked}
+            ></textarea>
+            <div class="composer__help">
+              Posts as you in c/{communityLabel || 'stacks'}. Thread auto-titled
+              “{defaultTitle}” — you can rename it after.
+            </div>
+            <button
+              class="action-btn"
+              type="submit"
+              disabled={!singleReply.trim() || singlePosting || !lemmyLinked}
+              >{singlePosting ? 'Posting…' : 'Post first comment'}</button
+            >
+          </form>
+        </div>
+      {/if}
+    {:else if loading && threads.length === 0}
+      <div class="muted">Loading threads…</div>
+    {:else if threads.length === 0}
+      <div class="muted">No threads yet.</div>
+    {:else}
+      <ul class="thread-list">
+        {#each threads as t (t.id)}
+          <li class="thread" class:expanded={expandedId === t.id}>
+            <button
+              class="thread__head"
+              onclick={() => expand(t)}
+              type="button"
+            >
+              <span class="thread__title">{t.title || '(untitled)'}</span>
+              <span class="thread__meta">{fmtTime(t.created_at)}</span>
+            </button>
+            {#if expandedId === t.id}
+              <div class="thread__body">
+                {#if t.lemmy_url}
+                  <a
+                    class="thread__lemmy"
+                    href={t.lemmy_url}
+                    target="_blank"
+                    rel="noopener">↗ View on fold</a
                   >
-                    <div class="comment__meta">
-                      <span>{commentAuthor(c)}</span>
-                      <span>{fmtTime(c.published)}</span>
+                {/if}
+                {#if t.url}
+                  <a
+                    class="link-card"
+                    href={t.url}
+                    target="_blank"
+                    rel="noopener">{t.url}</a
+                  >
+                {/if}
+                {#if t.body}
+                  <div class="markdown">{t.body}</div>
+                {/if}
+                <ul class="comments">
+                  {#each nested as { c, depth } (c.id)}
+                    <li
+                      class="comment"
+                      style="margin-left: {Math.min(depth, 6) * 16}px"
+                    >
+                      <div class="comment__meta">
+                        <span>{commentAuthor(c)}</span>
+                        <span>{fmtTime(c.published)}</span>
+                        <button
+                          class="link"
+                          type="button"
+                          onclick={() => (replyParent = c.id)}>Reply</button
+                        >
+                      </div>
+                      <div class="comment__body">
+                        {c.deleted ? '(deleted)' : c.content}
+                      </div>
+                    </li>
+                  {/each}
+                </ul>
+                <form
+                  class="reply"
+                  onsubmit={(e) => {
+                    e.preventDefault();
+                    postReply();
+                  }}
+                >
+                  {#if replyParent}
+                    <div class="muted">
+                      Replying to comment #{replyParent}
                       <button
                         class="link"
                         type="button"
-                        onclick={() => (replyParent = c.id)}>Reply</button
+                        onclick={() => (replyParent = null)}>cancel</button
                       >
                     </div>
-                    <div class="comment__body">
-                      {c.deleted ? '(deleted)' : c.content}
-                    </div>
-                  </li>
-                {/each}
-              </ul>
-              <form
-                class="reply"
-                onsubmit={(e) => {
-                  e.preventDefault();
-                  postReply();
-                }}
-              >
-                {#if replyParent}
-                  <div class="muted">
-                    Replying to comment #{replyParent}
-                    <button
-                      class="link"
-                      type="button"
-                      onclick={() => (replyParent = null)}>cancel</button
-                    >
-                  </div>
-                {/if}
-                <textarea
-                  rows="2"
-                  placeholder="Write a reply…"
-                  bind:value={replyBody}
-                ></textarea>
-                <button
-                  class="action-btn"
-                  type="submit"
-                  disabled={!replyBody.trim()}>Reply</button
-                >
-              </form>
-            </div>
-          {/if}
-        </li>
-      {/each}
-    </ul>
+                  {/if}
+                  <textarea
+                    rows="2"
+                    placeholder="Write a reply…"
+                    bind:value={replyBody}
+                  ></textarea>
+                  <button
+                    class="action-btn"
+                    type="submit"
+                    disabled={!replyBody.trim()}>Reply</button
+                  >
+                </form>
+              </div>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    {/if}
   {/if}
 </section>
 

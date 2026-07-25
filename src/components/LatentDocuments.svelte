@@ -5,6 +5,7 @@
   pane below. Autosave debounces every ~2 seconds. Revision history is a drawer.
 -->
 <script lang="ts">
+  import { isPhone } from '../lib/viewport.svelte.ts';
   import LatentStyleButton from './LatentStyleButton.svelte';
 
   type Props = {
@@ -38,6 +39,10 @@
   let dirty = $state(false);
   let saving = $state(false);
   let savedAt = $state<string | null>(null);
+  let open = $state(false);
+  let selectedName = $derived(
+    docs.find((d) => d.id === selectedId)?.name || '',
+  );
   let error = $state<string | null>(null);
 
   let revsOpen = $state(false);
@@ -218,20 +223,41 @@
 
 <section class="docs">
   <header class="docs__head" class:latent-band={!!styleKey}>
-    <h2>Documents</h2>
-    <div class="docs__tabs">
-      {#each docs as d (d.id)}
-        <button
-          class="tab"
-          class:active={d.id === selectedId}
-          onclick={() => (selectedId = d.id)}
-          type="button">{d.name}</button
-        >
-      {/each}
-      <button class="tab tab--add" onclick={createDoc} type="button"
-        >+ Add</button
+    {#if isPhone()}
+      <button
+        class="sec-summary"
+        type="button"
+        aria-expanded={open}
+        onclick={() => (open = !open)}
       >
-    </div>
+        <span class="sec-summary__caret" aria-hidden="true"
+          >{open ? '▾' : '▸'}</span
+        >
+        <span class="sec-summary__label">Documents</span>
+        <span class="sec-summary__meta"
+          >{docs.length} doc{docs.length === 1 ? '' : 's'}{selectedName
+            ? ` · ${selectedName}`
+            : ''}</span
+        >
+      </button>
+    {:else}
+      <h2>Documents</h2>
+    {/if}
+    {#if !isPhone() || open}
+      <div class="docs__tabs">
+        {#each docs as d (d.id)}
+          <button
+            class="tab"
+            class:active={d.id === selectedId}
+            onclick={() => (selectedId = d.id)}
+            type="button">{d.name}</button
+          >
+        {/each}
+        <button class="tab tab--add" onclick={createDoc} type="button"
+          >+ Add</button
+        >
+      </div>
+    {/if}
     {#if styleKey}
       <LatentStyleButton
         {projectId}
@@ -242,7 +268,9 @@
     {/if}
   </header>
 
-  {#if error}
+  {#if isPhone() && !open}
+    <!-- collapsed: the summary carries the doc count and current name -->
+  {:else if error}
     <div class="notice notice--error">{error}</div>
   {/if}
 
@@ -429,6 +457,13 @@
     color: var(--color-muted);
   }
   @media (max-width: 640px) {
+    /* rows="18" is ~330px — the tallest fixed block on the page. Half that on
+       a phone; the field still scrolls and still grows with the window. */
+    textarea {
+      min-height: 40vh;
+      height: 40vh;
+    }
+
     .docs__tabs {
       margin-left: 0;
       width: 100%;

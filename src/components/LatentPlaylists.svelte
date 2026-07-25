@@ -12,6 +12,9 @@
   import Sortable from 'sortablejs';
   import LatentStyleButton from './LatentStyleButton.svelte';
   import { queueMedia } from '../lib/playerQueue.ts';
+  import RowMove from './RowMove.svelte';
+  import { DRAG_OPTS } from '../lib/dragOptions.ts';
+  import { isPhone } from '../lib/viewport.svelte.ts';
 
   type Props = {
     projectId: string;
@@ -44,26 +47,12 @@
     slot_label: string;
   };
 
-  // Shared with LatentSlots: on touch a drag and a page scroll are the same
-  // gesture, so a drag needs a long press, a tolerant threshold, edge
-  // auto-scroll, and visible acknowledgement of the press.
-  const DRAG_OPTS = {
-    animation: 120,
-    delay: 180,
-    delayOnTouchOnly: true,
-    touchStartThreshold: 6,
-    scroll: true,
-    bubbleScroll: true,
-    scrollSensitivity: 60,
-    scrollSpeed: 12,
-    chosenClass: 'drag-chosen',
-  } as const;
-
   let playlists = $state<Playlist[]>([]);
   let selectedId = $state<string | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let renaming = $state(false);
+  let toolsOpen = $state(false);
   let renameValue = $state('');
 
   let adding = $state(false);
@@ -435,17 +424,46 @@
           }}
           aria-label="Playlist name"
         />
+      {:else if isPhone()}
+        <button
+          class="action-btn bar__tools"
+          type="button"
+          aria-expanded={toolsOpen}
+          onclick={() => (toolsOpen = !toolsOpen)}
+          >Order tools {toolsOpen ? '▴' : '▾'}</button
+        >
       {:else}
         <button class="action-btn" type="button" onclick={startRename}
           >Rename</button
         >
+        <button
+          class="action-btn action-btn--danger"
+          type="button"
+          onclick={deletePlaylist}>Delete</button
+        >
       {/if}
-      <button
-        class="action-btn action-btn--danger"
-        type="button"
-        onclick={deletePlaylist}>Delete</button
-      >
     </div>
+
+    {#if isPhone() && toolsOpen}
+      <div class="order-menu" role="group" aria-label="Running order tools">
+        <button
+          class="order-menu__item"
+          type="button"
+          onclick={() => {
+            toolsOpen = false;
+            startRename();
+          }}>Rename running order</button
+        >
+        <button
+          class="order-menu__item order-menu__item--danger"
+          type="button"
+          onclick={() => {
+            toolsOpen = false;
+            deletePlaylist();
+          }}>Delete running order</button
+        >
+      </div>
+    {/if}
 
     {#if selected.tracks.length === 0}
       <div class="muted empty">
@@ -456,30 +474,14 @@
       <ul class="track-list" use:sortableTracks>
         {#each selected.tracks as t, i (t.playlist_item_id)}
           <li class="track-row" data-row-id={t.playlist_item_id}>
-            <span class="row-move">
-              <button
-                class="row-move__arrow track-row__up"
-                type="button"
-                title="Move up"
-                aria-label={`Move ${t.filename || 'track'} up`}
-                disabled={i === 0}
-                onclick={() => nudge(i, -1)}>↑</button
-              >
-              <button
-                class="track-row__drag drag-handle"
-                type="button"
-                aria-label={`Drag to reorder ${t.filename || 'track'}`}
-                title="Drag to reorder">⠿</button
-              >
-              <button
-                class="row-move__arrow track-row__down"
-                type="button"
-                title="Move down"
-                aria-label={`Move ${t.filename || 'track'} down`}
-                disabled={i === selected.tracks.length - 1}
-                onclick={() => nudge(i, 1)}>↓</button
-              >
-            </span>
+            <RowMove
+              label={t.filename || 'track'}
+              handleClass="track-row__drag"
+              upDisabled={i === 0}
+              downDisabled={i === selected.tracks.length - 1}
+              onUp={() => nudge(i, -1)}
+              onDown={() => nudge(i, 1)}
+            />
             <span class="track-row__pos">{i + 1}</span>
             <a
               class="track-row__name"
@@ -491,6 +493,7 @@
             <button
               class="action-btn track-row__play"
               type="button"
+              aria-label={`Play ${t.filename || 'track'} from here`}
               title="Play from here"
               onclick={() => play(i)}>▶</button
             >
@@ -721,27 +724,6 @@
   /* One vertical control column per row: ↑ above the grip, ↓ below it. Arrows
      are the touch alternative to dragging and appear at <=640px only; on
      desktop the stack collapses to the grip alone. */
-  .row-move {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-  }
-  .row-move__arrow {
-    background: transparent;
-    border: 0;
-    color: var(--color-muted);
-    cursor: pointer;
-    font: inherit;
-    font-size: 0.9rem;
-    line-height: 1;
-    padding: 0;
-    display: none;
-  }
-  .row-move__arrow:disabled {
-    opacity: 0.3;
-    cursor: default;
-  }
 
   /* --- Add-tracks sheet -------------------------------------------------- */
   .sheet-backdrop {
@@ -826,14 +808,45 @@
     white-space: nowrap;
   }
 
+  .bar__tools {
+    min-height: 44px;
+  }
+  .order-menu {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    margin-top: 4px;
+  }
+  .order-menu__item {
+    font: inherit;
+    font-size: 0.75rem;
+    text-align: left;
+    background: none;
+    border: 0;
+    border-bottom: 1px dotted var(--color-border);
+    color: var(--color-text);
+    padding: 0 8px;
+    min-height: 44px;
+    cursor: pointer;
+  }
+  .order-menu__item:last-child {
+    border-bottom: 0;
+  }
+  .order-menu__item--danger {
+    color: var(--color-status-fail);
+  }
+  .order-menu__item:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -2px;
+  }
+
   @media (max-width: 640px) {
     .playlists__tabs {
       margin-left: 0;
       width: 100%;
-      /* Scroll the tabs rather than stacking them into a tall pile. */
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
+      flex-wrap: wrap;
+      gap: 3px;
     }
     .tab {
       white-space: nowrap;
@@ -844,31 +857,12 @@
     }
     /* Two lines: identity up top, controls under, drag handle full-height. */
     .track-row {
-      grid-template-columns: 44px 3ch 1fr auto;
+      grid-template-columns: 76px 3ch 1fr auto;
       grid-template-areas:
         'move pos  name name'
         'move dur  play remove';
       row-gap: 4px;
       padding: 6px 8px;
-    }
-    .row-move {
-      grid-area: move;
-      align-self: stretch;
-    }
-    .row-move__arrow {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      /* Three stacked targets in a 44px column — 36px arrows keep the whole
-         control thumb-sized without a giant row. */
-      min-height: 36px;
-      width: 100%;
-      font-size: 1.15rem;
-    }
-    .track-row__drag {
-      min-height: 40px;
-      width: 100%;
-      font-size: 1.1rem;
     }
     .track-row__pos {
       grid-area: pos;

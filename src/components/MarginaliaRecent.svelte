@@ -9,6 +9,7 @@
     - projectId: the Latent
 -->
 <script lang="ts">
+  import { isPhone } from '../lib/viewport.svelte.ts';
   import {
     seekAnnotation,
     fmtTimestamp,
@@ -59,7 +60,10 @@
   });
 </script>
 
-<details class="mgl-recent" open={items.length > 0}>
+<!-- Open by default on desktop; closed on a phone, where ten rows is ~520px
+     of page before you reach anything you came for. The summary carries the
+     count either way. -->
+<details class="mgl-recent" open={items.length > 0 && !isPhone()}>
   <summary class="mgl-recent__summary latent-band">
     <h2>Latest comments &amp; markers</h2>
     <span class="muted">{total}</span>
