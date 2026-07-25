@@ -456,12 +456,30 @@
       <ul class="track-list" use:sortableTracks>
         {#each selected.tracks as t, i (t.playlist_item_id)}
           <li class="track-row" data-row-id={t.playlist_item_id}>
-            <button
-              class="track-row__drag drag-handle"
-              type="button"
-              aria-label={`Drag to reorder ${t.filename || 'track'}`}
-              title="Drag to reorder">⠿</button
-            >
+            <span class="row-move">
+              <button
+                class="row-move__arrow track-row__up"
+                type="button"
+                title="Move up"
+                aria-label={`Move ${t.filename || 'track'} up`}
+                disabled={i === 0}
+                onclick={() => nudge(i, -1)}>↑</button
+              >
+              <button
+                class="track-row__drag drag-handle"
+                type="button"
+                aria-label={`Drag to reorder ${t.filename || 'track'}`}
+                title="Drag to reorder">⠿</button
+              >
+              <button
+                class="row-move__arrow track-row__down"
+                type="button"
+                title="Move down"
+                aria-label={`Move ${t.filename || 'track'} down`}
+                disabled={i === selected.tracks.length - 1}
+                onclick={() => nudge(i, 1)}>↓</button
+              >
+            </span>
             <span class="track-row__pos">{i + 1}</span>
             <a
               class="track-row__name"
@@ -469,22 +487,6 @@
               title="Open in Stacks">{t.filename || '—'}</a
             >
             <span class="track-row__dur">{fmtDuration(t.duration_seconds)}</span
-            >
-            <button
-              class="action-btn track-row__up"
-              type="button"
-              title="Move up"
-              aria-label={`Move ${t.filename || 'track'} up`}
-              disabled={i === 0}
-              onclick={() => nudge(i, -1)}>↑ Up</button
-            >
-            <button
-              class="action-btn track-row__down"
-              type="button"
-              title="Move down"
-              aria-label={`Move ${t.filename || 'track'} down`}
-              disabled={i === selected.tracks.length - 1}
-              onclick={() => nudge(i, 1)}>↓ Down</button
             >
             <button
               class="action-btn track-row__play"
@@ -716,11 +718,29 @@
     padding: 2px 6px;
     font-size: 0.75rem;
   }
-  /* Arrows are the touch alternative to dragging — mobile only, where a
-     long-press drag competes with the page scroll. */
-  .track-row__up,
-  .track-row__down {
+  /* One vertical control column per row: ↑ above the grip, ↓ below it. Arrows
+     are the touch alternative to dragging and appear at <=640px only; on
+     desktop the stack collapses to the grip alone. */
+  .row-move {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .row-move__arrow {
+    background: transparent;
+    border: 0;
+    color: var(--color-muted);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 0;
     display: none;
+  }
+  .row-move__arrow:disabled {
+    opacity: 0.3;
+    cursor: default;
   }
 
   /* --- Add-tracks sheet -------------------------------------------------- */
@@ -826,30 +846,28 @@
     .track-row {
       grid-template-columns: 44px 3ch 1fr auto;
       grid-template-areas:
-        'drag pos  name name'
-        'drag dur  up   down'
-        'drag play play remove';
+        'move pos  name name'
+        'move dur  play remove';
       row-gap: 4px;
       padding: 6px 8px;
     }
-    .track-row__up,
-    .track-row__down {
-      display: inline-flex;
+    .row-move {
+      grid-area: move;
+      align-self: stretch;
+    }
+    .row-move__arrow {
+      display: flex;
       align-items: center;
       justify-content: center;
-      min-height: 44px;
-      min-width: 44px;
-      justify-self: end;
-    }
-    .track-row__up {
-      grid-area: up;
-    }
-    .track-row__down {
-      grid-area: down;
+      /* Three stacked targets in a 44px column — 36px arrows keep the whole
+         control thumb-sized without a giant row. */
+      min-height: 36px;
+      width: 100%;
+      font-size: 1.15rem;
     }
     .track-row__drag {
-      grid-area: drag;
-      min-height: 44px;
+      min-height: 40px;
+      width: 100%;
       font-size: 1.1rem;
     }
     .track-row__pos {
