@@ -1571,242 +1571,249 @@
           a hidden affordance. Drag-and-drop / +Upload dropzone sits at the
           bottom of the panel; "+ Pull from index" is right next to it.
         -->
-        {#if isOpen(slot.id) && shows(slot.id, 'files')}
+        {#if isOpen(slot.id) && (shows(slot.id, 'files') || shows(slot.id, 'playlist') || shows(slot.id, 'add') || shows(slot.id, 'links'))}
           <div class="slot__panel">
-            {#if (itemsBySlot[slot.id] || []).length > 0}
-              <ul class="file-list" use:sortableFiles={slot.id}>
-                {#each itemsBySlot[slot.id] as it, i (it.id)}
-                  <li
-                    class="file-row"
-                    class:file-row--primary={it.is_primary}
-                    data-type={it.media?.media_type}
-                    data-media-id={it.media_item_id}
-                    data-item-id={it.id}
-                  >
-                    <RowMove
-                      label={it.media?.filename || 'file'}
-                      handleClass="file-row__drag"
-                      upDisabled={i === 0}
-                      downDisabled={i ===
-                        (itemsBySlot[slot.id] || []).length - 1}
-                      onUp={() => nudgeFile(slot.id, i, -1)}
-                      onDown={() => nudgeFile(slot.id, i, 1)}
-                    />
-                    <button
-                      class="file-row__star"
-                      type="button"
-                      title={it.is_primary
-                        ? 'Primary (click to unstar)'
-                        : 'Mark as primary'}
-                      onclick={() => togglePrimary(slot, it)}
-                      aria-pressed={it.is_primary}
-                      >{it.is_primary ? '★' : '☆'}</button
+            {#if shows(slot.id, 'files')}
+              {#if (itemsBySlot[slot.id] || []).length > 0}
+                <ul class="file-list" use:sortableFiles={slot.id}>
+                  {#each itemsBySlot[slot.id] as it, i (it.id)}
+                    <li
+                      class="file-row"
+                      class:file-row--primary={it.is_primary}
+                      data-type={it.media?.media_type}
+                      data-media-id={it.media_item_id}
+                      data-item-id={it.id}
                     >
-                    <a
-                      class="file-row__thumb"
-                      href={`/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
-                      title="Open in Stacks"
-                    >
-                      {#if it.media?.media_type === 'image'}
-                        <img
-                          src={thumbUrl(it.media_item_id)}
-                          alt={it.media?.filename}
-                        />
-                      {:else}
-                        <span class="icon"
-                          >{it.media?.media_type?.[0]?.toUpperCase() ||
-                            '?'}</span
-                        >
-                      {/if}
-                    </a>
-                    <span class="file-row__name-wrap">
-                      <a
-                        class="file-row__name"
-                        href={`/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
-                        title={it.media?.filename}
-                      >
-                        {it.media?.filename || '(unknown)'}
-                      </a>
-                      {#if it.media?.media_type === 'session'}
-                        {@const st = it.media.session_extraction_status}
-                        {@const count = it.media.session_extracted_count ?? 0}
-                        {#if st === 'pending' || st === 'processing'}
-                          <span class="session-pill session-pill--busy"
-                            >Extracting audio…</span
-                          >
-                        {:else if st === 'failed'}
-                          <span
-                            class="session-pill session-pill--error"
-                            title={sessionErrors[it.media_item_id] ||
-                              'Audio extraction failed'}>Extraction failed</span
-                          >
-                        {:else if count > 0}
-                          <button
-                            class="session-pill session-pill--toggle"
-                            type="button"
-                            aria-expanded={!!expandedSessions[it.media_item_id]}
-                            onclick={() =>
-                              toggleSessionChildren(it.media_item_id)}
-                            >{expandedSessions[it.media_item_id] ? '▾' : '▸'}
-                            {count} extracted file{count === 1
-                              ? ''
-                              : 's'}</button
-                          >
-                        {:else if st === 'done'}
-                          <span
-                            class="session-pill"
-                            title="No audio files found in this bundle"
-                            >0 extracted</span
-                          >
-                        {/if}
-                      {:else if it.media?.parent_media_item_id}
-                        {@const parent = parentInSlot(
-                          slot.id,
-                          it.media.parent_media_item_id,
-                        )}
-                        {#if parent}
-                          <button
-                            class="session-chip"
-                            type="button"
-                            title={`Extracted from ${parent.media?.filename || 'session bundle'} — click to jump to it`}
-                            onclick={() => scrollToParent(parent.media_item_id)}
-                            >from session</button
-                          >
-                        {:else}
-                          <span
-                            class="session-chip"
-                            title="Extracted from a session bundle"
-                            >extracted</span
-                          >
-                        {/if}
-                      {/if}
-                    </span>
-                    <span class="file-row__type" title={it.media?.mime_type}
-                      >{fileExt(it.media?.filename) ||
-                        it.media?.media_type ||
-                        'file'}</span
-                    >
-                    <span class="file-row__size"
-                      >{fmtBytes(it.media?.file_size_bytes)}</span
-                    >
-                    <div class="file-row__actions">
-                      {#if it.media}
-                        <MarginaliaBadge
-                          mediaId={it.media_item_id}
-                          mediaType={it.media.media_type}
-                          filename={it.media.filename || ''}
-                          counts={annotationCounts[it.media_item_id] || null}
-                        />
-                      {/if}
-                      {#if it.media?.media_type === 'audio' || it.media?.media_type === 'video' || it.media?.media_type === 'midi'}
-                        <button
-                          class="action-btn file-row__play"
-                          type="button"
-                          aria-label={`Play ${it.media?.filename || 'file'}`}
-                          title="Play (queues in the persistent Player)"
-                          onclick={() =>
-                            playInPlayer(
-                              it.media_item_id,
-                              it.media!.media_type,
-                              it.media?.filename || '',
-                            )}>{isPhone() ? '▶ Play' : '▶'}</button
-                        >
-                      {/if}
-                      <RowActions
-                        label={it.media?.filename || 'this file'}
-                        meta={[
-                          fileExt(it.media?.filename) ||
-                            it.media?.media_type ||
-                            'file',
-                          fmtBytes(it.media?.file_size_bytes),
-                          fmtDuration(it.media?.duration_seconds),
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                        actions={[
-                          {
-                            label: 'Rename',
-                            title: 'Rename this file',
-                            onClick: () => renameMediaItem(slot, it),
-                          },
-                          {
-                            label: 'Download',
-                            href: `/api/media/${encodeURIComponent(it.media_item_id)}/file`,
-                            download: it.media?.filename || undefined,
-                          },
-                          {
-                            label: 'Open in Stacks',
-                            href: `/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`,
-                          },
-                          {
-                            label: 'Remove from slot',
-                            danger: true,
-                            title: 'Remove from slot. File stays in Emulsion.',
-                            onClick: () => detachItem(slot, it),
-                          },
-                          {
-                            label: 'Delete permanently',
-                            danger: true,
-                            title:
-                              'Permanently delete from Emulsion. Cannot be undone.',
-                            onClick: () => deleteMediaItem(slot, it),
-                          },
-                        ]}
+                      <RowMove
+                        label={it.media?.filename || 'file'}
+                        handleClass="file-row__drag"
+                        upDisabled={i === 0}
+                        downDisabled={i ===
+                          (itemsBySlot[slot.id] || []).length - 1}
+                        onUp={() => nudgeFile(slot.id, i, -1)}
+                        onDown={() => nudgeFile(slot.id, i, 1)}
                       />
-                    </div>
-                  </li>
-                  {#if it.media?.media_type === 'session' && expandedSessions[it.media_item_id]}
-                    <li class="session-children">
-                      {#if childrenLoading[it.media_item_id]}
-                        <div class="muted session-children__status">
-                          Loading extracted files…
-                        </div>
-                      {:else if (childrenByMedia[it.media_item_id] || []).length === 0}
-                        <div class="muted session-children__status">
-                          No extracted files found.
-                        </div>
-                      {:else}
-                        <ul class="session-children__list">
-                          {#each childrenByMedia[it.media_item_id] || [] as child (child.id)}
-                            <li class="child-row">
-                              <a
-                                class="child-row__name"
-                                href={`/admin/search/detail?id=${encodeURIComponent(child.id)}`}
-                                title={child.filename}>{child.filename}</a
-                              >
-                              <span class="child-row__dur"
-                                >{fmtDuration(child.duration_seconds)}</span
-                              >
-                              <span class="child-row__size"
-                                >{fmtBytes(child.file_size_bytes)}</span
-                              >
-                              <MarginaliaBadge
-                                mediaId={child.id}
-                                mediaType={child.media_type}
-                                filename={child.filename || ''}
-                                counts={annotationCounts[child.id] || null}
-                              />
-                              {#if child.media_type === 'audio' || child.media_type === 'midi'}
-                                <button
-                                  class="action-btn"
-                                  type="button"
-                                  title="Play (queues in the persistent Player)"
-                                  onclick={() =>
-                                    playInPlayer(
-                                      child.id,
-                                      child.media_type,
-                                      child.filename,
-                                    )}>▶</button
-                                >
-                              {/if}
-                            </li>
-                          {/each}
-                        </ul>
-                      {/if}
+                      <button
+                        class="file-row__star"
+                        type="button"
+                        title={it.is_primary
+                          ? 'Primary (click to unstar)'
+                          : 'Mark as primary'}
+                        onclick={() => togglePrimary(slot, it)}
+                        aria-pressed={it.is_primary}
+                        >{it.is_primary ? '★' : '☆'}</button
+                      >
+                      <a
+                        class="file-row__thumb"
+                        href={`/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
+                        title="Open in Stacks"
+                      >
+                        {#if it.media?.media_type === 'image'}
+                          <img
+                            src={thumbUrl(it.media_item_id)}
+                            alt={it.media?.filename}
+                          />
+                        {:else}
+                          <span class="icon"
+                            >{it.media?.media_type?.[0]?.toUpperCase() ||
+                              '?'}</span
+                          >
+                        {/if}
+                      </a>
+                      <span class="file-row__name-wrap">
+                        <a
+                          class="file-row__name"
+                          href={`/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
+                          title={it.media?.filename}
+                        >
+                          {it.media?.filename || '(unknown)'}
+                        </a>
+                        {#if it.media?.media_type === 'session'}
+                          {@const st = it.media.session_extraction_status}
+                          {@const count = it.media.session_extracted_count ?? 0}
+                          {#if st === 'pending' || st === 'processing'}
+                            <span class="session-pill session-pill--busy"
+                              >Extracting audio…</span
+                            >
+                          {:else if st === 'failed'}
+                            <span
+                              class="session-pill session-pill--error"
+                              title={sessionErrors[it.media_item_id] ||
+                                'Audio extraction failed'}
+                              >Extraction failed</span
+                            >
+                          {:else if count > 0}
+                            <button
+                              class="session-pill session-pill--toggle"
+                              type="button"
+                              aria-expanded={!!expandedSessions[
+                                it.media_item_id
+                              ]}
+                              onclick={() =>
+                                toggleSessionChildren(it.media_item_id)}
+                              >{expandedSessions[it.media_item_id] ? '▾' : '▸'}
+                              {count} extracted file{count === 1
+                                ? ''
+                                : 's'}</button
+                            >
+                          {:else if st === 'done'}
+                            <span
+                              class="session-pill"
+                              title="No audio files found in this bundle"
+                              >0 extracted</span
+                            >
+                          {/if}
+                        {:else if it.media?.parent_media_item_id}
+                          {@const parent = parentInSlot(
+                            slot.id,
+                            it.media.parent_media_item_id,
+                          )}
+                          {#if parent}
+                            <button
+                              class="session-chip"
+                              type="button"
+                              title={`Extracted from ${parent.media?.filename || 'session bundle'} — click to jump to it`}
+                              onclick={() =>
+                                scrollToParent(parent.media_item_id)}
+                              >from session</button
+                            >
+                          {:else}
+                            <span
+                              class="session-chip"
+                              title="Extracted from a session bundle"
+                              >extracted</span
+                            >
+                          {/if}
+                        {/if}
+                      </span>
+                      <span class="file-row__type" title={it.media?.mime_type}
+                        >{fileExt(it.media?.filename) ||
+                          it.media?.media_type ||
+                          'file'}</span
+                      >
+                      <span class="file-row__size"
+                        >{fmtBytes(it.media?.file_size_bytes)}</span
+                      >
+                      <div class="file-row__actions">
+                        {#if it.media}
+                          <MarginaliaBadge
+                            mediaId={it.media_item_id}
+                            mediaType={it.media.media_type}
+                            filename={it.media.filename || ''}
+                            counts={annotationCounts[it.media_item_id] || null}
+                          />
+                        {/if}
+                        {#if it.media?.media_type === 'audio' || it.media?.media_type === 'video' || it.media?.media_type === 'midi'}
+                          <button
+                            class="action-btn file-row__play"
+                            type="button"
+                            aria-label={`Play ${it.media?.filename || 'file'}`}
+                            title="Play (queues in the persistent Player)"
+                            onclick={() =>
+                              playInPlayer(
+                                it.media_item_id,
+                                it.media!.media_type,
+                                it.media?.filename || '',
+                              )}>{isPhone() ? '▶ Play' : '▶'}</button
+                          >
+                        {/if}
+                        <RowActions
+                          label={it.media?.filename || 'this file'}
+                          meta={[
+                            fileExt(it.media?.filename) ||
+                              it.media?.media_type ||
+                              'file',
+                            fmtBytes(it.media?.file_size_bytes),
+                            fmtDuration(it.media?.duration_seconds),
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                          actions={[
+                            {
+                              label: 'Rename',
+                              title: 'Rename this file',
+                              onClick: () => renameMediaItem(slot, it),
+                            },
+                            {
+                              label: 'Download',
+                              href: `/api/media/${encodeURIComponent(it.media_item_id)}/file`,
+                              download: it.media?.filename || undefined,
+                            },
+                            {
+                              label: 'Open in Stacks',
+                              href: `/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`,
+                            },
+                            {
+                              label: 'Remove from slot',
+                              danger: true,
+                              title:
+                                'Remove from slot. File stays in Emulsion.',
+                              onClick: () => detachItem(slot, it),
+                            },
+                            {
+                              label: 'Delete permanently',
+                              danger: true,
+                              title:
+                                'Permanently delete from Emulsion. Cannot be undone.',
+                              onClick: () => deleteMediaItem(slot, it),
+                            },
+                          ]}
+                        />
+                      </div>
                     </li>
-                  {/if}
-                {/each}
-              </ul>
+                    {#if it.media?.media_type === 'session' && expandedSessions[it.media_item_id]}
+                      <li class="session-children">
+                        {#if childrenLoading[it.media_item_id]}
+                          <div class="muted session-children__status">
+                            Loading extracted files…
+                          </div>
+                        {:else if (childrenByMedia[it.media_item_id] || []).length === 0}
+                          <div class="muted session-children__status">
+                            No extracted files found.
+                          </div>
+                        {:else}
+                          <ul class="session-children__list">
+                            {#each childrenByMedia[it.media_item_id] || [] as child (child.id)}
+                              <li class="child-row">
+                                <a
+                                  class="child-row__name"
+                                  href={`/admin/search/detail?id=${encodeURIComponent(child.id)}`}
+                                  title={child.filename}>{child.filename}</a
+                                >
+                                <span class="child-row__dur"
+                                  >{fmtDuration(child.duration_seconds)}</span
+                                >
+                                <span class="child-row__size"
+                                  >{fmtBytes(child.file_size_bytes)}</span
+                                >
+                                <MarginaliaBadge
+                                  mediaId={child.id}
+                                  mediaType={child.media_type}
+                                  filename={child.filename || ''}
+                                  counts={annotationCounts[child.id] || null}
+                                />
+                                {#if child.media_type === 'audio' || child.media_type === 'midi'}
+                                  <button
+                                    class="action-btn"
+                                    type="button"
+                                    title="Play (queues in the persistent Player)"
+                                    onclick={() =>
+                                      playInPlayer(
+                                        child.id,
+                                        child.media_type,
+                                        child.filename,
+                                      )}>▶</button
+                                  >
+                                {/if}
+                              </li>
+                            {/each}
+                          </ul>
+                        {/if}
+                      </li>
+                    {/if}
+                  {/each}
+                </ul>
+              {/if}
             {/if}
             <!--
             The playlist: this slot's audio, in an order of its own. Expands
