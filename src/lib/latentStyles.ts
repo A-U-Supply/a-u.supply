@@ -20,6 +20,7 @@ export const SECTION_KEYS = [
   'links',
   'docs',
   'slots',
+  'playlists',
   'loose',
   'threads',
 ] as const;
@@ -30,6 +31,7 @@ export const SECTION_LABELS: Record<SectionKey, string> = {
   links: 'Links',
   docs: 'Documents',
   slots: 'Slots',
+  playlists: 'Playlists',
   loose: 'Loose files',
   threads: 'Threads',
 };
@@ -40,6 +42,7 @@ export const SECTION_TOKENS: Record<SectionKey, string> = {
   links: 'var(--latent-sec-links)',
   docs: 'var(--latent-sec-docs)',
   slots: 'var(--latent-sec-slots)',
+  playlists: 'var(--latent-sec-playlists)',
   loose: 'var(--latent-sec-loose)',
   threads: 'var(--latent-sec-threads)',
 };
