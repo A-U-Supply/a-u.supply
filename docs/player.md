@@ -60,6 +60,7 @@ Annotation reads/writes go through `GET|POST /api/media/{id}/annotations`, `PATC
 ## Notes
 
 - The player owns its own state (current track, playback time, queue). Pages should *not* read or write player state directly — only dispatch events.
+- **Don't put `src=` on the `<audio>`/`<video>` element, and don't `bind:paused`.** `loadTrack()` sets `src` imperatively (see `applySrc`) and `paused` is one-way, updated from the element's `play`/`pause` events. Both rules exist because Svelte's write-backs land a microtask *after* `loadTrack()` has already set the source and called `play()`: re-setting the `src` attribute — even to the same URL — re-runs the media load algorithm and aborts that `play()`, and `bind:paused` sees its stale `true` (from the `pause` at end of track) and pauses the track that just started. Either one alone leaves the next track loaded but silent — i.e. autoplay looks like it needs a manual Play.
 - URL-encode `release_code` anywhere it appears in a URL (see [`api.md`](api.md#special-characters-in-codes)).
 - The same event works from Astro pages and from the Svelte component — both are just DOM.
 
