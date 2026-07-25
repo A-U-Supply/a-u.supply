@@ -8,6 +8,8 @@
  * special-casing.
  */
 
+import { queueMedia } from '../lib/playerQueue';
+
 export type AnnotationAuthor = { id: number; name: string } | null;
 
 export type Annotation = {
@@ -267,9 +269,8 @@ export function queryPlayerState(): PlayerState | null {
 }
 
 /**
- * Build the exact track payload the Latents islands use (midi streams its
- * synthesized WAV preview) and queue it in the persistent player, with a
- * start_time the player seeks to once metadata loads.
+ * Queue a single media item in the persistent player, with a start_time the
+ * player seeks to once metadata loads. Track shape lives in lib/playerQueue.
  */
 export function queueMediaTrack(
   mediaId: string,
@@ -277,35 +278,7 @@ export function queueMediaTrack(
   filename: string,
   startTime?: number,
 ): void {
-  document.dispatchEvent(
-    new CustomEvent('player:queue', {
-      detail: {
-        tracks: [
-          {
-            track_id: mediaId,
-            title: filename || 'Untitled',
-            release_title: '',
-            release_code: '',
-            media_type: mediaType,
-            stream_url:
-              mediaType === 'midi'
-                ? `/api/media/${encodeURIComponent(mediaId)}/audio`
-                : `/api/media/${encodeURIComponent(mediaId)}/file`,
-            cover_url:
-              mediaType === 'image' || mediaType === 'video'
-                ? `/api/media/${encodeURIComponent(mediaId)}/thumbnail`
-                : '/assets/default-cover.jpg',
-            duration: 0,
-            entity_name: '',
-          },
-        ],
-        startIndex: 0,
-        ...(startTime != null && startTime > 0
-          ? { start_time: startTime }
-          : {}),
-      },
-    }),
-  );
+  queueMedia([{ id: mediaId, media_type: mediaType, filename }], 0, startTime);
 }
 
 /**
