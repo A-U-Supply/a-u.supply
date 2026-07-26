@@ -19,4 +19,9 @@ node_modules/
 data/*.db
 data/*.db-wal
 data/*.db-shm
+# Seeded media for local dev/audits (SEARCH_MEDIA_DIR). Only the *.db globs
+# were listed here, so fixture images and audio sat untracked and one
+# `git add -A` away from the repo — which has happened once already.
+data/search-media/
+data/media/
 .env
