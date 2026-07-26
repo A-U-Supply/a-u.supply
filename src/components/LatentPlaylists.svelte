@@ -903,16 +903,41 @@
       flex: 0 0 auto;
       min-height: 44px;
     }
+    /* A full-screen picker on a phone, not a partial sheet.
+       Two things made the partial version unusable: the persistent player is
+       fixed at z-index 9999, so it covered the sheet's footer (the Add and
+       Cancel buttons) — and 85vh measures the *largest* viewport, so with the
+       URL bar showing, the bottom of the sheet sat below the visible area
+       with nothing to scroll to. Full screen, above the player, sized in dvh
+       fixes both, and makes picking tracks its own screen rather than a
+       letterbox. */
+    .sheet-backdrop {
+      z-index: 9999;
+    }
     .sheet {
       left: 0;
-      top: auto;
+      right: 0;
+      top: 0;
       bottom: 0;
       transform: none;
       width: 100vw;
-      max-height: 85vh;
-      border-width: 2px 0 0 0;
+      height: 100dvh;
+      max-height: none;
+      border-width: 0;
+      z-index: 10000;
+    }
+    .sheet__head {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .sheet__body {
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
     }
     .sheet__foot {
+      position: sticky;
+      bottom: 0;
       padding-bottom: calc(var(--space-sm) + env(safe-area-inset-bottom));
     }
     .sheet__foot .btn-primary,
