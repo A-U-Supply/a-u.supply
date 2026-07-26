@@ -99,6 +99,16 @@
   };
 
   type Playlist = { tracks: Track[]; total_seconds: number };
+  type Slide = {
+    item_id: string;
+    media_item_id: string;
+    slot_id: string | null;
+    filename: string | null;
+    media_type: string | null;
+    width: number | null;
+    height: number | null;
+  };
+  type Slideshow = { slides: Slide[] };
 
   type SessionChild = {
     id: string;
@@ -116,6 +126,9 @@
   let itemsBySlot = $state<Record<string, Item[]>>({});
   // Playlists are per slot and independent of the panels above — a playlist
   // can stay open while notes or threads are.
+  let slideshowOpen = $state<Record<string, boolean>>({});
+  let slideshowBySlot = $state<Record<string, Slideshow>>({});
+  let slideshowLoading = $state<Record<string, boolean>>({});
   let playlistOpen = $state<Record<string, boolean>>({});
   let playlistBySlot = $state<Record<string, Playlist>>({});
   let playlistLoading = $state<Record<string, boolean>>({});
@@ -366,6 +379,7 @@
       );
       // An upload or detach changes what's in the playlist; keep an open one honest.
       if (playlistOpen[slotId]) loadPlaylist(slotId);
+      if (slideshowOpen[slotId]) loadSlideshow(slotId);
     } catch (e: any) {
       error = e?.message || 'Failed to load items';
     }
@@ -476,6 +490,117 @@
     );
   }
 
+  // --- Slot slideshow: the visual twin of the playlist above ---------------
+  // Same three orders rule: reordering slides never touches the file order or
+  // the playlist. See docs/plans/2026-07-26-latent-slideshow.md.
+
+  function visualCount(slotId: string): number {
+    return (itemsBySlot[slotId] || []).filter((it) =>
+      isViewable(it.media?.media_type),
+    ).length;
+  }
+
+  async function loadSlideshow(slotId: string) {
+    slideshowLoading = { ...slideshowLoading, [slotId]: true };
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/slots/${encodeURIComponent(slotId)}/slideshow`,
+        { credentials: 'include' },
+      );
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      slideshowBySlot = { ...slideshowBySlot, [slotId]: await res.json() };
+    } catch (e: any) {
+      error = e?.message || 'Failed to load slideshow';
+    } finally {
+      slideshowLoading = { ...slideshowLoading, [slotId]: false };
+    }
+  }
+
+  function toggleSlideshow(slotId: string) {
+    const open = !slideshowOpen[slotId];
+    slideshowOpen = { ...slideshowOpen, [slotId]: open };
+    if (!open) return;
+    loadSlideshow(slotId);
+    // Same reason as the playlist: on a phone the toggle sits above a
+    // screenful of file rows, so the panel would open off-screen.
+    if (window.matchMedia('(max-width: 640px)').matches) {
+      requestAnimationFrame(() => {
+        document
+          .querySelector(`.slideshow[data-slot-id="${slotId}"]`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+  }
+
+  /** Move one slide a step through the slideshow (the arrow-button path). */
+  async function nudgeSlide(slotId: string, index: number, delta: number) {
+    const sh = slideshowBySlot[slotId];
+    if (!sh) return;
+    const target = index + delta;
+    if (target < 0 || target >= sh.slides.length) return;
+    const slides = [...sh.slides];
+    [slides[index], slides[target]] = [slides[target], slides[index]];
+    slideshowBySlot = { ...slideshowBySlot, [slotId]: { ...sh, slides } };
+    await putSlideshowOrder(
+      slotId,
+      slides.map((sl) => sl.media_item_id),
+    );
+  }
+
+  /** Send a slideshow order. Shared by the drag handles and the arrows. */
+  async function putSlideshowOrder(slotId: string, order: string[]) {
+    if (!order.length) return;
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/slots/${encodeURIComponent(slotId)}/slideshow`,
+        {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order }),
+        },
+      );
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      slideshowBySlot = { ...slideshowBySlot, [slotId]: await res.json() };
+    } catch (e: any) {
+      error = e?.message || 'Failed to reorder slideshow';
+      loadSlideshow(slotId); // resync on failure
+    }
+  }
+
+  async function persistSlideshowOrder(slotId: string, list: HTMLElement) {
+    const order = domOrder(list, '.slide-row[data-media-id]', 'mediaId');
+    if (!order.length) return;
+    const current = slideshowBySlot[slotId];
+    if (current) {
+      const byMedia = new Map(
+        current.slides.map((sl) => [sl.media_item_id, sl]),
+      );
+      slideshowBySlot = {
+        ...slideshowBySlot,
+        [slotId]: {
+          ...current,
+          slides: order.map((id) => byMedia.get(id)!).filter(Boolean),
+        },
+      };
+    }
+    await putSlideshowOrder(slotId, order);
+  }
+
+  /** Open the viewer over the slot's slideshow, in its saved order. */
+  function viewSlideshow(slotId: string, startIndex = 0) {
+    const sh = slideshowBySlot[slotId];
+    if (!sh?.slides.length) return;
+    const reel = sh.slides.map((sl) => ({
+      media_item_id: sl.media_item_id,
+      media: { filename: sl.filename, media_type: sl.media_type },
+    }));
+    openLatentViewer(
+      reel,
+      reel[startIndex]?.media_item_id ?? reel[0].media_item_id,
+    );
+  }
+
   /** Move one file row a step through the slot's file order. */
   async function nudgeFile(slotId: string, index: number, delta: number) {
     const items = itemsBySlot[slotId] || [];
@@ -554,6 +679,18 @@
     return { destroy: () => s.destroy() };
   }
 
+  /** Sortable over a slot's slideshow rows. */
+  function sortableSlides(node: HTMLElement, slotId: string) {
+    const s = Sortable.create(node, {
+      ...DRAG_OPTS,
+      handle: '.slide-row__drag',
+      draggable: '.slide-row',
+      ghostClass: 'slide-row--ghost',
+      onEnd: () => persistSlideshowOrder(slotId, node),
+    });
+    return { destroy: () => s.destroy() };
+  }
+
   /** Sortable over a slot's playlist rows. */
   function sortableTracks(node: HTMLElement, slotId: string) {
     const s = Sortable.create(node, {
@@ -593,8 +730,11 @@
   /** Counts live in the label so a closed tab still reports its contents. */
   function tabsFor(slot: Slot): { key: string; label: string }[] {
     const audio = audioCount(slot.id);
+    const visual = visualCount(slot.id);
     const tabs = [{ key: 'files', label: `Files(${slot.item_count ?? 0})` }];
     if (audio > 0) tabs.push({ key: 'playlist', label: `Playlist(${audio})` });
+    if (visual > 0)
+      tabs.push({ key: 'slideshow', label: `Slideshow(${visual})` });
     tabs.push({ key: 'add', label: 'Add files' });
     tabs.push({ key: 'links', label: 'Links' });
     tabs.push({ key: 'notes', label: 'Notes' });
@@ -613,6 +753,7 @@
   function pickTab(id: string, tab: string) {
     slotTab[id] = tab;
     if (tab === 'playlist' && !playlistBySlot[id]) loadPlaylist(id);
+    if (tab === 'slideshow' && !slideshowBySlot[id]) loadSlideshow(id);
   }
 
   let expandedSessions = $state<Record<string, boolean>>({});
@@ -1372,6 +1513,18 @@
                     )})</button
                   >
                 {/if}
+                {#if visualCount(slot.id) > 0}
+                  <button
+                    class="action-btn playlist-toggle"
+                    type="button"
+                    aria-expanded={!!slideshowOpen[slot.id]}
+                    title="The images and video in this slot, in an order you set"
+                    onclick={() => toggleSlideshow(slot.id)}
+                    >{slideshowOpen[slot.id] ? '▾' : '▦'} Slideshow ({visualCount(
+                      slot.id,
+                    )})</button
+                  >
+                {/if}
                 <button
                   class="action-btn"
                   type="button"
@@ -1580,7 +1733,7 @@
           a hidden affordance. Drag-and-drop / +Upload dropzone sits at the
           bottom of the panel; "+ Pull from index" is right next to it.
         -->
-        {#if isOpen(slot.id) && (shows(slot.id, 'files') || shows(slot.id, 'playlist') || shows(slot.id, 'add') || shows(slot.id, 'links'))}
+        {#if isOpen(slot.id) && (shows(slot.id, 'files') || shows(slot.id, 'playlist') || shows(slot.id, 'slideshow') || shows(slot.id, 'add') || shows(slot.id, 'links'))}
           <div class="slot__panel">
             {#if shows(slot.id, 'files')}
               {#if (itemsBySlot[slot.id] || []).length > 0}
@@ -1921,6 +2074,96 @@
                             mediaType={t.media_type || 'audio'}
                             filename={t.filename || ''}
                             counts={annotationCounts[t.media_item_id] || null}
+                            showEmpty={isPhone()}
+                          />
+                        </div>
+                      </li>
+                    {/each}
+                  </ul>
+                {/if}
+              </div>
+            {/if}
+            <!--
+              The slideshow: this slot's images and video, in an order of its
+              own. Same inline accordion as the playlist above, and the same
+              independence — reordering slides moves neither the file order
+              nor the playlist.
+            -->
+            {#if isPhone() ? shows(slot.id, 'slideshow') : slideshowOpen[slot.id]}
+              {@const sh = slideshowBySlot[slot.id]}
+              <div class="slideshow" data-slot-id={slot.id}>
+                <div class="playlist__head">
+                  <button
+                    class="action-btn playlist__play-all"
+                    type="button"
+                    disabled={!sh?.slides.length}
+                    onclick={() => viewSlideshow(slot.id)}>▷ View all</button
+                  >
+                  {#if sh}
+                    <span class="muted playlist__meta"
+                      >{sh.slides.length} slide{sh.slides.length === 1
+                        ? ''
+                        : 's'}</span
+                    >
+                  {/if}
+                </div>
+                {#if slideshowLoading[slot.id] && !sh}
+                  <div class="muted playlist__status">Loading slideshow…</div>
+                {:else if sh && sh.slides.length === 0}
+                  <div class="muted playlist__status">
+                    No images or video in this slot yet. Anything you upload
+                    joins the slideshow automatically.
+                  </div>
+                {:else if sh}
+                  <ul class="playlist__list" use:sortableSlides={slot.id}>
+                    {#each sh.slides as sl, i (sl.media_item_id)}
+                      <li class="slide-row" data-media-id={sl.media_item_id}>
+                        <RowMove
+                          label={sl.filename || 'slide'}
+                          handleClass="slide-row__drag"
+                          upDisabled={i === 0}
+                          downDisabled={i === sh.slides.length - 1}
+                          onUp={() => nudgeSlide(slot.id, i, -1)}
+                          onDown={() => nudgeSlide(slot.id, i, 1)}
+                        />
+                        <div class="track-row__main">
+                          <span class="track-row__pos">{i + 1}</span>
+                          <button
+                            class="slide-row__thumb"
+                            type="button"
+                            aria-label={`View ${sl.filename || 'this slide'} full screen`}
+                            onclick={() => viewSlideshow(slot.id, i)}
+                          >
+                            {#if sl.media_type === 'image'}
+                              <img
+                                src={thumbUrl(sl.media_item_id)}
+                                alt={sl.filename || ''}
+                              />
+                            {:else}
+                              <span class="icon">V</span>
+                            {/if}
+                          </button>
+                          <span class="track-row__name"
+                            >{sl.filename || '—'}</span
+                          >
+                          <span class="track-row__dur"
+                            >{sl.width && sl.height
+                              ? `${sl.width}×${sl.height}`
+                              : ''}</span
+                          >
+                          <button
+                            class="action-btn track-row__play"
+                            type="button"
+                            aria-label={`View ${sl.filename || 'slide'} from here`}
+                            title="View from here"
+                            onclick={() => viewSlideshow(slot.id, i)}
+                            >{isPhone() ? '▷ View' : '▷'}</button
+                          >
+                          <MarginaliaBadge
+                            mediaId={sl.media_item_id}
+                            mediaType={sl.media_type || 'image'}
+                            filename={sl.filename || ''}
+                            counts={annotationCounts[sl.media_item_id] || null}
                             showEmpty={isPhone()}
                           />
                         </div>
@@ -2448,6 +2691,61 @@
   .track-row:hover {
     background: var(--color-surface);
   }
+  /* The slideshow reuses the playlist's chrome (.playlist__head/list/status)
+     and the track row's grid, with a thumbnail column where the playlist has
+     none. Keeping one set of rules means the two accordions can't drift. */
+  .slideshow {
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    margin-top: var(--space-sm);
+  }
+  .slide-row {
+    display: grid;
+    /* One more column than .track-row: grip, position, THUMB, name, size,
+       view, badge. Miscount it and the view button wraps to a second row. */
+    grid-template-columns: 20px 2ch 40px 1fr auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--color-border);
+    font-size: var(--text-sm);
+  }
+  .slide-row:last-child {
+    border-bottom: 0;
+  }
+  .slide-row:hover {
+    background: var(--color-surface);
+  }
+  .slide-row--ghost {
+    opacity: 0.4;
+  }
+  .slide-row__thumb {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: zoom-in;
+  }
+  .slide-row__thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .slide-row__thumb .icon {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 0.85rem;
+  }
+  .slide-row__thumb:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -2px;
+  }
   .track-row__pos {
     font-family: var(--font-mono);
     color: var(--color-muted);
@@ -2770,15 +3068,21 @@
     }
     /* Same failure and same fix as .file-row above: the content sits in a
        block *beside* the reorder control, so the row is the taller of the two
-       rather than the sum of them. */
-    .track-row {
+       rather than the sum of them. Slide rows share the fix — left on the
+       desktop grid they reopen the same ~60px gap in every row. */
+    .track-row,
+    .slide-row {
       display: flex;
       align-items: flex-start;
       column-gap: 6px;
       padding: 6px 8px;
     }
-    :global(.track-row .row-move) {
+    :global(.track-row .row-move),
+    :global(.slide-row .row-move) {
       flex: 0 0 68px;
+    }
+    .slide-row__thumb {
+      flex: 0 0 auto;
     }
     .track-row__main {
       display: flex;
