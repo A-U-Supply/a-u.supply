@@ -15,6 +15,7 @@
 <script lang="ts">
   import PullFromIndex from './PullFromIndex.svelte';
   import ColorPicker from './ColorPicker.svelte';
+  import { anchoredStyle } from '../lib/anchoredPanel.ts';
   import {
     SECTION_LABELS,
     FACE_TREATMENTS,
@@ -101,15 +102,36 @@
     return bad;
   });
 
+  /**
+   * Placement goes through the shared helper — this used to clamp only the
+   * panel's TOP (`min(anchor.bottom + 6, innerHeight - 80)`), which reads like
+   * a clamp but ignores that the panel is up to 600px tall. Opening a Style
+   * button low on the page parked it 80px from the bottom with the rest
+   * hanging off, and being fixed there was nothing to scroll to.
+   */
   const panelStyle = $derived.by(() => {
     if (!anchor || typeof window === 'undefined') return '';
     if (window.innerWidth < 640) return ''; // bottom sheet — CSS positions it
-    const left = Math.max(
-      8,
-      Math.min(anchor.right - PANEL_WIDTH, window.innerWidth - PANEL_WIDTH - 8),
-    );
-    const top = Math.min(anchor.bottom + 6, window.innerHeight - 80);
-    return `position:fixed;top:${top}px;left:${left}px;width:${PANEL_WIDTH}px;`;
+    return anchoredStyle(anchor, {
+      width: PANEL_WIDTH,
+      height: panelHeight,
+      gap: 6,
+      margin: 8,
+    });
+  });
+
+  /**
+   * Measured after mount so the helper can flip above rather than squash.
+   * `panelStyle` re-derives when this lands.
+   */
+  let panelHeight = $state(0);
+  $effect(() => {
+    if (!open || !panelEl) return;
+    // scrollHeight, not offsetHeight: offsetHeight is already limited by the
+    // max-height we just applied, so reading it would ratchet the panel
+    // smaller on every pass.
+    const wanted = panelEl.scrollHeight;
+    if (wanted && Math.abs(wanted - panelHeight) > 2) panelHeight = wanted;
   });
 
   async function onOpen(e: Event) {
