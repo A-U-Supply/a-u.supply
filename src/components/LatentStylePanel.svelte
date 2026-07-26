@@ -518,7 +518,9 @@
       position: fixed;
       inset: 0;
       background: var(--color-overlay-soft);
-      z-index: 110;
+      /* Above the persistent player (z-index 9999) — at 110 the player sat on
+         top of the sheet and hid whatever was at its bottom edge. */
+      z-index: 9999;
     }
     .panel {
       /* Bottom sheet — inline popover coords don't apply (panelStyle is
@@ -528,8 +530,13 @@
       top: auto !important;
       bottom: 0 !important;
       width: auto !important;
-      max-height: 70vh;
+      /* dvh, not vh: vh measures the largest viewport, so with the URL bar
+         showing the bottom of the sheet fell below the visible area. */
+      max-height: 70dvh;
       overflow-y: auto;
+      overscroll-behavior: contain;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      z-index: 10000;
       box-shadow: 0 -3px 0 var(--color-text);
     }
   }

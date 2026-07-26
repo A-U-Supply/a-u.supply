@@ -482,27 +482,30 @@
               onUp={() => nudge(i, -1)}
               onDown={() => nudge(i, 1)}
             />
-            <span class="track-row__pos">{i + 1}</span>
-            <a
-              class="track-row__name"
-              href={`/admin/search/detail?id=${encodeURIComponent(t.media_item_id)}`}
-              title="Open in Stacks">{t.filename || '—'}</a
-            >
-            <span class="track-row__dur">{fmtDuration(t.duration_seconds)}</span
-            >
-            <button
-              class="action-btn track-row__play"
-              type="button"
-              aria-label={`Play ${t.filename || 'track'} from here`}
-              title="Play from here"
-              onclick={() => play(i)}>▶</button
-            >
-            <button
-              class="action-btn track-row__remove"
-              type="button"
-              title="Remove from this running order. File stays in the Latent."
-              onclick={() => removeTrack(t)}>Remove</button
-            >
+            <div class="track-row__main">
+              <span class="track-row__pos">{i + 1}</span>
+              <a
+                class="track-row__name"
+                href={`/admin/search/detail?id=${encodeURIComponent(t.media_item_id)}`}
+                title="Open in Stacks">{t.filename || '—'}</a
+              >
+              <span class="track-row__dur"
+                >{fmtDuration(t.duration_seconds)}</span
+              >
+              <button
+                class="action-btn track-row__play"
+                type="button"
+                aria-label={`Play ${t.filename || 'track'} from here`}
+                title="Play from here"
+                onclick={() => play(i)}>▶</button
+              >
+              <button
+                class="action-btn track-row__remove"
+                type="button"
+                title="Remove from this running order. File stays in the Latent."
+                onclick={() => removeTrack(t)}>Remove</button
+              >
+            </div>
           </li>
         {/each}
       </ul>
@@ -701,6 +704,10 @@
     outline-offset: -2px;
     box-shadow: 0 2px 8px var(--color-overlay-soft);
   }
+  /* Transparent on desktop: children stay direct grid items of .track-row. */
+  .track-row__main {
+    display: contents;
+  }
   .track-row__pos {
     font-family: var(--font-mono);
     color: var(--color-muted);
@@ -731,15 +738,21 @@
      desktop the stack collapses to the grip alone. */
 
   /* --- Add-tracks sheet -------------------------------------------------- */
+  /* !important, reluctantly: detail.astro styles every direct child of a
+     .latent-section with `position: relative; z-index: 2` at specificity
+     (0,3,0), which outranks these scoped rules — so the overlay rendered in
+     the page flow instead of over it, on every width. LatentStylePanel is
+     mounted outside the sections for the same reason; this one can't be,
+     because it belongs to the island that owns the playlist state. */
   .sheet-backdrop {
-    position: fixed;
+    position: fixed !important;
     inset: 0;
     background: var(--color-overlay-soft);
-    z-index: 60;
+    z-index: 60 !important;
   }
   .sheet {
-    position: fixed;
-    z-index: 61;
+    position: fixed !important;
+    z-index: 61 !important;
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
@@ -861,45 +874,76 @@
       min-height: 44px;
     }
     /* Two lines: identity up top, controls under, drag handle full-height. */
+    /* Content sits beside the reorder block, so a row is the taller of the
+       two rather than the sum — the same fix .file-row needed. */
     .track-row {
-      grid-template-columns: 76px 3ch 1fr auto;
-      grid-template-areas:
-        'move pos  name name'
-        'move dur  play remove';
-      row-gap: 4px;
+      display: flex;
+      align-items: flex-start;
+      column-gap: 6px;
       padding: 6px 8px;
     }
-    .track-row__pos {
-      grid-area: pos;
+    :global(.track-row .row-move) {
+      flex: 0 0 68px;
+    }
+    .track-row__main {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      flex: 1 1 0;
+      min-width: 0;
+      gap: 4px 6px;
+    }
+    .track-row__pos,
+    .track-row__dur {
+      flex: 0 0 auto;
     }
     .track-row__name {
-      grid-area: name;
-    }
-    .track-row__dur {
-      grid-area: dur;
+      flex: 1 1 140px;
+      min-width: 0;
     }
     .track-row__play {
-      grid-area: play;
-      justify-self: stretch;
+      flex: 1 1 auto;
       min-height: 44px;
     }
     .track-row__remove {
-      grid-area: remove;
-      justify-self: end;
+      flex: 0 0 auto;
       min-height: 44px;
     }
-    /* Bottom sheet: header and footer pinned, body scrolls, footer clear of
-       the home indicator. */
+    /* A full-screen picker on a phone, not a partial sheet.
+       Two things made the partial version unusable: the persistent player is
+       fixed at z-index 9999, so it covered the sheet's footer (the Add and
+       Cancel buttons) — and 85vh measures the *largest* viewport, so with the
+       URL bar showing, the bottom of the sheet sat below the visible area
+       with nothing to scroll to. Full screen, above the player, sized in dvh
+       fixes both, and makes picking tracks its own screen rather than a
+       letterbox. */
+    .sheet-backdrop {
+      z-index: 9999 !important;
+    }
     .sheet {
       left: 0;
-      top: auto;
+      right: 0;
+      top: 0;
       bottom: 0;
       transform: none;
       width: 100vw;
-      max-height: 85vh;
-      border-width: 2px 0 0 0;
+      height: 100dvh;
+      max-height: none;
+      border-width: 0;
+      z-index: 10000 !important;
+    }
+    .sheet__head {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .sheet__body {
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
     }
     .sheet__foot {
+      position: sticky;
+      bottom: 0;
       padding-bottom: calc(var(--space-sm) + env(safe-area-inset-bottom));
     }
     .sheet__foot .btn-primary,
