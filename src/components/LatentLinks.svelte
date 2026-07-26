@@ -12,7 +12,6 @@
   Dropbox are similarly badged. Anything else is a generic link chip.
 -->
 <script lang="ts">
-  import { isPhone } from '../lib/viewport.svelte.ts';
   import LatentStyleButton from './LatentStyleButton.svelte';
 
   type Props = {
@@ -58,9 +57,10 @@
   let addUrl = $state('');
   let addLabel = $state('');
   let open = $state(false);
-  /* Only the page-level Links section collapses. The per-slot instance is
-     already inside a slot's Links tab; a second layer there is a trap. */
-  let collapsible = $derived(isPhone() && !compact && !!title);
+  /* Only the page-level Links section collapses, and it does so at every
+     width. The per-slot instance is already inside a slot's Links tab; a
+     second layer there is a trap. */
+  let collapsible = $derived(!compact && !!title);
   let editingId = $state<string | null>(null);
   let editUrl = $state('');
   let editLabel = $state('');

@@ -16,6 +16,7 @@
 -->
 <script lang="ts">
   import MarginaliaList from './MarginaliaList.svelte';
+  import { portal } from '../lib/portal.ts';
 
   type Props = {
     mediaId: string;
@@ -86,37 +87,55 @@
         aria-hidden="true"
       ></span>{/if}
   </button>
-  {#if open}
-    <div class="mgl-pop-backdrop" onclick={() => (open = false)}></div>
-    <div
-      class="mgl-pop"
-      role="dialog"
-      aria-label="Comments and markers for {filename || 'media item'}"
-      tabindex="-1"
-      bind:this={panelEl}
-      onkeydown={onPanelKeydown}
-    >
-      <div class="mgl-pop__head">
-        <span class="mgl-pop__title" title={filename}>💬 {filename}</span>
-        <button
-          class="mgl-pop__close"
-          type="button"
-          onclick={() => (open = false)}
-          aria-label="Close">&times;</button
-        >
-      </div>
-      <div class="mgl-pop__body">
-        <MarginaliaList
-          {mediaId}
-          {mediaType}
-          {filename}
-          readOnly
-          compact
-          showComposer={false}
-        />
-      </div>
+{/if}
+
+<!--
+  One popover for BOTH badges. It used to live inside the counts > 0 branch,
+  which made the `showEmpty` badge a dead button — it toggled `open` and
+  nothing rendered, so a file with no comments still had no door to its first
+  one (the very thing showEmpty was added for).
+
+  Portaled to <body>: the badge sits inside a .latent-section, and those
+  sections set isolation:isolate — a later section paints over the popover at
+  any z-index, and it can't beat the player's root-level 9999 either. It still
+  docks above the player bar rather than covering it. See src/lib/portal.ts.
+-->
+{#if open}
+  <div
+    use:portal
+    class="mgl-pop-backdrop"
+    onclick={() => (open = false)}
+    role="presentation"
+  ></div>
+  <div
+    use:portal
+    class="mgl-pop"
+    role="dialog"
+    aria-label="Comments and markers for {filename || 'media item'}"
+    tabindex="-1"
+    bind:this={panelEl}
+    onkeydown={onPanelKeydown}
+  >
+    <div class="mgl-pop__head">
+      <span class="mgl-pop__title" title={filename}>💬 {filename}</span>
+      <button
+        class="mgl-pop__close"
+        type="button"
+        onclick={() => (open = false)}
+        aria-label="Close">&times;</button
+      >
     </div>
-  {/if}
+    <div class="mgl-pop__body">
+      <MarginaliaList
+        {mediaId}
+        {mediaType}
+        {filename}
+        readOnly
+        compact
+        showComposer={false}
+      />
+    </div>
+  </div>
 {/if}
 
 <style>
@@ -172,10 +191,9 @@
     box-shadow: 6px 6px 0 var(--color-text);
     font-family: var(--font-mono);
   }
-  /* The popover lives inside .latent-section's isolation:isolate stacking
-     context, so its z-index can't beat the player bar's root-level 9999.
-     Instead it docks above the bar whenever the player is visible (the
-     player stamps body.player-active). */
+  /* Portaled out of the section (see the markup), so the z-index above is
+     honoured. It still docks above the player bar rather than covering it —
+     the player stamps body.player-active. */
   :global(body.player-active) .mgl-pop {
     bottom: 88px;
   }

@@ -5,7 +5,6 @@
   pane below. Autosave debounces every ~2 seconds. Revision history is a drawer.
 -->
 <script lang="ts">
-  import { isPhone } from '../lib/viewport.svelte.ts';
   import LatentStyleButton from './LatentStyleButton.svelte';
 
   type Props = {
@@ -223,27 +222,23 @@
 
 <section class="docs">
   <header class="docs__head" class:latent-band={!!styleKey}>
-    {#if isPhone()}
-      <button
-        class="sec-summary"
-        type="button"
-        aria-expanded={open}
-        onclick={() => (open = !open)}
+    <button
+      class="sec-summary"
+      type="button"
+      aria-expanded={open}
+      onclick={() => (open = !open)}
+    >
+      <span class="sec-summary__caret" aria-hidden="true"
+        >{open ? '▾' : '▸'}</span
       >
-        <span class="sec-summary__caret" aria-hidden="true"
-          >{open ? '▾' : '▸'}</span
-        >
-        <span class="sec-summary__label">Documents</span>
-        <span class="sec-summary__meta"
-          >{docs.length} doc{docs.length === 1 ? '' : 's'}{selectedName
-            ? ` · ${selectedName}`
-            : ''}</span
-        >
-      </button>
-    {:else}
-      <h2>Documents</h2>
-    {/if}
-    {#if !isPhone() || open}
+      <span class="sec-summary__label">Documents</span>
+      <span class="sec-summary__meta"
+        >{docs.length} doc{docs.length === 1 ? '' : 's'}{selectedName
+          ? ` · ${selectedName}`
+          : ''}</span
+      >
+    </button>
+    {#if open}
       <div class="docs__tabs">
         {#each docs as d (d.id)}
           <button
@@ -268,42 +263,44 @@
     {/if}
   </header>
 
-  {#if isPhone() && !open}
-    <!-- collapsed: the summary carries the doc count and current name -->
-  {:else if error}
+  {#if open && error}
     <div class="notice notice--error">{error}</div>
   {/if}
 
-  {#if current}
-    <div class="editor">
-      <div class="editor__bar">
-        <span class="status">
-          {#if saving}Saving…{:else if dirty}Unsaved changes{:else if savedAt}Saved
-            · {fmtTime(savedAt)}{/if}
-        </span>
-        <button class="action-btn" type="button" onclick={renameDoc}
-          >Rename</button
-        >
-        <button class="action-btn" type="button" onclick={openRevs}
-          >History</button
-        >
-        <button
-          class="action-btn action-btn--danger"
-          type="button"
-          onclick={deleteDoc}>Delete</button
-        >
+  <!-- Collapsed is collapsed: the editor used to render outside this gate, so
+       a closed section still showed its full textarea. -->
+  {#if open}
+    {#if current}
+      <div class="editor">
+        <div class="editor__bar">
+          <span class="status">
+            {#if saving}Saving…{:else if dirty}Unsaved changes{:else if savedAt}Saved
+              · {fmtTime(savedAt)}{/if}
+          </span>
+          <button class="action-btn" type="button" onclick={renameDoc}
+            >Rename</button
+          >
+          <button class="action-btn" type="button" onclick={openRevs}
+            >History</button
+          >
+          <button
+            class="action-btn action-btn--danger"
+            type="button"
+            onclick={deleteDoc}>Delete</button
+          >
+        </div>
+        <textarea
+          bind:value={current.content}
+          oninput={scheduleSave}
+          rows="18"
+          placeholder="Write in markdown… autosaves every couple seconds."
+        ></textarea>
       </div>
-      <textarea
-        bind:value={current.content}
-        oninput={scheduleSave}
-        rows="18"
-        placeholder="Write in markdown… autosaves every couple seconds."
-      ></textarea>
-    </div>
-  {:else if docs.length === 0}
-    <div class="muted">
-      No documents yet. Add one to write lyrics, mix notes, checklists…
-    </div>
+    {:else if docs.length === 0}
+      <div class="muted">
+        No documents yet. Add one to write lyrics, mix notes, checklists…
+      </div>
+    {/if}
   {/if}
 
   {#if revsOpen}

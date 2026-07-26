@@ -1,20 +1,29 @@
 <!--
-  A row's secondary actions.
+  A row's secondary actions, behind one labeled `More ▾` at every width.
 
-  Desktop keeps the buttons inline, exactly as before. On a phone they collapse
-  behind one labeled `More ▾` and open as a list — where they finally get to be
-  words ("Delete permanently") instead of glyphs (🗑), with the file's own
-  metadata across the top. That metadata is otherwise invisible on mobile:
-  .file-row__type and .file-row__size are display:none under 640px.
+  The actions are always words ("Delete permanently"), never glyphs (🗑) — but
+  they only take up room once you ask for them. Rendering all of them inline
+  was what collapsed the desktop filename column to zero width: the row grid is
+  `… minmax(…, 1fr) auto auto auto`, and five word-buttons in that last `auto`
+  ate the row. Loose tiles had it worse — six of them wrapping inside a 160px
+  tile.
 
-  Expands inline (the ColorPicker accordion technique) rather than floating, so
-  it inherits the card's layout at every width.
+  Two presentations of the same menu:
+    - phone: expands inline, full row width (the ColorPicker accordion
+      technique), so it inherits the card's layout and can't overflow.
+    - desktop: floats, anchored under the toggle, portaled to <body>.
+
+  The desktop panel MUST be portaled. Latents sections set isolation:isolate,
+  so a menu left inside one is painted over by every section below it — see
+  src/lib/portal.ts. Anchoring is done in script from the toggle's rect because
+  a portaled node has no layout relationship to its button any more.
 
   Primary actions — play, and the comments badge — never come in here. They
   stay in the row.
 -->
 <script lang="ts">
   import { isPhone } from '../lib/viewport.svelte.ts';
+  import { portal } from '../lib/portal.ts';
 
   export type RowAction = {
     label: string;
@@ -33,78 +42,160 @@
   }: { label?: string; meta?: string; actions?: RowAction[] } = $props();
 
   let open = $state(false);
+  let toggleEl = $state<HTMLButtonElement | undefined>(undefined);
+  let panelEl = $state<HTMLDivElement | undefined>(undefined);
+  let top = $state(0);
+  let left = $state(0);
+
+  const PANEL_W = 200; // keep in sync with .row-actions__panel--float width
+  const GAP = 2;
+
+  /**
+   * Park the floating panel under the toggle, right edges aligned, flipping
+   * above when the row is near the bottom of the viewport. Coordinates are
+   * viewport-relative because the panel is position:fixed.
+   */
+  function place() {
+    if (!toggleEl) return;
+    const r = toggleEl.getBoundingClientRect();
+    const h = panelEl?.offsetHeight ?? 0;
+    const below = window.innerHeight - r.bottom;
+    top =
+      h > 0 && below < h + GAP && r.top > h ? r.top - h - GAP : r.bottom + GAP;
+    left = Math.max(
+      4,
+      Math.min(r.right - PANEL_W, window.innerWidth - PANEL_W - 4),
+    );
+  }
+
+  function toggle() {
+    open = !open;
+    if (open && !isPhone()) {
+      place();
+      // Measure again once the panel exists — the flip decision needs its
+      // real height, which is unknown on the first pass.
+      requestAnimationFrame(place);
+    }
+  }
+
+  // While a floating menu is open, anything that moves the row under it
+  // invalidates the anchor. Cheapest correct answer: close it.
+  $effect(() => {
+    if (!open || isPhone()) return;
+    const onScroll = () => (open = false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') open = false;
+    };
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onScroll);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onScroll);
+      document.removeEventListener('keydown', onKey);
+    };
+  });
 </script>
 
-{#if isPhone()}
-  <div class="row-actions">
-    <button
-      class="action-btn row-actions__toggle"
-      type="button"
-      aria-expanded={open}
-      onclick={() => (open = !open)}>More {open ? '▴' : '▾'}</button
+<div class="row-actions">
+  <button
+    class="action-btn row-actions__toggle"
+    class:row-actions__toggle--phone={isPhone()}
+    type="button"
+    bind:this={toggleEl}
+    aria-expanded={open}
+    aria-label={`Actions for ${label}`}
+    onclick={toggle}>More {open ? '▴' : '▾'}</button
+  >
+
+  {#if open && isPhone()}
+    <div
+      class="row-actions__panel"
+      role="group"
+      aria-label={`Actions for ${label}`}
     >
-    {#if open}
-      <div
-        class="row-actions__panel"
-        role="group"
-        aria-label={`Actions for ${label}`}
-      >
-        {#if meta}
-          <div class="row-actions__meta">{meta}</div>
+      {#if meta}
+        <div class="row-actions__meta">{meta}</div>
+      {/if}
+      {#each actions as a (a.label)}
+        {#if a.href}
+          <a
+            class="row-actions__item"
+            class:row-actions__item--danger={a.danger}
+            href={a.href}
+            download={a.download}
+            title={a.title}
+            onclick={() => (open = false)}>{a.label}</a
+          >
+        {:else}
+          <button
+            class="row-actions__item"
+            class:row-actions__item--danger={a.danger}
+            type="button"
+            title={a.title}
+            onclick={() => {
+              open = false;
+              a.onClick?.();
+            }}>{a.label}</button
+          >
         {/if}
-        {#each actions as a (a.label)}
-          {#if a.href}
-            <a
-              class="row-actions__item"
-              class:row-actions__item--danger={a.danger}
-              href={a.href}
-              download={a.download}
-              title={a.title}
-              onclick={() => (open = false)}>{a.label}</a
-            >
-          {:else}
-            <button
-              class="row-actions__item"
-              class:row-actions__item--danger={a.danger}
-              type="button"
-              title={a.title}
-              onclick={() => {
-                open = false;
-                a.onClick?.();
-              }}>{a.label}</button
-            >
-          {/if}
-        {/each}
-      </div>
-    {/if}
+      {/each}
+    </div>
+  {/if}
+</div>
+
+{#if open && !isPhone()}
+  <!-- Portaled: see the header comment. Backdrop catches the outside click. -->
+  <div
+    use:portal
+    class="row-actions__scrim"
+    onclick={() => (open = false)}
+    role="presentation"
+  ></div>
+  <div
+    use:portal
+    bind:this={panelEl}
+    class="row-actions__panel row-actions__panel--float"
+    style="top: {top}px; left: {left}px;"
+    role="group"
+    aria-label={`Actions for ${label}`}
+  >
+    <div class="row-actions__meta row-actions__meta--name" title={label}>
+      {label}
+    </div>
+    {#each actions as a (a.label)}
+      {#if a.href}
+        <a
+          class="row-actions__item"
+          class:row-actions__item--danger={a.danger}
+          href={a.href}
+          download={a.download}
+          title={a.title}
+          onclick={() => (open = false)}>{a.label}</a
+        >
+      {:else}
+        <button
+          class="row-actions__item"
+          class:row-actions__item--danger={a.danger}
+          type="button"
+          title={a.title}
+          onclick={() => {
+            open = false;
+            a.onClick?.();
+          }}>{a.label}</button
+        >
+      {/if}
+    {/each}
   </div>
-{:else}
-  {#each actions as a (a.label)}
-    {#if a.href}
-      <a
-        class="action-btn"
-        class:action-btn--danger={a.danger}
-        href={a.href}
-        download={a.download}
-        title={a.title}>{a.label}</a
-      >
-    {:else}
-      <button
-        class="action-btn"
-        class:action-btn--danger={a.danger}
-        type="button"
-        title={a.title}
-        onclick={() => a.onClick?.()}>{a.label}</button
-      >
-    {/if}
-  {/each}
 {/if}
 
 <style>
   .row-actions {
     display: contents;
   }
-  .row-actions__toggle {
+  /* Only the phone target needs the 44px floor; desktop rows are 83px of
+     content and a 44px button would set the row height on its own. */
+  .row-actions__toggle--phone {
     min-height: 44px;
   }
   .row-actions__panel {
@@ -116,11 +207,29 @@
     background: var(--color-bg);
     margin-top: 4px;
   }
+  .row-actions__panel--float {
+    position: fixed;
+    z-index: 10002; /* above the player bar's 9999 */
+    flex: none;
+    width: 200px; /* keep in sync with PANEL_W */
+    margin-top: 0;
+    border: 2px solid var(--color-text);
+    box-shadow: 4px 4px 0 var(--color-text);
+  }
+  .row-actions__scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 10001;
+  }
   .row-actions__meta {
     font-size: 0.65rem;
     color: var(--color-muted);
     padding: 6px 8px;
     border-bottom: 1px dotted var(--color-border);
+  }
+  .row-actions__meta--name {
+    overflow-wrap: anywhere;
+    color: var(--color-text);
   }
   .row-actions__item {
     font-family: inherit;
@@ -136,6 +245,10 @@
     align-items: center;
     text-decoration: none;
     cursor: pointer;
+  }
+  /* A floating menu is a pointer target, not a thumb target. */
+  .row-actions__panel--float .row-actions__item {
+    min-height: 30px;
   }
   .row-actions__item:last-child {
     border-bottom: 0;
