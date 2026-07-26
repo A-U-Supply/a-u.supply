@@ -206,6 +206,19 @@ for _model in (_ProjectPlaylist, _ProjectPlaylistItem):
     if _model.__tablename__ not in _sa_inspect(engine).get_table_names():
         _model.__table__.create(bind=engine)
 
+# Migrate existing DB: slot slideshow order hint + Latent slideshows
+# (2026-07-26-latent-slideshow). No backfill — a NULL slideshow_json already
+# means "file order", which is the right starting state.
+_slot_cols_v4 = [c["name"] for c in _sa_inspect(engine).get_columns("project_slots")]
+if "slideshow_json" not in _slot_cols_v4:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE project_slots ADD COLUMN slideshow_json TEXT"))
+
+from server.models import ProjectSlideshow as _ProjectSlideshow, ProjectSlideshowItem as _ProjectSlideshowItem
+for _model in (_ProjectSlideshow, _ProjectSlideshowItem):
+    if _model.__tablename__ not in _sa_inspect(engine).get_table_names():
+        _model.__table__.create(bind=engine)
+
 # Migrate existing DB: create GitHub + ProjectLink tables if missing
 _existing_tables_g = set(_sa_inspect(engine).get_table_names())
 from server.models import (

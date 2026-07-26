@@ -647,6 +647,7 @@ class Project(Base):
     items = relationship("ProjectItem", back_populates="project", cascade="all, delete-orphan")
     documents = relationship("ProjectDocument", back_populates="project", order_by="ProjectDocument.position", cascade="all, delete-orphan")
     playlists = relationship("ProjectPlaylist", back_populates="project", order_by="ProjectPlaylist.position", cascade="all, delete-orphan")
+    slideshows = relationship("ProjectSlideshow", back_populates="project", order_by="ProjectSlideshow.position", cascade="all, delete-orphan")
 
 
 class ProjectSlot(Base):
@@ -678,6 +679,10 @@ class ProjectSlot(Base):
     # deletes drop out and slot moves take care of themselves. See
     # docs/plans/2026-07-24-latent-playlists.md.
     playlist_json = Column(String, nullable=True)
+    # Same contract for the slot's slideshow — a JSON array of media_item_ids
+    # that is the ORDER, never the membership. Membership derives from the
+    # slot's image/video items. See docs/plans/2026-07-26-latent-slideshow.md.
+    slideshow_json = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=_utcnow)
     updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
 
@@ -752,6 +757,51 @@ class ProjectPlaylistItem(Base):
     added_at = Column(DateTime, nullable=False, default=_utcnow)
 
     playlist = relationship("ProjectPlaylist", back_populates="items")
+    media_item = relationship("MediaItem")
+
+
+class ProjectSlideshow(Base):
+    """A named, hand-assembled sequence of images and video across a Latent.
+
+    The visual twin of ProjectPlaylist, and curated the same way: nothing
+    enters one without being added, and slides whose media leaves the Latent
+    are filtered out on read rather than deleted, so re-attaching a file
+    restores its place.
+    """
+
+    __tablename__ = "project_slideshows"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    project_id = Column(String, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    position = Column(Integer, nullable=False, default=0)
+    name = Column(String, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+    updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
+
+    project = relationship("Project", back_populates="slideshows")
+    items = relationship(
+        "ProjectSlideshowItem",
+        back_populates="slideshow",
+        order_by="ProjectSlideshowItem.position",
+        cascade="all, delete-orphan",
+    )
+    creator = relationship("User")
+
+
+class ProjectSlideshowItem(Base):
+    """One slide in a Latent slideshow."""
+
+    __tablename__ = "project_slideshow_items"
+    __table_args__ = (UniqueConstraint("slideshow_id", "media_item_id"),)
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    slideshow_id = Column(String, ForeignKey("project_slideshows.id", ondelete="CASCADE"), nullable=False, index=True)
+    media_item_id = Column(String, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False, index=True)
+    position = Column(Integer, nullable=False, default=0)
+    added_at = Column(DateTime, nullable=False, default=_utcnow)
+
+    slideshow = relationship("ProjectSlideshow", back_populates="items")
     media_item = relationship("MediaItem")
 
 

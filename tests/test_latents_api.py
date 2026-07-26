@@ -808,6 +808,81 @@ def attach_audio(client, auth_headers, db_session, project_id, slot_id, names):
     return items, media
 
 
+# --- Slideshow helpers (2026-07-26-latent-slideshow) -----------------------
+
+
+def make_image(db_session, name, width=800, height=600):
+    """An image media item with image_meta, so _slide_summary has dimensions."""
+    from server.models import MediaImageMeta
+
+    item = make_media_item(
+        db_session,
+        filename=name,
+        media_type="image",
+        mime_type="image/png",
+        file_path=f"images/2026-07/abcdef12_{name}",
+    )
+    db_session.add(MediaImageMeta(
+        media_item_id=item.id, width=width, height=height, format="PNG",
+    ))
+    db_session.commit()
+    return item
+
+
+def make_video(db_session, name, width=1920, height=1080):
+    from server.models import MediaVideoMeta
+
+    item = make_media_item(
+        db_session,
+        filename=name,
+        media_type="video",
+        mime_type="video/mp4",
+        file_path=f"video/2026-07/abcdef12_{name}",
+    )
+    db_session.add(MediaVideoMeta(
+        media_item_id=item.id, duration_seconds=4.0, width=width, height=height, fps=30.0,
+    ))
+    db_session.commit()
+    return item
+
+
+def get_slideshow(client, auth_headers, project_id, slot_id):
+    resp = client.get(
+        f"/api/projects/{project_id}/slots/{slot_id}/slideshow", headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    return resp.json()
+
+
+def put_slideshow(client, auth_headers, project_id, slot_id, order):
+    return client.put(
+        f"/api/projects/{project_id}/slots/{slot_id}/slideshow",
+        json={"order": order}, headers=auth_headers,
+    )
+
+
+def attach_images(client, auth_headers, db_session, project_id, slot_id, names):
+    """Attach fresh images to a slot in order; return (items, media)."""
+    media = [make_image(db_session, n) for n in names]
+    items = [attach_item(client, auth_headers, project_id, m.id, slot_id) for m in media]
+    return items, media
+
+
+def create_slideshow(client, auth_headers, project_id, name="Show"):
+    resp = client.post(
+        f"/api/projects/{project_id}/slideshows", json={"name": name}, headers=auth_headers,
+    )
+    assert resp.status_code == 201
+    return resp.json()
+
+
+def add_slides(client, auth_headers, project_id, slideshow_id, media_ids):
+    return client.post(
+        f"/api/projects/{project_id}/slideshows/{slideshow_id}/items",
+        json={"media_item_ids": media_ids}, headers=auth_headers,
+    )
+
+
 class TestItemOrder:
     def test_attach_appends(self, client, auth_headers, db_session, project, slot):
         items, media = attach_audio(
@@ -1194,6 +1269,351 @@ class TestLatentPlaylists:
     def test_rejects_member(self, client, member_auth_headers, project):
         resp = client.get(f"/api/projects/{project['id']}/playlists", headers=member_auth_headers)
         assert resp.status_code == 403
+
+
+class TestSlotSlideshow:
+    def test_seeded_from_file_order(self, client, auth_headers, db_session, project, slot):
+        _, media = attach_images(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.png", "b.png"],
+        )
+        sh = get_slideshow(client, auth_headers, project["id"], slot["id"])
+        assert [s["media_item_id"] for s in sh["slides"]] == [m.id for m in media]
+
+    def test_images_and_video_only(self, client, auth_headers, db_session, project, slot):
+        image = make_image(db_session, "a.png")
+        video = make_video(db_session, "b.mp4")
+        audio = make_audio(db_session, "c.wav")
+        for m in (image, video, audio):
+            attach_item(client, auth_headers, project["id"], m.id, slot["id"])
+        sh = get_slideshow(client, auth_headers, project["id"], slot["id"])
+        assert [s["media_item_id"] for s in sh["slides"]] == [image.id, video.id]
+
+    def test_slide_carries_dimensions(self, client, auth_headers, db_session, project, slot):
+        m = make_image(db_session, "a.png", width=700, height=1200)
+        attach_item(client, auth_headers, project["id"], m.id, slot["id"])
+        slide = get_slideshow(client, auth_headers, project["id"], slot["id"])["slides"][0]
+        assert (slide["width"], slide["height"]) == (700, 1200)
+
+    def test_video_dimensions_come_from_video_meta(self, client, auth_headers, db_session, project, slot):
+        m = make_video(db_session, "a.mp4", width=640, height=480)
+        attach_item(client, auth_headers, project["id"], m.id, slot["id"])
+        slide = get_slideshow(client, auth_headers, project["id"], slot["id"])["slides"][0]
+        assert (slide["width"], slide["height"]) == (640, 480)
+
+    def test_order_persists(self, client, auth_headers, db_session, project, slot):
+        _, media = attach_images(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.png", "b.png", "c.png"],
+        )
+        order = [media[2].id, media[0].id, media[1].id]
+        assert put_slideshow(client, auth_headers, project["id"], slot["id"], order).status_code == 200
+        sh = get_slideshow(client, auth_headers, project["id"], slot["id"])
+        assert [s["media_item_id"] for s in sh["slides"]] == order
+
+    def test_partial_order_appends_the_rest(self, client, auth_headers, db_session, project, slot):
+        _, media = attach_images(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.png", "b.png", "c.png"],
+        )
+        put_slideshow(client, auth_headers, project["id"], slot["id"], [media[2].id])
+        sh = get_slideshow(client, auth_headers, project["id"], slot["id"])
+        assert [s["media_item_id"] for s in sh["slides"]] == [media[2].id, media[0].id, media[1].id]
+
+    def test_new_upload_appends_after_arranging(self, client, auth_headers, db_session, project, slot):
+        _, media = attach_images(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.png", "b.png"],
+        )
+        put_slideshow(client, auth_headers, project["id"], slot["id"], [media[1].id, media[0].id])
+        late = make_image(db_session, "late.png")
+        attach_item(client, auth_headers, project["id"], late.id, slot["id"])
+        sh = get_slideshow(client, auth_headers, project["id"], slot["id"])
+        assert [s["media_item_id"] for s in sh["slides"]] == [media[1].id, media[0].id, late.id]
+
+    def test_detached_slide_drops_out_but_keeps_its_place(
+        self, client, auth_headers, db_session, project, slot
+    ):
+        items, media = attach_images(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.png", "b.png", "c.png"],
+        )
+        put_slideshow(
+            client, auth_headers, project["id"], slot["id"],
+            [media[2].id, media[1].id, media[0].id],
+        )
+        # Detach the middle one — it must vanish from the read...
+        assert client.delete(
+            f"/api/projects/{project['id']}/items/{items[1]['id']}", headers=auth_headers,
+        ).status_code in (200, 204)
+        sh = get_slideshow(client, auth_headers, project["id"], slot["id"])
+        assert [s["media_item_id"] for s in sh["slides"]] == [media[2].id, media[0].id]
+        # ...and come back to the SAME place when reattached, because the
+        # stored id was ignored rather than deleted.
+        attach_item(client, auth_headers, project["id"], media[1].id, slot["id"])
+        sh = get_slideshow(client, auth_headers, project["id"], slot["id"])
+        assert [s["media_item_id"] for s in sh["slides"]] == [media[2].id, media[1].id, media[0].id]
+
+    def test_rejects_duplicates(self, client, auth_headers, db_session, project, slot):
+        _, media = attach_images(client, auth_headers, db_session, project["id"], slot["id"], ["a.png"])
+        assert put_slideshow(
+            client, auth_headers, project["id"], slot["id"], [media[0].id, media[0].id],
+        ).status_code == 400
+
+    def test_rejects_non_member(self, client, auth_headers, db_session, project, slot):
+        attach_images(client, auth_headers, db_session, project["id"], slot["id"], ["a.png"])
+        stranger = make_image(db_session, "stranger.png")
+        assert put_slideshow(
+            client, auth_headers, project["id"], slot["id"], [stranger.id],
+        ).status_code == 400
+
+    def test_rejects_audio_in_the_slot(self, client, auth_headers, db_session, project, slot):
+        audio = make_audio(db_session, "a.wav")
+        attach_item(client, auth_headers, project["id"], audio.id, slot["id"])
+        assert put_slideshow(
+            client, auth_headers, project["id"], slot["id"], [audio.id],
+        ).status_code == 400
+
+    def test_rejects_member(self, client, auth_headers, member_auth_headers, db_session, project, slot):
+        attach_images(client, auth_headers, db_session, project["id"], slot["id"], ["a.png"])
+        assert client.get(
+            f"/api/projects/{project['id']}/slots/{slot['id']}/slideshow",
+            headers=member_auth_headers,
+        ).status_code == 403
+
+
+class TestThreeIndependentOrders:
+    """File order, slot playlist and slot slideshow never drag each other."""
+
+    def test_file_reorder_leaves_an_untouched_slideshow_alone(
+        self, client, auth_headers, db_session, project, slot
+    ):
+        items, media = attach_images(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.png", "b.png", "c.png"],
+        )
+        before = [s["media_item_id"] for s in
+                  get_slideshow(client, auth_headers, project["id"], slot["id"])["slides"]]
+        reorder_items(
+            client, auth_headers, project["id"], slot["id"],
+            [items[2]["id"], items[1]["id"], items[0]["id"]],
+        )
+        after = [s["media_item_id"] for s in
+                 get_slideshow(client, auth_headers, project["id"], slot["id"])["slides"]]
+        assert after == before
+
+    def test_pinned_slideshow_still_appends_new_images(
+        self, client, auth_headers, db_session, project, slot
+    ):
+        items, media = attach_images(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.png", "b.png"],
+        )
+        reorder_items(client, auth_headers, project["id"], slot["id"], [items[1]["id"], items[0]["id"]])
+        late = make_image(db_session, "late.png")
+        attach_item(client, auth_headers, project["id"], late.id, slot["id"])
+        sh = get_slideshow(client, auth_headers, project["id"], slot["id"])
+        assert [s["media_item_id"] for s in sh["slides"]] == [media[0].id, media[1].id, late.id]
+
+    def test_slideshow_reorder_leaves_the_file_order_alone(
+        self, client, auth_headers, db_session, project, slot
+    ):
+        items, media = attach_images(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.png", "b.png", "c.png"],
+        )
+        put_slideshow(
+            client, auth_headers, project["id"], slot["id"],
+            [media[2].id, media[0].id, media[1].id],
+        )
+        listed = list_items(client, auth_headers, project["id"], slot["id"])
+        assert [i["id"] for i in listed] == [i["id"] for i in items]
+
+    def test_slideshow_reorder_leaves_the_playlist_alone(
+        self, client, auth_headers, db_session, project, slot
+    ):
+        audio = [make_audio(db_session, n) for n in ("x.wav", "y.wav")]
+        for m in audio:
+            attach_item(client, auth_headers, project["id"], m.id, slot["id"])
+        _, images = attach_images(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.png", "b.png"],
+        )
+        put_slideshow(client, auth_headers, project["id"], slot["id"], [images[1].id, images[0].id])
+        pl = get_playlist(client, auth_headers, project["id"], slot["id"])
+        assert [t["media_item_id"] for t in pl["tracks"]] == [m.id for m in audio]
+
+    def test_file_reorder_pins_both_orders_at_once(
+        self, client, auth_headers, db_session, project, slot
+    ):
+        audio = [make_audio(db_session, n) for n in ("x.wav", "y.wav")]
+        audio_items = [attach_item(client, auth_headers, project["id"], m.id, slot["id"]) for m in audio]
+        img_items, images = attach_images(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.png", "b.png"],
+        )
+        every = audio_items + img_items
+        reorder_items(
+            client, auth_headers, project["id"], slot["id"], [i["id"] for i in reversed(every)],
+        )
+        pl = get_playlist(client, auth_headers, project["id"], slot["id"])
+        sh = get_slideshow(client, auth_headers, project["id"], slot["id"])
+        assert [t["media_item_id"] for t in pl["tracks"]] == [m.id for m in audio]
+        assert [s["media_item_id"] for s in sh["slides"]] == [m.id for m in images]
+
+
+class TestLatentSlideshows:
+    def test_create_and_list(self, client, auth_headers, project):
+        created = create_slideshow(client, auth_headers, project["id"], "Zine flip-through")
+        assert created["name"] == "Zine flip-through"
+        assert created["slides"] == []
+        listed = client.get(
+            f"/api/projects/{project['id']}/slideshows", headers=auth_headers,
+        ).json()["slideshows"]
+        assert [s["id"] for s in listed] == [created["id"]]
+
+    def test_rename(self, client, auth_headers, project):
+        sh = create_slideshow(client, auth_headers, project["id"])
+        resp = client.patch(
+            f"/api/projects/{project['id']}/slideshows/{sh['id']}",
+            json={"name": "Renamed"}, headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["name"] == "Renamed"
+
+    def test_rename_rejects_blank(self, client, auth_headers, project):
+        sh = create_slideshow(client, auth_headers, project["id"])
+        assert client.patch(
+            f"/api/projects/{project['id']}/slideshows/{sh['id']}",
+            json={"name": "   "}, headers=auth_headers,
+        ).status_code == 400
+
+    def test_delete(self, client, auth_headers, project):
+        sh = create_slideshow(client, auth_headers, project["id"])
+        assert client.delete(
+            f"/api/projects/{project['id']}/slideshows/{sh['id']}", headers=auth_headers,
+        ).status_code == 204
+        listed = client.get(
+            f"/api/projects/{project['id']}/slideshows", headers=auth_headers,
+        ).json()["slideshows"]
+        assert listed == []
+
+    def test_add_slides_in_order(self, client, auth_headers, db_session, project, slot):
+        _, media = attach_images(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.png", "b.png"],
+        )
+        sh = create_slideshow(client, auth_headers, project["id"])
+        resp = add_slides(client, auth_headers, project["id"], sh["id"], [media[1].id, media[0].id])
+        assert resp.status_code == 200
+        assert [s["media_item_id"] for s in resp.json()["slides"]] == [media[1].id, media[0].id]
+
+    def test_add_is_forgiving(self, client, auth_headers, db_session, project, slot):
+        """Non-members, audio and duplicates are skipped, not 400s."""
+        _, media = attach_images(client, auth_headers, db_session, project["id"], slot["id"], ["a.png"])
+        audio = make_audio(db_session, "x.wav")
+        attach_item(client, auth_headers, project["id"], audio.id, slot["id"])
+        stranger = make_image(db_session, "stranger.png")
+        sh = create_slideshow(client, auth_headers, project["id"])
+        resp = add_slides(
+            client, auth_headers, project["id"], sh["id"],
+            [media[0].id, audio.id, stranger.id, media[0].id],
+        )
+        assert resp.status_code == 200
+        assert [s["media_item_id"] for s in resp.json()["slides"]] == [media[0].id]
+
+    def test_remove_slide(self, client, auth_headers, db_session, project, slot):
+        _, media = attach_images(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.png", "b.png"],
+        )
+        sh = create_slideshow(client, auth_headers, project["id"])
+        added = add_slides(
+            client, auth_headers, project["id"], sh["id"], [m.id for m in media],
+        ).json()
+        row = added["slides"][0]["slideshow_item_id"]
+        resp = client.delete(
+            f"/api/projects/{project['id']}/slideshows/{sh['id']}/items/{row}",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert [s["media_item_id"] for s in resp.json()["slides"]] == [media[1].id]
+
+    def test_reorder(self, client, auth_headers, db_session, project, slot):
+        _, media = attach_images(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.png", "b.png", "c.png"],
+        )
+        sh = create_slideshow(client, auth_headers, project["id"])
+        added = add_slides(client, auth_headers, project["id"], sh["id"], [m.id for m in media]).json()
+        rows = [s["slideshow_item_id"] for s in added["slides"]]
+        resp = client.post(
+            f"/api/projects/{project['id']}/slideshows/{sh['id']}/items/reorder",
+            json={"order": [rows[2], rows[0], rows[1]]}, headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert [s["media_item_id"] for s in resp.json()["slides"]] == [
+            media[2].id, media[0].id, media[1].id,
+        ]
+
+    def test_partial_reorder_keeps_the_rest_at_the_end(
+        self, client, auth_headers, db_session, project, slot
+    ):
+        _, media = attach_images(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.png", "b.png", "c.png"],
+        )
+        sh = create_slideshow(client, auth_headers, project["id"])
+        added = add_slides(client, auth_headers, project["id"], sh["id"], [m.id for m in media]).json()
+        rows = [s["slideshow_item_id"] for s in added["slides"]]
+        resp = client.post(
+            f"/api/projects/{project['id']}/slideshows/{sh['id']}/items/reorder",
+            json={"order": [rows[2]]}, headers=auth_headers,
+        )
+        assert [s["media_item_id"] for s in resp.json()["slides"]] == [
+            media[2].id, media[0].id, media[1].id,
+        ]
+
+    def test_departed_slide_is_filtered_not_deleted(
+        self, client, auth_headers, db_session, project, slot
+    ):
+        items, media = attach_images(
+            client, auth_headers, db_session, project["id"], slot["id"], ["a.png", "b.png"],
+        )
+        sh = create_slideshow(client, auth_headers, project["id"])
+        add_slides(client, auth_headers, project["id"], sh["id"], [m.id for m in media])
+        client.delete(f"/api/projects/{project['id']}/items/{items[0]['id']}", headers=auth_headers)
+        listed = client.get(
+            f"/api/projects/{project['id']}/slideshows", headers=auth_headers,
+        ).json()["slideshows"][0]
+        assert [s["media_item_id"] for s in listed["slides"]] == [media[1].id]
+        # Reattaching restores it in place.
+        attach_item(client, auth_headers, project["id"], media[0].id, slot["id"])
+        listed = client.get(
+            f"/api/projects/{project['id']}/slideshows", headers=auth_headers,
+        ).json()["slideshows"][0]
+        assert [s["media_item_id"] for s in listed["slides"]] == [media[0].id, media[1].id]
+
+    def test_404_on_foreign_slideshow(self, client, auth_headers, project):
+        other = client.post(
+            "/api/projects", json={"name": "Other"}, headers=auth_headers,
+        ).json()
+        sh = create_slideshow(client, auth_headers, other["id"])
+        assert client.patch(
+            f"/api/projects/{project['id']}/slideshows/{sh['id']}",
+            json={"name": "x"}, headers=auth_headers,
+        ).status_code == 404
+
+    def test_rejects_member(self, client, auth_headers, member_auth_headers, project):
+        assert client.get(
+            f"/api/projects/{project['id']}/slideshows", headers=member_auth_headers,
+        ).status_code == 403
+        assert client.post(
+            f"/api/projects/{project['id']}/slideshows",
+            json={"name": "x"}, headers=member_auth_headers,
+        ).status_code == 403
+
+
+class TestSlideshowSectionStyle:
+    def test_slideshow_is_a_valid_section_key(self, client, auth_headers, project):
+        resp = patch_project(
+            client, auth_headers, project["id"],
+            {"section_styles": {"slideshow": {"accent": "#aabbcc"}}},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["section_styles"]["slideshow"]["accent"] == "#aabbcc"
+
+    def test_unknown_section_still_rejected(self, client, auth_headers, project):
+        assert patch_project(
+            client, auth_headers, project["id"],
+            {"section_styles": {"slideshows": {"accent": "#aabbcc"}}},
+        ).status_code == 400
 
 
 class TestPlaylistsSectionStyle:
