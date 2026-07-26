@@ -12,6 +12,7 @@
   import Sortable from 'sortablejs';
   import LatentStyleButton from './LatentStyleButton.svelte';
   import { queueMedia } from '../lib/playerQueue.ts';
+  import { portal } from '../lib/portal.ts';
   import RowMove from './RowMove.svelte';
   import { DRAG_OPTS } from '../lib/dragOptions.ts';
   import { isPhone } from '../lib/viewport.svelte.ts';
@@ -517,12 +518,19 @@
   <!-- Popover on desktop, bottom sheet under 640px — same shape as the Style
        panel, so the keyboard doesn't cover the filter box on a phone. -->
   <div
+    use:portal
     class="sheet-backdrop"
     onclick={closeAdd}
     onkeydown={() => {}}
     role="presentation"
   ></div>
-  <div class="sheet" role="dialog" aria-modal="true" aria-label="Add tracks">
+  <div
+    use:portal
+    class="sheet"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Add tracks"
+  >
     <header class="sheet__head">
       <strong>Add tracks</strong>
       <button
