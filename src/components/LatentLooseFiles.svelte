@@ -15,6 +15,7 @@
   import { fileExt } from '../lib/fileExt.ts';
   import RowActions from './RowActions.svelte';
   import { isPhone } from '../lib/viewport.svelte.ts';
+  import { openLatentViewer, isViewable } from '../lib/latentViewer.ts';
 
   type Props = {
     projectId: string;
@@ -44,6 +45,17 @@
   let pullOpen = $state(false);
   let rootEl: HTMLElement | null = $state(null);
   let annotationCounts = $state<AnnotationCounts>({});
+
+  // The loose pile mixes audio, sessions and documents in with the pictures;
+  // only images and video get a lightbox.
+  let viewableCount = $derived(
+    items.filter((it) => isViewable(it.media?.media_type)).length,
+  );
+
+  function viewAll() {
+    const first = items.find((it) => isViewable(it.media?.media_type));
+    if (first) openLatentViewer(items, first.media_item_id);
+  }
 
   async function load() {
     loading = true;
@@ -209,6 +221,14 @@
     <h2>Loose files</h2>
     <span class="muted">{items.length}</span>
     <div class="loose__actions">
+      {#if viewableCount > 0}
+        <button
+          class="action-btn"
+          type="button"
+          title="Look through every image and video in the loose pile"
+          onclick={viewAll}>▷ View all ({viewableCount})</button
+        >
+      {/if}
       <button class="action-btn" type="button" onclick={() => (pullOpen = true)}
         >+ Pull from index</button
       >
@@ -243,9 +263,19 @@
           data-type={it.media?.media_type}
           data-media-id={it.media_item_id}
         >
-          <a
+          <svelte:element
+            this={isViewable(it.media?.media_type) ? 'button' : 'a'}
             class="tile__thumb"
-            href={`/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
+            type={isViewable(it.media?.media_type) ? 'button' : undefined}
+            title={isViewable(it.media?.media_type)
+              ? `View ${it.media?.filename || 'this file'} full screen`
+              : 'Open in Stacks'}
+            href={isViewable(it.media?.media_type)
+              ? undefined
+              : `/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
+            onclick={isViewable(it.media?.media_type)
+              ? () => openLatentViewer(items, it.media_item_id)
+              : undefined}
           >
             {#if it.media?.media_type === 'image'}
               <img src={thumbUrl(it.media_item_id)} alt={it.media?.filename} />
@@ -261,7 +291,7 @@
                 >
               </span>
             {/if}
-          </a>
+          </svelte:element>
           <div class="tile__info">
             <div class="tile__name" title={it.media?.filename}>
               {it.media?.filename || '(unknown)'}
@@ -399,15 +429,28 @@
     display: flex;
     flex-direction: column;
   }
+  /* Renders as <button> for images and video (opens the viewer) and <a> for
+     everything else (Stacks) — so it carries the reset for both. */
   .tile__thumb {
     display: flex;
     align-items: center;
     justify-content: center;
     aspect-ratio: 1;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    font: inherit;
     background: var(--color-surface);
     text-decoration: none;
     color: inherit;
     overflow: hidden;
+  }
+  button.tile__thumb {
+    cursor: zoom-in;
+  }
+  .tile__thumb:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -2px;
   }
   .tile__thumb img {
     width: 100%;

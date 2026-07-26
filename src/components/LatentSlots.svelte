@@ -14,6 +14,7 @@
   import MarginaliaBadge from './MarginaliaBadge.svelte';
   import RowMove from './RowMove.svelte';
   import RowActions from './RowActions.svelte';
+  import { openLatentViewer, isViewable } from '../lib/latentViewer.ts';
   import {
     fetchAnnotationCounts,
     type AnnotationCounts,
@@ -1615,10 +1616,31 @@
                           aria-pressed={it.is_primary}
                           >{it.is_primary ? '★' : '☆'}</button
                         >
-                        <a
+                        <!-- A button for images and video (opens the viewer
+                             over this slot's pictures), a link to Stacks for
+                             everything else. "Open in Stacks" is still in the
+                             row's More menu either way. -->
+                        <svelte:element
+                          this={isViewable(it.media?.media_type)
+                            ? 'button'
+                            : 'a'}
                           class="file-row__thumb"
-                          href={`/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
-                          title="Open in Stacks"
+                          type={isViewable(it.media?.media_type)
+                            ? 'button'
+                            : undefined}
+                          href={isViewable(it.media?.media_type)
+                            ? undefined
+                            : `/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
+                          title={isViewable(it.media?.media_type)
+                            ? `View ${it.media?.filename || 'this file'} full screen`
+                            : 'Open in Stacks'}
+                          onclick={isViewable(it.media?.media_type)
+                            ? () =>
+                                openLatentViewer(
+                                  itemsBySlot[slot.id] || [],
+                                  it.media_item_id,
+                                )
+                            : undefined}
                         >
                           {#if it.media?.media_type === 'image'}
                             <img
@@ -1631,7 +1653,7 @@
                                 '?'}</span
                             >
                           {/if}
-                        </a>
+                        </svelte:element>
                         <span class="file-row__name-wrap">
                           <a
                             class="file-row__name"
@@ -2304,9 +2326,14 @@
   .file-row--primary .file-row__star {
     color: var(--color-accent);
   }
+  /* <button> for images and video, <a> for everything else — carries the
+     reset for both. */
   .file-row__thumb {
     width: 32px;
     height: 32px;
+    padding: 0;
+    border: 0;
+    font: inherit;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2314,6 +2341,13 @@
     text-decoration: none;
     color: var(--color-muted);
     overflow: hidden;
+  }
+  button.file-row__thumb {
+    cursor: zoom-in;
+  }
+  .file-row__thumb:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -1px;
   }
   .file-row__thumb img {
     width: 100%;

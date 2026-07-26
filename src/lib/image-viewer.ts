@@ -1,9 +1,16 @@
 /**
  * Media viewer — a lightbox-style overlay for images, video, and audio.
  *
- * Opens via `openImageViewer(items, startIndex, actions?)` (name kept from
- * v1 for compatibility — it handles all three kinds now). One viewer
+ * Opens via `openImageViewer(items, startIndex, actions?, opts?)` (name kept
+ * from v1 for compatibility — it handles all three kinds now). One viewer
  * instance at a time; opening a new one closes any existing.
+ *
+ * Chrome modes (`opts.chrome`):
+ * - `'persistent'` (default) — the bars are always there. Right for the triage
+ *   surfaces (midden, slop, workspace), where the toolbar IS the job.
+ * - `'auto-hide'` — the bars float over the image and fade after a couple of
+ *   seconds of stillness, so a still frame is nothing but the picture. Any
+ *   movement, key or touch brings them straight back. Used by Latents.
  *
  * Mobile support:
  * - Pinch-to-zoom via two-finger gestures (images only)
@@ -57,6 +64,18 @@ export interface ViewerActions {
   canDetails?: (item: ViewerItem) => boolean;
 }
 
+export interface ViewerOptions {
+  /**
+   * `'persistent'` (default) keeps the bars in the layout, as they have always
+   * been. `'auto-hide'` floats them over the image and fades them after a
+   * moment of stillness. See the module header.
+   */
+  chrome?: 'persistent' | 'auto-hide';
+}
+
+/** How long the viewer sits still before auto-hiding chrome fades out. */
+const CHROME_IDLE_MS = 2000;
+
 // ---------------------------------------------------------------------------
 // Module-scoped singleton state
 // ---------------------------------------------------------------------------
@@ -71,6 +90,7 @@ export function openImageViewer(
   items: ViewerItem[],
   startIndex: number,
   actions: ViewerActions = {},
+  opts: ViewerOptions = {},
 ): void {
   if (!items || items.length === 0) return;
   if (activeViewer) activeViewer.close();
@@ -78,6 +98,7 @@ export function openImageViewer(
     items,
     Math.max(0, Math.min(startIndex, items.length - 1)),
     actions,
+    opts,
   );
   activeViewer.open();
 }
@@ -180,6 +201,37 @@ const STYLES = `
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   justify-content: center;
   flex-wrap: wrap;
+}
+/* Auto-hide chrome. The bars come OUT of the flex column and float over the
+   stage — fading them in place would leave two black bands and the image
+   would never grow into the space. Absolute + the stage's flex:1 gives a
+   genuinely edge-to-edge picture. */
+.iv-root--autohide .iv-topbar,
+.iv-root--autohide .iv-toolbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  transition: opacity 0.25s ease;
+}
+.iv-root--autohide .iv-topbar { top: 0; }
+.iv-root--autohide .iv-toolbar { bottom: 0; }
+.iv-root--autohide .iv-nav-btn {
+  transition: opacity 0.25s ease;
+}
+/* Idle: everything but the picture gets out of the way. The nav arrows go too
+   — any movement brings them back, and the arrow keys never stopped working. */
+.iv-root--autohide.iv-root--idle .iv-topbar,
+.iv-root--autohide.iv-root--idle .iv-toolbar,
+.iv-root--autohide.iv-root--idle .iv-nav-btn {
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .iv-root--autohide .iv-topbar,
+  .iv-root--autohide .iv-toolbar,
+  .iv-root--autohide .iv-nav-btn {
+    transition: none;
+  }
 }
 .iv-title {
   flex: 1;
@@ -488,15 +540,26 @@ class ViewerInstance {
   } | null = null;
   private swipeStart: { x: number; y: number; time: number } | null = null;
 
+  // Auto-hide chrome
+  private autoHide: boolean;
+  private idleTimer: number | null = null;
+
   private keyHandler = (e: KeyboardEvent) => this.handleKey(e);
   private wheelHandler = (e: WheelEvent) => this.handleWheel(e);
   private navCloseHandler = () => this.close();
   private resizeHandler = () => this.resetZoom();
+  private activityHandler = () => this.wakeChrome();
 
-  constructor(items: ViewerItem[], index: number, actions: ViewerActions) {
+  constructor(
+    items: ViewerItem[],
+    index: number,
+    actions: ViewerActions,
+    opts: ViewerOptions = {},
+  ) {
     this.items = items;
     this.index = index;
     this.actions = actions;
+    this.autoHide = opts.chrome === 'auto-hide';
   }
 
   open() {
@@ -508,7 +571,38 @@ class ViewerInstance {
     document.addEventListener('keydown', this.keyHandler);
     document.addEventListener('astro:before-preparation', this.navCloseHandler);
     window.addEventListener('resize', this.resizeHandler);
+    if (this.autoHide) {
+      this.root.classList.add('iv-root--autohide');
+      // pointermove covers mouse, pen and touch-drag; pointerdown catches a
+      // bare tap, which a phone needs to get the toolbar back at all. keydown
+      // is already listened for, and routes through wakeChrome in handleKey.
+      this.root.addEventListener('pointermove', this.activityHandler);
+      this.root.addEventListener('pointerdown', this.activityHandler);
+      this.wakeChrome();
+    }
     this.render();
+  }
+
+  /**
+   * Show the chrome and restart the idle countdown. No-op unless the viewer
+   * was opened with `chrome: 'auto-hide'`.
+   */
+  private wakeChrome() {
+    if (!this.autoHide || !this.root) return;
+    this.root.classList.remove('iv-root--idle');
+    if (this.idleTimer !== null) window.clearTimeout(this.idleTimer);
+    this.idleTimer = window.setTimeout(() => {
+      this.idleTimer = null;
+      if (!this.root) return;
+      // Don't blank the controls out from under a pointer that's resting on
+      // them. `this.root` is the whole viewport, so it is always hovered —
+      // the bars themselves are the honest test.
+      const onChrome = this.root.querySelector(
+        '.iv-topbar:hover, .iv-toolbar:hover, .iv-nav-btn:hover',
+      );
+      if (onChrome) return this.wakeChrome();
+      this.root.classList.add('iv-root--idle');
+    }, CHROME_IDLE_MS);
   }
 
   close() {
@@ -526,6 +620,10 @@ class ViewerInstance {
       this.navCloseHandler,
     );
     window.removeEventListener('resize', this.resizeHandler);
+    if (this.idleTimer !== null) {
+      window.clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
     this.root.remove();
     document.body.style.overflow = '';
     if (activeViewer === this) activeViewer = null;
@@ -1081,6 +1179,10 @@ class ViewerInstance {
     // with the viewer open but defensive).
     const tgt = e.target as HTMLElement;
     if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA')) return;
+
+    // Driving by keyboard counts as activity — arrowing through a reel should
+    // keep the counter visible rather than fading it out mid-flip.
+    this.wakeChrome();
 
     // Cheatsheet overlay absorbs most keys
     if (this.cheatsheetEl) {

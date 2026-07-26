@@ -46,6 +46,7 @@
   let panelEl = $state<HTMLDivElement | undefined>(undefined);
   let top = $state(0);
   let left = $state(0);
+  let maxHeight = $state(0);
 
   const PANEL_W = 200; // keep in sync with .row-actions__panel--float width
   const GAP = 2;
@@ -53,18 +54,43 @@
   /**
    * Park the floating panel under the toggle, right edges aligned, flipping
    * above when the row is near the bottom of the viewport. Coordinates are
-   * viewport-relative because the panel is position:fixed.
+   * viewport-relative because the panel is position:fixed — so anything
+   * placed past the bottom edge is UNREACHABLE, not merely awkward.
+   *
+   * The earlier version of this fell back to `r.bottom + GAP` when neither
+   * side had room, which overflowed exactly like the Style panel bug, and it
+   * never capped the height, so a menu taller than the viewport always
+   * overflowed. Both fixed below.
+   *
+   * NOTE: this duplicates src/lib/anchoredPanel.ts, which landed separately as
+   * the single implementation of this. Collapse this onto the helper once both
+   * are on master — it is only hand-rolled here because that helper isn't on
+   * this branch.
    */
   function place() {
     if (!toggleEl) return;
     const r = toggleEl.getBoundingClientRect();
-    const h = panelEl?.offsetHeight ?? 0;
-    const below = window.innerHeight - r.bottom;
-    top =
-      h > 0 && below < h + GAP && r.top > h ? r.top - h - GAP : r.bottom + GAP;
+    // scrollHeight, not offsetHeight: offsetHeight is already limited by the
+    // maxHeight we set last pass, so reading it would shrink the menu a bit
+    // more on every re-place.
+    const h = panelEl?.scrollHeight ?? 0;
+    const MARGIN = 4;
+    const roomBelow = window.innerHeight - r.bottom - GAP - MARGIN;
+    const roomAbove = r.top - GAP - MARGIN;
+    const fits = (room: number) => (h > 0 ? h <= room : room >= 140);
+    const down =
+      fits(roomBelow) || (!fits(roomAbove) && roomBelow >= roomAbove);
+
+    if (down) {
+      top = r.bottom + GAP;
+      maxHeight = Math.max(0, roomBelow);
+    } else {
+      maxHeight = Math.max(0, roomAbove);
+      top = Math.max(MARGIN, r.top - GAP - Math.min(h || maxHeight, maxHeight));
+    }
     left = Math.max(
-      4,
-      Math.min(r.right - PANEL_W, window.innerWidth - PANEL_W - 4),
+      MARGIN,
+      Math.min(r.right - PANEL_W, window.innerWidth - PANEL_W - MARGIN),
     );
   }
 
@@ -156,7 +182,7 @@
     use:portal
     bind:this={panelEl}
     class="row-actions__panel row-actions__panel--float"
-    style="top: {top}px; left: {left}px;"
+    style="top: {top}px; left: {left}px; max-height: {maxHeight}px;"
     role="group"
     aria-label={`Actions for ${label}`}
   >
@@ -209,6 +235,7 @@
   }
   .row-actions__panel--float {
     position: fixed;
+    overflow-y: auto; /* the max-height set in script has to be able to bite */
     z-index: 10002; /* above the player bar's 9999 */
     flex: none;
     width: 200px; /* keep in sync with PANEL_W */
