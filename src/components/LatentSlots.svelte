@@ -569,9 +569,11 @@
   // Session rows poll while extraction is pending/processing; once done, the
   // harvested audio appears both as an expandable child list on the session
   // row and as peer rows carrying a "from session" chip.
-  /* Phone only. A slot card arrives collapsed to its summary line and opens
-     one tab at a time; desktop still shows everything stacked, so both are the
-     same markup with different visibility conditions. */
+  /* A slot card arrives collapsed to its summary line at EVERY width — a
+     6-slot latent was several screens of card before you could see the shape
+     of it. What "open" means still differs: a phone shows one tab at a time,
+     desktop stacks everything it has room for. Same markup, different
+     visibility conditions. */
   let cardOpen = $state<Record<string, boolean>>({});
   let statusOpen = $state<Record<string, boolean>>({});
   let toolsOpen = $state<Record<string, boolean>>({});
@@ -585,7 +587,7 @@
     return !isPhone() || tabOf(id) === tab;
   }
   function isOpen(id: string): boolean {
-    return !isPhone() || !!cardOpen[id];
+    return !!cardOpen[id];
   }
   /** Counts live in the label so a closed tab still reports its contents. */
   function tabsFor(slot: Slot): { key: string; label: string }[] {
@@ -1274,39 +1276,32 @@
               aria-label="Drag to reorder">⋮⋮</button
             >
             <span class="slot__pos">#{slot.position}</span>
-            {#if isPhone()}
-              <!-- Collapsed, the summary IS the status: label, counts, state.
-                   Renaming moves into Slot tools so the whole line can be the
-                   open/close target. -->
-              <button
-                class="slot__summary"
-                type="button"
-                aria-expanded={!!cardOpen[slot.id]}
-                onclick={() => (cardOpen[slot.id] = !cardOpen[slot.id])}
+            <!-- Collapsed, the summary IS the status: label, counts, state.
+                 The whole line is the open/close target at every width, so
+                 renaming can't also live on it — a phone reaches Rename
+                 through Slot tools, desktop through the Rename button in the
+                 controls row below. -->
+            <button
+              class="slot__summary"
+              type="button"
+              aria-expanded={!!cardOpen[slot.id]}
+              onclick={() => (cardOpen[slot.id] = !cardOpen[slot.id])}
+            >
+              <span class="slot__caret" aria-hidden="true"
+                >{cardOpen[slot.id] ? '▾' : '▸'}</span
               >
-                <span class="slot__caret" aria-hidden="true"
-                  >{cardOpen[slot.id] ? '▾' : '▸'}</span
-                >
-                <span class="slot__label-text">{slot.label}</span>
-                <span class="slot__summary-meta">
-                  {slot.item_count ?? 0} file{(slot.item_count ?? 0) === 1
-                    ? ''
-                    : 's'}{#if audioCount(slot.id) > 0}
-                    · {audioCount(slot.id)} audio{/if}
-                </span>
-                <span
-                  class="slot__summary-state"
-                  style="--c: {statusColor(slot.status)}">{slot.status}</span
-                >
-              </button>
-            {:else}
-              <button
-                class="slot__label"
-                onclick={() => renameSlot(slot)}
-                type="button"
-                title="Click to rename">{slot.label}</button
+              <span class="slot__label-text">{slot.label}</span>
+              <span class="slot__summary-meta">
+                {slot.item_count ?? 0} file{(slot.item_count ?? 0) === 1
+                  ? ''
+                  : 's'}{#if audioCount(slot.id) > 0}
+                  · {audioCount(slot.id)} audio{/if}
+              </span>
+              <span
+                class="slot__summary-state"
+                style="--c: {statusColor(slot.status)}">{slot.status}</span
               >
-            {/if}
+            </button>
           </div>
           <div class="slot__controls-row">
             {#if isPhone()}
@@ -1336,7 +1331,7 @@
                   >Slot tools {toolsOpen[slot.id] ? '▴' : '▾'}</button
                 >
               {/if}
-            {:else}
+            {:else if cardOpen[slot.id]}
               <div class="slot__status">
                 {#each ['forming', 'developing', 'fixed'] as st}
                   <button
@@ -1354,6 +1349,15 @@
                   >{slot.item_count ?? 0} file{(slot.item_count ?? 0) === 1
                     ? ''
                     : 's'}</span
+                >
+                <!-- The summary line is the open/close target now, so the
+                     click-the-title-to-rename affordance needs its own door.
+                     Removing it outright would delete a capability. -->
+                <button
+                  class="action-btn"
+                  type="button"
+                  title="Rename this slot"
+                  onclick={() => renameSlot(slot)}>Rename</button
                 >
                 {#if audioCount(slot.id) > 0}
                   <button
@@ -1478,7 +1482,7 @@
           {/if}
         </div>
 
-        {#if repoMeta && (!isPhone() || (isOpen(slot.id) && shows(slot.id, 'runs')))}
+        {#if repoMeta && isOpen(slot.id) && (!isPhone() || shows(slot.id, 'runs'))}
           <div class="slot__repo">
             {#if linkingSlot === slot.id}
               <input
@@ -1931,7 +1935,7 @@
           </div>
         {/if}
 
-        {#if isPhone() ? isOpen(slot.id) && shows(slot.id, 'notes') : openSlot === slot.id && openSection === 'notes'}
+        {#if isOpen(slot.id) && (isPhone() ? shows(slot.id, 'notes') : openSlot === slot.id && openSection === 'notes')}
           <div class="slot__panel">
             <textarea
               rows="6"
@@ -1942,7 +1946,7 @@
           </div>
         {/if}
 
-        {#if isPhone() ? isOpen(slot.id) && shows(slot.id, 'threads') : openSlot === slot.id && openSection === 'threads'}
+        {#if isOpen(slot.id) && (isPhone() ? shows(slot.id, 'threads') : openSlot === slot.id && openSection === 'threads')}
           <div class="slot__panel">
             <Threads
               anchorType="slot"
@@ -1953,7 +1957,7 @@
           </div>
         {/if}
 
-        {#if isPhone() ? isOpen(slot.id) && shows(slot.id, 'runs') : openSlot === slot.id && openSection === 'runs'}
+        {#if isOpen(slot.id) && (isPhone() ? shows(slot.id, 'runs') : openSlot === slot.id && openSection === 'runs')}
           <div class="slot__panel">
             {#if (runsBySlot[slot.id] || []).length === 0}
               <div class="muted">No runs yet — hit ▶ Run above.</div>
@@ -2241,7 +2245,11 @@
   }
   .file-row {
     display: grid;
-    grid-template-columns: 20px 24px 32px 1fr auto auto auto;
+    /* The name column needs a real floor. As a bare `1fr` (min-width:0 via
+       .file-row__name) it collapsed to zero the moment the actions column got
+       wide — which is exactly what happened when row actions became words, and
+       desktop rows showed no filename at all. */
+    grid-template-columns: 20px 24px 32px minmax(14ch, 1fr) auto auto auto;
     align-items: center;
     gap: 8px;
     padding: 4px 8px;
@@ -2317,12 +2325,13 @@
     font-weight: 700;
     font-size: 0.85rem;
   }
+  /* Wrap, never truncate — the tail of a generated filename is the part that
+     tells them apart (…-seed-4471-v2.png). Loose tiles got this in #541; slot
+     rows were the deferred half of it. */
   .file-row__name {
     color: var(--color-text);
     text-decoration: none;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
     min-width: 0;
   }
   .file-row__name:hover {
@@ -2534,7 +2543,10 @@
     font: inherit;
     background: none;
     border: 0;
-    color: var(--color-text);
+    /* inherit, like the .slot__label it replaced: .slot__head carries the
+       face-aware colour (--slot-text / --color-on-overlay) and the summary
+       must ride it, or a faced card's title goes dark-on-dark. */
+    color: inherit;
     padding: 4px 0;
     min-height: 44px;
     text-align: left;

@@ -16,7 +16,6 @@
     - currentUserId: local user id, used to gate the edit/delete affordances.
 -->
 <script lang="ts">
-  import { isPhone } from '../lib/viewport.svelte.ts';
   import LatentStyleButton from './LatentStyleButton.svelte';
 
   type Props = {
@@ -103,9 +102,9 @@
 
   let useCompactHeader = $derived(compact || singleThread);
   let open = $state(false);
-  /* Only the page-level section collapses; the slot instance already sits
-     inside a slot's Threads tab. */
-  let collapsed = $derived(isPhone() && !useCompactHeader && !open);
+  /* Only the page-level section collapses, and it does so at every width; the
+     slot instance already sits inside a slot's Threads tab. */
+  let collapsed = $derived(!useCompactHeader && !open);
 
   let primaryThread = $derived(
     singleThread && threads.length > 0
@@ -387,24 +386,20 @@
 <section class="threads" class:compact={useCompactHeader}>
   {#if !useCompactHeader}
     <header class="threads__head" class:latent-band={!!styleKey}>
-      {#if isPhone()}
-        <button
-          class="sec-summary"
-          type="button"
-          aria-expanded={open}
-          onclick={() => (open = !open)}
+      <button
+        class="sec-summary"
+        type="button"
+        aria-expanded={open}
+        onclick={() => (open = !open)}
+      >
+        <span class="sec-summary__caret" aria-hidden="true"
+          >{open ? '▾' : '▸'}</span
         >
-          <span class="sec-summary__caret" aria-hidden="true"
-            >{open ? '▾' : '▸'}</span
-          >
-          <span class="sec-summary__label">{title}</span>
-          <span class="sec-summary__meta"
-            >{threads.length} thread{threads.length === 1 ? '' : 's'}</span
-          >
-        </button>
-      {:else}
-        <h2>{title}</h2>
-      {/if}
+        <span class="sec-summary__label">{title}</span>
+        <span class="sec-summary__meta"
+          >{threads.length} thread{threads.length === 1 ? '' : 's'}</span
+        >
+      </button>
       {#if !singleThread}
         <button
           class="action-btn"

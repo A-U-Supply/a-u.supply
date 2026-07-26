@@ -4,6 +4,8 @@
   initial sync runs server-side.
 -->
 <script lang="ts">
+  import { portal } from '../lib/portal.ts';
+
   type Props = {
     open: boolean;
     projectId: string;
@@ -82,12 +84,27 @@
   $effect(() => {
     if (open) loadTokens();
   });
+
+  // Lock the page behind the modal — see PullFromIndex for the same pattern.
+  $effect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  });
 </script>
 
 <svelte:window onkeydown={onKeydown} />
 
 {#if open}
-  <div class="overlay" onclick={close} role="presentation">
+  <!--
+    Portaled to <body>: LatentRepoStrip renders in the FIRST .latent-section,
+    and every section below it paints over this at any z-index. See
+    src/lib/portal.ts.
+  -->
+  <div use:portal class="overlay" onclick={close} role="presentation">
     <div
       class="modal"
       role="dialog"

@@ -298,7 +298,11 @@ body.player-active .admin-main {
   font: inherit;
   background: none;
   border: 0;
-  color: var(--color-text);
+  /* inherit, NOT --color-text: the summary sits inside .latent-band, and a
+     faced section sets that band's color for contrast against its own
+     background. Hardcoding the theme text colour put the section title
+     dark-on-dark on every scrim/treat/solid face. */
+  color: inherit;
   padding: 4px 0;
   min-height: 44px;
   text-align: left;

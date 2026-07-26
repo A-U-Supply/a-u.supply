@@ -16,6 +16,7 @@
   import SearchFilterBar, { type Filters } from './SearchFilterBar.svelte';
   import Uploader from './Uploader.svelte';
   import { filtersToSearchBody } from '../lib/filterTranslator.ts';
+  import { portal } from '../lib/portal.ts';
 
   type Props = {
     open: boolean;
@@ -223,6 +224,18 @@
     onClose?.();
   }
 
+  // Lock the page behind the modal. Without this the wheel scrolls the page
+  // whenever the pointer isn't over .modal__body — which on desktop is most
+  // of the modal (the head, the search row, the footer, the gutters).
+  $effect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  });
+
   function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') close();
   }
@@ -294,7 +307,13 @@
 <svelte:window onkeydown={onKeydown} />
 
 {#if open}
-  <div class="overlay" onclick={close} role="presentation">
+  <!--
+    Portaled to <body>. Both callers (LatentSlots, LatentLooseFiles) render
+    inside a .latent-section, and those sections set isolation:isolate — a
+    later section paints over anything in an earlier one at any z-index. See
+    src/lib/portal.ts.
+  -->
+  <div use:portal class="overlay" onclick={close} role="presentation">
     <div
       class="modal"
       role="dialog"
@@ -546,6 +565,11 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    /* Hitting the end of the results must not hand the wheel to the page. */
+    overscroll-behavior: contain;
+    /* Reserve the scrollbar's width — without it the filter grid's right-hand
+       column renders under the bar and its boxes look cut off. */
+    scrollbar-gutter: stable;
     display: flex;
     flex-direction: column;
     gap: var(--space-sm);

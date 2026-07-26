@@ -5,7 +5,6 @@
   small "Link a GitHub repo" CTA that opens the modal.
 -->
 <script lang="ts">
-  import { isPhone } from '../lib/viewport.svelte.ts';
   import LinkRepoModal from './LinkRepoModal.svelte';
   import LatentStyleButton from './LatentStyleButton.svelte';
 
@@ -165,35 +164,31 @@
   {#if !loaded}
     <div class="placeholder">…</div>
   {:else if repo}
-    {#if isPhone()}
-      <!-- Collapsed, the summary is the whole status: which repo, how fresh. -->
-      <div class="row row--summary">
-        <button
-          class="sec-summary"
-          type="button"
-          aria-expanded={open}
-          onclick={() => (open = !open)}
+    <!-- Collapsed, the summary is the whole status: which repo, how fresh.
+         Every width, not just phones: the section is a one-line status until
+         you actually want to sync or unlink something. -->
+    <div class="row row--summary">
+      <button
+        class="sec-summary"
+        type="button"
+        aria-expanded={open}
+        onclick={() => (open = !open)}
+      >
+        <span class="sec-summary__caret" aria-hidden="true"
+          >{open ? '▾' : '▸'}</span
         >
-          <span class="sec-summary__caret" aria-hidden="true"
-            >{open ? '▾' : '▸'}</span
-          >
-          <span class="sec-summary__label">Repo</span>
-          <span class="sec-summary__meta"
-            >{repo.owner}/{repo.repo_name} · synced {fmtTime(
-              repo.last_synced_at,
-            )}</span
-          >
-        </button>
-        {#if styleKey}
-          <LatentStyleButton
-            {projectId}
-            scope="section"
-            sectionKey={styleKey}
-          />
-        {/if}
-      </div>
-    {/if}
-    {#if !isPhone() || open}
+        <span class="sec-summary__label">Repo</span>
+        <span class="sec-summary__meta"
+          >{repo.owner}/{repo.repo_name} · synced {fmtTime(
+            repo.last_synced_at,
+          )}</span
+        >
+      </button>
+      {#if styleKey}
+        <LatentStyleButton {projectId} scope="section" sectionKey={styleKey} />
+      {/if}
+    </div>
+    {#if open}
       <div class="row">
         <div class="left">
           <span class="icon" aria-hidden="true">⛬</span>
@@ -229,13 +224,6 @@
             type="button"
             onclick={unlink}>Unlink</button
           >
-          {#if styleKey && !isPhone()}
-            <LatentStyleButton
-              {projectId}
-              scope="section"
-              sectionKey={styleKey}
-            />
-          {/if}
         </div>
       </div>
     {/if}
