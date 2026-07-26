@@ -66,6 +66,11 @@
    * ochre is --color-accent (interactive). Closest neighbours are repo (blue)
    * and docs (violet); per-latent overrides exist if it reads too near them. */
   --latent-sec-playlists: #5b4fae;
+  /* Magenta: the widest arc left between docs (violet) and threads (plum)
+   * that doesn't land on a status semantic — red reads as status-fail and
+   * green as status-ok. The wheel is genuinely full at eight; per-latent
+   * overrides exist if it sits too near its neighbours. */
+  --latent-sec-slideshow: #9c4a93;
   --latent-sec-loose: #6b8e23;
   --latent-sec-threads: #8e4a6f;
 }
@@ -109,6 +114,7 @@ html[data-theme='dark'] {
   --latent-sec-docs: #9b7fc0;
   --latent-sec-slots: #d07f4f;
   --latent-sec-playlists: #9a8fd8;
+  --latent-sec-slideshow: #c98ac0;
   --latent-sec-loose: #8fb03e;
   --latent-sec-threads: #b06a92;
 }
