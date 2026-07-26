@@ -738,15 +738,21 @@
      desktop the stack collapses to the grip alone. */
 
   /* --- Add-tracks sheet -------------------------------------------------- */
+  /* !important, reluctantly: detail.astro styles every direct child of a
+     .latent-section with `position: relative; z-index: 2` at specificity
+     (0,3,0), which outranks these scoped rules — so the overlay rendered in
+     the page flow instead of over it, on every width. LatentStylePanel is
+     mounted outside the sections for the same reason; this one can't be,
+     because it belongs to the island that owns the playlist state. */
   .sheet-backdrop {
-    position: fixed;
+    position: fixed !important;
     inset: 0;
     background: var(--color-overlay-soft);
-    z-index: 60;
+    z-index: 60 !important;
   }
   .sheet {
-    position: fixed;
-    z-index: 61;
+    position: fixed !important;
+    z-index: 61 !important;
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
@@ -912,7 +918,7 @@
        fixes both, and makes picking tracks its own screen rather than a
        letterbox. */
     .sheet-backdrop {
-      z-index: 9999;
+      z-index: 9999 !important;
     }
     .sheet {
       left: 0;
@@ -924,7 +930,7 @@
       height: 100dvh;
       max-height: none;
       border-width: 0;
-      z-index: 10000;
+      z-index: 10000 !important;
     }
     .sheet__head {
       position: sticky;
