@@ -289,17 +289,6 @@
                 · {formatSize(it.media.file_size_bytes)}
               {/if}
             </div>
-            {#if it.media}
-              <div class="tile__badges">
-                <MarginaliaBadge
-                  mediaId={it.media_item_id}
-                  mediaType={it.media.media_type}
-                  filename={it.media.filename || ''}
-                  counts={annotationCounts[it.media_item_id] || null}
-                  showEmpty={isPhone()}
-                />
-              </div>
-            {/if}
           </div>
           <div class="tile__actions">
             {#if it.media?.media_type === 'audio' || it.media?.media_type === 'video' || it.media?.media_type === 'midi'}
@@ -315,6 +304,15 @@
                     it.media?.filename || '',
                   )}>▶ Play</button
               >
+            {/if}
+            {#if it.media}
+              <MarginaliaBadge
+                mediaId={it.media_item_id}
+                mediaType={it.media.media_type}
+                filename={it.media.filename || ''}
+                counts={annotationCounts[it.media_item_id] || null}
+                showEmpty={isPhone()}
+              />
             {/if}
             <RowActions
               label={it.media?.filename || 'this file'}
@@ -452,12 +450,6 @@
     color: var(--color-muted);
     font-size: 0.7rem;
   }
-  .tile__badges {
-    margin-top: 2px;
-  }
-  .tile__badges:empty {
-    display: none;
-  }
   .session-chip {
     display: inline-block;
     margin-top: 2px;
@@ -492,6 +484,7 @@
   .tile__actions {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 4px;
     padding: 0 6px 6px;
   }
