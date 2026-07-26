@@ -28,6 +28,8 @@ from server.models import (
     ProjectLink,
     ProjectPlaylist,
     ProjectPlaylistItem,
+    ProjectSlideshow,
+    ProjectSlideshowItem,
     ProjectSlot,
     SlotPrimaryPin,
     Thread,
@@ -260,17 +262,61 @@ def _slot_audio_items(db: Session, project_id: str, slot_id: str) -> list[Projec
     return _item_order(q).all()
 
 
-def _slot_playlist(slot: ProjectSlot, audio_items: list[ProjectItem]) -> list[ProjectItem]:
-    """Reconcile the stored order hint against what's actually in the slot.
+# Images and video are what a slideshow shows. Audio has the persistent
+# Player; sessions and documents have no visual form.
+SLIDESHOW_MEDIA_TYPES = ("image", "video")
 
-    Stored ids that are still audio in this slot keep their sequence; anything
-    else (a new upload, a file moved in) appends in file order. Ids that have
-    left are ignored, not deleted — a file that comes back keeps its old place.
+
+def _slide_summary(pi: ProjectItem) -> dict:
+    """A slideshow row: enough to render a thumbnail and reserve its aspect."""
+    mi = pi.media_item
+    meta = None
+    if mi:
+        meta = mi.image_meta or mi.video_meta
+    return {
+        "item_id": pi.id,
+        "media_item_id": pi.media_item_id,
+        "slot_id": pi.slot_id,
+        "filename": mi.filename if mi else None,
+        "media_type": mi.media_type if mi else None,
+        "width": meta.width if meta else None,
+        "height": meta.height if meta else None,
+    }
+
+
+def _slot_visual_items(db: Session, project_id: str, slot_id: str) -> list[ProjectItem]:
+    """The slot's image/video attachments in file order — the slideshow's membership."""
+    q = (
+        db.query(ProjectItem)
+        .options(
+            joinedload(ProjectItem.media_item).joinedload(MediaItem.image_meta),
+            joinedload(ProjectItem.media_item).joinedload(MediaItem.video_meta),
+        )
+        .join(MediaItem, MediaItem.id == ProjectItem.media_item_id)
+        .filter(
+            ProjectItem.project_id == project_id,
+            ProjectItem.slot_id == slot_id,
+            MediaItem.media_type.in_(SLIDESHOW_MEDIA_TYPES),
+        )
+    )
+    return _item_order(q).all()
+
+
+def _reconcile_order(stored_json: str | None, items: list[ProjectItem]) -> list[ProjectItem]:
+    """Reconcile a stored order hint against what's actually in the slot.
+
+    Stored ids that are still present keep their sequence; anything else (a new
+    upload, a file moved in) appends in file order. Ids that have left are
+    ignored, not deleted — a file that comes back keeps its old place.
     Read-only: never writes during a GET.
+
+    Media-type agnostic on purpose: the slot playlist (audio) and the slot
+    slideshow (image/video) are the same reconciliation over different
+    membership queries.
     """
-    by_media = {pi.media_item_id: pi for pi in audio_items}
+    by_media = {pi.media_item_id: pi for pi in items}
     try:
-        stored = json.loads(slot.playlist_json) if slot.playlist_json else []
+        stored = json.loads(stored_json) if stored_json else []
     except (ValueError, TypeError):
         stored = []
     ordered: list[ProjectItem] = []
@@ -280,14 +326,28 @@ def _slot_playlist(slot: ProjectSlot, audio_items: list[ProjectItem]) -> list[Pr
         if pi is not None and mid not in seen:
             ordered.append(pi)
             seen.add(mid)
-    ordered.extend(pi for pi in audio_items if pi.media_item_id not in seen)
+    ordered.extend(pi for pi in items if pi.media_item_id not in seen)
     return ordered
+
+
+def _slot_playlist(slot: ProjectSlot, audio_items: list[ProjectItem]) -> list[ProjectItem]:
+    """The slot's audio in playlist order."""
+    return _reconcile_order(slot.playlist_json, audio_items)
+
+
+def _slot_slideshow(slot: ProjectSlot, visual_items: list[ProjectItem]) -> list[ProjectItem]:
+    """The slot's images and video in slideshow order."""
+    return _reconcile_order(slot.slideshow_json, visual_items)
 
 
 def _playlist_payload(tracks: list[ProjectItem]) -> dict:
     summaries = [_track_summary(pi) for pi in tracks]
     total = sum(t["duration_seconds"] or 0 for t in summaries)
     return {"tracks": summaries, "total_seconds": total}
+
+
+def _slideshow_payload(slides: list[ProjectItem]) -> dict:
+    return {"slides": [_slide_summary(pi) for pi in slides]}
 
 
 def _pin_map_for_slot(db: Session, slot_id: str) -> dict[str, str]:
@@ -425,7 +485,7 @@ _HERO_ACCENT_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 _STYLE_HEX_KEYS = {"accent", "bg_color", "border", "text"}
 VALID_SLOT_BG_MODES = {"auto", "image", "solid", "none"}
 VALID_SECTION_BG_MODES = {"image", "solid", "none"}  # sections have no starred image
-VALID_SECTION_KEYS = {"repo", "links", "docs", "slots", "playlists", "loose", "threads"}
+VALID_SECTION_KEYS = {"repo", "links", "docs", "slots", "playlists", "slideshow", "loose", "threads"}
 
 
 def _merge_style_patch(
@@ -594,6 +654,26 @@ class AddPlaylistTracksBody(BaseModel):
 
 class ReorderPlaylistBody(BaseModel):
     order: list[str]  # playlist_item ids; omitted rows keep their order at the end
+
+
+class SetSlotSlideshowBody(BaseModel):
+    order: list[str]  # media_item_ids; may be a subset — the rest append on read
+
+
+class CreateSlideshowBody(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+
+
+class UpdateSlideshowBody(BaseModel):
+    name: str | None = None
+
+
+class AddSlidesBody(BaseModel):
+    media_item_ids: list[str]
+
+
+class ReorderSlideshowBody(BaseModel):
+    order: list[str]  # slideshow_item ids; omitted rows keep their order at the end
 
 
 # ---------------------------------------------------------------------------
@@ -1336,17 +1416,22 @@ def reorder_slot_items(
 ):
     """Set the manual file order for one slot.
 
-    Deliberately does NOT move the slot's playlist: the two orders are
-    independent by design (see docs/plans/2026-07-24-latent-playlists.md).
-    An untouched playlist has no stored order — it just mirrors the file
-    order — so this pins it as it currently reads *before* renumbering.
-    Without that snapshot, dragging files would drag the playlist along with
-    them right up until the first time the playlist itself was arranged.
+    Deliberately does NOT move the slot's playlist OR its slideshow: all three
+    orders are independent by design (see the plan docs for
+    2026-07-24-latent-playlists and 2026-07-26-latent-slideshow). An untouched
+    playlist/slideshow has no stored order — it just mirrors the file order —
+    so this pins each as it currently reads *before* renumbering. Without that
+    snapshot, dragging files would drag them along right up until the first
+    time they were arranged themselves.
     """
     s = _slot_or_404(db, project_id, slot_id)
     q = (
         db.query(ProjectItem)
-        .options(joinedload(ProjectItem.media_item).joinedload(MediaItem.audio_meta))
+        .options(
+            joinedload(ProjectItem.media_item).joinedload(MediaItem.audio_meta),
+            joinedload(ProjectItem.media_item).joinedload(MediaItem.image_meta),
+            joinedload(ProjectItem.media_item).joinedload(MediaItem.video_meta),
+        )
         .filter(ProjectItem.project_id == project_id, ProjectItem.slot_id == slot_id)
     )
     items = _item_order(q).all()
@@ -1357,6 +1442,10 @@ def reorder_slot_items(
         audio = [pi for pi in items if pi.media_item and pi.media_item.media_type == "audio"]
         if audio:
             s.playlist_json = json.dumps([pi.media_item_id for pi in _slot_playlist(s, audio)])
+    if not s.slideshow_json:
+        visual = [pi for pi in items if pi.media_item and pi.media_item.media_type in SLIDESHOW_MEDIA_TYPES]
+        if visual:
+            s.slideshow_json = json.dumps([pi.media_item_id for pi in _slot_slideshow(s, visual)])
     for i, item_id in enumerate(body.order):
         by_id[item_id].position = i + 1
     db.commit()
@@ -1614,6 +1703,262 @@ def reorder_playlist(
     db.commit()
     db.refresh(pl)
     return _playlist_summary(pl, _project_audio_items(db, project_id))
+
+
+# ---------------------------------------------------------------------------
+# Slot slideshow — image/video only, order stored as a hint, membership derived
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{project_id}/slots/{slot_id}/slideshow", summary="A slot's slideshow")
+def get_slot_slideshow(
+    project_id: str,
+    slot_id: str,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    s = _slot_or_404(db, project_id, slot_id)
+    return _slideshow_payload(_slot_slideshow(s, _slot_visual_items(db, project_id, slot_id)))
+
+
+@router.put("/{project_id}/slots/{slot_id}/slideshow", summary="Set a slot's slideshow order")
+def set_slot_slideshow(
+    project_id: str,
+    slot_id: str,
+    body: SetSlotSlideshowBody,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Store the order hint. A partial list is fine — anything left out appends
+    on read, which is what keeps a concurrent upload from 400-ing a drag."""
+    s = _slot_or_404(db, project_id, slot_id)
+    visual_items = _slot_visual_items(db, project_id, slot_id)
+    valid = {pi.media_item_id for pi in visual_items}
+    if len(set(body.order)) != len(body.order):
+        raise HTTPException(status_code=400, detail="Order contains duplicate media_item_ids")
+    unknown = [mid for mid in body.order if mid not in valid]
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Not an image or video attached to this slot: {unknown[0]}")
+    s.slideshow_json = json.dumps(list(body.order))
+    db.commit()
+    return _slideshow_payload(_slot_slideshow(s, visual_items))
+
+
+# ---------------------------------------------------------------------------
+# Latent slideshows — named, curated sequences of image/video
+# ---------------------------------------------------------------------------
+
+
+def _project_visual_items(db: Session, project_id: str) -> dict[str, ProjectItem]:
+    """Every image/video attached to the Latent, keyed by media_item_id.
+
+    A media item attached twice (a slot and loose) resolves to its first
+    attachment in canonical order; a slideshow only cares that it's a member
+    of the Latent.
+    """
+    q = (
+        db.query(ProjectItem)
+        .options(
+            joinedload(ProjectItem.media_item).joinedload(MediaItem.image_meta),
+            joinedload(ProjectItem.media_item).joinedload(MediaItem.video_meta),
+        )
+        .join(MediaItem, MediaItem.id == ProjectItem.media_item_id)
+        .filter(
+            ProjectItem.project_id == project_id,
+            MediaItem.media_type.in_(SLIDESHOW_MEDIA_TYPES),
+        )
+    )
+    out: dict[str, ProjectItem] = {}
+    for pi in _item_order(q).all():
+        out.setdefault(pi.media_item_id, pi)
+    return out
+
+
+def _slideshow_summary(sh: ProjectSlideshow, members: dict[str, ProjectItem]) -> dict:
+    """Serialize a slideshow, dropping slides whose media has left the Latent.
+
+    Rows for departed slides stay in the table — reattaching the file restores
+    its place rather than losing it.
+    """
+    slides = []
+    for row in sorted(sh.items, key=lambda r: (r.position, r.added_at)):
+        pi = members.get(row.media_item_id)
+        if pi is None:
+            continue
+        sl = _slide_summary(pi)
+        sl["slideshow_item_id"] = row.id
+        slides.append(sl)
+    return {
+        "id": sh.id,
+        "project_id": sh.project_id,
+        "name": sh.name,
+        "position": sh.position,
+        "slides": slides,
+        "created_at": sh.created_at.isoformat() if sh.created_at else None,
+        "updated_at": sh.updated_at.isoformat() if sh.updated_at else None,
+    }
+
+
+def _slideshow_or_404(db: Session, project_id: str, slideshow_id: str) -> ProjectSlideshow:
+    sh = (
+        db.query(ProjectSlideshow)
+        .filter(ProjectSlideshow.id == slideshow_id, ProjectSlideshow.project_id == project_id)
+        .first()
+    )
+    if not sh:
+        raise HTTPException(status_code=404, detail="Slideshow not found")
+    return sh
+
+
+@router.get("/{project_id}/slideshows", summary="List a Latent's slideshows")
+def list_slideshows(
+    project_id: str,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    _project_or_404(db, project_id)
+    members = _project_visual_items(db, project_id)
+    shows = (
+        db.query(ProjectSlideshow)
+        .options(joinedload(ProjectSlideshow.items))
+        .filter(ProjectSlideshow.project_id == project_id)
+        .order_by(ProjectSlideshow.position.asc(), ProjectSlideshow.created_at.asc())
+        .all()
+    )
+    return {"slideshows": [_slideshow_summary(sh, members) for sh in shows]}
+
+
+@router.post("/{project_id}/slideshows", status_code=201, summary="Create a slideshow")
+def create_slideshow(
+    project_id: str,
+    body: CreateSlideshowBody,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    _project_or_404(db, project_id)
+    nxt = (
+        db.query(func.max(ProjectSlideshow.position))
+        .filter(ProjectSlideshow.project_id == project_id)
+        .scalar()
+    )
+    sh = ProjectSlideshow(
+        project_id=project_id,
+        name=body.name.strip()[:120],
+        position=int(nxt or 0) + 1,
+        created_by=user.id,
+    )
+    db.add(sh)
+    db.commit()
+    db.refresh(sh)
+    return _slideshow_summary(sh, _project_visual_items(db, project_id))
+
+
+@router.patch("/{project_id}/slideshows/{slideshow_id}", summary="Rename a slideshow")
+def update_slideshow(
+    project_id: str,
+    slideshow_id: str,
+    body: UpdateSlideshowBody,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    sh = _slideshow_or_404(db, project_id, slideshow_id)
+    if body.name is not None:
+        name = body.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Name cannot be blank")
+        sh.name = name[:120]
+    db.commit()
+    db.refresh(sh)
+    return _slideshow_summary(sh, _project_visual_items(db, project_id))
+
+
+@router.delete("/{project_id}/slideshows/{slideshow_id}", status_code=204, summary="Delete a slideshow")
+def delete_slideshow(
+    project_id: str,
+    slideshow_id: str,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    sh = _slideshow_or_404(db, project_id, slideshow_id)
+    db.delete(sh)
+    db.commit()
+    return None
+
+
+@router.post("/{project_id}/slideshows/{slideshow_id}/items", summary="Add slides")
+def add_slides(
+    project_id: str,
+    slideshow_id: str,
+    body: AddSlidesBody,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Forgiving on purpose: ids that aren't image/video in this Latent, and
+    ids already in the slideshow, are skipped rather than 400-ing the batch."""
+    sh = _slideshow_or_404(db, project_id, slideshow_id)
+    members = _project_visual_items(db, project_id)
+    have = {r.media_item_id for r in sh.items}
+    pos = max((r.position for r in sh.items), default=0)
+    for mid in body.media_item_ids:
+        if mid not in members or mid in have:
+            continue
+        pos += 1
+        have.add(mid)
+        db.add(ProjectSlideshowItem(slideshow_id=sh.id, media_item_id=mid, position=pos))
+    db.commit()
+    db.refresh(sh)
+    return _slideshow_summary(sh, members)
+
+
+@router.delete(
+    "/{project_id}/slideshows/{slideshow_id}/items/{slideshow_item_id}",
+    summary="Remove a slide",
+)
+def remove_slide(
+    project_id: str,
+    slideshow_id: str,
+    slideshow_item_id: str,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    sh = _slideshow_or_404(db, project_id, slideshow_id)
+    row = next((r for r in sh.items if r.id == slideshow_item_id), None)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Slide not found")
+    db.delete(row)
+    db.commit()
+    db.refresh(sh)
+    return _slideshow_summary(sh, _project_visual_items(db, project_id))
+
+
+@router.post("/{project_id}/slideshows/{slideshow_id}/items/reorder", summary="Reorder a slideshow")
+def reorder_slideshow(
+    project_id: str,
+    slideshow_id: str,
+    body: ReorderSlideshowBody,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """A partial order is accepted: rows the client couldn't see (slides
+    currently detached from the Latent) keep their relative order at the end."""
+    sh = _slideshow_or_404(db, project_id, slideshow_id)
+    by_id = {r.id: r for r in sh.items}
+    if len(set(body.order)) != len(body.order):
+        raise HTTPException(status_code=400, detail="Order contains duplicate ids")
+    unknown = [i for i in body.order if i not in by_id]
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Not a slide in this slideshow: {unknown[0]}")
+    listed = set(body.order)
+    pos = 0
+    for row_id in body.order:
+        pos += 1
+        by_id[row_id].position = pos
+    for row in sorted((r for r in sh.items if r.id not in listed), key=lambda r: (r.position, r.added_at)):
+        pos += 1
+        row.position = pos
+    db.commit()
+    db.refresh(sh)
+    return _slideshow_summary(sh, _project_visual_items(db, project_id))
 
 
 # ---------------------------------------------------------------------------
