@@ -362,7 +362,10 @@
   .modal-overlay {
     position: fixed;
     inset: 0;
-    z-index: 1000;
+    /* Was 1000, which loses to the persistent player bar (9999) — this page
+       uses the Admin layout, so the player IS here and was covering the
+       bottom of the modal. Same family as the filter dropdown. */
+    z-index: var(--z-modal, 10000);
     background: rgba(0, 0, 0, 0.6);
     display: flex;
     align-items: center;

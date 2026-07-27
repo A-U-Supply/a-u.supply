@@ -10,6 +10,7 @@
  *     once we move past Phase 1
  *   - Svelte components that declare `position: fixed` without going
  *     through one of the two sanctioned overlay helpers (see below)
+ *   - Raw `z-index: N` (N >= 100) outside the one layering scale (see below)
  *
  * What it ignores:
  *   - The Atelier — Punctum, Photism, Bullethole, Spectralize live on
@@ -46,6 +47,27 @@
  *
  *   ...or be allowlisted below with a reason. The point isn't the import;
  *   it's that there is no third way to write an overlay by hand.
+ *
+ * The z-index rule, and why it exists:
+ *
+ *   Escaping the stacking context is only half of being on top; the other
+ *   half is winning on the flat <body> layer, and that is decided by a
+ *   number someone picked. #583 put every overlay on ONE scale in
+ *   tailwind.css (--z-player < --z-modal < --z-viewer < --z-menu <
+ *   --z-toast) precisely so the answer to "which of these is on top" is
+ *   readable. But nothing enforced it, so ad-hoc values kept surviving in
+ *   corners the overlay sweep didn't look at: SearchFilterBar's bits-ui
+ *   dropdown sat at 1000 and opened BEHIND the picker modal that renders
+ *   it (2026-07-27), and `.dialog-overlay` sat at 200, below the player.
+ *
+ *   Both look big enough. That is the trap — 1000 reads as "very high"
+ *   until you learn the player bar is 9999. So: any `z-index` of 100 or
+ *   more must be written as `var(--z-*, N)`. Under 100 is local layering
+ *   inside a component's own box and is left alone.
+ *
+ *   Fixing a finding means picking the right RUNG, not a bigger number. If
+ *   no rung fits, add one to the scale in tailwind.css — that is the whole
+ *   point of having the file.
  *
  * Exit status: 0 clean, 1 findings, 2 internal error.
  */
@@ -98,6 +120,38 @@ const OVERLAY_ALLOWLIST = {
 const FIXED_RE = /position:\s*fixed/;
 const OVERLAY_HELPER_RE =
   /from\s+['"][^'"]*\/(portal|anchoredPanel)(\.ts)?['"]/;
+
+/**
+ * Files allowed to write a raw z-index >= Z_FLOOR, with the exact values
+ * and the reason. These are NOT exceptions to the scale — they're places
+ * where the value genuinely can't be one of its rungs. Listing the values
+ * rather than the file keeps the exemption from widening: a NEW ad-hoc
+ * number in an allowlisted file still fails.
+ */
+const ZSCALE_ALLOWLIST = {
+  'src/components/Player.svelte': {
+    values: [9997, 9998],
+    reason:
+      'layers its own internals just UNDER --z-player; a rung per sub-part would be scale noise',
+  },
+  'src/components/Pukebox.svelte': {
+    values: [9999],
+    reason:
+      'owns its own page and never coexists with the admin overlays — deliberately outside the scale, per the tailwind.css comment',
+  },
+  'src/styles/admin.css': {
+    values: [100],
+    reason:
+      '.sidebar__toggle is page chrome, deliberately BELOW every overlay; 100 is a ceiling here, not a floor',
+  },
+};
+// Under this, a z-index is layering inside a component's own box (a veil
+// over a thumbnail, a badge over a tile) and has nothing to do with the
+// overlay scale. At or above it, you are claiming to be above page content.
+const Z_FLOOR = 100;
+// Matches a literal only: `z-index: var(--z-modal, 10000)` doesn't match,
+// because the character after the colon is `v`.
+const ZINDEX_RE = /z-index:\s*(-?\d+)/;
 
 const HEX_RE = /#([0-9a-fA-F]{3,8})\b/;
 const RGB_RE = /\b(?:rgba?|hsla?)\(/;
@@ -234,6 +288,50 @@ async function lintOverlay(filePath) {
   ];
 }
 
+/**
+ * Blank out CSS/JS comments, preserving offsets and newlines so line
+ * numbers stay honest. The line-prefix heuristic the colour pass uses
+ * ('*', '//', '/*') misses continuation lines, and a comment EXPLAINING a
+ * bad z-index reads exactly like the bad z-index.
+ */
+function stripComments(text) {
+  return text
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length));
+}
+
+/**
+ * The z-index-scale pass. Per-line, over component style blocks and the
+ * global stylesheets — see the header comment for the rule.
+ */
+async function lintZScale(filePath, { styleBlocksOnly }) {
+  const rel = relative(ROOT, filePath);
+  const allow = ZSCALE_ALLOWLIST[rel];
+  const raw = await readFile(filePath, 'utf8');
+  const text = stripComments(raw);
+  const offsets = lineOffsets(text);
+  const lines = text.split('\n');
+  const findings = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    if (styleBlocksOnly && !inStyleBlock(text, offsets[i])) continue;
+    const m = ZINDEX_RE.exec(lines[i]);
+    if (!m) continue;
+    const value = Number(m[1]);
+    if (Math.abs(value) < Z_FLOOR) continue;
+    if (allow?.values.includes(value)) continue;
+    findings.push({
+      file: rel,
+      line: i + 1,
+      kind: 'zscale',
+      match: `z-index: ${value}`,
+      // Report the ORIGINAL line, not the comment-stripped one.
+      source: raw.split('\n')[i].trim(),
+    });
+  }
+  return findings;
+}
+
 async function main() {
   const jsonMode = process.argv.includes('--json');
 
@@ -252,6 +350,7 @@ async function main() {
   for (const f of files) {
     const findings = await lintFile(f);
     allFindings.push(...findings);
+    allFindings.push(...(await lintZScale(f, { styleBlocksOnly: true })));
   }
 
   // Overlay discipline runs over the components tree, which the colour pass
@@ -260,6 +359,15 @@ async function main() {
   await walk(join(ROOT, 'src/components'), ['.svelte'], componentFiles);
   for (const f of componentFiles) {
     allFindings.push(...(await lintOverlay(f)));
+    allFindings.push(...(await lintZScale(f, { styleBlocksOnly: true })));
+  }
+
+  // ...and over the global stylesheets, which are where two of the three
+  // ad-hoc values found on 2026-07-27 were hiding.
+  const styleFiles = [];
+  await walk(join(ROOT, 'src/styles'), ['.css'], styleFiles);
+  for (const f of styleFiles) {
+    allFindings.push(...(await lintZScale(f, { styleBlocksOnly: false })));
   }
 
   if (jsonMode) {
@@ -268,7 +376,8 @@ async function main() {
     if (allFindings.length === 0) {
       console.log(
         `lint-design: ✓ ${files.length} pages clean (colors) + ` +
-          `${componentFiles.length} components clean (overlay discipline).`,
+          `${componentFiles.length} components clean (overlay discipline) + ` +
+          `${componentFiles.length + styleFiles.length} files clean (z-index scale).`,
       );
     } else {
       console.error(`lint-design: ✗ ${allFindings.length} issue(s):\n`);
@@ -276,7 +385,18 @@ async function main() {
         console.error(`  ${f.file}:${f.line} (${f.kind}: ${f.match})`);
         console.error(`    ${f.source}`);
       }
-      if (allFindings.some((f) => f.kind !== 'overlay')) {
+      if (allFindings.some((f) => f.kind === 'zscale')) {
+        console.error(
+          `\nA z-index of ${Z_FLOOR}+ must come from the one scale in ` +
+            `src/styles/tailwind.css: write 'var(--z-modal, 10000)' (or ` +
+            `--z-player / --z-viewer / --z-menu / --z-toast) with the literal ` +
+            `as a fallback. Pick the right RUNG, not a bigger number; if none ` +
+            `fits, add one to the scale. See the header comment for why.`,
+        );
+      }
+      if (
+        allFindings.some((f) => f.kind !== 'overlay' && f.kind !== 'zscale')
+      ) {
         console.error(
           `\nReplace hardcoded colors with tokens (--color-*, --color-status-*, --color-overlay*).`,
         );

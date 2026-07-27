@@ -83,8 +83,14 @@
    * Raise things HERE, in order, never ad hoc in a component. Not
    * theme-dependent, so it lives in :root only.
    *
-   * Deliberately left alone: the Atelier and Litany pages (≤1000) and the
-   * Pukebox, none of which coexist with these.
+   * This once said the Atelier and Litany pages were "deliberately left
+   * alone ... none of which coexist with these". That was WRONG and it is
+   * why their overlays kept their ad-hoc values through the #583 sweep:
+   * every one of those pages uses layouts/Admin.astro, which mounts the
+   * player. Their modals at 500/1000 were under the bar the whole time.
+   * The only genuine outsider is the Pukebox — src/pages/pukebox.astro is
+   * a standalone page with no player. scripts/lint-design.mjs now enforces
+   * this instead of a comment asking nicely.
    *
    * Every consumer writes `var(--z-modal, 10000)` with the literal as a
    * fallback. Tailwind v4's @theme tree-shakes variables nothing references —
@@ -96,6 +102,7 @@
   --z-modal: 10000; /* modals, sheets, and their backdrops. Above the player. */
   --z-viewer: 10050; /* the fullscreen media viewer */
   --z-menu: 10100; /* anchored menus + their scrims — always reachable */
+  --z-toast: 10200; /* transient feedback — nothing may cover it */
 }
 
 /*
