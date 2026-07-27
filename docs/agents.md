@@ -51,8 +51,13 @@ git fetch origin master
 # Create a worktree on a new branch off origin/master
 git worktree add .claude/worktrees/<slug> -b <slug> origin/master
 
-# Work inside the worktree
+# Node deps: a worktree has no node_modules of its own. Symlink the primary
+# checkout's rather than reinstalling — but NEVER commit that symlink (see
+# below), and use a RELATIVE target so it can't point at itself.
 cd .claude/worktrees/<slug>
+ln -s ../../../node_modules node_modules
+
+# Work inside the worktree
 …edit files…
 git add …
 git commit -m "…"
@@ -64,6 +69,20 @@ cd /home/tube/github/a-u.supply   # back to primary
 git worktree remove .claude/worktrees/<slug>
 git branch -D <slug>              # local branch cleanup
 ```
+
+### Never commit the node_modules symlink
+
+It happened once (2026-07-25, `ffc26d5`) and cost a reinstall: `.gitignore`
+said `node_modules/`, which matches a **directory** only, so the symlink — a
+file as far as git is concerned — wasn't ignored and a `git add` swept it in.
+Its target was an absolute path to the primary checkout's own `node_modules`,
+so checking master out there replaced the real directory with a symlink to
+itself, and every `npm`/`astro` command died with "Too many levels of symbolic
+links".
+
+Both halves are fixed: `.gitignore` now says `node_modules` (no slash), and
+`tests/test_tracked_symlinks.py` fails the suite if any tracked symlink points
+outside the repo. Stage explicit paths anyway — **never `git add -A`**.
 
 ### Why worktrees, not branch switching
 
