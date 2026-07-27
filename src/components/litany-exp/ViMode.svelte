@@ -87,7 +87,10 @@
     position: fixed;
     bottom: 16px;
     right: 16px;
-    z-index: 500;
+    /* A mode indicator is only useful if it's always readable, so it sits at
+       the top of the scale. At its old 500 the player bar (9999) covered it
+       outright — it's pinned 16px off the bottom, exactly where the bar is. */
+    z-index: var(--z-menu, 10100);
     background: #0c1012;
     border: 1px solid var(--lit-accent, #e6a817);
     padding: 8px 10px;

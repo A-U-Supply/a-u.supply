@@ -1529,8 +1529,15 @@
     font-size: 0.7rem;
     line-height: 1;
   }
+  /* bits-ui portals this to <body>, so it escapes any stacking context —
+     but it still has to WIN on the flat body layer. At its old ad-hoc
+     z-index: 1000 it lost to the player bar (9999) and, once this bar
+     started rendering inside PullFromIndex, to the picker modal itself
+     (10000): tapping Index/Channel inside the picker opened the dropdown
+     *behind* the modal, unreachable. It's an anchored menu — it belongs at
+     the top of the scale in tailwind.css, like RowActions'. */
   :global(.fb-select__content) {
-    z-index: 1000;
+    z-index: var(--z-menu, 10100);
     min-width: var(--bits-select-anchor-width);
     background: var(--color-bg);
     border: 2px solid var(--color-text);
