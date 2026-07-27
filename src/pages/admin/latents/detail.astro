@@ -366,6 +366,9 @@ import Admin from '../../../layouts/Admin.astro';
     overflow: hidden;
     isolation: isolate;
   }
+  /* Negative z-index, same as the section faces — see the note in the
+     .latent-section block. `isolation: isolate` on .latent-header--backdrop
+     above is what keeps these from sinking behind the page. */
   :global(.latent-header .header-backdrop) {
     position: absolute;
     inset: 0;
@@ -373,21 +376,24 @@ import Admin from '../../../layouts/Admin.astro';
     height: 100%;
     object-fit: cover;
     opacity: 0.15;
-    z-index: 0;
+    z-index: -2;
   }
   :global(.latent-header .header-backdrop-veil) {
     position: absolute;
     inset: 0;
     background: var(--color-overlay-soft);
-    z-index: 1;
+    z-index: -1;
     pointer-events: none;
   }
-  :global(
-    .latent-header--backdrop > :not(.header-backdrop):not(.header-backdrop-veil)
-  ) {
-    position: relative;
-    z-index: 2;
-  }
+  /* The third copy of the rule removed in #584 lived here:
+   *
+   *   .latent-header--backdrop > :not(.header-backdrop):not(.header-backdrop-veil) {
+   *     position: relative; z-index: 2;
+   *   }
+   *
+   * Same trap, same reason not to bring it back. It covers the header, which
+   * hosts #hero-island — so an overlay rendered at LatentHero's top level
+   * would have lost `position: fixed` exactly like the section ones did. */
   /* Hero accent carry — identity learned on the grid persists inside.
      Applied only when the Latent has an effective accent. */
   :global(.latent-header--accent) {
