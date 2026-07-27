@@ -166,7 +166,7 @@ const STYLES = `
 .iv-root {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: var(--z-viewer, 10050);
   background: rgba(0, 0, 0, 0.94);
   color: #fff;
   font-family: var(--font-mono, ui-monospace, Menlo, monospace);

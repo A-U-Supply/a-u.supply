@@ -236,7 +236,7 @@
   .row-actions__panel--float {
     position: fixed;
     overflow-y: auto; /* the max-height set in script has to be able to bite */
-    z-index: 10002; /* above the player bar's 9999 */
+    z-index: var(--z-menu, 10100);
     flex: none;
     width: 200px; /* keep in sync with PANEL_W */
     margin-top: 0;
@@ -246,7 +246,7 @@
   .row-actions__scrim {
     position: fixed;
     inset: 0;
-    z-index: 10001;
+    z-index: var(--z-menu, 10100);
   }
   .row-actions__meta {
     font-size: 0.65rem;
