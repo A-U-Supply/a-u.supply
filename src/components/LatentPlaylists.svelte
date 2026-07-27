@@ -926,6 +926,13 @@
   }
 
   @media (max-width: 640px) {
+    /* The tabs ask for width:100% here, and the head is a nowrap flex row —
+       so they squeezed the title to ~58px and its label spilled across them.
+       Let the head wrap and the tabs get the line they were asking for. */
+    .playlists__head {
+      flex-wrap: wrap;
+      row-gap: 4px;
+    }
     .playlists__tabs {
       margin-left: 0;
       width: 100%;

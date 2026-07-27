@@ -57,9 +57,24 @@
     const reduced = window.matchMedia(
       '(prefers-reduced-motion: reduce)',
     ).matches;
-    el.scrollIntoView({
+    // On a phone the admin sidebar toggle is `position: fixed` over the top
+    // edge, so a plain scrollIntoView parks the section's head underneath it
+    // — and for a COLLAPSED section the head is all there is to see. Measure
+    // the chrome rather than guessing a constant.
+    //
+    // (This map declares `position: sticky` for phones but never actually
+    // sticks: #map-island is only as tall as the map, so it scrolls away with
+    // the page. Pre-existing; left alone here.)
+    const toggle = document.querySelector<HTMLElement>('.sidebar__toggle');
+    const cs = toggle && getComputedStyle(toggle);
+    const offset =
+      cs && cs.position === 'fixed' && cs.display !== 'none'
+        ? toggle!.getBoundingClientRect().bottom + 8
+        : 0;
+    const top = el.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({
+      top: Math.max(0, top),
       behavior: reduced ? 'auto' : 'smooth',
-      block: 'start',
     });
   }
 

@@ -324,6 +324,12 @@ body.player-active .admin-main {
   text-transform: uppercase;
   letter-spacing: 1pt;
   font-size: var(--text-sm);
+  /* The summary sets min-width:0 so it can shrink in a crowded head. Without
+     this the label doesn't shrink with it — it spills across whatever shares
+     the row (the playlist tabs, at 390px). Truncate instead. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sec-summary__meta {
   grid-area: meta;
