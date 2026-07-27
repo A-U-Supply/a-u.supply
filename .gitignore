@@ -8,7 +8,11 @@ wheels/
 .venv/
 
 # Node / Astro
-node_modules/
+# No trailing slash: `node_modules/` matches a DIRECTORY only, so a worktree's
+# `node_modules` SYMLINK slipped past it and got committed on 2026-07-25 —
+# pointing at the main checkout's own node_modules, which then replaced the
+# real directory on checkout. tests/test_tracked_symlinks.py guards the class.
+node_modules
 .astro/
 
 # Claude Code (settings.json is committed, personal config is not)
