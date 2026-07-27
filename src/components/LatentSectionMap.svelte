@@ -21,6 +21,7 @@
     effectiveAccent,
     type SectionKey,
   } from '../lib/latentStyles.ts';
+  import { revealSection } from '../lib/latentCollapse.ts';
 
   type SlotChip = {
     id: string;
@@ -56,10 +57,35 @@
     const reduced = window.matchMedia(
       '(prefers-reduced-motion: reduce)',
     ).matches;
-    el.scrollIntoView({
+    // On a phone the admin sidebar toggle is `position: fixed` over the top
+    // edge, so a plain scrollIntoView parks the section's head underneath it
+    // — and for a COLLAPSED section the head is all there is to see. Measure
+    // the chrome rather than guessing a constant.
+    //
+    // (This map declares `position: sticky` for phones but never actually
+    // sticks: #map-island is only as tall as the map, so it scrolls away with
+    // the page. Pre-existing; left alone here.)
+    const toggle = document.querySelector<HTMLElement>('.sidebar__toggle');
+    const cs = toggle && getComputedStyle(toggle);
+    const offset =
+      cs && cs.position === 'fixed' && cs.display !== 'none'
+        ? toggle!.getBoundingClientRect().bottom + 8
+        : 0;
+    const top = el.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({
+      top: Math.max(0, top),
       behavior: reduced ? 'auto' : 'smooth',
-      block: 'start',
     });
+  }
+
+  /**
+   * Three sections can be collapsed (see lib/latentCollapse.ts). Jumping to a
+   * collapsed one would land on a head line with nothing under it, so ask it
+   * to open first and scroll on the next frame, once it has rendered.
+   */
+  function goToSection(key: SectionKey) {
+    revealSection(key);
+    requestAnimationFrame(() => scrollToEl(`#${key}-island`));
   }
 
   function onStyleChanged(e: Event) {
@@ -104,7 +130,7 @@
       type="button"
       title={SECTION_LABELS[key]}
       aria-label="Go to {SECTION_LABELS[key]}"
-      onclick={() => scrollToEl(`#${key}-island`)}
+      onclick={() => goToSection(key)}
     >
       <i class="map__swatch" style={sectionSwatch(key)}></i>
       <span class="map__name">{SECTION_LABELS[key]}</span>

@@ -16,6 +16,11 @@
   import RowMove from './RowMove.svelte';
   import { DRAG_OPTS } from '../lib/dragOptions.ts';
   import { isPhone } from '../lib/viewport.svelte.ts';
+  import {
+    readSectionOpen,
+    writeSectionOpen,
+    SECTION_REVEAL_EVENT,
+  } from '../lib/latentCollapse.ts';
 
   type Props = {
     projectId: string;
@@ -61,6 +66,12 @@
   let candidatesLoading = $state(false);
   let filter = $state('');
   let picked = $state<Set<string>>(new Set());
+  let open = $state(readSectionOpen(projectId, 'playlists'));
+
+  function toggleOpen() {
+    open = !open;
+    writeSectionOpen(projectId, 'playlists', open);
+  }
 
   const selected = $derived(playlists.find((p) => p.id === selectedId) || null);
 
@@ -347,9 +358,17 @@
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && adding) closeAdd();
     };
+    // The section map jumps here; collapsed, that would be a dead end.
+    const onReveal = (e: Event) => {
+      if ((e as CustomEvent).detail?.section !== 'playlists' || open) return;
+      open = true;
+      writeSectionOpen(projectId, 'playlists', true);
+    };
     document.addEventListener('keydown', onKey);
+    window.addEventListener(SECTION_REVEAL_EVENT, onReveal);
     return () => {
       document.removeEventListener('keydown', onKey);
+      window.removeEventListener(SECTION_REVEAL_EVENT, onReveal);
       document.body.style.overflow = '';
     };
   });
@@ -357,20 +376,44 @@
 
 <section class="playlists">
   <header class="playlists__head" class:latent-band={!!styleKey}>
-    <h2>Playlists</h2>
-    <div class="playlists__tabs">
-      {#each playlists as p (p.id)}
-        <button
-          class="tab"
-          class:active={p.id === selectedId}
-          onclick={() => (selectedId = p.id)}
-          type="button">{p.name}</button
-        >
-      {/each}
-      <button class="tab tab--add" onclick={createPlaylist} type="button"
-        >+ New</button
+    <!-- .sec-summary is the house collapsible-section head (admin.css) — the
+         same one Repo, Links, Documents and Threads use. Kept inside the h2 so
+         the page outline still has a heading here. -->
+    <h2 class="playlists__title">
+      <button
+        class="sec-summary"
+        type="button"
+        aria-expanded={open}
+        aria-controls="playlists-body"
+        onclick={toggleOpen}
       >
-    </div>
+        <span class="sec-summary__caret" aria-hidden="true"
+          >{open ? '▾' : '▸'}</span
+        >
+        <span class="sec-summary__label">Playlists</span>
+        <span class="sec-summary__meta"
+          >{playlists.length} playlist{playlists.length === 1 ? '' : 's'}</span
+        >
+      </button>
+    </h2>
+    <!-- The tabs pick WHICH playlist the body shows, so collapsed they'd change
+         something you can't see. The Style button acts on the section itself
+         and stays, as it does on every other collapsible section. -->
+    {#if open}
+      <div class="playlists__tabs">
+        {#each playlists as p (p.id)}
+          <button
+            class="tab"
+            class:active={p.id === selectedId}
+            onclick={() => (selectedId = p.id)}
+            type="button">{p.name}</button
+          >
+        {/each}
+        <button class="tab tab--add" onclick={createPlaylist} type="button"
+          >+ New</button
+        >
+      </div>
+    {/if}
     {#if styleKey}
       <LatentStyleButton
         {projectId}
@@ -381,136 +424,142 @@
     {/if}
   </header>
 
-  {#if error}
-    <div class="error">{error}</div>
-  {/if}
+  {#if open}
+    <div id="playlists-body">
+      {#if error}
+        <div class="error">{error}</div>
+      {/if}
 
-  {#if loading}
-    <div class="muted empty">Loading…</div>
-  {:else if !selected}
-    <div class="muted empty">
-      No running orders yet. A running order is a sequence you assemble by hand
-      out of the audio anywhere in this Latent — an album sequence, a set for
-      someone. <button class="link" type="button" onclick={createPlaylist}
-        >Make one</button
-      >.
-    </div>
-  {:else}
-    <div class="bar">
-      <button
-        class="action-btn"
-        type="button"
-        disabled={!selected.tracks.length}
-        onclick={() => play()}>▷ Play all</button
-      >
-      <span class="muted bar__meta"
-        >{selected.tracks.length} track{selected.tracks.length === 1
-          ? ''
-          : 's'}{selected.total_seconds
-          ? ` · ${fmtDuration(selected.total_seconds)}`
-          : ''}</span
-      >
-      <span class="spacer"></span>
-      <button class="action-btn" type="button" onclick={openAdd}
-        >+ Add tracks</button
-      >
-      {#if renaming}
-        <input
-          class="rename"
-          bind:value={renameValue}
-          onblur={commitRename}
-          onkeydown={(e) => {
-            if (e.key === 'Enter') commitRename();
-            if (e.key === 'Escape') renaming = false;
-          }}
-          aria-label="Playlist name"
-        />
-      {:else if isPhone()}
-        <button
-          class="action-btn bar__tools"
-          type="button"
-          aria-expanded={toolsOpen}
-          onclick={() => (toolsOpen = !toolsOpen)}
-          >Order tools {toolsOpen ? '▴' : '▾'}</button
-        >
+      {#if loading}
+        <div class="muted empty">Loading…</div>
+      {:else if !selected}
+        <div class="muted empty">
+          No running orders yet. A running order is a sequence you assemble by
+          hand out of the audio anywhere in this Latent — an album sequence, a
+          set for someone. <button
+            class="link"
+            type="button"
+            onclick={createPlaylist}>Make one</button
+          >.
+        </div>
       {:else}
-        <button class="action-btn" type="button" onclick={startRename}
-          >Rename</button
-        >
-        <button
-          class="action-btn action-btn--danger"
-          type="button"
-          onclick={deletePlaylist}>Delete</button
-        >
+        <div class="bar">
+          <button
+            class="action-btn"
+            type="button"
+            disabled={!selected.tracks.length}
+            onclick={() => play()}>▷ Play all</button
+          >
+          <span class="muted bar__meta"
+            >{selected.tracks.length} track{selected.tracks.length === 1
+              ? ''
+              : 's'}{selected.total_seconds
+              ? ` · ${fmtDuration(selected.total_seconds)}`
+              : ''}</span
+          >
+          <span class="spacer"></span>
+          <button class="action-btn" type="button" onclick={openAdd}
+            >+ Add tracks</button
+          >
+          {#if renaming}
+            <input
+              class="rename"
+              bind:value={renameValue}
+              onblur={commitRename}
+              onkeydown={(e) => {
+                if (e.key === 'Enter') commitRename();
+                if (e.key === 'Escape') renaming = false;
+              }}
+              aria-label="Playlist name"
+            />
+          {:else if isPhone()}
+            <button
+              class="action-btn bar__tools"
+              type="button"
+              aria-expanded={toolsOpen}
+              onclick={() => (toolsOpen = !toolsOpen)}
+              >Order tools {toolsOpen ? '▴' : '▾'}</button
+            >
+          {:else}
+            <button class="action-btn" type="button" onclick={startRename}
+              >Rename</button
+            >
+            <button
+              class="action-btn action-btn--danger"
+              type="button"
+              onclick={deletePlaylist}>Delete</button
+            >
+          {/if}
+        </div>
+
+        {#if isPhone() && toolsOpen}
+          <div class="order-menu" role="group" aria-label="Running order tools">
+            <button
+              class="order-menu__item"
+              type="button"
+              onclick={() => {
+                toolsOpen = false;
+                startRename();
+              }}>Rename running order</button
+            >
+            <button
+              class="order-menu__item order-menu__item--danger"
+              type="button"
+              onclick={() => {
+                toolsOpen = false;
+                deletePlaylist();
+              }}>Delete running order</button
+            >
+          </div>
+        {/if}
+
+        {#if selected.tracks.length === 0}
+          <div class="muted empty">
+            Nothing in this running order yet — “+ Add tracks” pulls from any
+            slot in this Latent.
+          </div>
+        {:else}
+          <ul class="track-list" use:sortableTracks>
+            {#each selected.tracks as t, i (t.playlist_item_id)}
+              <li class="track-row" data-row-id={t.playlist_item_id}>
+                <RowMove
+                  label={t.filename || 'track'}
+                  handleClass="track-row__drag"
+                  upDisabled={i === 0}
+                  downDisabled={i === selected.tracks.length - 1}
+                  onUp={() => nudge(i, -1)}
+                  onDown={() => nudge(i, 1)}
+                />
+                <div class="track-row__main">
+                  <span class="track-row__pos">{i + 1}</span>
+                  <a
+                    class="track-row__name"
+                    href={`/admin/search/detail?id=${encodeURIComponent(t.media_item_id)}`}
+                    title="Open in Stacks">{t.filename || '—'}</a
+                  >
+                  <span class="track-row__dur"
+                    >{fmtDuration(t.duration_seconds)}</span
+                  >
+                  <button
+                    class="action-btn track-row__play"
+                    type="button"
+                    aria-label={`Play ${t.filename || 'track'} from here`}
+                    title="Play from here"
+                    onclick={() => play(i)}>▶</button
+                  >
+                  <button
+                    class="action-btn track-row__remove"
+                    type="button"
+                    title="Remove from this running order. File stays in the Latent."
+                    onclick={() => removeTrack(t)}>Remove</button
+                  >
+                </div>
+              </li>
+            {/each}
+          </ul>
+        {/if}
       {/if}
     </div>
-
-    {#if isPhone() && toolsOpen}
-      <div class="order-menu" role="group" aria-label="Running order tools">
-        <button
-          class="order-menu__item"
-          type="button"
-          onclick={() => {
-            toolsOpen = false;
-            startRename();
-          }}>Rename running order</button
-        >
-        <button
-          class="order-menu__item order-menu__item--danger"
-          type="button"
-          onclick={() => {
-            toolsOpen = false;
-            deletePlaylist();
-          }}>Delete running order</button
-        >
-      </div>
-    {/if}
-
-    {#if selected.tracks.length === 0}
-      <div class="muted empty">
-        Nothing in this running order yet — “+ Add tracks” pulls from any slot
-        in this Latent.
-      </div>
-    {:else}
-      <ul class="track-list" use:sortableTracks>
-        {#each selected.tracks as t, i (t.playlist_item_id)}
-          <li class="track-row" data-row-id={t.playlist_item_id}>
-            <RowMove
-              label={t.filename || 'track'}
-              handleClass="track-row__drag"
-              upDisabled={i === 0}
-              downDisabled={i === selected.tracks.length - 1}
-              onUp={() => nudge(i, -1)}
-              onDown={() => nudge(i, 1)}
-            />
-            <div class="track-row__main">
-              <span class="track-row__pos">{i + 1}</span>
-              <a
-                class="track-row__name"
-                href={`/admin/search/detail?id=${encodeURIComponent(t.media_item_id)}`}
-                title="Open in Stacks">{t.filename || '—'}</a
-              >
-              <span class="track-row__dur"
-                >{fmtDuration(t.duration_seconds)}</span
-              >
-              <button
-                class="action-btn track-row__play"
-                type="button"
-                aria-label={`Play ${t.filename || 'track'} from here`}
-                title="Play from here"
-                onclick={() => play(i)}>▶</button
-              >
-              <button
-                class="action-btn track-row__remove"
-                type="button"
-                title="Remove from this running order. File stays in the Latent."
-                onclick={() => removeTrack(t)}>Remove</button
-              >
-            </div>
-          </li>
-        {/each}
-      </ul>
-    {/if}
   {/if}
 </section>
 
@@ -592,6 +641,13 @@
     flex-direction: column;
     gap: var(--space-sm);
   }
+  /* One wrapper so the whole body collapses together; it re-declares
+     .playlists' column gap now that it's the flex child. */
+  #playlists-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
   .playlists__head {
     display: flex;
     align-items: center;
@@ -599,11 +655,13 @@
     border-bottom: 2px solid var(--color-text);
     padding-bottom: var(--space-xs);
   }
-  .playlists__head h2 {
+  /* The heading is now a wrapper around .sec-summary, which brings its own
+     type. It just has to stop being a block and let the summary fill the row. */
+  .playlists__title {
     margin: 0;
-    font-size: var(--text-lg);
-    text-transform: uppercase;
-    letter-spacing: 1pt;
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
   }
   .playlists__tabs {
     display: flex;
@@ -868,6 +926,13 @@
   }
 
   @media (max-width: 640px) {
+    /* The tabs ask for width:100% here, and the head is a nowrap flex row —
+       so they squeezed the title to ~58px and its label spilled across them.
+       Let the head wrap and the tabs get the line they were asking for. */
+    .playlists__head {
+      flex-wrap: wrap;
+      row-gap: 4px;
+    }
     .playlists__tabs {
       margin-left: 0;
       width: 100%;

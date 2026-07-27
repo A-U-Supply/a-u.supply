@@ -308,9 +308,15 @@ body.player-active .admin-main {
   text-align: left;
   cursor: pointer;
 }
+/* caret + meta: the same reason .sec-summary itself inherits. --color-muted is
+   a THEME colour, so on a faced section (scrim/treat/solid) it landed
+   dark-on-dark — the count under "LOOSE FILES" on a solid face was all but
+   invisible. Inherit the head's colour and step it back with opacity instead,
+   which reads as secondary against any face. */
 .sec-summary__caret {
   grid-area: caret;
-  color: var(--color-muted);
+  color: inherit;
+  opacity: 0.65;
 }
 .sec-summary__label {
   grid-area: label;
@@ -318,11 +324,18 @@ body.player-active .admin-main {
   text-transform: uppercase;
   letter-spacing: 1pt;
   font-size: var(--text-sm);
+  /* The summary sets min-width:0 so it can shrink in a crowded head. Without
+     this the label doesn't shrink with it — it spills across whatever shares
+     the row (the playlist tabs, at 390px). Truncate instead. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sec-summary__meta {
   grid-area: meta;
   font-size: 0.65rem;
-  color: var(--color-muted);
+  color: inherit;
+  opacity: 0.75;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
