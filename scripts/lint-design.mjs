@@ -11,6 +11,8 @@
  *   - Svelte components that declare `position: fixed` without going
  *     through one of the two sanctioned overlay helpers (see below)
  *   - Raw `z-index: N` (N >= 100) outside the one layering scale (see below)
+ *   - `max-height` in `vh` instead of `dvh` (see below)
+ *   - `--bits-*` custom properties the installed bits-ui doesn't emit
  *
  * What it ignores:
  *   - The Atelier — Punctum, Photism, Bullethole, Spectralize live on
@@ -68,6 +70,30 @@
  *   Fixing a finding means picking the right RUNG, not a bigger number. If
  *   no rung fits, add one to the scale in tailwind.css — that is the whole
  *   point of having the file.
+ *
+ * The sizing rules, and why they exist:
+ *
+ *   Being on top and being on SCREEN are different problems, and the second
+ *   one keeps coming back in a form nothing catches. Two causes, both silent:
+ *
+ *   1. `vh` is the LARGEST viewport — the one with the phone's URL bar
+ *      hidden. Every overlay in this tree was capped in `vh`, so with the bar
+ *      showing each was taller than the visible area. Usually that costs you
+ *      the bottom edge; for a floating panel that flips ABOVE its trigger it
+ *      costs the top, which is how the Color dropdown ended up starting at
+ *      GREEN with four options above y=0 (2026-07-27). `dvh` is the live one,
+ *      and on a desktop dvh === vh, so the swap only changes the broken case.
+ *
+ *   2. A capped height is still wrong if it ignores the room actually
+ *      available on the side a floating panel chose. bits-ui publishes that
+ *      measurement as `--bits-floating-available-height`; consume it rather
+ *      than guessing a fraction. And a MISSPELLED `--bits-*` var is silent —
+ *      the declaration is simply dropped. `--bits-select-anchor-width` never
+ *      existed (it's `--bits-floating-anchor-width`), so the dropdown's
+ *      min-width did nothing from the day it was written. Same shape as the
+ *      tree-shaken `--z-player`: a var that reads as empty looks like code
+ *      that works. So the set of legal names is read from the INSTALLED
+ *      bits-ui, which also makes a rename-on-upgrade fail loudly.
  *
  * Exit status: 0 clean, 1 findings, 2 internal error.
  */
@@ -152,6 +178,23 @@ const Z_FLOOR = 100;
 // Matches a literal only: `z-index: var(--z-modal, 10000)` doesn't match,
 // because the character after the colon is `v`.
 const ZINDEX_RE = /z-index:\s*(-?\d+)/;
+
+// `vh` is the LARGEST viewport — the one with the phone's URL bar hidden. A
+// panel capped at 90vh is therefore taller than what you can actually see the
+// moment the bar is showing, and its bottom (or, when a floating panel flips
+// above its trigger, its top) sits off-screen with nothing to scroll to.
+// `dvh` is the live one. Only max-height is checked: it's the property that
+// decides whether an overlay fits, and on a desktop dvh === vh, so the swap
+// is a no-op everywhere it isn't a fix.
+const MAXH_VH_RE = /max-height:[^;]*?\b\d+vh\b/;
+const MAXH_VH_ALLOWLIST = {};
+
+// Custom properties a third-party kit publishes are an API, and a typo in one
+// is SILENT — the declaration is simply dropped. `--bits-select-anchor-width`
+// never existed (it is `--bits-floating-anchor-width`), so the dropdown's
+// min-width did nothing from the day it was written. Same shape as the
+// tree-shaken --z-player: a var that reads as empty looks like working code.
+const BITS_VAR_RE = /--bits-[a-z0-9-]+/g;
 
 const HEX_RE = /#([0-9a-fA-F]{3,8})\b/;
 const RGB_RE = /\b(?:rgba?|hsla?)\(/;
@@ -332,6 +375,76 @@ async function lintZScale(filePath, { styleBlocksOnly }) {
   return findings;
 }
 
+/** The dvh pass — see MAXH_VH_RE. Per-line, same scope as the z-index pass. */
+async function lintViewportUnits(filePath, { styleBlocksOnly }) {
+  const rel = relative(ROOT, filePath);
+  const allow = MAXH_VH_ALLOWLIST[rel];
+  const raw = await readFile(filePath, 'utf8');
+  const text = stripComments(raw);
+  const offsets = lineOffsets(text);
+  const lines = text.split('\n');
+  const findings = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (styleBlocksOnly && !inStyleBlock(text, offsets[i])) continue;
+    const m = MAXH_VH_RE.exec(lines[i]);
+    if (!m) continue;
+    if (allow?.lines.includes(i + 1)) continue;
+    findings.push({
+      file: rel,
+      line: i + 1,
+      kind: 'dvh',
+      match: m[0].trim(),
+      source: raw.split('\n')[i].trim(),
+    });
+  }
+  return findings;
+}
+
+/**
+ * The bits-ui custom-property pass. Reads the set of properties the INSTALLED
+ * bits-ui actually emits and refuses any reference outside it, so a typo'd or
+ * renamed-on-upgrade variable fails loudly instead of silently resolving to
+ * nothing. Skipped (not failed) if bits-ui isn't installed — a missing
+ * node_modules must not turn into a design finding.
+ */
+async function knownBitsVars() {
+  const dist = join(ROOT, 'node_modules/bits-ui/dist');
+  try {
+    await stat(dist);
+  } catch {
+    return null;
+  }
+  const files = [];
+  await walk(dist, ['.js', '.svelte'], files);
+  const known = new Set();
+  for (const f of files) {
+    const text = await readFile(f, 'utf8');
+    for (const m of text.matchAll(BITS_VAR_RE)) known.add(m[0]);
+  }
+  return known;
+}
+
+async function lintBitsVars(filePath, known) {
+  const rel = relative(ROOT, filePath);
+  const raw = await readFile(filePath, 'utf8');
+  const text = stripComments(raw);
+  const lines = text.split('\n');
+  const findings = [];
+  for (let i = 0; i < lines.length; i++) {
+    for (const m of lines[i].matchAll(BITS_VAR_RE)) {
+      if (known.has(m[0])) continue;
+      findings.push({
+        file: rel,
+        line: i + 1,
+        kind: 'bits-var',
+        match: m[0],
+        source: raw.split('\n')[i].trim(),
+      });
+    }
+  }
+  return findings;
+}
+
 async function main() {
   const jsonMode = process.argv.includes('--json');
 
@@ -360,6 +473,9 @@ async function main() {
   for (const f of componentFiles) {
     allFindings.push(...(await lintOverlay(f)));
     allFindings.push(...(await lintZScale(f, { styleBlocksOnly: true })));
+    allFindings.push(
+      ...(await lintViewportUnits(f, { styleBlocksOnly: true })),
+    );
   }
 
   // ...and over the global stylesheets, which are where two of the three
@@ -368,6 +484,17 @@ async function main() {
   await walk(join(ROOT, 'src/styles'), ['.css'], styleFiles);
   for (const f of styleFiles) {
     allFindings.push(...(await lintZScale(f, { styleBlocksOnly: false })));
+    allFindings.push(
+      ...(await lintViewportUnits(f, { styleBlocksOnly: false })),
+    );
+  }
+
+  // bits-ui custom properties, over everything that could reference one.
+  const known = await knownBitsVars();
+  if (known) {
+    for (const f of [...componentFiles, ...styleFiles, ...files]) {
+      allFindings.push(...(await lintBitsVars(f, known)));
+    }
   }
 
   if (jsonMode) {
@@ -394,8 +521,26 @@ async function main() {
             `fits, add one to the scale. See the header comment for why.`,
         );
       }
+      if (allFindings.some((f) => f.kind === 'dvh')) {
+        console.error(
+          `\nUse 'dvh', not 'vh', for a max-height. 'vh' is the LARGEST ` +
+            `viewport — with a phone's URL bar showing, a 90vh panel is taller ` +
+            `than the visible area and an edge of it is unreachable. On a ` +
+            `desktop dvh === vh, so the swap only ever changes the broken case.`,
+        );
+      }
+      if (allFindings.some((f) => f.kind === 'bits-var')) {
+        console.error(
+          `\nThat --bits-* custom property is not one the installed bits-ui ` +
+            `emits, so the declaration using it is silently dropped. Grep ` +
+            `node_modules/bits-ui/dist for the real name (the floating ones ` +
+            `are --bits-floating-*, not --bits-<component>-*).`,
+        );
+      }
       if (
-        allFindings.some((f) => f.kind !== 'overlay' && f.kind !== 'zscale')
+        allFindings.some(
+          (f) => !['overlay', 'zscale', 'dvh', 'bits-var'].includes(f.kind),
+        )
       ) {
         console.error(
           `\nReplace hardcoded colors with tokens (--color-*, --color-status-*, --color-overlay*).`,

@@ -692,7 +692,7 @@ body.player-active .admin-main {
   border: 2px solid var(--color-text);
   max-width: 400px;
   width: 100%;
-  max-height: calc(100vh - 2 * var(--space-sm));
+  max-height: calc(100dvh - 2 * var(--space-sm));
   overflow-y: auto;
   font-family: var(--font-mono);
 }

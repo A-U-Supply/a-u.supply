@@ -91,3 +91,37 @@ def test_zscale_pass_actually_fires() -> None:
     assert [(f["line"], f["match"]) for f in probe_hits] == [(1, "z-index: 1500")], (
         f"expected exactly the line-1 violation, got {probe_hits}"
     )
+
+
+@requires_node
+def test_overlay_sizing_passes_actually_fire() -> None:
+    """Prove the dvh and bits-var guards can fail.
+
+    Both exist because their bug is SILENT: a 90vh panel renders fine until a
+    phone URL bar appears, and a misspelled --bits-* var just drops the
+    declaration. A guard for a silent bug that is itself a no-op would be
+    invisible twice over, so pin the exact findings — including the valid
+    forms each pass must leave alone.
+    """
+    probe = REPO_ROOT / "src" / "styles" / "__overlay_probe.css"
+    probe.write_text(
+        ".a { max-height: 85vh; }\n"
+        "/* prose mentioning max-height: 85vh is not a violation */\n"
+        ".b { min-width: var(--bits-select-anchor-width); }\n"
+        ".c { min-width: var(--bits-floating-anchor-width); }\n"
+        ".d { max-height: 85dvh; }\n"
+    )
+    try:
+        findings = _run_lint()
+    finally:
+        probe.unlink()
+
+    hits = sorted(
+        (f["line"], f["kind"], f["match"])
+        for f in findings
+        if f["file"].endswith("__overlay_probe.css")
+    )
+    assert hits == [
+        (1, "dvh", "max-height: 85vh"),
+        (3, "bits-var", "--bits-select-anchor-width"),
+    ], f"expected exactly the line 1 + 3 violations, got {hits}"

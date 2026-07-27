@@ -1536,20 +1536,37 @@
      (10000): tapping Index/Channel inside the picker opened the dropdown
      *behind* the modal, unreachable. It's an anchored menu — it belongs at
      the top of the scale in tailwind.css, like RowActions'. */
+  /* bits-ui puts the floating maths on the WRAPPER div and these custom
+     properties inherit down to here. The names are `--bits-floating-*`; the
+     old rule below said `--bits-select-anchor-width`, which does not exist in
+     bits-ui 1.8 — so that min-width silently did nothing from the day it was
+     written. Grep node_modules/bits-ui/dist before inventing one of these. */
   :global(.fb-select__content) {
     z-index: var(--z-menu, 10100);
-    min-width: var(--bits-select-anchor-width);
+    min-width: var(--bits-floating-anchor-width);
     background: var(--color-bg);
     border: 2px solid var(--color-text);
     box-shadow: 3px 3px 0 var(--color-text);
     font-family: var(--font-mono);
-    max-width: min(92vw, 360px);
-    max-height: 60vh;
+    max-width: min(92dvw, 360px);
+    /* Cap to the room floating-ui MEASURED on the side it chose, not a fixed
+       fraction of the screen. At `60vh` a long list (Color has 14 options)
+       flipped above its trigger and ran off the TOP of the phone — the first
+       four options were above y=0 with nothing to scroll to. The 12px keeps
+       it off the very edge, since these are mounted with collisionPadding 0. */
+    max-height: calc(var(--bits-floating-available-height, 60dvh) - 12px);
+    /* So the viewport, not the box, is what scrolls. */
+    display: flex;
+    flex-direction: column;
   }
   :global(.fb-select__viewport) {
     padding: 4px;
     overflow-y: auto;
-    max-height: 60vh;
+    /* min-height:0 lets a flex child actually shrink; without it the viewport
+       keeps its content height and pushes the box past the cap above. */
+    min-height: 0;
+    /* Reaching the end of the list must not hand the wheel to the page. */
+    overscroll-behavior: contain;
   }
   :global(.fb-select__item) {
     display: flex;

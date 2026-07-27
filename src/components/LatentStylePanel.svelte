@@ -444,7 +444,7 @@
     flex-direction: column;
     gap: 8px;
     font-size: var(--text-sm);
-    max-height: min(600px, 80vh);
+    max-height: min(600px, 80dvh);
     overflow-y: auto;
   }
   .panel__head {
