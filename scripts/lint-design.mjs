@@ -204,8 +204,12 @@ async function lintOverlay(filePath) {
   const hits = [];
   for (let i = 0; i < lines.length; i++) {
     if (!inStyleBlock(text, offsets[i])) continue;
+    // Skip comments, same as the color pass — a rule that fires on prose
+    // about `position: fixed` punishes exactly the people documenting it.
+    const t = lines[i].trim();
+    if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) continue;
     if (!FIXED_RE.test(lines[i])) continue;
-    hits.push({ line: i + 1, source: lines[i].trim() });
+    hits.push({ line: i + 1, source: t });
   }
   if (hits.length === 0) return [];
   if (OVERLAY_HELPER_RE.test(text)) return [];
