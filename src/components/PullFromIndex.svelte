@@ -526,7 +526,7 @@
     border: 2px solid var(--color-text);
     box-shadow: 4px 4px 0 var(--color-text);
     width: min(900px, 100%);
-    max-height: 90vh;
+    max-height: 90dvh;
     display: flex;
     flex-direction: column;
     gap: var(--space-sm);

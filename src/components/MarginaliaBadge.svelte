@@ -182,7 +182,7 @@
     bottom: 16px;
     z-index: var(--z-modal, 10000);
     width: min(440px, calc(100vw - 32px));
-    max-height: 60vh;
+    max-height: 60dvh;
     display: flex;
     flex-direction: column;
     background: var(--color-bg);
@@ -247,7 +247,7 @@
       right: 0;
       bottom: 0;
       width: auto;
-      max-height: 70vh;
+      max-height: 70dvh;
       border-left: none;
       border-right: none;
       border-bottom: none;

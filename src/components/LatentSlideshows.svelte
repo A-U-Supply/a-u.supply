@@ -859,7 +859,7 @@
     top: 50%;
     transform: translate(-50%, -50%);
     width: min(560px, calc(100vw - 2rem));
-    max-height: min(70vh, 640px);
+    max-height: min(70dvh, 640px);
     display: flex;
     flex-direction: column;
     background: var(--color-bg);

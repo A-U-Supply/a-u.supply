@@ -378,7 +378,7 @@
     border: 1px solid var(--lit-border);
     max-width: 800px;
     width: 100%;
-    max-height: 85vh;
+    max-height: 85dvh;
     display: flex;
     flex-direction: column;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);

@@ -1988,7 +1988,7 @@
     z-index: 9998;
     background: #1a1a1a;
     border-top: 1px solid #333;
-    max-height: 50vh;
+    max-height: 50dvh;
     display: flex;
     flex-direction: column;
     font-family: 'Courier New', Courier, monospace;
@@ -2280,7 +2280,7 @@
     z-index: 9998;
     background: #1a1a1a;
     border-top: 1px solid #333;
-    max-height: 60vh;
+    max-height: 60dvh;
     display: flex;
     flex-direction: column;
     font-family: 'Courier New', Courier, monospace;
@@ -2642,14 +2642,14 @@
     }
 
     .queue-panel {
-      max-height: calc(100vh - 100px);
+      max-height: calc(100dvh - 100px);
       bottom: 100px;
     }
 
     /* Marginalia panel → bottom sheet. */
     .marginalia {
       bottom: 100px;
-      max-height: 70vh;
+      max-height: 70dvh;
     }
     /* ≥44px hit areas without blowing up the visuals. */
     .marginalia__marker::before {
