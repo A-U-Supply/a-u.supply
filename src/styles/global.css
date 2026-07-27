@@ -323,3 +323,53 @@ label[for] {
 .latent-section--faced .latent-band {
   background: transparent;
 }
+
+/*
+  Section disclosure (2026-07-27). The three sections that grow without bound
+  — Loose files, Playlists, Slideshows — collapse to their head line. The
+  title itself is the toggle, which is the slot-card summary pattern one
+  level up (see .slot__summary in LatentSlots.svelte).
+
+  Here rather than in each island for the same reason as .latent-band: the
+  three must stay identical, and it has to inherit the head's face-aware
+  colour instead of hard-coding --color-text.
+*/
+.sec-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  /* Once collapsed, this line is the ONLY way back in — so it gets a real
+     touch target, same 32px the section map chips settled on. */
+  min-height: 32px;
+}
+.sec-toggle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.sec-toggle__caret {
+  flex: 0 0 auto;
+  width: 0.9em;
+  font-size: 0.85em;
+  opacity: 0.75;
+}
+.sec-toggle:hover .sec-toggle__caret {
+  opacity: 1;
+}
+/* The count rides inside the toggle so the collapsed line still reports what
+   it's hiding — it opts out of the h2's uppercase/tracking. */
+.sec-toggle__count {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0.65;
+}

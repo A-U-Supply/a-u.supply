@@ -18,6 +18,11 @@
   import RowMove from './RowMove.svelte';
   import { DRAG_OPTS } from '../lib/dragOptions.ts';
   import { isPhone } from '../lib/viewport.svelte.ts';
+  import {
+    readSectionOpen,
+    writeSectionOpen,
+    SECTION_REVEAL_EVENT,
+  } from '../lib/latentCollapse.ts';
 
   type Props = {
     projectId: string;
@@ -64,6 +69,12 @@
   let candidatesLoading = $state(false);
   let filter = $state('');
   let picked = $state<Set<string>>(new Set());
+  let open = $state(readSectionOpen(projectId, 'slideshow'));
+
+  function toggleOpen() {
+    open = !open;
+    writeSectionOpen(projectId, 'slideshow', open);
+  }
 
   const selected = $derived(
     slideshows.find((p) => p.id === selectedId) || null,
@@ -359,9 +370,17 @@
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && adding) closeAdd();
     };
+    // The section map jumps here; collapsed, that would be a dead end.
+    const onReveal = (e: Event) => {
+      if ((e as CustomEvent).detail?.section !== 'slideshow' || open) return;
+      open = true;
+      writeSectionOpen(projectId, 'slideshow', true);
+    };
     document.addEventListener('keydown', onKey);
+    window.addEventListener(SECTION_REVEAL_EVENT, onReveal);
     return () => {
       document.removeEventListener('keydown', onKey);
+      window.removeEventListener(SECTION_REVEAL_EVENT, onReveal);
       document.body.style.overflow = '';
     };
   });
@@ -369,171 +388,198 @@
 
 <section class="playlists">
   <header class="playlists__head" class:latent-band={!!styleKey}>
-    <h2>Slideshows</h2>
-    <div class="playlists__tabs">
-      {#each slideshows as p (p.id)}
-        <button
-          class="tab"
-          class:active={p.id === selectedId}
-          onclick={() => (selectedId = p.id)}
-          type="button">{p.name}</button
-        >
-      {/each}
-      <button class="tab tab--add" onclick={createSlideshow} type="button"
-        >+ New</button
+    <h2>
+      <button
+        class="sec-toggle"
+        type="button"
+        aria-expanded={open}
+        aria-controls="slideshow-body"
+        title={open ? 'Collapse slideshows' : 'Expand slideshows'}
+        onclick={toggleOpen}
       >
-    </div>
-    {#if styleKey}
-      <LatentStyleButton
-        {projectId}
-        scope="section"
-        sectionKey={styleKey}
-        push
-      />
+        <span class="sec-toggle__caret" aria-hidden="true"
+          >{open ? '▾' : '▸'}</span
+        >
+        Slideshows
+        <span class="sec-toggle__count">{slideshows.length}</span>
+      </button>
+    </h2>
+    <!-- Collapsed, the head line is just the disclosure — the tabs would be
+         the one control left and they'd open a body you can't see. -->
+    {#if open}
+      <div class="playlists__tabs">
+        {#each slideshows as p (p.id)}
+          <button
+            class="tab"
+            class:active={p.id === selectedId}
+            onclick={() => (selectedId = p.id)}
+            type="button">{p.name}</button
+          >
+        {/each}
+        <button class="tab tab--add" onclick={createSlideshow} type="button"
+          >+ New</button
+        >
+      </div>
+      {#if styleKey}
+        <LatentStyleButton
+          {projectId}
+          scope="section"
+          sectionKey={styleKey}
+          push
+        />
+      {/if}
     {/if}
   </header>
 
-  {#if error}
-    <div class="error">{error}</div>
-  {/if}
+  {#if open}
+    <div id="slideshow-body">
+      {#if error}
+        <div class="error">{error}</div>
+      {/if}
 
-  {#if loading}
-    <div class="muted empty">Loading…</div>
-  {:else if !selected}
-    <div class="muted empty">
-      No slideshows yet. A slideshow is a sequence you assemble by hand out of
-      the images and video anywhere in this Latent — a zine flip-through, a cut
-      of scenes. <button class="link" type="button" onclick={createSlideshow}
-        >Make one</button
-      >.
-    </div>
-  {:else}
-    <div class="bar">
-      <button
-        class="action-btn"
-        type="button"
-        disabled={!selected.slides.length}
-        onclick={() => view()}>▷ View all</button
-      >
-      <span class="muted bar__meta"
-        >{selected.slides.length} slide{selected.slides.length === 1
-          ? ''
-          : 's'}</span
-      >
-      <span class="spacer"></span>
-      <button class="action-btn" type="button" onclick={openAdd}
-        >+ Add slides</button
-      >
-      {#if renaming}
-        <input
-          class="rename"
-          bind:value={renameValue}
-          onblur={commitRename}
-          onkeydown={(e) => {
-            if (e.key === 'Enter') commitRename();
-            if (e.key === 'Escape') renaming = false;
-          }}
-          aria-label="Slideshow name"
-        />
-      {:else if isPhone()}
-        <button
-          class="action-btn bar__tools"
-          type="button"
-          aria-expanded={toolsOpen}
-          onclick={() => (toolsOpen = !toolsOpen)}
-          >Slideshow tools {toolsOpen ? '▴' : '▾'}</button
-        >
+      {#if loading}
+        <div class="muted empty">Loading…</div>
+      {:else if !selected}
+        <div class="muted empty">
+          No slideshows yet. A slideshow is a sequence you assemble by hand out
+          of the images and video anywhere in this Latent — a zine flip-through,
+          a cut of scenes. <button
+            class="link"
+            type="button"
+            onclick={createSlideshow}>Make one</button
+          >.
+        </div>
       {:else}
-        <button class="action-btn" type="button" onclick={startRename}
-          >Rename</button
-        >
-        <button
-          class="action-btn action-btn--danger"
-          type="button"
-          onclick={deleteSlideshow}>Delete</button
-        >
+        <div class="bar">
+          <button
+            class="action-btn"
+            type="button"
+            disabled={!selected.slides.length}
+            onclick={() => view()}>▷ View all</button
+          >
+          <span class="muted bar__meta"
+            >{selected.slides.length} slide{selected.slides.length === 1
+              ? ''
+              : 's'}</span
+          >
+          <span class="spacer"></span>
+          <button class="action-btn" type="button" onclick={openAdd}
+            >+ Add slides</button
+          >
+          {#if renaming}
+            <input
+              class="rename"
+              bind:value={renameValue}
+              onblur={commitRename}
+              onkeydown={(e) => {
+                if (e.key === 'Enter') commitRename();
+                if (e.key === 'Escape') renaming = false;
+              }}
+              aria-label="Slideshow name"
+            />
+          {:else if isPhone()}
+            <button
+              class="action-btn bar__tools"
+              type="button"
+              aria-expanded={toolsOpen}
+              onclick={() => (toolsOpen = !toolsOpen)}
+              >Slideshow tools {toolsOpen ? '▴' : '▾'}</button
+            >
+          {:else}
+            <button class="action-btn" type="button" onclick={startRename}
+              >Rename</button
+            >
+            <button
+              class="action-btn action-btn--danger"
+              type="button"
+              onclick={deleteSlideshow}>Delete</button
+            >
+          {/if}
+        </div>
+
+        {#if isPhone() && toolsOpen}
+          <div class="order-menu" role="group" aria-label="Slideshow tools">
+            <button
+              class="order-menu__item"
+              type="button"
+              onclick={() => {
+                toolsOpen = false;
+                startRename();
+              }}>Rename slideshow</button
+            >
+            <button
+              class="order-menu__item order-menu__item--danger"
+              type="button"
+              onclick={() => {
+                toolsOpen = false;
+                deleteSlideshow();
+              }}>Delete slideshow</button
+            >
+          </div>
+        {/if}
+
+        {#if selected.slides.length === 0}
+          <div class="muted empty">
+            Nothing in this slideshow yet — “+ Add slides” pulls from any slot
+            in this Latent.
+          </div>
+        {:else}
+          <ul class="track-list" use:sortableTracks>
+            {#each selected.slides as sl, i (sl.slideshow_item_id)}
+              <li class="track-row" data-row-id={sl.slideshow_item_id}>
+                <RowMove
+                  label={sl.filename || 'slide'}
+                  handleClass="track-row__drag"
+                  upDisabled={i === 0}
+                  downDisabled={i === selected.slides.length - 1}
+                  onUp={() => nudge(i, -1)}
+                  onDown={() => nudge(i, 1)}
+                />
+                <div class="track-row__main">
+                  <span class="track-row__pos">{i + 1}</span>
+                  <button
+                    class="slide-thumb"
+                    type="button"
+                    aria-label={`View ${sl.filename || 'this slide'} full screen`}
+                    onclick={() => view(i)}
+                  >
+                    {#if sl.media_type === 'image'}
+                      <img
+                        src={thumbUrl(sl.media_item_id)}
+                        alt={sl.filename || ''}
+                      />
+                    {:else}
+                      <span class="slide-thumb__chip">V</span>
+                    {/if}
+                  </button>
+                  <a
+                    class="track-row__name"
+                    href={`/admin/search/detail?id=${encodeURIComponent(sl.media_item_id)}`}
+                    title="Open in Stacks">{sl.filename || '—'}</a
+                  >
+                  <span class="track-row__dur"
+                    >{fmtDims(sl.width, sl.height)}</span
+                  >
+                  <button
+                    class="action-btn track-row__play"
+                    type="button"
+                    aria-label={`View ${sl.filename || 'slide'} from here`}
+                    title="View from here"
+                    onclick={() => view(i)}>▷</button
+                  >
+                  <button
+                    class="action-btn track-row__remove"
+                    type="button"
+                    title="Remove from this slideshow. File stays in the Latent."
+                    onclick={() => removeSlide(sl)}>Remove</button
+                  >
+                </div>
+              </li>
+            {/each}
+          </ul>
+        {/if}
       {/if}
     </div>
-
-    {#if isPhone() && toolsOpen}
-      <div class="order-menu" role="group" aria-label="Slideshow tools">
-        <button
-          class="order-menu__item"
-          type="button"
-          onclick={() => {
-            toolsOpen = false;
-            startRename();
-          }}>Rename slideshow</button
-        >
-        <button
-          class="order-menu__item order-menu__item--danger"
-          type="button"
-          onclick={() => {
-            toolsOpen = false;
-            deleteSlideshow();
-          }}>Delete slideshow</button
-        >
-      </div>
-    {/if}
-
-    {#if selected.slides.length === 0}
-      <div class="muted empty">
-        Nothing in this slideshow yet — “+ Add slides” pulls from any slot in
-        this Latent.
-      </div>
-    {:else}
-      <ul class="track-list" use:sortableTracks>
-        {#each selected.slides as sl, i (sl.slideshow_item_id)}
-          <li class="track-row" data-row-id={sl.slideshow_item_id}>
-            <RowMove
-              label={sl.filename || 'slide'}
-              handleClass="track-row__drag"
-              upDisabled={i === 0}
-              downDisabled={i === selected.slides.length - 1}
-              onUp={() => nudge(i, -1)}
-              onDown={() => nudge(i, 1)}
-            />
-            <div class="track-row__main">
-              <span class="track-row__pos">{i + 1}</span>
-              <button
-                class="slide-thumb"
-                type="button"
-                aria-label={`View ${sl.filename || 'this slide'} full screen`}
-                onclick={() => view(i)}
-              >
-                {#if sl.media_type === 'image'}
-                  <img
-                    src={thumbUrl(sl.media_item_id)}
-                    alt={sl.filename || ''}
-                  />
-                {:else}
-                  <span class="slide-thumb__chip">V</span>
-                {/if}
-              </button>
-              <a
-                class="track-row__name"
-                href={`/admin/search/detail?id=${encodeURIComponent(sl.media_item_id)}`}
-                title="Open in Stacks">{sl.filename || '—'}</a
-              >
-              <span class="track-row__dur">{fmtDims(sl.width, sl.height)}</span>
-              <button
-                class="action-btn track-row__play"
-                type="button"
-                aria-label={`View ${sl.filename || 'slide'} from here`}
-                title="View from here"
-                onclick={() => view(i)}>▷</button
-              >
-              <button
-                class="action-btn track-row__remove"
-                type="button"
-                title="Remove from this slideshow. File stays in the Latent."
-                onclick={() => removeSlide(sl)}>Remove</button
-              >
-            </div>
-          </li>
-        {/each}
-      </ul>
-    {/if}
   {/if}
 </section>
 
@@ -618,6 +664,13 @@
 
 <style>
   .playlists {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+  /* One wrapper so the whole body collapses together; it re-declares
+     .playlists' column gap now that it's the flex child. */
+  #slideshow-body {
     display: flex;
     flex-direction: column;
     gap: var(--space-sm);

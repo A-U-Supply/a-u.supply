@@ -16,6 +16,11 @@
   import RowActions from './RowActions.svelte';
   import { isPhone } from '../lib/viewport.svelte.ts';
   import { openLatentViewer, isViewable } from '../lib/latentViewer.ts';
+  import {
+    readSectionOpen,
+    writeSectionOpen,
+    SECTION_REVEAL_EVENT,
+  } from '../lib/latentCollapse.ts';
 
   type Props = {
     projectId: string;
@@ -45,6 +50,14 @@
   let pullOpen = $state(false);
   let rootEl: HTMLElement | null = $state(null);
   let annotationCounts = $state<AnnotationCounts>({});
+  // The pile is the tallest thing on the page once it fills up. Collapsed, the
+  // head line keeps the count so it still reports what's in there.
+  let open = $state(readSectionOpen(projectId, 'loose'));
+
+  function toggleOpen() {
+    open = !open;
+    writeSectionOpen(projectId, 'loose', open);
+  }
 
   // The loose pile mixes audio, sessions and documents in with the pictures;
   // only images and video get a lightbox.
@@ -214,177 +227,221 @@
   $effect(() => {
     if (projectId) load();
   });
+
+  // The section map jumps here; if we're collapsed it would jump to a dead end.
+  $effect(() => {
+    const onReveal = (e: Event) => {
+      if ((e as CustomEvent).detail?.section !== 'loose' || open) return;
+      open = true;
+      writeSectionOpen(projectId, 'loose', true);
+    };
+    window.addEventListener(SECTION_REVEAL_EVENT, onReveal);
+    return () => window.removeEventListener(SECTION_REVEAL_EVENT, onReveal);
+  });
 </script>
 
 <section class="loose" bind:this={rootEl}>
   <header class="loose__head" class:latent-band={!!styleKey}>
-    <h2>Loose files</h2>
-    <span class="muted">{items.length}</span>
-    <div class="loose__actions">
-      {#if viewableCount > 0}
+    <h2>
+      <button
+        class="sec-toggle"
+        type="button"
+        aria-expanded={open}
+        aria-controls="loose-body"
+        title={open ? 'Collapse loose files' : 'Expand loose files'}
+        onclick={toggleOpen}
+      >
+        <span class="sec-toggle__caret" aria-hidden="true"
+          >{open ? '▾' : '▸'}</span
+        >
+        Loose files
+        <span class="sec-toggle__count">{items.length}</span>
+      </button>
+    </h2>
+    <!-- Collapsed, the head line is just the disclosure: nothing to act on
+         until you can see what you'd be acting on. -->
+    {#if open}
+      <div class="loose__actions">
+        {#if viewableCount > 0}
+          <button
+            class="action-btn"
+            type="button"
+            title="Look through every image and video in the loose pile"
+            onclick={viewAll}>▷ View all ({viewableCount})</button
+          >
+        {/if}
         <button
           class="action-btn"
           type="button"
-          title="Look through every image and video in the loose pile"
-          onclick={viewAll}>▷ View all ({viewableCount})</button
+          onclick={() => (pullOpen = true)}>+ Pull from index</button
         >
-      {/if}
-      <button class="action-btn" type="button" onclick={() => (pullOpen = true)}
-        >+ Pull from index</button
-      >
-      {#if styleKey}
-        <LatentStyleButton {projectId} scope="section" sectionKey={styleKey} />
-      {/if}
-    </div>
+        {#if styleKey}
+          <LatentStyleButton
+            {projectId}
+            scope="section"
+            sectionKey={styleKey}
+          />
+        {/if}
+      </div>
+    {/if}
   </header>
 
-  <Uploader
-    destination="project"
-    {projectId}
-    compact={true}
-    onUploaded={() => load()}
-  />
+  {#if open}
+    <div id="loose-body">
+      <Uploader
+        destination="project"
+        {projectId}
+        compact={true}
+        onUploaded={() => load()}
+      />
 
-  {#if error}
-    <div class="notice notice--error">{error}</div>
-  {/if}
-  {#if loading && items.length === 0}
-    <div class="muted">Loading…</div>
-  {:else if items.length === 0}
-    <div class="muted">
-      No loose files yet — drop something above, or pull from the index.
-    </div>
-  {:else}
-    <ul class="grid">
-      {#each items as it (it.id)}
-        {@const ext = fileExt(it.media?.filename)}
-        <li
-          class="tile"
-          data-type={it.media?.media_type}
-          data-media-id={it.media_item_id}
-        >
-          <svelte:element
-            this={isViewable(it.media?.media_type) ? 'button' : 'a'}
-            class="tile__thumb"
-            type={isViewable(it.media?.media_type) ? 'button' : undefined}
-            title={isViewable(it.media?.media_type)
-              ? `View ${it.media?.filename || 'this file'} full screen`
-              : 'Open in Stacks'}
-            href={isViewable(it.media?.media_type)
-              ? undefined
-              : `/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
-            onclick={isViewable(it.media?.media_type)
-              ? () => openLatentViewer(items, it.media_item_id)
-              : undefined}
-          >
-            {#if it.media?.media_type === 'image'}
-              <img src={thumbUrl(it.media_item_id)} alt={it.media?.filename} />
-            {:else}
-              <span class="filechip">
-                <span class="filechip__ext"
-                  >{ext ? '.' + ext : it.media?.media_type || 'file'}</span
-                >
-                <span class="filechip__type"
-                  >{it.media?.media_type === 'session'
-                    ? '▣ session'
-                    : it.media?.media_type || 'file'}</span
-                >
-              </span>
-            {/if}
-          </svelte:element>
-          <div class="tile__info">
-            <div class="tile__name" title={it.media?.filename}>
-              {it.media?.filename || '(unknown)'}
-            </div>
-            {#if it.media?.parent_media_item_id}
-              {@const parent = parentOf(it)}
-              {#if parent}
-                <button
-                  class="session-chip"
-                  type="button"
-                  title={`Extracted from ${parent.media?.filename || 'session bundle'} — click to jump to it`}
-                  onclick={() => scrollToParent(parent.media_item_id)}
-                  >from session</button
-                >
-              {:else}
-                <span
-                  class="session-chip"
-                  title="Extracted from a session bundle">extracted</span
-                >
-              {/if}
-            {/if}
-            <div class="tile__meta" title={it.media?.mime_type}>
-              {ext || it.media?.media_type || ''}
-              {#if it.media?.file_size_bytes}
-                · {formatSize(it.media.file_size_bytes)}
-              {/if}
-            </div>
-          </div>
-          <div class="tile__actions">
-            {#if it.media?.media_type === 'audio' || it.media?.media_type === 'video' || it.media?.media_type === 'midi'}
-              <button
-                class="action-btn"
-                type="button"
-                aria-label={`Play ${it.media?.filename || 'file'}`}
-                title="Play (queues in the persistent Player)"
-                onclick={() =>
-                  playInPlayer(
-                    it.media_item_id,
-                    it.media!.media_type,
-                    it.media?.filename || '',
-                  )}>▶ Play</button
+      {#if error}
+        <div class="notice notice--error">{error}</div>
+      {/if}
+      {#if loading && items.length === 0}
+        <div class="muted">Loading…</div>
+      {:else if items.length === 0}
+        <div class="muted">
+          No loose files yet — drop something above, or pull from the index.
+        </div>
+      {:else}
+        <ul class="grid">
+          {#each items as it (it.id)}
+            {@const ext = fileExt(it.media?.filename)}
+            <li
+              class="tile"
+              data-type={it.media?.media_type}
+              data-media-id={it.media_item_id}
+            >
+              <svelte:element
+                this={isViewable(it.media?.media_type) ? 'button' : 'a'}
+                class="tile__thumb"
+                type={isViewable(it.media?.media_type) ? 'button' : undefined}
+                title={isViewable(it.media?.media_type)
+                  ? `View ${it.media?.filename || 'this file'} full screen`
+                  : 'Open in Stacks'}
+                href={isViewable(it.media?.media_type)
+                  ? undefined
+                  : `/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`}
+                onclick={isViewable(it.media?.media_type)
+                  ? () => openLatentViewer(items, it.media_item_id)
+                  : undefined}
               >
-            {/if}
-            {#if it.media}
-              <MarginaliaBadge
-                mediaId={it.media_item_id}
-                mediaType={it.media.media_type}
-                filename={it.media.filename || ''}
-                counts={annotationCounts[it.media_item_id] || null}
-                showEmpty={isPhone()}
-              />
-            {/if}
-            <RowActions
-              label={it.media?.filename || 'this file'}
-              meta={[
-                fileExt(it.media?.filename) || it.media?.media_type || 'file',
-                it.media?.file_size_bytes
-                  ? formatSize(it.media.file_size_bytes)
-                  : '',
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-              actions={[
-                { label: 'Rename', onClick: () => rename(it) },
-                ...(it.media?.media_type === 'image'
-                  ? [
-                      {
-                        label: 'Set as card image',
-                        onClick: () => setAsHero(it),
-                      },
-                    ]
-                  : []),
-                {
-                  label: 'Download',
-                  href: fileUrl(it.media_item_id),
-                  download: it.media?.filename || undefined,
-                },
-                {
-                  label: 'Open in Stacks',
-                  href: `/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`,
-                },
-                {
-                  label: 'Detach',
-                  danger: true,
-                  title: 'Remove from this Latent. File stays in Emulsion.',
-                  onClick: () => detach(it),
-                },
-              ]}
-            />
-          </div>
-        </li>
-      {/each}
-    </ul>
+                {#if it.media?.media_type === 'image'}
+                  <img
+                    src={thumbUrl(it.media_item_id)}
+                    alt={it.media?.filename}
+                  />
+                {:else}
+                  <span class="filechip">
+                    <span class="filechip__ext"
+                      >{ext ? '.' + ext : it.media?.media_type || 'file'}</span
+                    >
+                    <span class="filechip__type"
+                      >{it.media?.media_type === 'session'
+                        ? '▣ session'
+                        : it.media?.media_type || 'file'}</span
+                    >
+                  </span>
+                {/if}
+              </svelte:element>
+              <div class="tile__info">
+                <div class="tile__name" title={it.media?.filename}>
+                  {it.media?.filename || '(unknown)'}
+                </div>
+                {#if it.media?.parent_media_item_id}
+                  {@const parent = parentOf(it)}
+                  {#if parent}
+                    <button
+                      class="session-chip"
+                      type="button"
+                      title={`Extracted from ${parent.media?.filename || 'session bundle'} — click to jump to it`}
+                      onclick={() => scrollToParent(parent.media_item_id)}
+                      >from session</button
+                    >
+                  {:else}
+                    <span
+                      class="session-chip"
+                      title="Extracted from a session bundle">extracted</span
+                    >
+                  {/if}
+                {/if}
+                <div class="tile__meta" title={it.media?.mime_type}>
+                  {ext || it.media?.media_type || ''}
+                  {#if it.media?.file_size_bytes}
+                    · {formatSize(it.media.file_size_bytes)}
+                  {/if}
+                </div>
+              </div>
+              <div class="tile__actions">
+                {#if it.media?.media_type === 'audio' || it.media?.media_type === 'video' || it.media?.media_type === 'midi'}
+                  <button
+                    class="action-btn"
+                    type="button"
+                    aria-label={`Play ${it.media?.filename || 'file'}`}
+                    title="Play (queues in the persistent Player)"
+                    onclick={() =>
+                      playInPlayer(
+                        it.media_item_id,
+                        it.media!.media_type,
+                        it.media?.filename || '',
+                      )}>▶ Play</button
+                  >
+                {/if}
+                {#if it.media}
+                  <MarginaliaBadge
+                    mediaId={it.media_item_id}
+                    mediaType={it.media.media_type}
+                    filename={it.media.filename || ''}
+                    counts={annotationCounts[it.media_item_id] || null}
+                    showEmpty={isPhone()}
+                  />
+                {/if}
+                <RowActions
+                  label={it.media?.filename || 'this file'}
+                  meta={[
+                    fileExt(it.media?.filename) ||
+                      it.media?.media_type ||
+                      'file',
+                    it.media?.file_size_bytes
+                      ? formatSize(it.media.file_size_bytes)
+                      : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                  actions={[
+                    { label: 'Rename', onClick: () => rename(it) },
+                    ...(it.media?.media_type === 'image'
+                      ? [
+                          {
+                            label: 'Set as card image',
+                            onClick: () => setAsHero(it),
+                          },
+                        ]
+                      : []),
+                    {
+                      label: 'Download',
+                      href: fileUrl(it.media_item_id),
+                      download: it.media?.filename || undefined,
+                    },
+                    {
+                      label: 'Open in Stacks',
+                      href: `/admin/search/detail?id=${encodeURIComponent(it.media_item_id)}`,
+                    },
+                    {
+                      label: 'Detach',
+                      danger: true,
+                      title: 'Remove from this Latent. File stays in Emulsion.',
+                      onClick: () => detach(it),
+                    },
+                  ]}
+                />
+              </div>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
   {/if}
 
   <PullFromIndex bind:open={pullOpen} {projectId} onAttached={() => load()} />
@@ -402,6 +459,13 @@
     gap: var(--space-sm);
     border-bottom: 2px solid var(--color-text);
     padding-bottom: var(--space-xs);
+  }
+  /* The body is one wrapper so the whole thing collapses together; it has to
+     re-declare .loose's column gap, since it's now the flex child. */
+  #loose-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
   }
   .loose__head h2 {
     margin: 0;

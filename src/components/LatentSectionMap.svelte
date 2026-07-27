@@ -21,6 +21,7 @@
     effectiveAccent,
     type SectionKey,
   } from '../lib/latentStyles.ts';
+  import { revealSection } from '../lib/latentCollapse.ts';
 
   type SlotChip = {
     id: string;
@@ -60,6 +61,16 @@
       behavior: reduced ? 'auto' : 'smooth',
       block: 'start',
     });
+  }
+
+  /**
+   * Three sections can be collapsed (see lib/latentCollapse.ts). Jumping to a
+   * collapsed one would land on a head line with nothing under it, so ask it
+   * to open first and scroll on the next frame, once it has rendered.
+   */
+  function goToSection(key: SectionKey) {
+    revealSection(key);
+    requestAnimationFrame(() => scrollToEl(`#${key}-island`));
   }
 
   function onStyleChanged(e: Event) {
@@ -104,7 +115,7 @@
       type="button"
       title={SECTION_LABELS[key]}
       aria-label="Go to {SECTION_LABELS[key]}"
-      onclick={() => scrollToEl(`#${key}-island`)}
+      onclick={() => goToSection(key)}
     >
       <i class="map__swatch" style={sectionSwatch(key)}></i>
       <span class="map__name">{SECTION_LABELS[key]}</span>
