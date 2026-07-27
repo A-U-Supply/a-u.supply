@@ -1739,7 +1739,7 @@
     bottom: 0;
     left: 0;
     right: 0;
-    z-index: 9999;
+    z-index: var(--z-player, 9999);
     background: #1a1a1a;
     border-top: 1px solid #333;
     color: #e0e0e0;

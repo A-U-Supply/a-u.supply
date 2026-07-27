@@ -73,6 +73,29 @@
   --latent-sec-slideshow: #9c4a93;
   --latent-sec-loose: #6b8e23;
   --latent-sec-threads: #8e4a6f;
+
+  /*
+   * Overlay layering. One scale, so "which of these is on top" is answerable
+   * without grepping six components — which is how the Style panel ended up
+   * painting over the image picker it had just opened, and how the picker
+   * ended up underneath the player bar.
+   *
+   * Raise things HERE, in order, never ad hoc in a component. Not
+   * theme-dependent, so it lives in :root only.
+   *
+   * Deliberately left alone: the Atelier and Litany pages (≤1000) and the
+   * Pukebox, none of which coexist with these.
+   *
+   * Every consumer writes `var(--z-modal, 10000)` with the literal as a
+   * fallback. Tailwind v4's @theme tree-shakes variables nothing references —
+   * --z-player was silently dropped when it was documentation-only — and the
+   * player also renders on layouts that may not load this sheet. A missing
+   * token must never drop an overlay to z-index:auto.
+   */
+  --z-player: 9999; /* the persistent player bar — the value it already had */
+  --z-modal: 10000; /* modals, sheets, and their backdrops. Above the player. */
+  --z-viewer: 10050; /* the fullscreen media viewer */
+  --z-menu: 10100; /* anchored menus + their scrims — always reachable */
 }
 
 /*

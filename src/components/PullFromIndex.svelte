@@ -518,7 +518,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: var(--z-modal, 10000);
     padding: var(--space-sm);
   }
   .modal {
@@ -708,6 +708,15 @@
   @media (max-width: 640px) {
     .modal {
       padding: var(--space-sm);
+    }
+    /* Filters + Upload + the query box + Search don't fit on one 390px line —
+       the input and the Search button were running off the right edge. */
+    .search {
+      flex-wrap: wrap;
+    }
+    .search input {
+      flex: 1 1 100%;
+      order: -1;
     }
     .modal__head h2 {
       font-size: var(--text-base);

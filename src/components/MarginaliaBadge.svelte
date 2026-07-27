@@ -174,13 +174,13 @@
     position: fixed;
     inset: 0;
     background: var(--color-overlay-soft);
-    z-index: 10000;
+    z-index: var(--z-modal, 10000);
   }
   .mgl-pop {
     position: fixed;
     right: 16px;
     bottom: 16px;
-    z-index: 10001;
+    z-index: var(--z-modal, 10000);
     width: min(440px, calc(100vw - 32px));
     max-height: 60vh;
     display: flex;

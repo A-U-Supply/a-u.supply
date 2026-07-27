@@ -926,7 +926,7 @@
        fixes both, and makes picking tracks its own screen rather than a
        letterbox. */
     .sheet-backdrop {
-      z-index: 9999 !important;
+      z-index: var(--z-modal, 10000) !important;
     }
     .sheet {
       left: 0;
@@ -938,7 +938,7 @@
       height: 100dvh;
       max-height: none;
       border-width: 0;
-      z-index: 10000 !important;
+      z-index: var(--z-modal, 10000) !important;
     }
     .sheet__head {
       position: sticky;

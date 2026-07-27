@@ -262,7 +262,15 @@
   }
 </script>
 
-{#if open}
+<!--
+  `!pickerOpen`: the panel steps aside entirely while the image picker is up.
+  Both are full-attention overlays, and on a phone the panel is a 70dvh bottom
+  sheet — so with both open it covered the picker's results and its confirm
+  button, and every tap was ambiguous about which overlay owned it. Yielding
+  is simpler than fighting over z-index, and it means the picker's × returns
+  you to the panel instead of closing the whole thing.
+-->
+{#if open && !pickerOpen}
   <div class="backdrop" onclick={close} aria-hidden="true"></div>
   <div
     class="panel"
@@ -426,7 +434,7 @@
   }
   .panel {
     position: fixed;
-    z-index: 120;
+    z-index: var(--z-modal, 10000);
     background: var(--color-bg);
     color: var(--color-text);
     border: 2px solid var(--color-text);
@@ -542,7 +550,7 @@
       background: var(--color-overlay-soft);
       /* Above the persistent player (z-index 9999) — at 110 the player sat on
          top of the sheet and hid whatever was at its bottom edge. */
-      z-index: 9999;
+      z-index: var(--z-modal, 10000);
     }
     .panel {
       /* Bottom sheet — inline popover coords don't apply (panelStyle is
@@ -558,7 +566,7 @@
       overflow-y: auto;
       overscroll-behavior: contain;
       padding-bottom: env(safe-area-inset-bottom, 0px);
-      z-index: 10000;
+      z-index: var(--z-modal, 10000);
       box-shadow: 0 -3px 0 var(--color-text);
     }
   }
