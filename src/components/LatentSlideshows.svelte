@@ -388,24 +388,31 @@
 
 <section class="playlists">
   <header class="playlists__head" class:latent-band={!!styleKey}>
-    <h2>
+    <!-- .sec-summary is the house collapsible-section head (admin.css) — the
+         same one Repo, Links, Documents and Threads use. Kept inside the h2 so
+         the page outline still has a heading here. -->
+    <h2 class="playlists__title">
       <button
-        class="sec-toggle"
+        class="sec-summary"
         type="button"
         aria-expanded={open}
         aria-controls="slideshow-body"
-        title={open ? 'Collapse slideshows' : 'Expand slideshows'}
         onclick={toggleOpen}
       >
-        <span class="sec-toggle__caret" aria-hidden="true"
+        <span class="sec-summary__caret" aria-hidden="true"
           >{open ? '▾' : '▸'}</span
         >
-        Slideshows
-        <span class="sec-toggle__count">{slideshows.length}</span>
+        <span class="sec-summary__label">Slideshows</span>
+        <span class="sec-summary__meta"
+          >{slideshows.length} slideshow{slideshows.length === 1
+            ? ''
+            : 's'}</span
+        >
       </button>
     </h2>
-    <!-- Collapsed, the head line is just the disclosure — the tabs would be
-         the one control left and they'd open a body you can't see. -->
+    <!-- The tabs pick WHICH slideshow the body shows, so collapsed they'd change
+         something you can't see. The Style button acts on the section itself
+         and stays, as it does on every other collapsible section. -->
     {#if open}
       <div class="playlists__tabs">
         {#each slideshows as p (p.id)}
@@ -420,14 +427,14 @@
           >+ New</button
         >
       </div>
-      {#if styleKey}
-        <LatentStyleButton
-          {projectId}
-          scope="section"
-          sectionKey={styleKey}
-          push
-        />
-      {/if}
+    {/if}
+    {#if styleKey}
+      <LatentStyleButton
+        {projectId}
+        scope="section"
+        sectionKey={styleKey}
+        push
+      />
     {/if}
   </header>
 
@@ -682,11 +689,13 @@
     border-bottom: 2px solid var(--color-text);
     padding-bottom: var(--space-xs);
   }
-  .playlists__head h2 {
+  /* The heading is now a wrapper around .sec-summary, which brings its own
+     type. It just has to stop being a block and let the summary fill the row. */
+  .playlists__title {
     margin: 0;
-    font-size: var(--text-lg);
-    text-transform: uppercase;
-    letter-spacing: 1pt;
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
   }
   .playlists__tabs {
     display: flex;

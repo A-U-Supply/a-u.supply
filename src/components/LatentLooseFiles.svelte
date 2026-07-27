@@ -242,48 +242,43 @@
 
 <section class="loose" bind:this={rootEl}>
   <header class="loose__head" class:latent-band={!!styleKey}>
-    <h2>
+    <!-- .sec-summary is the house collapsible-section head (admin.css) — the
+         same one Repo, Links, Documents and Threads use. Kept inside the h2 so
+         the page outline still has a heading here. Per that pattern the head's
+         controls stay put; only the body collapses. -->
+    <h2 class="loose__title">
       <button
-        class="sec-toggle"
+        class="sec-summary"
         type="button"
         aria-expanded={open}
         aria-controls="loose-body"
-        title={open ? 'Collapse loose files' : 'Expand loose files'}
         onclick={toggleOpen}
       >
-        <span class="sec-toggle__caret" aria-hidden="true"
+        <span class="sec-summary__caret" aria-hidden="true"
           >{open ? '▾' : '▸'}</span
         >
-        Loose files
-        <span class="sec-toggle__count">{items.length}</span>
+        <span class="sec-summary__label">Loose files</span>
+        <span class="sec-summary__meta"
+          >{items.length} file{items.length === 1 ? '' : 's'}</span
+        >
       </button>
     </h2>
-    <!-- Collapsed, the head line is just the disclosure: nothing to act on
-         until you can see what you'd be acting on. -->
-    {#if open}
-      <div class="loose__actions">
-        {#if viewableCount > 0}
-          <button
-            class="action-btn"
-            type="button"
-            title="Look through every image and video in the loose pile"
-            onclick={viewAll}>▷ View all ({viewableCount})</button
-          >
-        {/if}
+    <div class="loose__actions">
+      {#if viewableCount > 0}
         <button
           class="action-btn"
           type="button"
-          onclick={() => (pullOpen = true)}>+ Pull from index</button
+          title="Look through every image and video in the loose pile"
+          onclick={viewAll}>▷ View all ({viewableCount})</button
         >
-        {#if styleKey}
-          <LatentStyleButton
-            {projectId}
-            scope="section"
-            sectionKey={styleKey}
-          />
-        {/if}
-      </div>
-    {/if}
+      {/if}
+      <button class="action-btn" type="button" onclick={() => (pullOpen = true)}
+        >+ Pull from index</button
+      >
+      {#if styleKey}
+        <LatentStyleButton {projectId} scope="section" sectionKey={styleKey} />
+      {/if}
+    </div>
   </header>
 
   {#if open}
@@ -467,11 +462,13 @@
     flex-direction: column;
     gap: var(--space-sm);
   }
-  .loose__head h2 {
+  /* The heading is now a wrapper around .sec-summary, which brings its own
+     type. It just has to stop being a block and let the summary fill the row. */
+  .loose__title {
     margin: 0;
-    font-size: var(--text-lg);
-    text-transform: uppercase;
-    letter-spacing: 1pt;
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
   }
   .loose__actions {
     margin-left: auto;
