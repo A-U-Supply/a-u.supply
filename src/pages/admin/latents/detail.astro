@@ -130,18 +130,23 @@ import Admin from '../../../layouts/Admin.astro';
     border-left: 4px solid var(--sec-accent);
     padding: var(--space-sm);
   }
+  /* The face layers sit on NEGATIVE z-indexes, behind the section's in-flow
+     content, rather than at 0/1 with every sibling pushed to 2. See the note
+     where that rule used to be, below. `isolation: isolate` on .latent-section
+     is what keeps them from sinking behind the page itself — without a
+     stacking context, a negative z-index child escapes its parent. */
   .latent-section :global(.sec-bg) {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    z-index: 0;
+    z-index: -2;
   }
   .latent-section :global(.sec-veil) {
     position: absolute;
     inset: 0;
-    z-index: 1;
+    z-index: -1;
     pointer-events: none;
   }
   /* scrim — top-anchored (section headers sit at the top; the index cards
@@ -185,10 +190,24 @@ import Admin from '../../../layouts/Admin.astro';
   .latent-section--face-solid :global(.latent-band h3) {
     color: var(--sec-text, var(--sec-face-text, inherit));
   }
-  .latent-section > :global(:not(.sec-bg):not(.sec-veil)) {
-    position: relative;
-    z-index: 2;
-  }
+  /* There used to be a rule here:
+   *
+   *   .latent-section > :global(:not(.sec-bg):not(.sec-veil)) {
+   *     position: relative; z-index: 2;
+   *   }
+   *
+   * It lifted content above the face layers, and it was a booby trap. It
+   * matches every direct child at specificity (0,3,0); a Svelte component's
+   * scoped `.sheet`/`.panel`/`.modal` rule is (0,2,0), so any overlay an
+   * island rendered at its top level silently lost `position: fixed` and
+   * rendered in page flow at the bottom of its section — often below the
+   * fold, with nothing to scroll to. Nothing errored. It cost four separate
+   * fixes (#573, #574, #575, #581).
+   *
+   * Negative z-indexes on the face layers achieve the same stacking with no
+   * rule on the content at all, so DON'T REINTRODUCE THIS. If content ever
+   * appears behind a face again, the layers' z-index is the thing to look at.
+   */
   /* Title on its own line; entry/options underneath — both breakpoints. */
   :global(.latent-header .header-title-row) {
     display: flex;

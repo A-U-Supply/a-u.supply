@@ -2333,18 +2333,21 @@
     );
     border-left: 4px solid var(--slot-accent, var(--color-border));
   }
+  /* Negative z-indexes, behind the card's in-flow content — see the note
+     where the `.slot--styled > :not(...)` rule used to be. `isolation:
+     isolate` on .slot--styled is what stops them sinking behind the page. */
   .slot__bg {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    z-index: 0;
+    z-index: -2;
   }
   .slot__veil {
     position: absolute;
     inset: 0;
-    z-index: 1;
+    z-index: -1;
     pointer-events: none;
   }
   /* scrim — the index-card recipe with the gradient anchored to the TOP:
@@ -2397,10 +2400,17 @@
   .slot--face-solid .slot__head {
     color: var(--slot-text, var(--slot-face-text, inherit));
   }
-  .slot--styled > :not(.slot__bg):not(.slot__veil) {
-    position: relative;
-    z-index: 2;
-  }
+  /* The slot-card twin of the section rule removed in detail.astro:
+   *
+   *   .slot--styled > :not(.slot__bg):not(.slot__veil) {
+   *     position: relative; z-index: 2;
+   *   }
+   *
+   * Same trap, one level down — it would clobber `position: fixed` on
+   * anything rendered at the top level of a slot card. Nothing hit it yet
+   * only because the card's overlays are all portaled. Deleted rather than
+   * left as a landmine; the face layers' negative z-indexes do the job.
+   */
   .slot--ghost {
     opacity: 0.3;
   }
