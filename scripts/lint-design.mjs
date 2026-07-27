@@ -151,7 +151,15 @@ async function lintFile(filePath) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (!inStyleBlock(text, offsets[i])) continue;
-    if (line.trim().startsWith('//') || line.trim().startsWith('*')) continue;
+    const trimmed = line.trim();
+    // `/*` was missing here, so a block comment opening with a PR reference
+    // ("#584") read as a 3-digit hex colour.
+    if (
+      trimmed.startsWith('//') ||
+      trimmed.startsWith('*') ||
+      trimmed.startsWith('/*')
+    )
+      continue;
 
     const allowed = ALLOWLIST.some(
       ([f, frag]) => rel === f && line.includes(frag),
