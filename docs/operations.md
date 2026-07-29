@@ -63,6 +63,14 @@ ssh dokku run au-supply .venv/bin/python manage.py <subcommand> [args...]
 
 Run `ssh dokku run au-supply .venv/bin/python manage.py` (no subcommand) to print the live usage banner.
 
+**No dokku key on your machine?** Deploys reach production through the GitHub
+Actions runner's `DOKKU_SSH_KEY` secret, so a laptop never needs one — which
+also means `ssh dokku ...` there fails to resolve the alias outright. Run the
+backfills from the **Run a backfill** workflow instead
+(`.github/workflows/run-backfill.yml`), or `gh workflow run run-backfill.yml -f
+command=<name>`. The command is a fixed choice, not free text, because that
+workflow holds a production key.
+
 ## API admin tokens
 
 Programmatic admin access goes through API keys, not interactive SSH:

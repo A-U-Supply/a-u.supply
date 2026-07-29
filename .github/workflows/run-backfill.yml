@@ -1,0 +1,41 @@
+name: Run a backfill
+
+# Manual ops that need SSH, for anyone whose machine has no dokku key.
+# Deploys reach production through this runner's DOKKU_SSH_KEY secret, so a
+# laptop never needs one — but that also means `ssh dokku run ...` from a
+# laptop just fails to resolve, and the manage.py backfills were unreachable.
+#
+# The command is a fixed choice, not free text: this workflow holds a
+# production key, and "run whatever string the input says" would turn write
+# access to the repo into a shell on the box.
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'Which backfill to run'
+        required: true
+        type: choice
+        options:
+          - backfill-video-thumbnails
+          - backfill-thumbnails
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    # ffmpeg runs once per video; the image twin walks every image. Neither
+    # is quick on a full library, and a killed run leaves the work half done
+    # (it's re-runnable, but only if someone notices).
+    timeout-minutes: 120
+    steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DOKKU_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H 204.168.201.89 >> ~/.ssh/known_hosts
+
+      - name: Run ${{ github.event.inputs.command }}
+        run: |
+          ssh dokku@204.168.201.89 run au-supply \
+            .venv/bin/python manage.py '${{ github.event.inputs.command }}'
