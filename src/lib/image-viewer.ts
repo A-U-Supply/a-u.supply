@@ -73,8 +73,14 @@ export interface ViewerOptions {
   chrome?: 'persistent' | 'auto-hide';
 }
 
-/** How long the viewer sits still before auto-hiding chrome fades out. */
-const CHROME_IDLE_MS = 2000;
+/**
+ * How long the viewer sits still before auto-hiding chrome fades out.
+ *
+ * Exported because the player's fullscreen video chrome does the same thing,
+ * and two auto-hide delays that are nearly-but-not-quite equal read as a bug
+ * when you meet them one after the other in the same Latent.
+ */
+export const CHROME_IDLE_MS = 2000;
 
 // ---------------------------------------------------------------------------
 // Module-scoped singleton state
