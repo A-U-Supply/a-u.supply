@@ -55,6 +55,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Node, in the PYTHON job, on purpose: tests/test_design_lint.py shells
+      # out to lint-design.mjs, and its bits-var pass reads the INSTALLED
+      # bits-ui to learn which --bits-* properties exist. With no
+      # node_modules that pass silently skips itself, and
+      # `test_overlay_sizing_passes_actually_fire` — which exists precisely to
+      # prove the guard isn't a no-op — fails. It caught this on the first
+      # run, which is a good sign about the test and a bad sign about
+      # assuming an environment.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
