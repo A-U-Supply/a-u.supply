@@ -146,6 +146,32 @@ try {
    * colour, DELETE's colour, and the contrast of each against the ground the
    * face guarantees.
    */
+  /**
+   * Slot cards render CLOSED (the mobile streamline made that the default),
+   * and `.slot__controls-row` is empty until they're opened — so the action
+   * buttons this pass is about don't exist yet. Probing without this returns
+   * "no buttons found", which looks like a passing selector and is not.
+   */
+  const OPEN_CARD = `(() => {
+    const card = document.querySelector('.slot--faced') || document.querySelector('.slot');
+    if (!card) return { opened:false, why:'no slot card' };
+    const summary = card.querySelector('.slot__summary');
+    if (!summary) return { opened:false, why:'no summary toggle' };
+    if (summary.getAttribute('aria-expanded') === 'true') return { opened:true, already:true };
+    summary.click();
+    // Svelte updates the attribute on its own tick — reading it back in this
+    // same expression always returns the stale value, which reads as "the
+    // click didn't work" when it did.
+    return { clicked:true };
+  })()`;
+
+  /** Did the card actually end up open? Run this AFTER a tick. */
+  const IS_OPEN = `(() => {
+    const card = document.querySelector('.slot--faced') || document.querySelector('.slot');
+    const s = card?.querySelector('.slot__summary');
+    return s?.getAttribute('aria-expanded') === 'true';
+  })()`;
+
   const PROBE = `(() => {
     const srgb = (c) => { c/=255; return c<=0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055,2.4); };
     const lum = ([r,g,b]) => 0.2126*srgb(r)+0.7152*srgb(g)+0.0722*srgb(b);
@@ -175,7 +201,21 @@ try {
       plainColor: plain ? cs(plain).color : null,
       plainBorder: plain ? cs(plain).borderTopColor : null,
       dangerColor: danger ? cs(danger).color : null,
-      themeText,
+      // Normalised: getComputedStyle returns rgb(), a custom property returns
+      // whatever was authored (#1a1a1a). Comparing those raw reports two
+      // identical colours as a mismatch.
+      themeText: (() => { const [r,g,b] = parse(themeText); return \`rgb(\${r}, \${g}, \${b})\`; })(),
+      themeTextRaw: themeText,
+      // The token DELETE is supposed to use on a guaranteed-dark face,
+      // resolved and normalised so it can be compared exactly. Asserting
+      // merely "not the theme colour" is too weak — it passes when the rule
+      // loses a specificity fight and DELETE inherits plain white.
+      dangerToken: (() => {
+        const raw = getComputedStyle(document.documentElement)
+          .getPropertyValue('--color-danger-on-overlay').trim();
+        if (!raw) return null;
+        const [r,g,b] = parse(raw); return \`rgb(\${r}, \${g}, \${b})\`;
+      })(),
       contrast: {
         plain: plain ? ratio(cs(plain).color, GROUND) : null,
         danger: danger ? ratio(cs(danger).color, GROUND) : null,
@@ -183,17 +223,22 @@ try {
     };
   })()`;
 
+  // `fixedRed`: scrim and treat clamp to a guaranteed dark ground, so DELETE
+  // can use --color-danger-on-overlay there. A solid face is an arbitrary
+  // user colour, so DELETE must ride the contrast-computed text like the
+  // plain buttons — a fixed red hits 2.24:1 on a plum, which is how this
+  // distinction was found.
   const TREATMENTS = [
-    ['image · scrim', { bg_mode: 'image', bg_style: 'scrim' }, OVERLAY_GROUND],
-    ['image · treat', { bg_mode: 'image', bg_style: 'treat' }, OVERLAY_GROUND],
-    ['solid', { bg_mode: 'solid', bg_color: '#aa3355' }, '#aa3355'],
+    ['image · scrim', { bg_mode: 'image', bg_style: 'scrim' }, OVERLAY_GROUND, true],
+    ['image · treat', { bg_mode: 'image', bg_style: 'treat' }, OVERLAY_GROUND, true],
+    ['solid', { bg_mode: 'solid', bg_color: '#aa3355' }, '#aa3355', false],
     // The negative control. plate's head sits on an opaque --color-bg plate,
     // so theme colours are CORRECT there — if the fix leaked into plate, the
     // buttons would be washed-out light text on a light plate.
     ['image · plate', { bg_mode: 'image', bg_style: 'plate' }, null],
   ];
 
-  for (const [label, style, ground] of TREATMENTS) {
+  for (const [label, style, ground, fixedRed] of TREATMENTS) {
     const full =
       style.bg_mode === 'image'
         ? { ...style, bg_media_item_id: imgId }
@@ -203,10 +248,25 @@ try {
        body:JSON.stringify({style:${JSON.stringify(full)}})}); return true})()`);
     await goto(`${BASE}/admin/latents/detail?id=${PROJ}`);
     await sleep(2400);
+    const attempt = await ev(OPEN_CARD);
+    await sleep(500);
+    check(
+      `${label}: slot card opened`,
+      await ev(IS_OPEN),
+      attempt?.why || '',
+    );
 
     const r = await ev(PROBE.replace(/GROUND/g, JSON.stringify(ground || '#000')));
     if (!r?.found) {
       check(`${label}: faced slot rendered`, false, 'no .slot--faced on page');
+      continue;
+    }
+    if (!r.plainColor) {
+      check(
+        `${label}: head has action buttons to check`,
+        false,
+        'no .action-btn inside .slot__head — card probably still closed',
+      );
       continue;
     }
 
@@ -214,9 +274,8 @@ try {
       // plate: buttons must still be theme-coloured.
       check(
         `${label}: buttons keep the THEME colour (plate is excluded)`,
-        r.plainColor === r.themeText ||
-          r.plainColor.replace(/\s/g, '') === r.themeText.replace(/\s/g, ''),
-        `button=${r.plainColor} theme=${r.themeText}`,
+        r.plainColor === r.themeText,
+        `button=${r.plainColor} theme=${r.themeText} (raw ${r.themeTextRaw})`,
       );
       continue;
     }
@@ -232,9 +291,14 @@ try {
       `contrast ${r.contrast.plain?.toFixed(2)} vs ${ground}`,
     );
     check(
-      `${label}: DELETE is NOT the theme colour and clears AA`,
-      r.dangerColor !== r.themeText && r.contrast.danger >= AA,
-      `delete=${r.dangerColor} contrast ${r.contrast.danger?.toFixed(2)}`,
+      fixedRed
+        ? `${label}: DELETE uses the face red and clears AA`
+        : `${label}: DELETE rides the computed text (no fixed red on solid)`,
+      fixedRed
+        ? r.dangerColor === r.dangerToken && r.contrast.danger >= AA
+        : r.dangerColor === r.headColor && r.contrast.danger >= AA,
+      `delete=${r.dangerColor} expected=${fixedRed ? r.dangerToken : r.headColor} ` +
+        `contrast ${r.contrast.danger?.toFixed(2)}`,
     );
   }
 
@@ -247,6 +311,8 @@ try {
      body:JSON.stringify({style:{bg_mode:'image',bg_style:'scrim',bg_media_item_id:'${imgId}'}})}); return true})()`);
   await goto(`${BASE}/admin/latents/detail?id=${PROJ}`);
   await sleep(2400);
+  await ev(OPEN_CARD);
+  await sleep(400);
   const regressed = await ev(`(()=>{
     const st=document.createElement('style');
     st.id='regress-probe';
@@ -278,5 +344,9 @@ try {
     ws.close();
   } catch {}
   chrome.kill();
-  rmSync(dir, { recursive: true, force: true });
+  // Chrome may still be flushing its profile; a failed temp cleanup must not
+  // turn a green pass into a crash.
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch {}
 }

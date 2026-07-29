@@ -2438,9 +2438,26 @@
     background: color-mix(in srgb, currentColor 20%, transparent);
     color: inherit;
   }
-  /* DELETE sets its own #c00 and so ignores the inherit above. It needs the
-   * face-ground red, or it's the least readable button on the card. */
-  .slot--faced:not(.slot--face-plate) .slot__head .action-btn--danger {
+  /* DELETE sets its own #c00 and so ignores the inherit above.
+   *
+   * Scrim and treat only. Both clamp to a guaranteed dark ground, so a fixed
+   * red is safe against them. A SOLID face is whatever colour the user picked
+   * — the contrast test caught #f0746a landing at 2.24:1 on a plum #aa3355 —
+   * so there is no fixed red that's safe there, for exactly the reason the
+   * plain buttons can't use a fixed token either. Solid keeps the inherit
+   * above instead, riding `--slot-face-text`, which is contrast-computed
+   * client-side against the chosen colour.
+   *
+   * The cost is that DELETE stops being red on solid faces. That's the honest
+   * trade: legible-and-not-red beats red-and-unreadable, and the confirm
+   * dialog is still the actual safety net. */
+  /* `.slot--faced` is carried purely for specificity: the rule above scores
+   * (0,4,0), because `:not()` contributes its argument's weight, so a plain
+   * three-class selector here LOSES to it and DELETE silently renders as the
+   * inherited white. Matching the count and relying on source order is what
+   * makes the red actually apply. */
+  .slot--faced.slot--face-scrim .slot__head .action-btn--danger,
+  .slot--faced.slot--face-treat .slot__head .action-btn--danger {
     color: var(--color-danger-on-overlay);
     border-color: color-mix(
       in srgb,
@@ -2448,7 +2465,8 @@
       transparent
     );
   }
-  .slot--faced:not(.slot--face-plate) .slot__head .action-btn--danger:hover {
+  .slot--faced.slot--face-scrim .slot__head .action-btn--danger:hover,
+  .slot--faced.slot--face-treat .slot__head .action-btn--danger:hover {
     background: color-mix(
       in srgb,
       var(--color-danger-on-overlay) 25%,
