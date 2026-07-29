@@ -8,6 +8,7 @@
  */
 
 import { addItemsToWorkspace } from './workspace';
+import { thumbUrl, thumbUrlFrom } from './mediaThumb';
 import {
   closeImageViewer,
   openImageViewer,
@@ -70,8 +71,8 @@ export function mediaItemToViewerItem(row: {
     id: row.id,
     kind: 'media_item',
     media_kind: kind,
-    large_url: `/api/media/${row.id}/thumbnail?size=lg`,
-    thumbnail_url: `/api/media/${row.id}/thumbnail?size=sm`,
+    large_url: thumbUrl(row.id, 'lg'),
+    thumbnail_url: thumbUrl(row.id, 'sm'),
     download_url: `/api/media/${row.id}/file`,
     stream_url: `/api/media/${row.id}/file`,
     filename: row.filename,
@@ -142,8 +143,8 @@ export function jobOutputToViewerItem(row: {
     id: row.id,
     kind: 'job_output',
     media_kind: kind,
-    large_url: `${base}/thumbnail?size=lg`,
-    thumbnail_url: `${base}/thumbnail?size=sm`,
+    large_url: thumbUrlFrom(base, 'lg'),
+    thumbnail_url: thumbUrlFrom(base, 'sm'),
     download_url: downloadUrl,
     stream_url: downloadUrl,
     job_id: row.job_id,

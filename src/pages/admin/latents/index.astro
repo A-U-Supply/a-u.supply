@@ -278,6 +278,8 @@ import Admin from '../../../layouts/Admin.astro';
 </style>
 
 <script>
+  import { thumbUrl } from '../../../lib/mediaThumb.ts';
+
   let initialized = false;
   let activeStatus = '';
   let activeKind = '';
@@ -383,8 +385,8 @@ import Admin from '../../../layouts/Admin.astro';
         const accent = /^#[0-9a-f]{6}$/i.test(p.hero_accent || '')
           ? p.hero_accent
           : '';
-        const thumb = (size: string) =>
-          `/api/media/${encodeURIComponent(p.hero_media_item_id)}/thumbnail?size=${size}`;
+        const thumb = (size: 'sm' | 'md') =>
+          thumbUrl(p.hero_media_item_id, size);
         return `<a class="card card--hero card--${heroStyle}" href="${href}"${
           accent ? ` style="--latent-accent:${accent}"` : ''
         }>

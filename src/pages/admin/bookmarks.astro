@@ -303,6 +303,7 @@ import BrutalSelect from '../../components/BrutalSelect.astro';
   import { addItemsToWorkspace } from '../../lib/workspace';
   import { openImageViewer, type ViewerItem } from '../../lib/image-viewer';
   import { renderPagination, wirePagination } from '../../lib/pagination';
+  import { thumbUrl } from '../../lib/mediaThumb';
 
   document.addEventListener('astro:page-load', async () => {
     const gridEl = document.getElementById('bookmarks-grid');
@@ -692,8 +693,8 @@ import BrutalSelect from '../../components/BrutalSelect.astro';
           id,
           kind: 'media_item' as const,
           media_kind: kind as 'image' | 'video',
-          large_url: `/api/media/${id}/thumbnail?size=lg`,
-          thumbnail_url: `/api/media/${id}/thumbnail?size=sm`,
+          large_url: thumbUrl(id, 'lg'),
+          thumbnail_url: thumbUrl(id, 'sm'),
           download_url: `/api/media/${id}/file`,
           stream_url: `/api/media/${id}/file`,
           filename: m?.name,

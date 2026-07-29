@@ -305,6 +305,7 @@ import BrutalSelect from '../../../components/BrutalSelect.astro';
 
 <script>
   import { renderPagination, wirePagination } from '../../../lib/pagination';
+  import { thumbUrl } from '../../../lib/mediaThumb';
 
   document.addEventListener('astro:page-load', async () => {
     await (window as any).__authReady;
@@ -519,8 +520,8 @@ import BrutalSelect from '../../../components/BrutalSelect.astro';
       if (j.preview_media_id) {
         const title = (j.preview_media_type || 'media').replace(/["<>&]/g, '');
         // Jobs list thumbs render small (~48px) — prefer the sm variant.
-        const sm = `/api/media/${j.preview_media_id}/thumbnail?size=sm`;
-        const md = `/api/media/${j.preview_media_id}/thumbnail`;
+        const sm = thumbUrl(j.preview_media_id, 'sm');
+        const md = thumbUrl(j.preview_media_id, 'md');
         return `<img class="job-thumb" src="${sm}" srcset="${sm} 1x, ${md} 2x" alt="" loading="lazy" decoding="async" title="${title}">`;
       }
       return `<div class="job-thumb job-thumb--placeholder">—</div>`;

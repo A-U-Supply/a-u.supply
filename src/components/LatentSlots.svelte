@@ -20,6 +20,7 @@
     type AnnotationCounts,
   } from './marginalia.ts';
   import { fileExt } from '../lib/fileExt.ts';
+  import { hasThumb, thumbAttrs, thumbUrl } from '../lib/mediaThumb.ts';
   import { DRAG_OPTS } from '../lib/dragOptions.ts';
   import { isPhone } from '../lib/viewport.svelte.ts';
   import { queueMedia } from '../lib/playerQueue.ts';
@@ -1189,10 +1190,6 @@
     }
   }
 
-  function thumbUrl(mediaId: string): string {
-    return `/api/media/${encodeURIComponent(mediaId)}/thumbnail?size=sm`;
-  }
-
   function fmtBytes(n: number | null | undefined): string {
     if (n == null) return '';
     if (n < 1024) return `${n} B`;
@@ -1282,8 +1279,11 @@
     return !!(slotVars(slot) || slotFace(slot));
   }
 
+  // Card face, not a tile — a single md render behind the whole slot. Kept at
+  // md (matching detail.astro's background loader) rather than moved onto the
+  // srcset path, which is for boxes whose size varies with the viewport.
   function bgThumbUrl(mediaId: string): string {
-    return `/api/media/${encodeURIComponent(mediaId)}/thumbnail?size=md`;
+    return thumbUrl(mediaId, 'md');
   }
 
   function removeBgLayers(e: Event) {
@@ -1795,9 +1795,13 @@
                                 )
                             : undefined}
                         >
-                          {#if it.media?.media_type === 'image'}
+                          {#if hasThumb(it.media?.media_type)}
                             <img
-                              src={thumbUrl(it.media_item_id)}
+                              {...thumbAttrs(
+                                it.media_item_id,
+                                it.media?.media_type,
+                                '32px',
+                              )}
                               alt={it.media?.filename}
                             />
                           {:else}
@@ -2134,9 +2138,13 @@
                             aria-label={`View ${sl.filename || 'this slide'} full screen`}
                             onclick={() => viewSlideshow(slot.id, i)}
                           >
-                            {#if sl.media_type === 'image'}
+                            {#if hasThumb(sl.media_type)}
                               <img
-                                src={thumbUrl(sl.media_item_id)}
+                                {...thumbAttrs(
+                                  sl.media_item_id,
+                                  sl.media_type,
+                                  '40px',
+                                )}
                                 alt={sl.filename || ''}
                               />
                             {:else}

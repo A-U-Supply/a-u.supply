@@ -14,6 +14,7 @@
   import Sortable from 'sortablejs';
   import LatentStyleButton from './LatentStyleButton.svelte';
   import { openLatentViewer } from '../lib/latentViewer.ts';
+  import { hasThumb, thumbAttrs } from '../lib/mediaThumb.ts';
   import { portal } from '../lib/portal.ts';
   import RowMove from './RowMove.svelte';
   import { DRAG_OPTS } from '../lib/dragOptions.ts';
@@ -350,10 +351,6 @@
     return w && h ? `${w}\u00d7${h}` : '';
   }
 
-  function thumbUrl(id: string): string {
-    return `/api/media/${encodeURIComponent(id)}/thumbnail?size=sm`;
-  }
-
   function sortableTracks(node: HTMLElement) {
     const s = Sortable.create(node, {
       ...DRAG_OPTS,
@@ -550,9 +547,9 @@
                     aria-label={`View ${sl.filename || 'this slide'} full screen`}
                     onclick={() => view(i)}
                   >
-                    {#if sl.media_type === 'image'}
+                    {#if hasThumb(sl.media_type)}
                       <img
-                        src={thumbUrl(sl.media_item_id)}
+                        {...thumbAttrs(sl.media_item_id, sl.media_type, '40px')}
                         alt={sl.filename || ''}
                       />
                     {:else}
@@ -638,8 +635,11 @@
                   onchange={() => togglePick(c.media_item_id)}
                 />
                 <span class="pick-row__thumb">
-                  {#if c.media_type === 'image'}
-                    <img src={thumbUrl(c.media_item_id)} alt="" />
+                  {#if hasThumb(c.media_type)}
+                    <img
+                      {...thumbAttrs(c.media_item_id, c.media_type, '32px')}
+                      alt=""
+                    />
                   {:else}
                     <span class="slide-thumb__chip">V</span>
                   {/if}
