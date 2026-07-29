@@ -1,0 +1,89 @@
+name: CI
+
+# Until now nothing ran the checks. `deploy.yml` pushes to Dokku and that's
+# it, so `lint-design.mjs` and the pytest suite only ever ran when somebody
+# remembered to run them locally — which meant the guards written to stop
+# bugs recurring (#588's z-index scale, #590's thumbnail rule, #593's faced
+# contrast test) could only catch a mistake that someone was already looking
+# for.
+#
+# Runs on PRs and on master. Deploy is deliberately NOT gated on this yet:
+# turning a green-by-assumption repo into a required check in the same change
+# that first measures it is how you end up unable to ship a hotfix. Make it
+# required once it's been honest for a week.
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+# A new push to a PR makes the in-flight run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (format, design lint, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `npm ci` not `install`: the design lint reads the INSTALLED bits-ui to
+      # decide which --bits-* custom properties are real, so a drifting
+      # lockfile would quietly change what the lint considers valid.
+      - run: npm ci
+
+      - name: Formatting
+        run: npm run format:check
+
+      - name: Design lint
+        run: npm run lint:design
+
+      - name: Build
+        run: npm run build
+
+  python:
+    name: Python (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node, in the PYTHON job, on purpose: tests/test_design_lint.py shells
+      # out to lint-design.mjs, and its bits-var pass reads the INSTALLED
+      # bits-ui to learn which --bits-* properties exist. With no
+      # node_modules that pass silently skips itself, and
+      # `test_overlay_sizing_passes_actually_fire` — which exists precisely to
+      # prove the guard isn't a no-op — fails. It caught this on the first
+      # run, which is a good sign about the test and a bad sign about
+      # assuming an environment.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # The full dependency set includes torch/easyocr/faster-whisper. They're
+      # heavy, but they're also what the extraction tests import, so a
+      # test-only subset would skip precisely the code most likely to break.
+      # uv's cache makes the repeat cost bearable.
+      - name: Install dependencies
+        run: uv sync --extra test
+
+      # The browser test (tests/test_faced_head_contrast.py) skips here by
+      # design — it needs Chrome plus a running Astro and uvicorn. Adding that
+      # to CI is a separate job worth doing; a skip is honest, a fake pass
+      # would not be.
+      - name: Tests
+        run: uv run pytest -q

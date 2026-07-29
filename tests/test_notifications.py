@@ -6,6 +6,7 @@ level only — they short-circuit when FOLD_DATABASE_URL is unset, which
 is the test environment's default.
 """
 
+import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -188,6 +189,18 @@ def test_resolved_failures_are_not_surfaced(db_session, test_user):
 
 
 def test_midden_picks_up_discarded_outputs(db_session, test_user):
+    # Unmute BEFORE the first materialize, not after.
+    #
+    # `_seed_default_muted` started muting "midden" for new users after this
+    # test was written, and it has been failing ever since — but not for the
+    # obvious reason. A muted source's materializer never runs, so it never
+    # seeds a watermark either. Unmuting afterwards means midden's watermark
+    # is first created on the SECOND call, i.e. after the discard below, and
+    # `discarded_at >= watermark` is then false: first-poll seeding says "as
+    # of now you've seen everything". Setting it here means the watermark is
+    # seeded on the first call and the discard genuinely lands after it.
+    test_user.muted_sources = json.dumps([])
+    db_session.flush()
     notif.materialize_for_user(test_user, db_session)
 
     job = _make_job(db_session, created_by=test_user.id)
