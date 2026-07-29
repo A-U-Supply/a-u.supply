@@ -125,3 +125,35 @@ def test_overlay_sizing_passes_actually_fire() -> None:
         (1, "dvh", "max-height: 85vh"),
         (3, "bits-var", "--bits-select-anchor-width"),
     ], f"expected exactly the line 1 + 3 violations, got {hits}"
+
+
+@requires_node
+def test_thumb_url_pass_actually_fires() -> None:
+    """Prove the thumbnail-URL guard can fail.
+
+    This one guards a bug that looked like working code for months: eleven
+    hand-built ``/thumbnail?size=`` URLs that all pinned ``sm`` (the 128px
+    mobile variant, in 160px desktop tiles) and all hid video behind an
+    ``=== 'image'`` check, while the backend had a poster frame ready. A
+    no-op guard would let the twelfth copy in, so pin both the catch and
+    the call it must leave alone.
+    """
+    probe = REPO_ROOT / "src" / "lib" / "__thumb_probe.ts"
+    probe.write_text(
+        "export const bad = `/api/media/${id}/thumbnail?size=sm`;\n"
+        "// prose mentioning /thumbnail?size=sm is not a violation\n"
+        "export const good = thumbUrl(id, 'md');\n"
+    )
+    try:
+        findings = _run_lint()
+    finally:
+        probe.unlink()
+
+    hits = [
+        (f["line"], f["kind"])
+        for f in findings
+        if f["file"].endswith("__thumb_probe.ts")
+    ]
+    assert hits == [(1, "thumb-url")], (
+        f"expected exactly the line-1 violation, got {hits}"
+    )

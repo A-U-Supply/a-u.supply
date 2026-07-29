@@ -59,6 +59,7 @@ ssh dokku run au-supply .venv/bin/python manage.py <subcommand> [args...]
 | `backfill-ai-descriptions` | `[--all] [--restart]` | Generate AI vision descriptions, tags, and structured attributes via the vision model. Requires `VISION_API_KEY`. Checkpointed. See [`ai-image-descriptions.md`](ai-image-descriptions.md). |
 | `test-ai-description` | `<media_id> [--write]` | Spot-check the vision pipeline on a single item. |
 | `backfill-thumbnails` | — | Generate sm / md / lg thumbnails for image media items missing any of them. |
+| `backfill-video-thumbnails` | — | Grab a poster frame for any video missing one. The image command above skips videos entirely, so anything whose extraction never ran has stayed frameless and renders as a placeholder. Runs ffprobe first when there's no `MediaVideoMeta` row yet. |
 
 Run `ssh dokku run au-supply .venv/bin/python manage.py` (no subcommand) to print the live usage banner.
 

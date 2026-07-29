@@ -17,6 +17,7 @@
   import Uploader from './Uploader.svelte';
   import { filtersToSearchBody } from '../lib/filterTranslator.ts';
   import { portal } from '../lib/portal.ts';
+  import { hasThumb, thumbAttrs } from '../lib/mediaThumb.ts';
 
   type Props = {
     open: boolean;
@@ -240,10 +241,6 @@
     if (e.key === 'Escape') close();
   }
 
-  function thumbUrl(id: string): string {
-    return `/api/media/${encodeURIComponent(id)}/thumbnail?size=sm`;
-  }
-
   // Re-search when the modal opens (first time) or when filters change
   // (after open). Skip when closed so we don't fire stale requests.
   let lastFilterSig = $state('');
@@ -420,7 +417,12 @@
                   aria-pressed={selected.has(a.media_item_id)}
                   onclick={() => toggleSel(a.media_item_id)}
                 >
-                  <img src={thumbUrl(a.media_item_id)} alt={a.filename || ''} />
+                  <!-- Strip is image-only by construction (hero must be an
+                       image), so this never needs the video branch. -->
+                  <img
+                    {...thumbAttrs(a.media_item_id, 'image', '56px')}
+                    alt={a.filename || ''}
+                  />
                 </button>
               {/each}
             </div>
@@ -451,8 +453,16 @@
                     aria-pressed={selected.has(h.id)}
                   >
                     <div class="tile__thumb">
-                      {#if h.media_type === 'image'}
-                        <img src={thumbUrl(h.id)} alt={h.filename || ''} />
+                      {#if hasThumb(h.media_type)}
+                        <!-- Grid is minmax(140px, 1fr), 110px under 600px. -->
+                        <img
+                          {...thumbAttrs(
+                            h.id,
+                            h.media_type,
+                            '(max-width: 600px) 110px, 140px',
+                          )}
+                          alt={h.filename || ''}
+                        />
                       {:else}
                         <span class="icon">{h.media_type || 'file'}</span>
                       {/if}

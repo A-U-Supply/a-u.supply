@@ -13,6 +13,7 @@
  *   - Raw `z-index: N` (N >= 100) outside the one layering scale (see below)
  *   - `max-height` in `vh` instead of `dvh` (see below)
  *   - `--bits-*` custom properties the installed bits-ui doesn't emit
+ *   - Hand-built `/thumbnail?size=` URLs outside src/lib/mediaThumb.ts
  *
  * What it ignores:
  *   - The Atelier — Punctum, Photism, Bullethole, Spectralize live on
@@ -94,6 +95,30 @@
  *      tree-shaken `--z-player`: a var that reads as empty looks like code
  *      that works. So the set of legal names is read from the INSTALLED
  *      bits-ui, which also makes a rename-on-upgrade fail loudly.
+ *
+ * The thumbnail rule, and why it exists:
+ *
+ *   `/api/media/{id}/thumbnail?size=` was written by hand in eleven places
+ *   across the Latents tree, and every one of them got the same two things
+ *   wrong, because they were copies of each other:
+ *
+ *   1. All asked for `size=sm`. That is the 128px variant, which
+ *      `server/extraction.py` documents as "mobile grids / narrow strips" —
+ *      the 400px `md` is the one it documents for "desktop grid tiles". The
+ *      loose-files grid is `minmax(160px, 1fr)`, so on a 2x display it was
+ *      upscaling 128px into a 320px box and every tile looked soft. An
+ *      admin reported it as "image quality" on 2026-07-29.
+ *   2. All gated the `<img>` on `media_type === 'image'`, so video fell
+ *      through to an extension chip — even though the backend has grabbed a
+ *      poster frame at ~10% duration since extraction shipped, and
+ *      `_resolve_thumbnail_path()` returns it ahead of every other
+ *      candidate. The picture was there; nothing asked for it.
+ *
+ *   Neither is visible at the call site: `size=sm` looks like a decision
+ *   and `=== 'image'` looks like a type guard. So the URL is built in one
+ *   place now — src/lib/mediaThumb.ts — which owns the srcset and the
+ *   image-vs-video branch, and this rule keeps the twelfth copy from
+ *   being written.
  *
  * Exit status: 0 clean, 1 findings, 2 internal error.
  */
@@ -195,6 +220,20 @@ const MAXH_VH_ALLOWLIST = {};
 // min-width did nothing from the day it was written. Same shape as the
 // tree-shaken --z-player: a var that reads as empty looks like working code.
 const BITS_VAR_RE = /--bits-[a-z0-9-]+/g;
+
+// A hand-built thumbnail URL. Matches the query string rather than the whole
+// path so a `size=` appended somewhere unusual still trips it.
+const THUMB_URL_RE = /\/thumbnail\?size=/;
+// The one module allowed to build it — everything else imports from here.
+const THUMB_OWNER = 'src/lib/mediaThumb.ts';
+/**
+ * Files that must hand-roll the URL, with the reason. Keep this short: an
+ * entry here is a place the next copy-paste can start from.
+ */
+const THUMB_ALLOWLIST = {
+  'src/pages/admin/hecatomb.astro':
+    "its inline <script> can't import — see the filterTranslator note in the file, which is inlined for the same reason",
+};
 
 const HEX_RE = /#([0-9a-fA-F]{3,8})\b/;
 const RGB_RE = /\b(?:rgba?|hsla?)\(/;
@@ -424,6 +463,30 @@ async function knownBitsVars() {
   return known;
 }
 
+/**
+ * The thumbnail-URL pass. Whole file, not just style blocks — these live in
+ * markup and in `<script>`. See the header comment for the rule.
+ */
+async function lintThumbUrl(filePath) {
+  const rel = relative(ROOT, filePath);
+  if (rel === THUMB_OWNER || THUMB_ALLOWLIST[rel]) return [];
+  const raw = await readFile(filePath, 'utf8');
+  const text = stripComments(raw);
+  const lines = text.split('\n');
+  const findings = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!THUMB_URL_RE.test(lines[i])) continue;
+    findings.push({
+      file: rel,
+      line: i + 1,
+      kind: 'thumb-url',
+      match: '/thumbnail?size=',
+      source: raw.split('\n')[i].trim(),
+    });
+  }
+  return findings;
+}
+
 async function lintBitsVars(filePath, known) {
   const rel = relative(ROOT, filePath);
   const raw = await readFile(filePath, 'utf8');
@@ -464,6 +527,7 @@ async function main() {
     const findings = await lintFile(f);
     allFindings.push(...findings);
     allFindings.push(...(await lintZScale(f, { styleBlocksOnly: true })));
+    allFindings.push(...(await lintThumbUrl(f)));
   }
 
   // Overlay discipline runs over the components tree, which the colour pass
@@ -476,6 +540,15 @@ async function main() {
     allFindings.push(
       ...(await lintViewportUnits(f, { styleBlocksOnly: true })),
     );
+    allFindings.push(...(await lintThumbUrl(f)));
+  }
+
+  // ...and over src/lib, where the viewer's URL plumbing lives. Without this
+  // the thumbnail rule would have an obvious hole to move a copy into.
+  const libFiles = [];
+  await walk(join(ROOT, 'src/lib'), ['.ts'], libFiles);
+  for (const f of libFiles) {
+    allFindings.push(...(await lintThumbUrl(f)));
   }
 
   // ...and over the global stylesheets, which are where two of the three
@@ -529,6 +602,15 @@ async function main() {
             `desktop dvh === vh, so the swap only ever changes the broken case.`,
         );
       }
+      if (allFindings.some((f) => f.kind === 'thumb-url')) {
+        console.error(
+          `\nBuild thumbnail URLs with src/lib/mediaThumb.ts — thumbAttrs() ` +
+            `for an <img> (it owns the srcset AND the image-vs-video branch), ` +
+            `or thumbUrl(id, size) for a bare URL. Hand-written copies all ` +
+            `pinned size=sm and hid video behind an === 'image' check. See ` +
+            `the header comment for why.`,
+        );
+      }
       if (allFindings.some((f) => f.kind === 'bits-var')) {
         console.error(
           `\nThat --bits-* custom property is not one the installed bits-ui ` +
@@ -539,7 +621,10 @@ async function main() {
       }
       if (
         allFindings.some(
-          (f) => !['overlay', 'zscale', 'dvh', 'bits-var'].includes(f.kind),
+          (f) =>
+            !['overlay', 'zscale', 'dvh', 'bits-var', 'thumb-url'].includes(
+              f.kind,
+            ),
         )
       ) {
         console.error(

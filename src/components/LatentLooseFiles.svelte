@@ -13,6 +13,7 @@
     type AnnotationCounts,
   } from './marginalia.ts';
   import { fileExt } from '../lib/fileExt.ts';
+  import { hasThumb, thumbAttrs } from '../lib/mediaThumb.ts';
   import RowActions from './RowActions.svelte';
   import { isPhone } from '../lib/viewport.svelte.ts';
   import { openLatentViewer, isViewable } from '../lib/latentViewer.ts';
@@ -143,10 +144,6 @@
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  }
-
-  function thumbUrl(mediaId: string): string {
-    return `/api/media/${encodeURIComponent(mediaId)}/thumbnail?size=sm`;
   }
 
   function fileUrl(mediaId: string): string {
@@ -322,9 +319,14 @@
                   ? () => openLatentViewer(items, it.media_item_id)
                   : undefined}
               >
-                {#if it.media?.media_type === 'image'}
+                {#if hasThumb(it.media?.media_type)}
+                  <!-- Grid is minmax(160px, 1fr), 120px under 600px. -->
                   <img
-                    src={thumbUrl(it.media_item_id)}
+                    {...thumbAttrs(
+                      it.media_item_id,
+                      it.media?.media_type,
+                      '(max-width: 600px) 120px, 160px',
+                    )}
                     alt={it.media?.filename}
                   />
                 {:else}

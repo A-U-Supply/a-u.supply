@@ -421,6 +421,7 @@ import Admin from '../../../layouts/Admin.astro';
     currentTheme,
     watchTheme,
   } from '../../../lib/latentStyles.ts';
+  import { thumbUrl } from '../../../lib/mediaThumb.ts';
   import LatentHero from '../../../components/LatentHero.svelte';
   import LatentSectionMap from '../../../components/LatentSectionMap.svelte';
   import LatentSlots from '../../../components/LatentSlots.svelte';
@@ -852,7 +853,7 @@ import Admin from '../../../layouts/Admin.astro';
           img.className = 'sec-bg';
           img.alt = '';
           img.loading = 'lazy';
-          img.src = `/api/media/${encodeURIComponent(st.bg_media_item_id)}/thumbnail?size=md`;
+          img.src = thumbUrl(st.bg_media_item_id, 'md');
           img.onerror = () => {
             veil.remove();
             img.remove();
@@ -888,7 +889,7 @@ import Admin from '../../../layouts/Admin.astro';
       img.className = 'header-backdrop';
       img.alt = '';
       img.loading = 'lazy';
-      img.src = `/api/media/${encodeURIComponent(mediaId)}/thumbnail?size=md`;
+      img.src = thumbUrl(mediaId, 'md');
       img.onerror = () => {
         veil.remove();
         img.remove();

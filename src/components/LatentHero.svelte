@@ -10,6 +10,7 @@
 -->
 <script lang="ts">
   import PullFromIndex from './PullFromIndex.svelte';
+  import { thumbAttrs } from '../lib/mediaThumb.ts';
 
   type Props = {
     projectId: string;
@@ -98,10 +99,6 @@
     if (accentTimer) clearTimeout(accentTimer);
     accentTimer = setTimeout(() => patch({ hero_accent_override: v }), 500);
   }
-
-  function thumbUrl(id: string): string {
-    return `/api/media/${encodeURIComponent(id)}/thumbnail?size=sm`;
-  }
 </script>
 
 <div class="hero-row">
@@ -112,7 +109,7 @@
       href={`/admin/search/detail?id=${encodeURIComponent(hero)}`}
       title="Open in search"
     >
-      <img src={thumbUrl(hero)} alt="Card image" />
+      <img {...thumbAttrs(hero, 'image', '64px')} alt="Card image" />
     </a>
   {:else}
     <span class="thumb thumb--empty">no card image</span>

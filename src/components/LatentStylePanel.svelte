@@ -16,6 +16,7 @@
   import PullFromIndex from './PullFromIndex.svelte';
   import ColorPicker from './ColorPicker.svelte';
   import { anchoredStyle } from '../lib/anchoredPanel.ts';
+  import { thumbAttrs } from '../lib/mediaThumb.ts';
   import {
     SECTION_LABELS,
     FACE_TREATMENTS,
@@ -256,10 +257,6 @@
   function pickBgImage(id: string) {
     patchStyle({ bg_mode: 'image', bg_media_item_id: id });
   }
-
-  function thumbUrl(id: string): string {
-    return `/api/media/${encodeURIComponent(id)}/thumbnail?size=sm`;
-  }
 </script>
 
 <!--
@@ -310,7 +307,7 @@
         {#if current.bg_media_item_id}
           <img
             class="bg-thumb"
-            src={thumbUrl(current.bg_media_item_id)}
+            {...thumbAttrs(current.bg_media_item_id, 'image', '28px')}
             alt="Face"
           />
         {/if}

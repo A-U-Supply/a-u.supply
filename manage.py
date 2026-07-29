@@ -17,6 +17,7 @@ Usage (from host):
     ssh dokku run au-supply .venv/bin/python manage.py backfill-ai-descriptions [--all] [--restart]
     ssh dokku run au-supply .venv/bin/python manage.py test-ai-description <media_id> [--write]
     ssh dokku run au-supply .venv/bin/python manage.py backfill-audio-ai-tags [--all]
+    ssh dokku run au-supply .venv/bin/python manage.py backfill-video-thumbnails
     ssh dokku run au-supply .venv/bin/python manage.py index-drum-machines [--limit N]
     ssh dokku run au-supply .venv/bin/python manage.py reroute-sample-uploads
     ssh dokku run au-supply .venv/bin/python manage.py jobs-list
@@ -1016,6 +1017,82 @@ def backfill_image_thumbnails():
     db.close()
 
 
+def backfill_video_thumbnails():
+    """Grab a poster frame for any video missing one.
+
+    The image twin above only touches ``media_type == "image"``, so videos
+    whose extraction never ran (or whose thumbnail step failed) have stayed
+    frameless — `_resolve_thumbnail_path` falls back to the placeholder SVG
+    and every grid renders a chip instead of a picture.
+
+    Note `MediaVideoMeta.duration_seconds/width/height` are NOT NULL, so a
+    video with no meta row at all needs ffprobe before the thumbnail path
+    can be written — upserting `thumbnail_path` alone would fail the insert.
+    """
+    import os
+    from server.models import MediaItem, MediaVideoMeta
+    from server.extraction import (
+        SEARCH_MEDIA_DIR,
+        _upsert_meta,
+        extract_video_metadata,
+        generate_video_thumbnail,
+    )
+
+    db = SessionLocal()
+    videos = db.query(MediaItem).filter(MediaItem.media_type == "video").all()
+
+    total = len(videos)
+    log(f"Scanning {total} video items for missing thumbnails")
+
+    done = skipped = probed = errors = 0
+    for i, item in enumerate(videos):
+        full_path = os.path.join(SEARCH_MEDIA_DIR, item.file_path)
+        if not os.path.exists(full_path):
+            log(f"  SKIP {item.id} — source missing: {full_path}")
+            errors += 1
+            continue
+
+        meta = (
+            db.query(MediaVideoMeta)
+            .filter(MediaVideoMeta.media_item_id == item.id)
+            .first()
+        )
+        # A recorded path whose file has since vanished counts as missing.
+        if meta and meta.thumbnail_path and os.path.exists(
+            os.path.join(SEARCH_MEDIA_DIR, meta.thumbnail_path)
+        ):
+            skipped += 1
+            continue
+
+        log(f"  [{i + 1}/{total}] {item.filename}")
+
+        # No meta row yet — ffprobe first so the insert has its NOT NULL cols.
+        if meta is None:
+            try:
+                _upsert_meta(
+                    db, MediaVideoMeta, item.id, extract_video_metadata(full_path)
+                )
+                probed += 1
+            except Exception as exc:
+                log(f"    ERROR ffprobe failed: {exc}")
+                errors += 1
+                continue
+
+        thumb_path = str(Path(full_path).parent / f"{Path(full_path).stem}_thumb.webp")
+        if generate_video_thumbnail(full_path, thumb_path):
+            _upsert_meta(db, MediaVideoMeta, item.id, {"thumbnail_path": thumb_path})
+            done += 1
+        else:
+            log("    ERROR ffmpeg returned non-zero")
+            errors += 1
+
+    log(
+        f"Done! thumbnails: {done}, metadata rows created: {probed}, "
+        f"already had one: {skipped}, errors: {errors}"
+    )
+    db.close()
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(__doc__)
@@ -1237,6 +1314,9 @@ if __name__ == "__main__":
 
     elif cmd == "backfill-thumbnails":
         backfill_image_thumbnails()
+
+    elif cmd == "backfill-video-thumbnails":
+        backfill_video_thumbnails()
 
     elif cmd == "refresh-app":
         if len(sys.argv) < 3:
