@@ -52,6 +52,16 @@
   --color-overlay: rgba(0, 0, 0, 0.6);
   --color-overlay-soft: rgba(0, 0, 0, 0.35);
   --color-on-overlay: #fff;
+  /* Destructive actions sitting on a face. `.action-btn--danger` hardcodes
+   * #c00 — a dark red tuned for a light page — so on a scrimmed photo the
+   * DELETE button reads WORSE than the plain ones it sits beside.
+   *
+   * The value is dark mode's own --color-status-fail, not a new hue: a face
+   * is a dark ground in BOTH themes (the scrim gradient and the treat
+   * brightness clamp guarantee it), so the red that already works on the
+   * dark page is the red that works here. Same reasoning as
+   * --color-on-overlay being #fff in both themes. */
+  --color-danger-on-overlay: #f0746a;
 
   /* Latent detail-page section palette (2026-07-17-latent-section-styles).
    * One default hue per fixed section, same on every latent, overridable

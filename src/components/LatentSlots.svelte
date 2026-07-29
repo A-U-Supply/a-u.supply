@@ -2408,6 +2408,54 @@
   .slot--face-solid .slot__head {
     color: var(--slot-text, var(--slot-face-text, inherit));
   }
+
+  /* Head buttons on a face.
+   *
+   * Every rule above sets `.slot__head`'s colour, but `.action-btn` (in
+   * admin.css) declares its own `color: var(--color-text)` and
+   * `border-color: var(--color-border)` — and an explicit declaration doesn't
+   * inherit. So PLAYLIST / SLIDESHOW / NOTES / THREADS / CLEAR FILES / DELETE
+   * stayed theme-coloured on a darkened image: dark on dark, all six equally.
+   * Reported four times before this fix.
+   *
+   * `plate` is excluded on purpose — its head sits on an opaque --color-bg
+   * plate, so the theme colours there are already the correct ones. That
+   * exclusion is also why the bug kept surviving passes: it's invisible in
+   * the one treatment nobody was using.
+   *
+   * Anything added inside a faced head from here on must ride `currentColor`
+   * or `inherit` — the ground is an arbitrary photo, so no fixed token can be
+   * right. `tests/test_faced_head_contrast.py` fails if it doesn't. */
+  .slot--faced:not(.slot--face-plate) .slot__head .action-btn {
+    color: inherit;
+    border-color: color-mix(in srgb, currentColor 45%, transparent);
+  }
+  /* A wash, not the usual inversion. `.action-btn:hover` swaps to
+   * `background: var(--color-text); color: var(--color-bg)`, which assumes it
+   * knows what's behind it — on a face that's a photo or a colour the user
+   * picked, so there is no correct --color-bg to invert to. */
+  .slot--faced:not(.slot--face-plate) .slot__head .action-btn:hover {
+    background: color-mix(in srgb, currentColor 20%, transparent);
+    color: inherit;
+  }
+  /* DELETE sets its own #c00 and so ignores the inherit above. It needs the
+   * face-ground red, or it's the least readable button on the card. */
+  .slot--faced:not(.slot--face-plate) .slot__head .action-btn--danger {
+    color: var(--color-danger-on-overlay);
+    border-color: color-mix(
+      in srgb,
+      var(--color-danger-on-overlay) 55%,
+      transparent
+    );
+  }
+  .slot--faced:not(.slot--face-plate) .slot__head .action-btn--danger:hover {
+    background: color-mix(
+      in srgb,
+      var(--color-danger-on-overlay) 25%,
+      transparent
+    );
+    color: var(--color-danger-on-overlay);
+  }
   /* The slot-card twin of the section rule removed in detail.astro:
    *
    *   .slot--styled > :not(.slot__bg):not(.slot__veil) {
