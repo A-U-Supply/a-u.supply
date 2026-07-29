@@ -13,6 +13,7 @@
     sourceLabel,
     excerpt,
   } from './marginalia.ts';
+  import { CHROME_IDLE_MS } from '../lib/image-viewer.ts';
 
   let queue = $state([]);
   let currentIndex = $state(-1);
@@ -64,7 +65,14 @@
 
   let mediaEl = $state(undefined);
   let pipEl = $state(undefined);
+  let playerEl = $state(undefined);
   let isFullscreen = $state(false);
+  let playerObserver = null;
+  /* Video chrome (the PiP's own buttons + the fullscreen transport) rides an
+     idle timer rather than :hover — a phone has no hover, which is why the
+     minimize/close buttons were effectively unreachable on touch. */
+  let chromeAwake = $state(true);
+  let chromeTimer = null;
 
   let currentTrack = $derived(
     currentIndex >= 0 && currentIndex < queue.length
@@ -275,6 +283,48 @@
   function toggleShuffle() {
     shuffleOn = !shuffleOn;
     if (shuffleOn) buildShuffledIndices();
+  }
+
+  /**
+   * Publish the bar's real height as `--player-h` on <html>.
+   *
+   * Everything that floats above the player used to hardcode `100px` — the
+   * PiP, the scroll spacer, the queue panel's bottom AND its max-height, and
+   * the marginalia sheet. The bar has no height of its own: it's padding plus
+   * content, and under 640px `.player__inner` wraps. Load a video and it
+   * stacks into three rows well past 100px, so the PiP slid underneath it and
+   * the video was hidden behind the transport (reported 2026-07-29).
+   *
+   * A measurement can't drift out of sync with the layout the way a constant
+   * does, so nothing downstream needs to know what's in the bar.
+   */
+  /**
+   * Show the video chrome and restart the idle countdown.
+   *
+   * Same contract as the image viewer's `wakeChrome` — and the same
+   * `CHROME_IDLE_MS`, imported rather than re-typed, so the fullscreen video
+   * and the image viewer you reach from the same Latent fade identically.
+   */
+  function wakeChrome() {
+    chromeAwake = true;
+    if (chromeTimer) clearTimeout(chromeTimer);
+    chromeTimer = setTimeout(() => {
+      chromeTimer = null;
+      // Don't blank the controls out from under a pointer resting on them.
+      // The PiP is the whole viewport in fullscreen, so it is always hovered
+      // — the control bar itself is the honest test.
+      if (pipEl?.querySelector('.player__fs-bar:hover')) {
+        wakeChrome();
+        return;
+      }
+      chromeAwake = false;
+    }, CHROME_IDLE_MS);
+  }
+
+  function measurePlayer() {
+    const h = playerEl?.offsetHeight;
+    if (!h) return;
+    document.documentElement.style.setProperty('--player-h', `${h}px`);
   }
 
   function onSeek(e) {
@@ -636,6 +686,8 @@
 
   function onFullscreenChange() {
     isFullscreen = !!document.fullscreenElement;
+    // Entering or leaving is activity: show the chrome, then let it fade.
+    wakeChrome();
   }
 
   function onAdd(e) {
@@ -791,6 +843,9 @@
 
   function onKeyDown(e) {
     if (!visible) return;
+    // Keyboard counts as activity too — otherwise space-to-pause in
+    // fullscreen works but leaves the controls faded, so nothing confirms it.
+    if (isVideo && pipOpen) wakeChrome();
     // Escape closes innermost-first: annotation card → composer → panel.
     // Handled before the typing guard so it also works from panel inputs.
     if (e.key === 'Escape') {
@@ -914,7 +969,32 @@
     document.removeEventListener('keydown', onKeyDown);
     document.removeEventListener('fullscreenchange', onFullscreenChange);
     if (liveTimer) clearTimeout(liveTimer);
+    if (chromeTimer) clearTimeout(chromeTimer);
+    playerObserver?.disconnect();
+    document.documentElement.style.removeProperty('--player-h');
     document.body.classList.remove('player-active');
+  });
+
+  // Start the countdown when the video surface appears, so the chrome fades
+  // on its own the first time too rather than sitting lit until the first
+  // pointer event.
+  $effect(() => {
+    if (isVideo && pipOpen) wakeChrome();
+  });
+
+  // Measure whenever the bar itself resizes — a track change, a wrap at a new
+  // breakpoint, the marginalia panel opening. `visible` gates the element's
+  // existence, so re-observe when it comes back.
+  $effect(() => {
+    playerObserver?.disconnect();
+    if (!playerEl) {
+      document.documentElement.style.removeProperty('--player-h');
+      return;
+    }
+    measurePlayer();
+    playerObserver = new ResizeObserver(measurePlayer);
+    playerObserver.observe(playerEl);
+    return () => playerObserver?.disconnect();
   });
 </script>
 
@@ -924,10 +1004,14 @@
 
 {#if visible}
   {#if isVideo && pipOpen}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="player__pip"
       class:player__pip--fs={isFullscreen}
+      class:player__pip--awake={chromeAwake}
       bind:this={pipEl}
+      onpointermove={wakeChrome}
+      onpointerdown={wakeChrome}
     >
       <div class="player__pip-controls">
         <button
@@ -984,10 +1068,167 @@
         poster={currentTrack?.cover_url}
         preload="auto"
       ></video>
+      {#if isFullscreen}
+        <!--
+          The transport has to live INSIDE the fullscreened element. Fullscreen
+          paints only that element's subtree, and `.player` is a sibling — so
+          in fullscreen the real bar isn't hidden, it isn't rendered at all,
+          and the <video> carries no `controls` to fall back on. That left a
+          bare video with no way to pause or seek (reported 2026-07-29).
+        -->
+        <div class="player__fs-bar">
+          <div class="player__fs-transport">
+            <button
+              class="player__btn"
+              onclick={prev}
+              title="Previous"
+              aria-label="Previous track"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+              >
+                <rect x="1" y="2" width="2" height="12" />
+                <polygon points="14,2 14,14 4,8" />
+              </svg>
+            </button>
+            <button
+              class="player__btn player__btn--play"
+              onclick={togglePlay}
+              title={paused ? 'Play' : 'Pause'}
+              aria-label={paused ? 'Play' : 'Pause'}
+            >
+              {#if paused}
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <polygon points="4,2 18,10 4,18" />
+                </svg>
+              {:else}
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <rect x="3" y="2" width="5" height="16" />
+                  <rect x="12" y="2" width="5" height="16" />
+                </svg>
+              {/if}
+            </button>
+            <button
+              class="player__btn"
+              onclick={next}
+              title="Next"
+              aria-label="Next track"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+              >
+                <polygon points="2,2 2,14 12,8" />
+                <rect x="13" y="2" width="2" height="12" />
+              </svg>
+            </button>
+
+            <span class="player__time">{fmt(currentTime)}</span>
+            <input
+              class="player__range player__range--seek player__fs-seek"
+              type="range"
+              min="0"
+              max={duration || 0}
+              step="0.1"
+              value={currentTime}
+              oninput={onSeek}
+              aria-label="Seek"
+              aria-valuetext={fmt(currentTime)}
+            />
+            <span class="player__time">{fmt(duration)}</span>
+
+            <div class="player__fs-volume">
+              <button
+                class="player__btn"
+                onclick={toggleMute}
+                title={muted ? 'Unmute' : 'Mute'}
+                aria-label={muted ? 'Unmute' : 'Mute'}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                >
+                  <polygon points="1,6 1,10 4,10 8,14 8,2 4,6" />
+                  {#if muted || volume === 0}
+                    <line
+                      x1="10"
+                      y1="5"
+                      x2="15"
+                      y2="11"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                    />
+                    <line
+                      x1="15"
+                      y1="5"
+                      x2="10"
+                      y2="11"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                    />
+                  {:else}
+                    <path
+                      d="M10 4.5c1.5 1.5 1.5 5.5 0 7"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      fill="none"
+                    />
+                  {/if}
+                </svg>
+              </button>
+              <input
+                class="player__range"
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={volume}
+                oninput={onVolume}
+                aria-label="Volume"
+              />
+            </div>
+
+            <button
+              class="player__btn"
+              onclick={toggleFullscreen}
+              title="Exit fullscreen"
+              aria-label="Exit fullscreen"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <path d="M5 1v4H1M11 1v4h4M5 15v-4H1M11 15v-4h4" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      {/if}
     </div>
   {/if}
 
-  <div class="player">
+  <div class="player" bind:this={playerEl}>
     {#if !isVideo || !pipOpen}
       <!-- No src= here on purpose: loadTrack owns it. See applySrc. -->
       <audio
@@ -1731,7 +1972,7 @@
     background: #1a1a1a;
   }
   .player__spacer--active {
-    height: 72px;
+    height: var(--player-h, 72px);
   }
 
   .player {
@@ -1982,7 +2223,7 @@
 
   .queue-panel {
     position: fixed;
-    bottom: 72px;
+    bottom: var(--player-h, 72px);
     left: 0;
     right: 0;
     z-index: 9998;
@@ -2122,7 +2363,7 @@
   /* Video PiP panel */
   .player__pip {
     position: fixed;
-    bottom: 72px;
+    bottom: calc(var(--player-h, 72px) + 8px);
     right: 1rem;
     z-index: 9998;
     width: 320px;
@@ -2148,7 +2389,12 @@
     transition: opacity 0.15s;
   }
 
-  .player__pip:hover .player__pip-controls {
+  /* Hover still works on a desktop, but it can't be the only way in: a phone
+     never fires it, so these buttons used to be unreachable on touch (they
+     appeared only when a tap left a sticky hover behind). `--awake` is the
+     idle timer, which every pointer event restarts. */
+  .player__pip:hover .player__pip-controls,
+  .player__pip--awake .player__pip-controls {
     opacity: 1;
   }
 
@@ -2184,6 +2430,54 @@
     width: 100%;
     height: 100%;
     object-fit: contain;
+  }
+
+  /* Fullscreen transport. Floats over the video rather than displacing it —
+     letterboxing already gives it somewhere to sit on most clips, and a bar
+     that resized the picture every time it faded would be worse than none. */
+  .player__fs-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.85), transparent);
+    opacity: 0;
+    transition: opacity 0.25s;
+    pointer-events: none;
+  }
+  .player__pip--awake .player__fs-bar {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .player__fs-transport {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+  .player__fs-seek {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .player__fs-volume {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex: 0 0 auto;
+  }
+  .player__fs-volume .player__range {
+    width: 70px;
+  }
+
+  @media (max-width: 639px) {
+    /* A phone in portrait can't fit the slider next to a usable scrubber.
+       The mute button stays — and on iOS that's the only half that works,
+       since Safari ignores scripted volume changes entirely. */
+    .player__fs-volume .player__range {
+      display: none;
+    }
   }
 
   .player__pip-reopen {
@@ -2274,7 +2568,7 @@
   /* ── Marginalia panel (waveform + annotations above the bar) ────────── */
   .marginalia {
     position: fixed;
-    bottom: 72px;
+    bottom: var(--player-h, 72px);
     left: 0;
     right: 0;
     z-index: 9998;
@@ -2603,9 +2897,8 @@
   }
 
   @media (max-width: 639px) {
-    .player__spacer--active {
-      height: 100px;
-    }
+    /* No mobile height override: `--player-h` is measured, and the whole
+       point is that the wrapped bar isn't a number anyone can predict. */
     .player {
       padding: 0.375rem 0.5rem;
     }
@@ -2638,17 +2931,14 @@
 
     .player__pip {
       width: 200px;
-      bottom: 100px;
     }
 
     .queue-panel {
-      max-height: calc(100dvh - 100px);
-      bottom: 100px;
+      max-height: calc(100dvh - var(--player-h, 72px));
     }
 
     /* Marginalia panel → bottom sheet. */
     .marginalia {
-      bottom: 100px;
       max-height: 70dvh;
     }
     /* ≥44px hit areas without blowing up the visuals. */
