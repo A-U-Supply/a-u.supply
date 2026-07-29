@@ -2408,6 +2408,72 @@
   .slot--face-solid .slot__head {
     color: var(--slot-text, var(--slot-face-text, inherit));
   }
+
+  /* Head buttons on a face.
+   *
+   * Every rule above sets `.slot__head`'s colour, but `.action-btn` (in
+   * admin.css) declares its own `color: var(--color-text)` and
+   * `border-color: var(--color-border)` — and an explicit declaration doesn't
+   * inherit. So PLAYLIST / SLIDESHOW / NOTES / THREADS / CLEAR FILES / DELETE
+   * stayed theme-coloured on a darkened image: dark on dark, all six equally.
+   * Reported four times before this fix.
+   *
+   * `plate` is excluded on purpose — its head sits on an opaque --color-bg
+   * plate, so the theme colours there are already the correct ones. That
+   * exclusion is also why the bug kept surviving passes: it's invisible in
+   * the one treatment nobody was using.
+   *
+   * Anything added inside a faced head from here on must ride `currentColor`
+   * or `inherit` — the ground is an arbitrary photo, so no fixed token can be
+   * right. `tests/test_faced_head_contrast.py` fails if it doesn't. */
+  .slot--faced:not(.slot--face-plate) .slot__head .action-btn {
+    color: inherit;
+    border-color: color-mix(in srgb, currentColor 45%, transparent);
+  }
+  /* A wash, not the usual inversion. `.action-btn:hover` swaps to
+   * `background: var(--color-text); color: var(--color-bg)`, which assumes it
+   * knows what's behind it — on a face that's a photo or a colour the user
+   * picked, so there is no correct --color-bg to invert to. */
+  .slot--faced:not(.slot--face-plate) .slot__head .action-btn:hover {
+    background: color-mix(in srgb, currentColor 20%, transparent);
+    color: inherit;
+  }
+  /* DELETE sets its own #c00 and so ignores the inherit above.
+   *
+   * Scrim and treat only. Both clamp to a guaranteed dark ground, so a fixed
+   * red is safe against them. A SOLID face is whatever colour the user picked
+   * — the contrast test caught #f0746a landing at 2.24:1 on a plum #aa3355 —
+   * so there is no fixed red that's safe there, for exactly the reason the
+   * plain buttons can't use a fixed token either. Solid keeps the inherit
+   * above instead, riding `--slot-face-text`, which is contrast-computed
+   * client-side against the chosen colour.
+   *
+   * The cost is that DELETE stops being red on solid faces. That's the honest
+   * trade: legible-and-not-red beats red-and-unreadable, and the confirm
+   * dialog is still the actual safety net. */
+  /* `.slot--faced` is carried purely for specificity: the rule above scores
+   * (0,4,0), because `:not()` contributes its argument's weight, so a plain
+   * three-class selector here LOSES to it and DELETE silently renders as the
+   * inherited white. Matching the count and relying on source order is what
+   * makes the red actually apply. */
+  .slot--faced.slot--face-scrim .slot__head .action-btn--danger,
+  .slot--faced.slot--face-treat .slot__head .action-btn--danger {
+    color: var(--color-danger-on-overlay);
+    border-color: color-mix(
+      in srgb,
+      var(--color-danger-on-overlay) 55%,
+      transparent
+    );
+  }
+  .slot--faced.slot--face-scrim .slot__head .action-btn--danger:hover,
+  .slot--faced.slot--face-treat .slot__head .action-btn--danger:hover {
+    background: color-mix(
+      in srgb,
+      var(--color-danger-on-overlay) 25%,
+      transparent
+    );
+    color: var(--color-danger-on-overlay);
+  }
   /* The slot-card twin of the section rule removed in detail.astro:
    *
    *   .slot--styled > :not(.slot__bg):not(.slot__veil) {
