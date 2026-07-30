@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session, joinedload
 
 from server.auth import get_db, require_admin
@@ -52,6 +52,46 @@ MAX_REVISIONS_PER_DOCUMENT = 100
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+# The index grid's manual order is written with raw SQL, never the ORM.
+# `Project.updated_at` carries `onupdate=_utcnow` (server/models.py), and every
+# index card renders "updated {date}" — so touching a row through the ORM (or
+# through query().update(), which also fires Core onupdate defaults) would
+# re-stamp a dozen latents to today on every single drag, destroying the exact
+# signal the manual order exists to stop fighting. See
+# tests/test_latents_api.py::TestLatentOrder::test_reorder_does_not_bump_updated_at.
+_SET_POSITION_SQL = text("UPDATE projects SET position = :position WHERE id = :id")
+
+# Total ordering for the index grid. The created_at/id tiebreaks match
+# backfill_project_positions' ranking exactly, so the seed and the sort can
+# never disagree, and duplicate positions degrade to a stable order instead of
+# rendering nondeterministically.
+def _ordered_projects_query(db: Session):
+    return db.query(Project).order_by(
+        Project.position.asc(),
+        Project.created_at.desc(),
+        Project.id.desc(),
+    )
+
+
+def backfill_project_positions(conn) -> None:
+    """Seed the manual index order from created_at DESC — newest latent first.
+
+    A row's 0-based rank is the number of rows that sort ahead of it, which is
+    the same correlated-COUNT shape used to backfill `project_items.position`
+    in main.py. Pure function of (created_at, id), so it is idempotent and safe
+    to re-run. Takes a Connection rather than living inline in main.py so the
+    tests can drive it against the in-memory engine (tests/conftest.py imports
+    `main`, which would otherwise run this only against the real data/ SQLite).
+    """
+    conn.execute(text("""
+        UPDATE projects SET position = (
+            SELECT COUNT(*) FROM projects p2
+             WHERE p2.created_at > projects.created_at
+                OR (p2.created_at = projects.created_at AND p2.id > projects.id)
+        )
+    """))
 
 
 def _slugify(name: str) -> str:
@@ -126,6 +166,7 @@ def _project_summary(p: Project) -> dict:
         "name": p.name,
         "kind": p.kind,
         "status": p.status,
+        "position": p.position,
         "description": p.description,
         "metadata": _parse_metadata(p.metadata_json),
         "hero_media_item_id": p.hero_media_item_id,
@@ -605,6 +646,20 @@ class ReorderSlotsBody(BaseModel):
     order: list[str]  # slot ids in new order
 
 
+class ReorderProjectsBody(BaseModel):
+    """Where a dragged index card came to rest, as its VISIBLE neighbours.
+
+    Anchors rather than a full ordered array (the shape slots/reorder uses)
+    because the index grid can be filtered by status/kind — the client simply
+    does not know the full order to send. Naming them prev/next rather than
+    before/after keeps "the card above it" unambiguous.
+    """
+
+    moved_id: str
+    prev_id: str | None = None  # visible card now directly ABOVE the moved one
+    next_id: str | None = None  # visible card now directly BELOW it
+
+
 class AttachItemsBody(BaseModel):
     media_item_ids: list[str]
     slot_id: str | None = None
@@ -701,14 +756,14 @@ def list_projects(
     user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    q = db.query(Project)
+    q = _ordered_projects_query(db)
     if status:
         q = q.filter(Project.status == status)
     if kind:
         q = q.filter(Project.kind == kind)
     if created_by:
         q = q.filter(Project.created_by == created_by)
-    items = q.order_by(Project.updated_at.desc()).all()
+    items = q.all()
     return {"projects": [_project_summary(p) for p in items]}
 
 
@@ -721,12 +776,20 @@ def create_project(
     kind = body.kind if body.kind in VALID_KINDS else "other"
     base_slug = _slugify(body.name)
     slug = _unique_slug(db, base_slug)
+    # A new latent lands at the top of the grid, which is what the default
+    # order (newest created first) means once the order is manual. Prepending
+    # at min-1 keeps that O(1): shifting every other row +1 would be an O(n)
+    # write, and through the ORM it would re-stamp updated_at on every latent
+    # in the system. Positions are allowed to go sparse and negative; the next
+    # reorder renormalises them to 0..N-1.
+    min_pos = db.query(func.min(Project.position)).scalar()
     project = Project(
         id=str(uuid.uuid4()),
         slug=slug,
         name=body.name,
         kind=kind,
         status="forming",
+        position=0 if min_pos is None else min_pos - 1,
         created_by=user.id,
     )
     db.add(project)
@@ -744,6 +807,75 @@ def create_project(
         logger.exception("slack notify_immediate(latent.created) failed")
 
     return _project_summary(project)
+
+
+def _resolve_project_order(
+    full_ids: list[str],
+    moved_id: str,
+    prev_id: str | None,
+    next_id: str | None,
+) -> list[str]:
+    """Place `moved_id` between its visible neighbours within the full order.
+
+    The invariant: **only the moved latent changes its relative position.**
+    Every other latent — including the ones a status/kind filter is hiding —
+    keeps its relative order with every other latent. That is what "drag while
+    filtered" has to mean if the result is going to survive clearing the
+    filter.
+
+    Everything else follows from it rather than being a special case:
+      * dropped at the top of a filtered view with hidden cards above it lands
+        directly above the first VISIBLE card, not at absolute top;
+      * dropped at the bottom is the mirror image;
+      * a hidden card sitting between the two anchors stays where it is
+        (prev wins over next);
+      * an anchor another admin deleted mid-drag is not an error — it falls
+        through to the other anchor, then to a no-op.
+    """
+    rest = [i for i in full_ids if i != moved_id]
+    if prev_id is not None and prev_id in rest:
+        idx = rest.index(prev_id) + 1
+    elif next_id is not None and next_id in rest:
+        idx = rest.index(next_id)
+    else:
+        return list(full_ids)  # nothing to anchor to; leave the order alone
+    return rest[:idx] + [moved_id] + rest[idx:]
+
+
+@router.post("/reorder", summary="Reorder the Latents index grid")
+def reorder_projects(
+    body: ReorderProjectsBody,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Move one card in the index grid's shared manual order.
+
+    Declared before `GET /{project_id}` so "reorder" is matched as a literal
+    path, the same reason `by-slug` sits where it does.
+    """
+    rows = _ordered_projects_query(db).all()
+    full_ids = [p.id for p in rows]
+    if body.moved_id not in full_ids:
+        raise HTTPException(status_code=404, detail=f"Project {body.moved_id} not found")
+    if body.prev_id == body.moved_id or body.next_id == body.moved_id:
+        raise HTTPException(status_code=400, detail="A card cannot be its own neighbour")
+
+    new_order = _resolve_project_order(full_ids, body.moved_id, body.prev_id, body.next_id)
+
+    # Renormalise to 0..N-1, writing only the rows that actually move. RAW SQL
+    # on purpose — see _SET_POSITION_SQL. Going through the ORM here would bump
+    # updated_at on every touched latent.
+    current = {p.id: p.position for p in rows}
+    changed = [
+        {"position": i, "id": pid}
+        for i, pid in enumerate(new_order)
+        if current.get(pid) != i
+    ]
+    if changed:
+        db.execute(_SET_POSITION_SQL, changed)
+        db.commit()
+        db.expire_all()  # the identity map still holds the pre-write positions
+    return {"order": new_order}
 
 
 @router.get("/{project_id}", summary="Get a Latent (header + summaries)")
