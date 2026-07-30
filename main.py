@@ -36,7 +36,7 @@ from server.bundles_api import router as bundles_router
 from server.catalog import router as catalog_router
 from server.github_api import router as github_router
 from server.jobs_api import router as jobs_router
-from server.latents_api import router as latents_router, links_for_media_router
+from server.latents_api import backfill_project_positions, router as latents_router, links_for_media_router
 from server.lemmy_api import router as lemmy_router
 from server.marginalia_api import router as marginalia_router
 from server.notifications_api import router as notifications_router
@@ -161,6 +161,16 @@ for _col, _ddl in (
     if _col not in _project_cols:
         with engine.begin() as _conn:
             _conn.execute(_sa_text(_ddl))
+
+# Migrate existing DB: the index grid's manual house order
+# (2026-07-30-latents-manual-order). Backfilled newest-created-first, which is
+# the default the admins asked to keep as the starting point; from there the
+# order is dragged. Note this CHANGES the grid's sort — it was updated_at DESC.
+if "position" not in _project_cols:
+    with engine.begin() as _conn:
+        _conn.execute(_sa_text("ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0"))
+        backfill_project_positions(_conn)
+        _conn.execute(_sa_text("CREATE INDEX IF NOT EXISTS ix_projects_position ON projects(position)"))
 
 _slot_cols_v2 = [c["name"] for c in _sa_inspect(engine).get_columns("project_slots")]
 for _col, _ddl in (

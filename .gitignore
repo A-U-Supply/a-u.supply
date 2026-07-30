@@ -20,6 +20,12 @@ node_modules
 .claude/worktrees/
 
 # App data
+# Bare `data`, same reasoning as `node_modules` above: a worktree needs a
+# `data` SYMLINK into the main checkout, and every rule below is a path INSIDE
+# the directory, so none of them match the link itself. Nothing under data/ is
+# tracked, so ignoring the whole thing costs nothing and closes the hole that
+# swept node_modules in. tests/test_tracked_symlinks.py is the backstop.
+data
 data/*.db
 data/*.db-wal
 data/*.db-shm

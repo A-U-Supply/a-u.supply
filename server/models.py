@@ -629,6 +629,11 @@ class Project(Base):
     name = Column(String, nullable=False)
     kind = Column(String, nullable=False, default="other")  # album | video | zine | session | other
     status = Column(String, nullable=False, default="forming")  # forming | developing | fixing | abandoned
+    # The index grid's manual house order — low sorts first, shared by every admin.
+    # Seeded from created_at DESC, then curated by drag. Sparse and NEGATIVE values
+    # are legal: creates prepend at min-1, and reorders renormalise to 0..N-1, so
+    # gaps self-heal. Deliberately NOT unique — see reorder_projects in latents_api.
+    position = Column(Integer, nullable=False, default=0, index=True)
     description = Column(String, nullable=True)        # markdown, longer-form than the name
     metadata_json = Column(String, nullable=True)      # JSON dict of arbitrary {key: value}
     hero_media_item_id = Column(String, ForeignKey("media_items.id", ondelete="SET NULL"), nullable=True)

@@ -1623,3 +1623,246 @@ class TestPlaylistsSectionStyle:
         )
         assert resp.status_code == 200
         assert resp.json()["section_styles"]["playlists"]["accent"] == "#ff0000"
+
+
+# ---------------------------------------------------------------------------
+# Manual index order (docs/plans/2026-07-30-latents-manual-order.md)
+# ---------------------------------------------------------------------------
+
+
+def order_ids(client, auth_headers, **params):
+    """The index grid's order, as the page would render it."""
+    resp = client.get("/api/projects", params=params, headers=auth_headers)
+    assert resp.status_code == 200
+    return [p["id"] for p in resp.json()["projects"]]
+
+
+def reorder(client, auth_headers, moved_id, prev_id=None, next_id=None):
+    return client.post(
+        "/api/projects/reorder",
+        json={"moved_id": moved_id, "prev_id": prev_id, "next_id": next_id},
+        headers=auth_headers,
+    )
+
+
+@pytest.fixture
+def grid(client, auth_headers):
+    """Four latents created A→B→C→D.
+
+    Creates prepend, so the grid reads newest-created-first: D, C, B, A.
+    Returned keyed by name so the tests can talk about cards, not indices.
+    """
+    made = {}
+    for name in ("A", "B", "C", "D"):
+        resp = client.post("/api/projects", json={"name": name}, headers=auth_headers)
+        assert resp.status_code == 201
+        made[name] = resp.json()["id"]
+    return made
+
+
+def set_status(client, auth_headers, project_id, status):
+    resp = patch_project(client, auth_headers, project_id, {"status": status})
+    assert resp.status_code == 200
+
+
+class TestLatentOrderSeed:
+    """The default the admins asked to keep: newest created first."""
+
+    def test_new_latents_appear_first(self, client, auth_headers, grid):
+        assert order_ids(client, auth_headers) == [grid["D"], grid["C"], grid["B"], grid["A"]]
+
+    def test_position_is_exposed_in_the_summary(self, client, auth_headers, grid):
+        resp = client.get("/api/projects", headers=auth_headers)
+        positions = [p["position"] for p in resp.json()["projects"]]
+        assert positions == sorted(positions), "grid must be sorted by position ascending"
+
+    def test_a_latent_created_later_still_lands_on_top(self, client, auth_headers, grid):
+        resp = client.post("/api/projects", json={"name": "E"}, headers=auth_headers)
+        assert order_ids(client, auth_headers)[0] == resp.json()["id"]
+
+    def test_backfill_seeds_from_created_at_desc(self, client, auth_headers, db_session, test_user):
+        """A pre-existing table (every row position 0) ranks by created_at DESC."""
+        from datetime import datetime, timedelta
+
+        from server.latents_api import backfill_project_positions
+        from server.models import Project
+
+        base = datetime(2026, 1, 1)
+        made = []
+        for n, offset in (("old", 0), ("mid", 10), ("new", 20)):
+            p = Project(
+                slug=f"seed-{n}", name=n, kind="other", status="forming",
+                position=0, created_by=test_user.id,
+                created_at=base + timedelta(days=offset),
+                updated_at=base,
+            )
+            db_session.add(p)
+            made.append(p)
+        db_session.commit()
+
+        backfill_project_positions(db_session.connection())
+        db_session.commit()
+
+        ordered = order_ids(client, auth_headers)
+        by_name = {p.name: p.id for p in made}
+        assert ordered == [by_name["new"], by_name["mid"], by_name["old"]]
+
+    def test_backfill_is_idempotent(self, client, auth_headers, db_session, test_user):
+        from datetime import datetime, timedelta
+
+        from server.latents_api import backfill_project_positions
+        from server.models import Project
+
+        base = datetime(2026, 1, 1)
+        for n, offset in (("x", 0), ("y", 5), ("z", 9)):
+            db_session.add(Project(
+                slug=f"idem-{n}", name=n, kind="other", status="forming",
+                position=0, created_by=test_user.id,
+                created_at=base + timedelta(days=offset), updated_at=base,
+            ))
+        db_session.commit()
+
+        backfill_project_positions(db_session.connection())
+        db_session.commit()
+        once = order_ids(client, auth_headers)
+        backfill_project_positions(db_session.connection())
+        db_session.commit()
+        assert order_ids(client, auth_headers) == once
+
+
+class TestLatentReorder:
+    """Unfiltered drags — the plain case."""
+
+    def test_move_first_to_last(self, client, auth_headers, grid):
+        # [D C B A] -> drop D below A
+        assert reorder(client, auth_headers, grid["D"], prev_id=grid["A"]).status_code == 200
+        assert order_ids(client, auth_headers) == [grid["C"], grid["B"], grid["A"], grid["D"]]
+
+    def test_move_last_to_first(self, client, auth_headers, grid):
+        # [D C B A] -> drop A above D
+        assert reorder(client, auth_headers, grid["A"], next_id=grid["D"]).status_code == 200
+        assert order_ids(client, auth_headers) == [grid["A"], grid["D"], grid["C"], grid["B"]]
+
+    def test_move_into_the_middle(self, client, auth_headers, grid):
+        # [D C B A] -> drop A between C and B
+        assert reorder(
+            client, auth_headers, grid["A"], prev_id=grid["C"], next_id=grid["B"],
+        ).status_code == 200
+        assert order_ids(client, auth_headers) == [grid["D"], grid["C"], grid["A"], grid["B"]]
+
+    def test_response_echoes_the_full_order(self, client, auth_headers, grid):
+        resp = reorder(client, auth_headers, grid["D"], prev_id=grid["A"])
+        assert resp.json()["order"] == order_ids(client, auth_headers)
+
+    def test_positions_renormalise_to_dense_rank(self, client, auth_headers, grid):
+        """Creates leave positions sparse and negative; a reorder tidies them."""
+        reorder(client, auth_headers, grid["D"], prev_id=grid["A"])
+        resp = client.get("/api/projects", headers=auth_headers)
+        assert [p["position"] for p in resp.json()["projects"]] == [0, 1, 2, 3]
+
+    def test_order_survives_a_second_move(self, client, auth_headers, grid):
+        reorder(client, auth_headers, grid["D"], prev_id=grid["A"])          # [C B A D]
+        reorder(client, auth_headers, grid["B"], next_id=grid["C"])          # [B C A D]
+        assert order_ids(client, auth_headers) == [grid["B"], grid["C"], grid["A"], grid["D"]]
+
+    def test_reorder_does_not_bump_updated_at(self, client, auth_headers, grid):
+        """The regression that matters.
+
+        Every index card renders "updated {date}". Project.updated_at carries
+        onupdate=_utcnow, so writing positions through the ORM would re-stamp
+        every touched latent to today — corrupting the signal on a dozen cards
+        for one drag. Positions go through raw SQL precisely to avoid this.
+        """
+        before = {p["id"]: p["updated_at"] for p in
+                  client.get("/api/projects", headers=auth_headers).json()["projects"]}
+        assert reorder(client, auth_headers, grid["D"], prev_id=grid["A"]).status_code == 200
+        after = {p["id"]: p["updated_at"] for p in
+                 client.get("/api/projects", headers=auth_headers).json()["projects"]}
+        assert after == before
+
+
+class TestLatentReorderUnderFilter:
+    """Dragging while a status/kind chip is active.
+
+    The invariant under test in all three: hidden cards never change position
+    relative to each other, so the result still makes sense once the filter is
+    cleared. Grid is [D C B A] throughout.
+    """
+
+    def test_hidden_card_between_the_anchors_stays_put(self, client, auth_headers, grid):
+        set_status(client, auth_headers, grid["C"], "fixing")   # hidden
+        set_status(client, auth_headers, grid["A"], "fixing")   # hidden
+        assert order_ids(client, auth_headers, status="forming") == [grid["D"], grid["B"]]
+
+        # Drag D below B in the filtered view.
+        assert reorder(client, auth_headers, grid["D"], prev_id=grid["B"]).status_code == 200
+
+        # D landed directly after B. C stayed ahead of B; A stayed last.
+        assert order_ids(client, auth_headers) == [grid["C"], grid["B"], grid["D"], grid["A"]]
+
+    def test_dropped_at_top_of_filtered_view_lands_above_first_visible(self, client, auth_headers, grid):
+        set_status(client, auth_headers, grid["D"], "fixing")   # hidden, above everything
+        set_status(client, auth_headers, grid["C"], "fixing")   # hidden
+        assert order_ids(client, auth_headers, status="forming") == [grid["B"], grid["A"]]
+
+        # Drag A to the top of the filtered view.
+        assert reorder(client, auth_headers, grid["A"], next_id=grid["B"]).status_code == 200
+
+        # Directly above B — NOT at absolute top. The hidden pair is untouched.
+        assert order_ids(client, auth_headers) == [grid["D"], grid["C"], grid["A"], grid["B"]]
+
+    def test_dropped_at_bottom_of_filtered_view_lands_below_last_visible(self, client, auth_headers, grid):
+        set_status(client, auth_headers, grid["B"], "fixing")   # hidden, below everything
+        set_status(client, auth_headers, grid["A"], "fixing")   # hidden
+        assert order_ids(client, auth_headers, status="forming") == [grid["D"], grid["C"]]
+
+        # Drag D to the bottom of the filtered view.
+        assert reorder(client, auth_headers, grid["D"], prev_id=grid["C"]).status_code == 200
+
+        # Directly below C — not past the hidden tail.
+        assert order_ids(client, auth_headers) == [grid["C"], grid["D"], grid["B"], grid["A"]]
+
+    def test_filtered_view_reflects_the_new_order(self, client, auth_headers, grid):
+        set_status(client, auth_headers, grid["C"], "fixing")
+        reorder(client, auth_headers, grid["D"], prev_id=grid["B"])
+        assert order_ids(client, auth_headers, status="forming") == [grid["B"], grid["D"], grid["A"]]
+
+
+class TestLatentReorderRobustness:
+    def test_unknown_moved_id_is_404(self, client, auth_headers, grid):
+        assert reorder(client, auth_headers, "no-such-id", prev_id=grid["A"]).status_code == 404
+
+    def test_prev_anchor_cannot_be_the_moved_card(self, client, auth_headers, grid):
+        assert reorder(client, auth_headers, grid["D"], prev_id=grid["D"]).status_code == 400
+
+    def test_next_anchor_cannot_be_the_moved_card(self, client, auth_headers, grid):
+        assert reorder(client, auth_headers, grid["D"], next_id=grid["D"]).status_code == 400
+
+    def test_stale_prev_anchor_falls_through_to_next(self, client, auth_headers, grid):
+        """Another admin deleted the card you dropped under — not an error."""
+        resp = reorder(client, auth_headers, grid["A"], prev_id="deleted-id", next_id=grid["D"])
+        assert resp.status_code == 200
+        assert order_ids(client, auth_headers) == [grid["A"], grid["D"], grid["C"], grid["B"]]
+
+    def test_both_anchors_unknown_is_a_no_op(self, client, auth_headers, grid):
+        before = order_ids(client, auth_headers)
+        resp = reorder(client, auth_headers, grid["D"], prev_id="gone", next_id="also-gone")
+        assert resp.status_code == 200
+        assert order_ids(client, auth_headers) == before
+
+    def test_no_anchors_at_all_is_a_no_op(self, client, auth_headers, grid):
+        before = order_ids(client, auth_headers)
+        assert reorder(client, auth_headers, grid["D"]).status_code == 200
+        assert order_ids(client, auth_headers) == before
+
+
+class TestLatentReorderAuth:
+    def test_reorder_requires_auth(self, client, grid):
+        assert client.post(
+            "/api/projects/reorder", json={"moved_id": grid["A"]},
+        ).status_code == 401
+
+    def test_reorder_rejects_member(self, client, member_auth_headers, grid):
+        assert client.post(
+            "/api/projects/reorder", json={"moved_id": grid["A"]}, headers=member_auth_headers,
+        ).status_code == 403
