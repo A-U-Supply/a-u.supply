@@ -321,9 +321,9 @@ import Admin from '../../../layouts/Admin.astro';
      backing; nothing else guarantees a ground up here.
 
      --color-overlay, NOT --color-overlay-soft. The soft token (35% black in
-     light mode) composites to rgb(166) over a white photograph, where white
-     ink lands at 2.44:1 — under AA, and genuinely hard to see on a pale
-     image. --color-overlay is 0.6/0.7, which holds 5.7:1 over the same
+     light mode) composites to a mid grey over a white photograph, where
+     white ink lands at 2.44:1 — under AA, and genuinely hard to see on a
+     pale image. --color-overlay is 0.6/0.7, which holds 5.7:1 over the same
      worst case. `.status-pill` beside it does use the soft token, but it is
      larger, has a border in its own semantic colour, and is not a control
      you have to hit. tests/browser/index_order.mjs measures this against
