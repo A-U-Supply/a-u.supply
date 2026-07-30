@@ -116,6 +116,30 @@ const goto = async (u) => {
   }
 };
 
+/**
+ * Poll until `expr` is truthy. Returns false on timeout.
+ *
+ * `readyState === 'complete'` only means the DOCUMENT is done — this grid is
+ * fetched and rendered by an inline script afterwards. Sleeping a fixed
+ * couple of seconds and then asserting is how the faced-head pass came to
+ * report a still-compiling dev server as a product failure (see
+ * tests/browser/faced_head_contrast.mjs). Wait for the thing.
+ */
+const waitFor = async (expr, ms = 15000) => {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    try {
+      if (await ev(expr)) return true;
+    } catch {}
+    await sleep(150);
+  }
+  return false;
+};
+
+/** The grid has finished a fetch and painted real cards (not skeletons). */
+const GRID_READY = `document.querySelector('.latent-grid')?.getAttribute('aria-busy') === 'false'
+  && !!document.querySelector('.latent-grid .card')`;
+
 const results = [];
 const check = (name, pass, detail) =>
   results.push({ name, pass: !!pass, detail: detail ?? '' });
@@ -231,7 +255,12 @@ try {
   if (status !== 200) throw new Error('cannot log in');
 
   await goto(`${BASE}/admin/latents`);
-  await sleep(1500);
+  if (!(await waitFor(GRID_READY))) {
+    check('the grid rendered', false,
+      'no cards within 15s — the dev server is still compiling or is in a bad ' +
+      'state. This is NOT a reorder failure; restart astro dev.');
+    throw new Error('grid never rendered');
+  }
 
   // --- seed: one card per hero treatment, plus a plain one ----------------
   // Find any image already attached to any latent. Deliberately NOT via
@@ -283,7 +312,7 @@ try {
   check('seeded probe latents', made.length >= 2, `${made.length}: ${plan.map((p) => p[0]).join(', ')}`);
 
   await goto(`${BASE}/admin/latents`);
-  await sleep(2000);
+  await waitFor(GRID_READY);
   await ev(CONTRAST_FN);
 
   const probes = await ev(PROBE);
@@ -351,7 +380,7 @@ try {
     `${before.join(' | ')}  ->  ${after.join(' | ')}`);
 
   await goto(`${BASE}/admin/latents`);
-  await sleep(1800);
+  await waitFor(GRID_READY);
   const reloaded = await ev(ALL_NAMES);
   check('the new order survives a reload', reloaded.join() === after.join(),
     `${reloaded.join(' | ')}`);
