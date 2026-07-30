@@ -317,11 +317,20 @@ import Admin from '../../../layouts/Admin.astro';
   }
   /* Hero cards: the TOP of the card is bare photograph under every treatment
      — scrim's gradient is transparent by 70% and plate's opaque strip is
-     pinned to the BOTTOM. So the grip gets the same treatment .status-pill
-     already gets over imagery: on-overlay ink plus a soft backing. */
+     pinned to the BOTTOM. So the grip needs on-overlay ink plus its own
+     backing; nothing else guarantees a ground up here.
+
+     --color-overlay, NOT --color-overlay-soft. The soft token (35% black in
+     light mode) composites to rgb(166) over a white photograph, where white
+     ink lands at 2.44:1 — under AA, and genuinely hard to see on a pale
+     image. --color-overlay is 0.6/0.7, which holds 5.7:1 over the same
+     worst case. `.status-pill` beside it does use the soft token, but it is
+     larger, has a border in its own semantic colour, and is not a control
+     you have to hit. tests/browser/index_order.mjs measures this against
+     both a white and a black ground. */
   :global(.latent-grid .card--hero .card__grip) {
     color: var(--color-on-overlay);
-    background: var(--color-overlay-soft);
+    background: var(--color-overlay);
   }
   :global(.latent-grid .card__grip:active) {
     cursor: grabbing;
