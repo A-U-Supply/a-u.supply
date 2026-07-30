@@ -106,6 +106,33 @@ const goto = async (u) => {
   }
 };
 
+/**
+ * Poll until `expr` is truthy. Returns false on timeout.
+ *
+ * `readyState === 'complete'` only means the DOCUMENT is done — every island
+ * on this page mounts later, on `astro:page-load`. Sleeping a fixed 2.4s and
+ * then asserting was this harness's real weakness: on a cold vite compile, a
+ * recompile after a branch switch or `npm run format`, or just a loaded
+ * machine, the slot card simply isn't there yet and every check reports "no
+ * slot card" — which reads exactly like a contrast regression and sends the
+ * next person hunting a bug that doesn't exist. It did exactly that on
+ * 2026-07-30. Wait for the thing; don't guess how long it takes.
+ */
+const waitFor = async (expr, ms = 15000) => {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    try {
+      if (await ev(expr)) return true;
+    } catch {}
+    await sleep(150);
+  }
+  return false;
+};
+
+/** The slot card exists and its island has hydrated (the summary is a real
+ *  toggle, not just server markup). */
+const SLOT_READY = `!!document.querySelector('.slot .slot__summary')`;
+
 const results = [];
 const check = (name, pass, detail) => {
   results.push({ name, pass: !!pass, detail: detail ?? '' });
@@ -127,7 +154,15 @@ try {
   if (status !== 200) throw new Error('cannot log in');
 
   await goto(`${BASE}/admin/latents/detail?id=${PROJ}`);
-  await sleep(2500);
+  if (!(await waitFor(SLOT_READY))) {
+    check(
+      'the detail page hydrated',
+      false,
+      'no .slot rendered within 15s — the dev server is still compiling or is ' +
+        'in a bad state. This is NOT a contrast failure; restart astro dev.',
+    );
+    throw new Error('page never hydrated');
+  }
 
   const imgId = await ev(`(async()=>{
     const items=(await (await fetch('/api/projects/${PROJ}/items',{credentials:'include'})).json()).items;
@@ -247,9 +282,11 @@ try {
       {method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json'},
        body:JSON.stringify({style:${JSON.stringify(full)}})}); return true})()`);
     await goto(`${BASE}/admin/latents/detail?id=${PROJ}`);
-    await sleep(2400);
-    const attempt = await ev(OPEN_CARD);
-    await sleep(500);
+    const ready = await waitFor(SLOT_READY);
+    const attempt = ready
+      ? await ev(OPEN_CARD)
+      : { opened: false, why: 'page never hydrated (dev server), not a contrast failure' };
+    await waitFor(IS_OPEN, 3000);
     check(
       `${label}: slot card opened`,
       await ev(IS_OPEN),
@@ -310,9 +347,9 @@ try {
     {method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json'},
      body:JSON.stringify({style:{bg_mode:'image',bg_style:'scrim',bg_media_item_id:'${imgId}'}})}); return true})()`);
   await goto(`${BASE}/admin/latents/detail?id=${PROJ}`);
-  await sleep(2400);
+  await waitFor(SLOT_READY);
   await ev(OPEN_CARD);
-  await sleep(400);
+  await waitFor(IS_OPEN, 3000);
   const regressed = await ev(`(()=>{
     const st=document.createElement('style');
     st.id='regress-probe';
