@@ -226,14 +226,17 @@
     align-items: center;
     gap: var(--space-xs);
   }
+  /* Typed as a peer of the section heads it maps — the same 700-weight
+     uppercase at --text-sm that .sec-summary__label uses — rather than as the
+     small muted caption it was when it was a bare label. */
   .map__title {
-    font-size: 0.62rem;
+    font-size: var(--text-sm);
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1pt;
-    color: var(--color-muted);
+    color: var(--color-text);
     white-space: nowrap;
     margin: 0;
-    font-weight: normal;
   }
   /* Hiding must never be silent: once a chip is gone, Arrange is the only way
      back, so the head says how much is missing. */
