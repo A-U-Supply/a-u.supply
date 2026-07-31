@@ -523,6 +523,20 @@ def _format_latent_abandoned(u: str, d: dict) -> dict:
     return {"text": text, "unfurl_links": False}
 
 
+def _format_latent_deleted(u: str, d: dict) -> dict:
+    """Deletion is the one latent event with no project link — that URL is a
+    404 now. Links to the index instead, and leads with what SURVIVED, because
+    on a shared workspace that's the part everyone else needs to hear."""
+    name = d.get("name") or "(untitled)"
+    n = int(d.get("item_count") or 0)
+    kept = f" — {n} file{'' if n == 1 else 's'} stayed in Emulsion" if n else ""
+    text = (
+        f"🎞 *{u}* deleted the latent *{name}*{kept}\n"
+        f"<{_latents_index_link()}|all latents>"
+    )
+    return {"text": text, "unfurl_links": False}
+
+
 # All fold/Lemmy events share this emoji so they're scannable in #supply-side.
 _FOLD_EMOJI = "🗯"
 
@@ -642,6 +656,7 @@ _IMMEDIATE_FORMATTERS = {
     "latent.created": _format_latent_created,
     "latent.status_changed": _format_latent_status_changed,
     "latent.abandoned": _format_latent_abandoned,
+    "latent.deleted": _format_latent_deleted,
     "latent.thread_created": _format_latent_thread_created,
     "latent.thread_reply": _format_latent_thread_reply,
     "latent.annotation_created": _format_latent_annotation_created,

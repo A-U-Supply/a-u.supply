@@ -1048,8 +1048,32 @@ def delete_project(
     db: Session = Depends(get_db),
 ):
     p = _project_or_404(db, project_id)
+
+    # Read what the notice needs BEFORE the row goes; after db.delete() the
+    # instance is expired and every attribute access raises.
+    name, kind = p.name, p.kind
+    item_count = db.query(func.count(ProjectItem.id)).filter(ProjectItem.project_id == project_id).scalar() or 0
+
+    # Only the latent goes. `project_items` is a JOIN row, so the cascade takes
+    # the latent's structure — slots, documents (+revisions), playlists,
+    # slideshows, links, the repo attachment — and never reaches `media_items`.
+    # Every file stays in Emulsion and in the search index. That is Tube's
+    # condition on this feature, and tests/test_latents_api.py::TestLatentDelete
+    # ::test_media_survives is what keeps it true.
+    #
+    # Threads are the deliberate exception: they anchor by (anchor_type,
+    # anchor_id) with no foreign key, so they do NOT cascade, and we leave them.
+    # The discussion lives on the fold as Lemmy posts; deleting a workspace
+    # shouldn't reach into it. The dialog says so.
     db.delete(p)
     db.commit()
+
+    try:
+        from server.slack_notifier import notify_immediate
+        notify_immediate("latent.deleted", user, name=name, kind=kind, item_count=item_count)
+    except Exception:
+        logger.exception("slack notify_immediate(latent deleted) failed")
+
     return None
 
 
