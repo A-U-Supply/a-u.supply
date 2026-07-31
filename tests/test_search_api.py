@@ -571,3 +571,96 @@ class TestScopeEnforcement:
         )
         # Should be 403 (scope) not 404 (not found) because scope check happens first
         assert resp.status_code == 403
+
+
+class TestUploadFailureReport:
+    """Tests for POST /api/media/upload/report-failure.
+
+    The browser is the only witness to a transfer that dies in flight — a
+    dropped connection or an aborted request never reaches this process — so
+    the client reports them and the server relays to Slack.
+    """
+
+    @pytest.fixture(autouse=True)
+    def mock_slack(self, monkeypatch):
+        calls = []
+
+        def fake_notify(event_type, user, **payload):
+            calls.append((event_type, payload))
+
+        import server.slack_notifier
+
+        monkeypatch.setattr(server.slack_notifier, "notify_immediate", fake_notify)
+        return calls
+
+    def report(self, client, headers, failures):
+        return client.post(
+            "/api/media/upload/report-failure",
+            json={"failures": failures},
+            headers=headers,
+        )
+
+    def test_requires_auth(self, client):
+        resp = self.report(client, {}, [{"name": "a.wav", "message": "boom"}])
+        assert resp.status_code in (401, 403)
+
+    def test_reports_one_failure(self, client, auth_headers, mock_slack):
+        resp = self.report(
+            client, auth_headers, [{"name": "kick_04.wav", "message": "Network error"}]
+        )
+        assert resp.status_code == 204
+        events = [p for e, p in mock_slack if e == "upload.failed"]
+        assert len(events) == 1
+        assert events[0]["count"] == 1
+        assert events[0]["names"] == ["kick_04.wav"]
+        assert events[0]["first_message"] == "Network error"
+
+    def test_a_whole_queue_is_one_message(self, client, auth_headers, mock_slack):
+        """The client batches on purpose: one dead uplink fails everything
+        queued behind it, and a post per file would be a wall of red."""
+        failures = [{"name": f"f{i}.wav", "message": "Network error"} for i in range(12)]
+        assert self.report(client, auth_headers, failures).status_code == 204
+        events = [p for e, p in mock_slack if e == "upload.failed"]
+        assert len(events) == 1
+        assert events[0]["count"] == 12
+        # Names are capped so a big batch doesn't paste a directory listing.
+        assert len(events[0]["names"]) == 5
+
+    def test_empty_report_says_nothing(self, client, auth_headers, mock_slack):
+        assert self.report(client, auth_headers, []).status_code == 204
+        assert [e for e, _ in mock_slack if e == "upload.failed"] == []
+
+    def test_slack_outage_is_not_an_upload_failure(
+        self, client, auth_headers, monkeypatch
+    ):
+        """Reporting a failure must never itself surface as one."""
+
+        def boom(*a, **k):
+            raise RuntimeError("slack is down")
+
+        import server.slack_notifier
+
+        monkeypatch.setattr(server.slack_notifier, "notify_immediate", boom)
+        resp = self.report(client, auth_headers, [{"name": "a.wav", "message": "x"}])
+        assert resp.status_code == 204
+
+
+class TestUploadFailedSlackMessage:
+    def test_singular_names_the_file(self):
+        from server.slack_notifier import _format_upload_failed
+
+        text = _format_upload_failed(
+            "brendan", {"count": 1, "names": ["kick_04.wav"], "first_message": "413 too large"}
+        )["text"]
+        assert "kick_04.wav" in text
+        assert "413 too large" in text
+        assert "1 of" not in text  # reads as a sentence, not a tally
+
+    def test_plural_counts_and_truncates(self):
+        from server.slack_notifier import _format_upload_failed
+
+        text = _format_upload_failed(
+            "brendan", {"count": 12, "names": [f"f{i}.wav" for i in range(5)]}
+        )["text"]
+        assert "12 of" in text
+        assert "+7 more" in text
