@@ -30,6 +30,13 @@
  *     drops to the floor when there isn't — via `--player-h`, not a constant.
  *  4. **The real picker path**, through Tribute's file input, so the handoff
  *     wiring is covered and not just the event contract.
+ *  5. **Session bundles** — a `.logicx` end to end, and a cancel mid-part that
+ *     has to hand the staging area back. This is the heaviest path in the
+ *     queue module (staging id, three parallel part workers, per-part retry)
+ *     and it shipped in #601 having never once executed under test.
+ *  6. **A live page refreshing off `upload:done`** — what replaced Uploader's
+ *     `onUploaded` callback, and the only reason a page you never left still
+ *     looks right when the upload lands.
  *
  * The transfer is slowed with CDP network throttling rather than a huge file,
  * so "mid-transfer" is deterministic instead of a race against localhost.
@@ -174,7 +181,58 @@ const WATCH_DONE = `(() => {
   return true;
 })()`;
 
+/**
+ * Record the queue's own fetch traffic.
+ *
+ * Needed because "the staging area was released" is a request that happens
+ * and then leaves no trace: there is no GET for a staging area, and the UI
+ * looks identical whether the DELETE fired or not. Resource timing gives the
+ * URL but not the method, so the wrapper is the only way to see it.
+ *
+ * Restored by `UNWATCH_FETCH` in the finally block — a stubbed `fetch` left
+ * installed breaks every later check, including the harness's own cleanup.
+ */
+const WATCH_FETCH = `(() => {
+  if (window.__realFetch) return true;
+  window.__realFetch = window.fetch;
+  window.__calls = [];
+  window.fetch = function (input, init) {
+    try {
+      const url = typeof input === 'string' ? input : (input && input.url) || '';
+      window.__calls.push({ method: (init && init.method) || 'GET', url });
+    } catch {}
+    return window.__realFetch.apply(this, arguments);
+  };
+  return true;
+})()`;
+
+const UNWATCH_FETCH = `(() => {
+  if (window.__realFetch) { window.fetch = window.__realFetch; delete window.__realFetch; }
+  return true;
+})()`;
+
+/**
+ * A .logicx as File objects with `webkitRelativePath` faked in — the shape the
+ * directory picker produces. Building real directory entries would need a
+ * fixture on disk and `DOM.setFileInputFiles` on a `webkitdirectory` input;
+ * this exercises the same `enqueueBundleFiles` path with less ceremony.
+ */
+const makeBundle = (name, parts) => `(() => {
+  const files = ${JSON.stringify(parts)}.map(([rel, size]) => {
+    const bytes = new Uint8Array(size);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = (Math.random() * 256) | 0;
+    const f = new File([bytes], rel.split('/').pop());
+    Object.defineProperty(f, 'webkitRelativePath', { value: ${JSON.stringify(name)} + '/' + rel });
+    return f;
+  });
+  document.dispatchEvent(new CustomEvent('upload:start', {
+    detail: { bundleFiles: files, destination: 'tribute' },
+  }));
+  return files.length;
+})()`;
+
 const uploaded = [];
+const latents = [];
 
 try {
   await send('Page.enable');
@@ -429,12 +487,181 @@ try {
   );
   check('the picker upload landed', !!pid, pid || 'no completion announced');
   if (pid) uploaded.push(pid);
+  await ev(`document.querySelector('.dock__close')?.click()`);
+
+  // --- 5. Session bundles -------------------------------------------------
+  // The heaviest path in the queue module and the one with the most state:
+  // a staging id, three parallel part workers, per-part retry with backoff,
+  // and a cancel that has to hand the staging area back. None of it shares
+  // code with the plain-file path above, so none of the checks so far touch
+  // it. It shipped in #601 having never once executed under test.
+  await ev(WATCH_FETCH);
+  await ev(WATCH_DONE);
+
+  const bundleName = `${PREFIX}-bundle-${Date.now()}.logicx`;
+  await ev(makeBundle(bundleName, [
+    ['ProjectData', 40000],
+    ['Alternatives/000/ProjectData', 30000],
+    ['Media/kick.wav', 60000],
+    ['Media/snare.wav', 50000],
+    ['Resources/thumb.png', 12000],
+  ]));
+  check('a .logicx bundle enters the queue', await waitFor(DOCK, 10000));
+
+  const bundleDone = await waitFor(
+    `(window.__dockDone || []).some(d => (d.name || '') === ${JSON.stringify(bundleName)})`,
+    120000,
+  );
+  const bundleId = await ev(
+    `(window.__dockDone || []).find(d => (d.name || '') === ${JSON.stringify(bundleName)})?.media_item_id || ''`,
+  );
+  check('the bundle completes', bundleDone, bundleId || 'no completion');
+  if (bundleId) {
+    uploaded.push(bundleId);
+    const got = await api('GET', `/api/media/${bundleId}`);
+    // The point of a bundle is that the server harvests it into a session
+    // item — a plain upload of the same bytes would not produce this.
+    check(
+      'the server made a session item out of it',
+      got.status === 200 && got.body?.media_type === 'session',
+      `${got.status} · media_type=${got.body?.media_type} · tool=${got.body?.session_meta?.tool}`,
+    );
+  }
+  await ev(`document.querySelector('.dock__close')?.click()`);
+
+  // --- 6. Cancelling a bundle mid-flight releases the staging area --------
+  // Throttled so the cancel genuinely lands between parts. Without the
+  // throttle this raced and the bundle finished first, which looks exactly
+  // like a cancel that worked — the queue is empty either way.
+  await send('Network.emulateNetworkConditions', {
+    offline: false,
+    latency: 20,
+    downloadThroughput: -1,
+    uploadThroughput: 120 * 1024,
+  });
+  const cancelName = `${PREFIX}-cancel-${Date.now()}.logicx`;
+  await ev(`window.__calls = []`);
+  await ev(makeBundle(cancelName, [
+    ['ProjectData', 900000],
+    ['Media/a.wav', 900000],
+    ['Media/b.wav', 900000],
+  ]));
+  await waitFor(DOCK, 10000);
+  await ev(`document.querySelector('.dock__toggle')?.click()`);
+  const midFlight = await waitFor(
+    `/\\d+%/.test(document.querySelector('.row__status')?.textContent || '')`,
+    30000,
+  );
+  check(
+    'the bundle is genuinely mid-part-upload before we cancel',
+    midFlight,
+    await ev(`document.querySelector('.row__status')?.textContent`),
+  );
+
+  await ev(`document.querySelector('.row__x')?.click()`);
+  await sleep(600);
+  check('cancel removes the row', !(await ev(`!!document.querySelector('.row')`)));
+
+  await send('Network.emulateNetworkConditions', {
+    offline: false,
+    latency: 0,
+    downloadThroughput: -1,
+    uploadThroughput: -1,
+  });
+  await sleep(9000);
+  check(
+    'it stays cancelled',
+    !(await ev(
+      `(window.__dockDone || []).some(d => (d.name || '') === ${JSON.stringify(cancelName)})`,
+    )),
+    'no completion may be announced for a cancelled bundle',
+  );
+
+  // The staging directory the server created must be handed back. This was
+  // a real leak: runBundle recorded `cancelled` before it recorded the id,
+  // so a cancel landing while POST /api/media/bundles was in flight threw
+  // away the only handle to it — a staging area orphaned with nothing left
+  // to delete it by, and completely invisible from the UI.
+  const calls = JSON.parse(await ev(`JSON.stringify(window.__calls || [])`));
+  const created = calls.filter(
+    (c) => c.method === 'POST' && /\/api\/media\/bundles$/.test(c.url),
+  ).length;
+  const released = calls.filter(
+    (c) => c.method === 'DELETE' && /\/api\/media\/bundles\//.test(c.url),
+  ).length;
+  check(
+    'the staging area is released on cancel',
+    created > 0 && released >= 1,
+    `${created} staged, ${released} released`,
+  );
+
+  // --- 7. A live page refreshes itself off upload:done --------------------
+  // The dock announces completions; whoever is still mounted listens. This
+  // is what replaced Uploader's `onUploaded` callback, and it is the only
+  // reason a page you never left still looks right afterwards.
+  const latent = (
+    await api('POST', '/api/projects', { name: `${PREFIX} Refresh`, kind: 'other' })
+  ).body;
+  if (latent?.id) {
+    latents.push(latent.id);
+    await goto(`${BASE}/admin/latents/detail?id=${latent.id}`);
+    // The detail page canonicalises ?id=<uuid> to a slug URL. Clicking
+    // before that settles means clicking a document about to be replaced.
+    await waitFor(`/\\/admin\\/latents\\/[^/]+$/.test(location.pathname)`, 20000);
+    const hasLoose = await waitFor(
+      `!!document.querySelector('#loose-island .sec-summary')`,
+    );
+    check('the latent page has a Loose files section', hasLoose);
+
+    for (let i = 0; i < 5 && !(await ev(`!!document.querySelector('#loose-body')`)); i++) {
+      await ev(`document.querySelector('#loose-island .sec-summary')?.click()`);
+      await sleep(900);
+    }
+    check('Loose files is open', await ev(`!!document.querySelector('#loose-body')`));
+    await ev(WATCH_DONE);
+    const before = await ev(
+      `document.querySelectorAll('#loose-island .tile').length`,
+    );
+
+    await ev(`(() => {
+      const b = new Uint8Array(90000);
+      for (let i = 0; i < b.length; i++) b[i] = (Math.random()*256)|0;
+      const f = new File([b], '${PREFIX}-refresh-' + Date.now() + '.bin');
+      document.dispatchEvent(new CustomEvent('upload:start', { detail: {
+        files: [f], destination: 'project', projectId: ${JSON.stringify(latent.id)} } }));
+    })()`);
+
+    const grew = await waitFor(
+      `document.querySelectorAll('#loose-island .tile').length > ${before}`,
+      60000,
+    );
+    check(
+      'the live section refreshed itself, with no reload',
+      grew,
+      `${before} tiles → ${await ev(`document.querySelectorAll('#loose-island .tile').length`)}`,
+    );
+    const rid = await ev(
+      `(window.__dockDone || []).find(d => (d.name || '').includes('${PREFIX}-refresh'))?.media_item_id || ''`,
+    );
+    if (rid) uploaded.push(rid);
+  } else {
+    check('could create a latent to upload into', false, 'POST /api/projects failed');
+  }
 } catch (e) {
   check('harness completed', false, String(e && e.message));
 } finally {
+  // Restore fetch FIRST — cleanup below goes through it.
+  try {
+    await ev(UNWATCH_FETCH);
+  } catch {}
   for (const mid of uploaded) {
     try {
       await api('DELETE', `/api/media/${mid}`);
+    } catch {}
+  }
+  for (const lid of latents) {
+    try {
+      await api('DELETE', `/api/projects/${lid}`);
     } catch {}
   }
   try {
