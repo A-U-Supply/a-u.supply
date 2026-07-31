@@ -25,9 +25,14 @@ Also covered, each because it fails quietly:
   something it no longer holds.
 * **Persistence.** A version that only reorders the DOM looks identical until
   you reload.
-* **The menu path.** Dragging is a desktop gesture — a phone shows one
-  collapsed tab at a time — so ``Move to slot ▸`` is the only route on a phone,
-  the only keyboard route, and the only way anyone discovers the feature at all.
+* **The menu path, at both widths.** Dragging is a desktop gesture — a phone
+  shows one collapsed tab at a time — so ``Move to slot ▸`` is the only route
+  on a phone, the only keyboard route, and the only way anyone discovers the
+  feature at all. ``RowActions`` renders a *different* presentation below 640px
+  (inline accordion vs the portaled panel), so exercising it on desktop says
+  nothing about the case it exists for. The phone pass also checks the nested
+  rows are still 44px targets — an indent that shrank them would be a
+  regression no assertion about the move itself would catch.
 
 **Driving a real drag needs CDP drag interception.** SortableJS uses native
 HTML5 drag-and-drop here (``DRAG_OPTS`` sets no ``forceFallback``), which

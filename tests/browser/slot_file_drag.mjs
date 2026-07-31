@@ -424,6 +424,87 @@ try {
     (await serverItems(latentId, slotB.id)) === beforeMenu + 1,
     `B went ${beforeMenu} → ${await serverItems(latentId, slotB.id)}`,
   );
+
+  // --- 6. the menu on a PHONE ---------------------------------------------
+  // The whole reason `Move to slot` exists — dragging needs two cards on
+  // screen, and a phone shows one collapsed tab at a time. RowActions renders
+  // a *different* presentation below 640px (inline accordion vs the portaled
+  // panel exercised above), so the desktop pass says nothing about it.
+  // Slot A is empty by now — every check above moved another file out of it.
+  // Give the phone pass its own row rather than depending on what survived.
+  const phoneFile = JSON.parse(
+    await ev(`(async () => {
+      const b = new Uint8Array(1500);
+      for (let i = 0; i < b.length; i++) b[i] = (Math.random()*256)|0;
+      const fd = new FormData();
+      fd.append('file', new File([b], '${PREFIX}-phone.wav', { type: 'audio/wav' }));
+      fd.append('project_id', ${JSON.stringify(latentId)});
+      fd.append('slot_id', ${JSON.stringify(slotA.id)});
+      const r = await fetch('/api/media/upload', { method:'POST', credentials:'include', body: fd });
+      const j = await r.json().catch(() => null);
+      return JSON.stringify(j && j.id);
+    })()`),
+  );
+  if (phoneFile) mediaIds.push(phoneFile);
+  check('a fresh file for the phone pass', !!phoneFile);
+
+  await send('Emulation.setDeviceMetricsOverride', {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 2,
+    mobile: true,
+  });
+  await goto(`${BASE}/admin/latents/detail?id=${latentId}`);
+  await waitFor(`document.querySelectorAll('.slot').length === 2`);
+  check(
+    'the phone breakpoint is actually on',
+    await ev(`window.matchMedia('(max-width: 640px)').matches`),
+  );
+  await ev(
+    `document.querySelector('.slot[data-slot-id="${slotA.id}"] .slot__summary')?.click()`,
+  );
+  await waitFor(`!!document.querySelector('.slot[data-slot-id="${slotA.id}"] .file-row')`);
+  await ev(
+    `document.querySelector('.slot[data-slot-id="${slotA.id}"] .file-row .row-actions__toggle')?.click()`,
+  );
+  await sleep(500);
+  check(
+    'the menu opens inline, not as the floating panel',
+    await ev(
+      `!!document.querySelector('.row-actions .row-actions__panel:not(.row-actions__panel--float)')`,
+    ),
+  );
+  await ev(`document.querySelector('.row-actions__item--parent')?.click()`);
+  await sleep(400);
+  check(
+    'the disclosure expands on a phone too',
+    await ev(
+      `!!Array.from(document.querySelectorAll('.row-actions__item--nested'))
+         .find(e => e.textContent.trim() === 'Beta')`,
+    ),
+  );
+  // 44px is the house minimum for a touch target; the nested rows inherit it
+  // from .row-actions__item, and an indent must not have shrunk them.
+  const shortRows = JSON.parse(
+    await ev(`JSON.stringify(Array.from(document.querySelectorAll('.row-actions__item'))
+      .map(e => Math.round(e.getBoundingClientRect().height)).filter(h => h < 44))`),
+  );
+  check('every menu row is still a 44px target', shortRows.length === 0,
+    shortRows.length ? `${shortRows.length} too short` : '');
+  const phoneBefore = await serverItems(latentId, slotB.id);
+  await ev(`Array.from(document.querySelectorAll('.row-actions__item--nested'))
+      .find(e => e.textContent.trim() === 'Beta')?.click()`);
+  await sleep(2200);
+  check(
+    'the file moves from a phone',
+    (await serverItems(latentId, slotB.id)) === phoneBefore + 1,
+    `B went ${phoneBefore} → ${await serverItems(latentId, slotB.id)}`,
+  );
+  check(
+    'no horizontal overflow at 390px',
+    !(await ev(`document.documentElement.scrollWidth > window.innerWidth + 1`)),
+    await ev(`document.documentElement.scrollWidth + ' vs ' + window.innerWidth`),
+  );
 } catch (e) {
   check('harness completed', false, String(e && e.message));
 } finally {
