@@ -35,10 +35,45 @@ afterwards, and the bar is the same element it was before. It also covers:
   event contract.
 * **Stay-until-dismissed** — the finished bar is the record of what happened
   and must not evaporate on a timer.
+* **Session bundles.** A ``.logicx`` end to end (the server has to make a
+  ``media_type=session`` item out of it — a plain upload of the same bytes
+  would not), and a cancel landing *mid-part* that has to hand the staging
+  area back. This is the heaviest path in the queue module — a staging id,
+  three parallel part workers, per-part retry with backoff — and it shipped in
+  #601 having never once executed under test.
 
-**Proved able to fail.** Dropping ``transition:persist`` from the dock's
-wrapper turns the element-identity check red and leaves the rest green — which
-is what established that the two mechanisms are independent in the first place.
+  The staging-release assertion needs the queue's own fetch traffic recorded,
+  because it is a request that happens and then leaves no trace: there is no
+  GET for a staging area, and the UI looks identical whether the DELETE fired
+  or not. That leak was real — ``runBundle`` recorded ``cancelled`` before it
+  recorded the bundle id, so a cancel arriving while ``POST
+  /api/media/bundles`` was in flight discarded the only handle to the
+  directory the server had just created.
+
+  The cancel is throttled deliberately. Unthrottled it raced, and the bundle
+  finished *before* the cancel landed — which looks exactly like a cancel that
+  worked, since the queue ends up empty either way.
+* **A live page refreshing off ``upload:done``** — what replaced Uploader's
+  ``onUploaded`` callback. It creates its own throwaway latent, opens Loose
+  files, uploads into it and asserts the tile count grows with no reload.
+  (The detail page canonicalises ``?id=<uuid>`` to a slug URL; the harness
+  waits for that before touching anything, or it clicks a document that is
+  about to be replaced.)
+
+**Proved able to fail**, one canary per mechanism, each reddening only its own
+checks:
+
+* Dropping ``transition:persist`` → the element-identity check alone. This is
+  what established that the two survival mechanisms are independent.
+* Restoring the old ``cancelled``-before-``bundleId`` order → *"the staging
+  area is released on cancel"* alone (``1 staged, 0 released``).
+* Breaking the ``upload:done`` filter in ``Uploader`` → *"the live section
+  refreshed itself"* alone (``0 tiles → 0``).
+* Never running enqueued bundles → the four bundle checks, and nothing else.
+
+Reproducing the whole pre-fix shape (queue in component state, no persist)
+turns the survival checks red with ``6.6% before → 0.0% after nav`` — the
+original bug.
 
 **This does not run in CI** (it needs Chrome plus both dev servers). It skips
 unless the local loop is up:
