@@ -1866,3 +1866,183 @@ class TestLatentReorderAuth:
         assert client.post(
             "/api/projects/reorder", json={"moved_id": grid["A"]}, headers=member_auth_headers,
         ).status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Deleting a latent (docs/plans/2026-07-30-latent-delete.md)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def furnished(client, auth_headers, db_session, test_user, project):
+    """A latent carrying one of everything the cascade is supposed to reach,
+    plus a thread, which it is supposed to leave alone."""
+    from server.models import Thread
+
+    slot = client.post(
+        f"/api/projects/{project['id']}/slots", json={}, headers=auth_headers,
+    ).json()
+    media = make_media_item(db_session, media_type="audio", mime_type="audio/wav")
+    item = attach_item(client, auth_headers, project["id"], media.id, slot_id=slot["id"])
+    doc = client.post(
+        f"/api/projects/{project['id']}/documents", json={"name": "Liner notes"},
+        headers=auth_headers,
+    ).json()
+    playlist = client.post(
+        f"/api/projects/{project['id']}/playlists", json={"name": "Running order"},
+        headers=auth_headers,
+    ).json()
+    slideshow = client.post(
+        f"/api/projects/{project['id']}/slideshows", json={"name": "Contact sheet"},
+        headers=auth_headers,
+    ).json()
+    link = client.post(
+        f"/api/projects/{project['id']}/links", json={"url": "https://example.com/x"},
+        headers=auth_headers,
+    ).json()
+
+    thread = Thread(
+        anchor_type="project", anchor_id=project["id"],
+        lemmy_post_id=4242, lemmy_community_id=7,
+        created_by=test_user.id,
+    )
+    db_session.add(thread)
+    db_session.commit()
+
+    return {
+        "project": project, "slot": slot, "media": media, "item": item,
+        "doc": doc, "playlist": playlist, "slideshow": slideshow,
+        "link": link, "thread_id": thread.id,
+    }
+
+
+class TestLatentDelete:
+    """David asked to delete two dead latents; Tube's condition was that it
+    must not touch the files or the search index."""
+
+    @pytest.fixture(autouse=True)
+    def mock_slack(self, monkeypatch):
+        calls = []
+
+        def fake_notify(event_type, user, **payload):
+            calls.append((event_type, payload))
+
+        import server.slack_notifier
+
+        monkeypatch.setattr(server.slack_notifier, "notify_immediate", fake_notify)
+        return calls
+
+    def delete(self, client, auth_headers, project_id):
+        return client.delete(f"/api/projects/{project_id}", headers=auth_headers)
+
+    def test_deletes_the_latent(self, client, auth_headers, project):
+        assert self.delete(client, auth_headers, project["id"]).status_code == 204
+        assert client.get(
+            f"/api/projects/{project['id']}", headers=auth_headers,
+        ).status_code == 404
+
+    def test_media_survives(self, client, auth_headers, db_session, furnished):
+        """THE test. `project_items` is a join row — deleting the latent
+        detaches the file, it does not delete it, and the search index is
+        never touched. This is Tube's condition on the whole feature."""
+        from server.models import MediaItem, ProjectItem
+
+        media_id = furnished["media"].id
+        assert self.delete(client, auth_headers, furnished["project"]["id"]).status_code == 204
+        db_session.expire_all()
+
+        assert db_session.query(MediaItem).filter(MediaItem.id == media_id).first() is not None
+        assert db_session.query(ProjectItem).filter(
+            ProjectItem.media_item_id == media_id,
+        ).count() == 0
+
+    def test_structure_cascades_away(self, client, auth_headers, db_session, furnished):
+        from server.models import (
+            ProjectDocument, ProjectLink, ProjectPlaylist, ProjectSlideshow, ProjectSlot,
+        )
+
+        pid = furnished["project"]["id"]
+        assert self.delete(client, auth_headers, pid).status_code == 204
+        db_session.expire_all()
+
+        for model in (ProjectSlot, ProjectDocument, ProjectPlaylist, ProjectSlideshow, ProjectLink):
+            assert db_session.query(model).filter(model.project_id == pid).count() == 0, model.__name__
+
+    def test_threads_survive(self, client, auth_headers, db_session, furnished):
+        """Deliberate, not an oversight. Threads anchor by (anchor_type,
+        anchor_id) with no foreign key, so they don't cascade — and the
+        discussion itself lives on the fold as a Lemmy post. Deleting a
+        workspace shouldn't reach into it. The dialog says so."""
+        from server.models import Thread
+
+        assert self.delete(client, auth_headers, furnished["project"]["id"]).status_code == 204
+        db_session.expire_all()
+        assert db_session.query(Thread).filter(
+            Thread.id == furnished["thread_id"],
+        ).first() is not None
+
+    def test_siblings_keep_their_order_and_dates(self, client, auth_headers, grid):
+        """`Project.updated_at` carries onupdate=_utcnow and every index card
+        renders "updated {date}", so a delete that touched its neighbours
+        would re-stamp the grid — the same hazard the manual order fights."""
+        before = {
+            p["id"]: (p["position"], p["updated_at"])
+            for p in client.get("/api/projects", headers=auth_headers).json()["projects"]
+        }
+        assert self.delete(client, auth_headers, grid["C"]).status_code == 204
+
+        after = {
+            p["id"]: (p["position"], p["updated_at"])
+            for p in client.get("/api/projects", headers=auth_headers).json()["projects"]
+        }
+        assert grid["C"] not in after
+        assert after == {k: v for k, v in before.items() if k != grid["C"]}
+
+    def test_unknown_id_is_404(self, client, auth_headers):
+        assert self.delete(client, auth_headers, "no-such-latent").status_code == 404
+
+    def test_requires_auth(self, client, project):
+        assert client.delete(f"/api/projects/{project['id']}").status_code == 401
+
+    def test_rejects_member(self, client, member_auth_headers, project):
+        assert client.delete(
+            f"/api/projects/{project['id']}", headers=member_auth_headers,
+        ).status_code == 403
+
+    def test_announces_in_slack(self, client, auth_headers, mock_slack, furnished):
+        assert self.delete(client, auth_headers, furnished["project"]["id"]).status_code == 204
+        # Filtered, not indexed: creating the fixture fires latent.created into
+        # the same list, and which of the two lands first depends on fixture
+        # ordering rather than on anything this test is about.
+        deleted = [p for e, p in mock_slack if e == "latent.deleted"]
+        assert len(deleted) == 1
+        assert deleted[0]["name"] == "Test Latent"
+        assert deleted[0]["item_count"] == 1
+        # No project link in the message — that URL is a 404 now.
+        assert "project_id" not in deleted[0]
+
+    def test_no_announcement_when_nothing_was_deleted(self, client, auth_headers, mock_slack):
+        assert self.delete(client, auth_headers, "no-such-latent").status_code == 404
+        assert [e for e, _ in mock_slack if e == "latent.deleted"] == []
+
+
+class TestLatentDeletedSlackMessage:
+    def test_names_what_stayed(self):
+        from server.slack_notifier import _format_latent_deleted
+
+        text = _format_latent_deleted("brendan", {"name": "Curtis Contribs", "item_count": 14})["text"]
+        assert "deleted the latent *Curtis Contribs*" in text
+        assert "14 files stayed in Emulsion" in text
+        assert "/admin/latents" in text
+        assert "detail?id=" not in text, "the latent's own URL is a 404 now"
+
+    def test_singular_file(self):
+        from server.slack_notifier import _format_latent_deleted
+
+        assert "1 file stayed" in _format_latent_deleted("b", {"name": "x", "item_count": 1})["text"]
+
+    def test_empty_latent_says_nothing_about_files(self):
+        from server.slack_notifier import _format_latent_deleted
+
+        text = _format_latent_deleted("b", {"name": "x", "item_count": 0})["text"]
+        assert "stayed" not in text

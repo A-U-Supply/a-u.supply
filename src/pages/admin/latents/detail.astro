@@ -43,6 +43,52 @@ import Admin from '../../../layouts/Admin.astro';
   </div>
 
   <div id="style-panel-island"></div>
+
+  {
+    /*
+    Native <dialog>, in the STATIC markup rather than in the header's
+    innerHTML — built once, listeners bound once, and immune to the header
+    re-rendering under it.
+
+    Native is the point, not a detail: showModal() puts the dialog in the
+    browser's top layer, so it needs no `position: fixed` and no z-index, and
+    `.latent-header--backdrop`'s `isolation: isolate` cannot swallow it. That
+    exact trap cost four separate fixes (#573/#574/#575/#581). Focus trapping
+    and Escape come free. Precedent: .quick-link-dialog in admin/dashboard.astro.
+  */
+  }
+  <dialog class="delete-dialog" id="delete-dialog">
+    <h3>Delete latent</h3>
+    <p class="delete-dialog__lede">
+      You are about to permanently delete
+      <strong id="delete-name"></strong>
+    </p>
+    <ul class="delete-dialog__ledger" id="delete-ledger"></ul>
+    <p class="delete-dialog__final">This cannot be undone.</p>
+    <label class="delete-dialog__label" for="delete-confirm">
+      Type the latent's name to confirm
+    </label>
+    <input
+      class="delete-dialog__input"
+      id="delete-confirm"
+      type="text"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <p class="delete-dialog__error" id="delete-error" hidden></p>
+    <div class="delete-dialog__actions">
+      <button class="action-btn" id="delete-cancel" type="button">Cancel</button
+      >
+      <button
+        class="action-btn action-btn--danger latent-danger"
+        id="delete-confirm-btn"
+        type="button"
+        disabled
+      >
+        Delete latent
+      </button>
+    </div>
+  </dialog>
 </Admin>
 
 <style>
@@ -261,6 +307,49 @@ import Admin from '../../../layouts/Admin.astro';
   :global(.latent-header .summary) {
     color: var(--color-muted);
     font-size: var(--text-sm);
+    /* The counts stay left; DELETE LATENT rides the right edge of this line,
+       which is the last thing above #hero-island. */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+  }
+  /* Destructive buttons that must stay legible, wherever they land.
+     `.action-btn--danger` hardcodes a red tuned for a light page, and it has
+     two problems here.
+
+     One: this header can carry the latent's cover art
+     (.latent-header--backdrop below), and that ground composites to a MID
+     tone in light mode — art at 15% under a --color-overlay-soft veil, which
+     is black in BOTH themes — where the hardcoded red falls under AA. The
+     answer is not --color-danger-on-overlay; that token is built for the dark
+     slot faces and reads worse still on a mid ground. A face is not always
+     dark. The header already solves this for its inputs ("Inputs sit on
+     opaque grounds", further down), so the button takes an opaque plate too.
+
+     Two: the hardcoded red is under AA on the dark theme's page background
+     regardless of artwork. --color-status-fail is the token that already
+     flips per theme, and it clears AA on --color-bg in both.
+
+     Specificity is deliberate — .action-btn.latent-danger beats
+     .action-btn--danger, and the :hover pair beats .action-btn--danger:hover.
+     Matching specificity here would leave the winner up to stylesheet order. */
+  :global(.action-btn.latent-danger) {
+    background: var(--color-bg);
+    border-color: var(--color-status-fail);
+    color: var(--color-status-fail);
+    /* On a phone the summary text is long enough to squeeze the button into
+       two stacked words. Let the counts wrap instead. */
+    flex: none;
+    white-space: nowrap;
+  }
+  :global(.action-btn.latent-danger:hover:not(:disabled)) {
+    background: var(--color-status-fail);
+    color: var(--color-bg);
+  }
+  :global(.action-btn.latent-danger:disabled) {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
   :global(.latent-header .slug-input) {
     background: var(--color-bg);
@@ -409,6 +498,109 @@ import Admin from '../../../layouts/Admin.astro';
     border-color: var(--latent-accent);
     box-shadow: 2px 2px 0 var(--latent-accent);
   }
+
+  /* Delete confirmation. Follows .quick-link-dialog in admin/dashboard.astro:
+     an opaque brutalist plate on a washed backdrop. No position/z-index of
+     its own — showModal() handles that in the browser's top layer. */
+  .delete-dialog {
+    border: 2px solid var(--color-fg);
+    box-shadow: 4px 4px 0 var(--color-fg);
+    background: var(--color-bg);
+    color: var(--color-fg);
+    padding: var(--space-md);
+    width: min(480px, 90vw);
+    font-family: var(--font-mono);
+    /* The site's reset zeroes margin on everything, which takes out the UA's
+       `margin: auto` and drops an open dialog into the top-left corner. */
+    margin: auto;
+  }
+  .delete-dialog::backdrop {
+    background: var(--color-overlay);
+  }
+  .delete-dialog h3 {
+    margin: 0 0 var(--space-sm) 0;
+    font-size: var(--text-base);
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+  }
+  .delete-dialog__lede {
+    margin: 0 0 var(--space-sm) 0;
+    font-size: var(--text-sm);
+  }
+  .delete-dialog__lede strong {
+    display: block;
+    margin-top: 4px;
+    font-size: var(--text-base);
+  }
+  .delete-dialog__ledger {
+    margin: 0 0 var(--space-sm) 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--text-sm);
+    /* dvh, not vh — vh is the LARGEST viewport, so a long ledger on a phone
+       would sit under the URL bar with nothing to scroll. */
+    max-height: 40dvh;
+    overflow-y: auto;
+  }
+  /* :global — the rows are written with innerHTML at open time, so they never
+     carry Astro's scope attribute and a scoped `li` rule silently misses them:
+     the labels render, un-columned, run straight into the text, and nothing
+     errors. Scoped rules only reach markup Astro compiled. */
+  .delete-dialog__ledger :global(li) {
+    display: flex;
+    gap: var(--space-xs);
+    padding: 3px 0;
+    border-top: 1px solid var(--color-border);
+  }
+  /* A flex item's default `min-width: auto` is its MIN-CONTENT width, so on a
+     phone the ledger's text refuses to shrink and runs out past the dialog's
+     right edge — wrapped, but clipped. */
+  .delete-dialog__ledger :global(span) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .delete-dialog__ledger :global(b) {
+    flex: 0 0 4.5em;
+    text-transform: uppercase;
+    font-size: 0.65rem;
+    letter-spacing: 1pt;
+    color: var(--color-muted);
+    padding-top: 3px;
+  }
+  .delete-dialog__final {
+    margin: 0 0 var(--space-sm) 0;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--color-status-fail);
+  }
+  .delete-dialog__label {
+    display: block;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    color: var(--color-muted);
+    margin-bottom: 4px;
+  }
+  .delete-dialog__input {
+    width: 100%;
+    background: var(--color-bg);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    padding: 6px 8px;
+    font: inherit;
+    font-size: var(--text-sm);
+  }
+  .delete-dialog__error {
+    margin: var(--space-xs) 0 0 0;
+    font-size: var(--text-sm);
+    color: var(--color-status-fail);
+  }
+  .delete-dialog__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-xs);
+    margin-top: var(--space-md);
+  }
 </style>
 
 <script>
@@ -468,6 +660,120 @@ import Admin from '../../../layouts/Admin.astro';
           }) as Record<string, string>
         )[c],
     );
+  }
+
+  // --- Delete a latent -----------------------------------------------------
+  // The dialog lives in the page's static markup, so its listeners bind ONCE
+  // (`deleteWired`) while the header button — which innerHTML rebuilds on every
+  // render — is re-bound each time. `deleteCtx` is what the two halves share.
+  let deleteCtx: { id: string; name: string } | null = null;
+  let deleteWired = false;
+
+  function deleteLedger(p: any): string {
+    const n = (c: number, one: string, many = one + 's') =>
+      `${c} ${c === 1 ? one : many}`;
+    // Only slots and documents come back with the project; playlists,
+    // slideshows, links and the repo are fetched by their own islands. So the
+    // counted part is conditional and the rest is named as categories — a
+    // ledger that opened with "0 slots · 0 documents" on an empty latent would
+    // read like a bug and teach the admin to skim past it.
+    const counted = [
+      p.slots?.length ? n(p.slots.length, 'slot') : '',
+      p.documents?.length
+        ? `${n(p.documents.length, 'document')} (and every revision)`
+        : '',
+    ].filter(Boolean);
+    const rest =
+      'its running orders, slideshows, pinned links and repo attachment';
+    const goes = counted.length
+      ? `${counted.join(' · ')} · plus ${rest}`
+      : rest;
+    const files = p.item_count || 0;
+    const rows = [
+      `<li><b>Goes</b><span>${escapeHtml(goes)}</span></li>`,
+      `<li><b>Stays</b><span>${
+        files
+          ? `all ${n(files, 'file')}, in Emulsion and in the search index`
+          : 'nothing is removed from Emulsion or the search index'
+      }</span></li>`,
+    ];
+    if (p.thread_count) {
+      rows.push(
+        `<li><b>Stays</b><span>${n(p.thread_count, 'discussion')} — they live on the fold, not here</span></li>`,
+      );
+    }
+    return rows.join('');
+  }
+
+  function wireDelete(id: string, p: any) {
+    deleteCtx = { id, name: p.name || '' };
+
+    const dialog = document.getElementById(
+      'delete-dialog',
+    ) as HTMLDialogElement | null;
+    const openBtn = document.getElementById(
+      'delete-latent',
+    ) as HTMLButtonElement | null;
+    if (!dialog || !openBtn) return;
+
+    const nameEl = document.getElementById('delete-name')!;
+    const ledgerEl = document.getElementById('delete-ledger')!;
+    const input = document.getElementById('delete-confirm') as HTMLInputElement;
+    const errorEl = document.getElementById('delete-error') as HTMLElement;
+    const confirmBtn = document.getElementById(
+      'delete-confirm-btn',
+    ) as HTMLButtonElement;
+    const cancelBtn = document.getElementById(
+      'delete-cancel',
+    ) as HTMLButtonElement;
+
+    openBtn.addEventListener('click', () => {
+      nameEl.textContent = deleteCtx?.name || '';
+      ledgerEl.innerHTML = deleteLedger(p);
+      input.value = '';
+      confirmBtn.disabled = true;
+      errorEl.hidden = true;
+      // showModal() throws on an already-open dialog (eg. a double-click),
+      // and the exception would abort the rest of this handler silently.
+      if (dialog.open) return;
+      dialog.showModal();
+      input.focus();
+    });
+
+    if (deleteWired) return;
+    deleteWired = true;
+
+    // Trimmed and case-insensitive on purpose. The gate is there to make you
+    // stop and read, not to test your typing — names like
+    // "2019 SF [TUBE,BDO,DWF]" are punishing enough once.
+    const matches = () =>
+      input.value.trim().toLowerCase() ===
+      (deleteCtx?.name || '').trim().toLowerCase();
+    input.addEventListener('input', () => {
+      confirmBtn.disabled = !matches();
+    });
+
+    cancelBtn.addEventListener('click', () => dialog.close());
+
+    confirmBtn.addEventListener('click', async () => {
+      if (!deleteCtx || !matches()) return;
+      confirmBtn.disabled = true;
+      errorEl.hidden = true;
+      try {
+        const res = await fetch(
+          `/api/projects/${encodeURIComponent(deleteCtx.id)}`,
+          { method: 'DELETE', credentials: 'include' },
+        );
+        if (!res.ok) throw new Error(`Failed (HTTP ${res.status})`);
+        window.location.href = '/admin/latents';
+      } catch (e: any) {
+        // Stay open. Closing would drop the admin back onto a detail page
+        // that may or may not still describe a latent that exists.
+        errorEl.textContent = e?.message || 'Could not delete the latent.';
+        errorEl.hidden = false;
+        confirmBtn.disabled = !matches();
+      }
+    });
   }
 
   async function resolveProjectId(
@@ -571,7 +877,7 @@ import Admin from '../../../layouts/Admin.astro';
         </div>
         <a class="action-btn" href="/admin/latents">All latents</a>
       </div>
-      <p class="summary">${escapeHtml(p.kind)} latent · ${p.item_count} files · ${p.documents.length} document${p.documents.length === 1 ? '' : 's'} · ${p.slots.length} slot${p.slots.length === 1 ? '' : 's'}${p.thread_count ? ' · ' + p.thread_count + ' thread' + (p.thread_count === 1 ? '' : 's') : ''}</p>
+      <p class="summary"><span>${escapeHtml(p.kind)} latent · ${p.item_count} files · ${p.documents.length} document${p.documents.length === 1 ? '' : 's'} · ${p.slots.length} slot${p.slots.length === 1 ? '' : 's'}${p.thread_count ? ' · ' + p.thread_count + ' thread' + (p.thread_count === 1 ? '' : 's') : ''}</span><button class="action-btn action-btn--danger latent-danger" id="delete-latent" type="button">Delete latent</button></p>
 
       <div id="hero-island"></div>
 
@@ -636,6 +942,8 @@ import Admin from '../../../layouts/Admin.astro';
             });
         });
       });
+
+    wireDelete(id, p);
 
     // Slug change — autosave + replaceState to keep the URL pretty
     const slugInput = document.getElementById('slug-input') as HTMLInputElement;
@@ -1042,6 +1350,11 @@ import Admin from '../../../layouts/Admin.astro';
       stopThemeWatch();
       stopThemeWatch = null;
     }
+    // The delete dialog is static markup, so a swap replaces the element the
+    // once-only listeners were bound to. Without this the next page's dialog
+    // opens with a DELETE button that can never enable.
+    deleteWired = false;
+    deleteCtx = null;
     initialized = false;
   });
   init();
