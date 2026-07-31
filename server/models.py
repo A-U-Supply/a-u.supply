@@ -641,6 +641,11 @@ class Project(Base):
     hero_accent_auto = Column(String, nullable=True)       # server-extracted "#rrggbb"; recomputed when the hero changes
     hero_accent_override = Column(String, nullable=True)   # manual "#rrggbb"; wins over auto; survives hero changes
     section_styles = Column(String, nullable=True)         # JSON dict {section_key: style object} for detail-page sections
+    # JSON {"order": [section_key…], "hidden": [section_key…]} — the detail page's
+    # section arrangement. NULL means default order with nothing hidden, so every
+    # pre-existing latent is already correct. Hiding never touches content; the
+    # island stays mounted and only stops being painted.
+    section_layout = Column(String, nullable=True)
     lemmy_community_id = Column(Integer, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, nullable=False, default=_utcnow)

@@ -8,20 +8,32 @@
   Sticky on mobile only, where the page is a long scroll and the map is the
   primary way to jump around.
 
-  Live updates ride two window events:
+  The head carries the Arrange button (LatentArrange), which sets which
+  sections are shown and in what order. A hidden section drops its chip — so
+  the head also states how many are hidden, because once the chip is gone that
+  button is the only way back.
+
+  Live updates ride three window events:
   - `latent-style-changed` (Style panel) — colors and, for slots, labels.
   - `latent-slots-updated` (LatentSlots) — add / remove / reorder / rename.
+  - `latent-layout-changed` (LatentArrange) — order and visibility.
 -->
 <script lang="ts">
   import {
-    SECTION_KEYS,
-    SECTION_LABELS,
     SECTION_TOKENS,
     safeHex,
     effectiveAccent,
     type SectionKey,
   } from '../lib/latentStyles.ts';
+  import {
+    LAYOUT_EVENT,
+    LAYOUT_LABELS,
+    resolveLayout,
+    type LayoutKey,
+    type StoredLayout,
+  } from '../lib/latentLayout.ts';
   import { revealSection } from '../lib/latentCollapse.ts';
+  import LatentArrange from './LatentArrange.svelte';
 
   type SlotChip = {
     id: string;
@@ -32,18 +44,36 @@
   type Props = {
     projectId: string;
     sectionStyles?: Record<string, Record<string, string>>;
+    sectionLayout?: StoredLayout;
     initialSlots?: SlotChip[];
   };
 
-  let { projectId, sectionStyles = {}, initialSlots = [] }: Props = $props();
+  let {
+    projectId,
+    sectionStyles = {},
+    sectionLayout = {},
+    initialSlots = [],
+  }: Props = $props();
 
   let styles = $state<Record<string, Record<string, string>>>(sectionStyles);
   let slots = $state<SlotChip[]>(initialSlots);
+  let layoutRaw = $state<StoredLayout>(sectionLayout);
+  let arrangeOpen = $state(false);
 
-  function sectionSwatch(key: SectionKey): string {
+  const layout = $derived(resolveLayout(layoutRaw));
+  const shown = $derived(layout.order.filter((k) => !layout.hidden.has(k)));
+  const hiddenCount = $derived(layout.order.length - shown.length);
+
+  function sectionSwatch(key: LayoutKey): string {
+    // Marginalia has no styleable colour of its own — it borrows the threads
+    // accent on the page, so its chip does too.
+    if (key === 'marginalia') {
+      const hex = effectiveAccent(styles.threads);
+      return `background:${hex || SECTION_TOKENS.threads}`;
+    }
     // effectiveAccent so chips track solid-face-derived accents too.
     const hex = effectiveAccent(styles[key]);
-    return `background:${hex || SECTION_TOKENS[key]}`;
+    return `background:${hex || SECTION_TOKENS[key as SectionKey]}`;
   }
 
   function slotSwatch(s: SlotChip): string {
@@ -83,7 +113,7 @@
    * collapsed one would land on a head line with nothing under it, so ask it
    * to open first and scroll on the next frame, once it has rendered.
    */
-  function goToSection(key: SectionKey) {
+  function goToSection(key: LayoutKey) {
     revealSection(key);
     requestAnimationFrame(() => scrollToEl(`#${key}-island`));
   }
@@ -112,62 +142,130 @@
     slots = d.slots;
   }
 
+  function onLayoutChanged(e: Event) {
+    const d = (e as CustomEvent).detail;
+    if (!d || d.projectId !== projectId) return;
+    layoutRaw = d.layout || {};
+  }
+
   $effect(() => {
     window.addEventListener('latent-style-changed', onStyleChanged);
     window.addEventListener('latent-slots-updated', onSlotsUpdated);
+    window.addEventListener(LAYOUT_EVENT, onLayoutChanged);
     return () => {
       window.removeEventListener('latent-style-changed', onStyleChanged);
       window.removeEventListener('latent-slots-updated', onSlotsUpdated);
+      window.removeEventListener(LAYOUT_EVENT, onLayoutChanged);
     };
   });
 </script>
 
 <nav class="map" aria-label="Section map">
-  <span class="map__label">Section map</span>
-  {#each SECTION_KEYS as key (key)}
-    <button
-      class="map__chip"
-      type="button"
-      title={SECTION_LABELS[key]}
-      aria-label="Go to {SECTION_LABELS[key]}"
-      onclick={() => goToSection(key)}
-    >
-      <i class="map__swatch" style={sectionSwatch(key)}></i>
-      <span class="map__name">{SECTION_LABELS[key]}</span>
-    </button>
-    {#if key === 'slots'}
-      {#each slots as s (s.id)}
-        <button
-          class="map__chip map__chip--slot"
-          type="button"
-          title={s.label}
-          aria-label="Go to slot {s.label}"
-          onclick={() => scrollToEl(`[data-slot-id="${CSS.escape(s.id)}"]`)}
-        >
-          <i class="map__swatch" style={slotSwatch(s)}></i>
-          <span class="map__name">{s.label}</span>
-        </button>
-      {/each}
+  <div class="map__head">
+    <h2 class="map__title">Section map</h2>
+    {#if hiddenCount > 0}
+      <span class="map__hidden">{hiddenCount} hidden</span>
     {/if}
-  {/each}
+    <button
+      class="map__arrange"
+      type="button"
+      onclick={() => (arrangeOpen = true)}
+    >
+      Arrange
+    </button>
+  </div>
+  <div class="map__chips">
+    {#each shown as key (key)}
+      <button
+        class="map__chip"
+        type="button"
+        title={LAYOUT_LABELS[key]}
+        aria-label="Go to {LAYOUT_LABELS[key]}"
+        onclick={() => goToSection(key)}
+      >
+        <i class="map__swatch" style={sectionSwatch(key)}></i>
+        <span class="map__name">{LAYOUT_LABELS[key]}</span>
+      </button>
+      {#if key === 'slots'}
+        {#each slots as s (s.id)}
+          <button
+            class="map__chip map__chip--slot"
+            type="button"
+            title={s.label}
+            aria-label="Go to slot {s.label}"
+            onclick={() => scrollToEl(`[data-slot-id="${CSS.escape(s.id)}"]`)}
+          >
+            <i class="map__swatch" style={slotSwatch(s)}></i>
+            <span class="map__name">{s.label}</span>
+          </button>
+        {/each}
+      {/if}
+    {/each}
+  </div>
 </nav>
+
+<LatentArrange
+  {projectId}
+  {slots}
+  open={arrangeOpen}
+  layout={layoutRaw}
+  swatchFor={sectionSwatch}
+  onClose={() => (arrangeOpen = false)}
+/>
 
 <style>
   .map {
     display: flex;
-    align-items: center;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 4px;
     padding: 4px 0;
     margin-top: var(--space-xs);
   }
-  .map__label {
+  .map__head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+  }
+  .map__title {
     font-size: 0.62rem;
     text-transform: uppercase;
     letter-spacing: 1pt;
     color: var(--color-muted);
-    margin-right: 4px;
     white-space: nowrap;
+    margin: 0;
+    font-weight: normal;
+  }
+  /* Hiding must never be silent: once a chip is gone, Arrange is the only way
+     back, so the head says how much is missing. */
+  .map__hidden {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    color: var(--color-muted);
+    white-space: nowrap;
+  }
+  .map__arrange {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    padding: 4px 10px;
+    min-height: 32px;
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+  }
+  .map__arrange:hover {
+    border-color: var(--color-text);
+  }
+  .map__arrange:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+  .map__chips {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
   }
   .map__chip {
     display: inline-flex;
@@ -212,10 +310,15 @@
       top: 0;
       z-index: 30;
       background: var(--color-bg);
-      flex-wrap: wrap;
       gap: 3px;
       border-bottom: 2px solid var(--color-text);
       padding: 5px 0;
+    }
+    .map__chips {
+      gap: 3px;
+    }
+    .map__arrange {
+      min-height: 36px;
     }
     /* Was 0.66rem with 2px padding — under the touch guidance the rest of the
        page respects, for the control you navigate with. */

@@ -2336,3 +2336,140 @@ class TestMoveItemBetweenSlots:
             json={"slot_id": dst["id"]},
         )
         assert resp.status_code in (401, 403)
+
+
+class TestSectionLayout:
+    """`section_layout` — which detail-page sections show, and in what order
+    (docs/plans/2026-07-31-latent-section-arrange.md).
+
+    The server validates and stores; the client's resolveLayout() does the
+    resolving (partial orders, appended newcomers). So these cover the grammar
+    and the round trip, and the browser suite covers the reading.
+    """
+
+    def test_summary_default_empty(self, project):
+        assert project["section_layout"] == {}
+
+    def test_round_trip(self, client, auth_headers, project):
+        payload = {"order": ["slots", "loose", "docs"], "hidden": ["docs"]}
+        resp = patch_project(client, auth_headers, project["id"], {"section_layout": payload})
+        assert resp.status_code == 200
+        assert resp.json()["section_layout"] == payload
+        again = client.get(f"/api/projects/{project['id']}", headers=auth_headers)
+        assert again.json()["section_layout"] == payload
+
+    def test_partial_order_is_stored_as_given(self, client, auth_headers, project):
+        """A partial order is legal — the reader appends whatever it omits, which
+        is what lets a saved layout survive a NEW section being added later."""
+        resp = patch_project(
+            client, auth_headers, project["id"], {"section_layout": {"order": ["threads"]}}
+        )
+        assert resp.status_code == 200
+        assert resp.json()["section_layout"] == {"order": ["threads"]}
+
+    def test_marginalia_is_arrangeable(self, client, auth_headers, project):
+        """Marginalia is not a styleable section, but it IS on the page."""
+        resp = patch_project(
+            client, auth_headers, project["id"], {"section_layout": {"hidden": ["marginalia"]}}
+        )
+        assert resp.status_code == 200
+        assert resp.json()["section_layout"]["hidden"] == ["marginalia"]
+
+    def test_marginalia_still_rejected_as_a_style_key(self, client, auth_headers, project):
+        resp = patch_project(
+            client, auth_headers, project["id"],
+            {"section_styles": {"marginalia": {"accent": "#abcdef"}}},
+        )
+        assert resp.status_code == 400
+
+    def test_replaces_rather_than_merges(self, client, auth_headers, project):
+        """Unlike section_styles, a write is the whole object."""
+        patch_project(
+            client, auth_headers, project["id"],
+            {"section_layout": {"order": ["loose"], "hidden": ["docs"]}},
+        )
+        resp = patch_project(
+            client, auth_headers, project["id"], {"section_layout": {"hidden": ["links"]}}
+        )
+        assert resp.json()["section_layout"] == {"hidden": ["links"]}
+
+    def test_empty_object_clears(self, client, auth_headers, db_session, project):
+        from server.models import Project
+
+        patch_project(
+            client, auth_headers, project["id"], {"section_layout": {"hidden": ["docs"]}}
+        )
+        resp = patch_project(client, auth_headers, project["id"], {"section_layout": {}})
+        assert resp.status_code == 200
+        assert resp.json()["section_layout"] == {}
+        # Cleared back to NULL, so "never arranged" and "reset" are the same row.
+        row = db_session.query(Project).filter(Project.id == project["id"]).first()
+        db_session.refresh(row)
+        assert row.section_layout is None
+
+    def test_empty_lists_clear(self, client, auth_headers, project):
+        patch_project(
+            client, auth_headers, project["id"], {"section_layout": {"hidden": ["docs"]}}
+        )
+        resp = patch_project(
+            client, auth_headers, project["id"],
+            {"section_layout": {"order": [], "hidden": []}},
+        )
+        assert resp.json()["section_layout"] == {}
+
+    def test_unknown_section_rejected(self, client, auth_headers, project):
+        resp = patch_project(
+            client, auth_headers, project["id"], {"section_layout": {"order": ["header"]}}
+        )
+        assert resp.status_code == 400
+        assert "header" in resp.json()["detail"]
+
+    def test_unknown_field_rejected(self, client, auth_headers, project):
+        resp = patch_project(
+            client, auth_headers, project["id"], {"section_layout": {"collapsed": ["docs"]}}
+        )
+        assert resp.status_code == 400
+
+    def test_duplicate_key_rejected(self, client, auth_headers, project):
+        resp = patch_project(
+            client, auth_headers, project["id"],
+            {"section_layout": {"order": ["docs", "docs"]}},
+        )
+        assert resp.status_code == 400
+
+    def test_non_list_rejected(self, client, auth_headers, project):
+        resp = patch_project(
+            client, auth_headers, project["id"], {"section_layout": {"hidden": "docs"}}
+        )
+        assert resp.status_code == 400
+
+    def test_non_string_member_rejected(self, client, auth_headers, project):
+        resp = patch_project(
+            client, auth_headers, project["id"], {"section_layout": {"order": [3]}}
+        )
+        assert resp.status_code == 400
+
+    def test_layout_and_styles_are_independent(self, client, auth_headers, project):
+        patch_project(
+            client, auth_headers, project["id"],
+            {"section_styles": {"docs": {"accent": "#abcdef"}}},
+        )
+        resp = patch_project(
+            client, auth_headers, project["id"], {"section_layout": {"hidden": ["docs"]}}
+        )
+        assert resp.json()["section_styles"]["docs"]["accent"] == "#abcdef"
+        assert resp.json()["section_layout"]["hidden"] == ["docs"]
+
+    def test_requires_auth(self, client, project):
+        resp = client.patch(
+            f"/api/projects/{project['id']}", json={"section_layout": {"hidden": ["docs"]}}
+        )
+        assert resp.status_code == 401
+
+    def test_rejects_member(self, client, member_auth_headers, project):
+        resp = client.patch(
+            f"/api/projects/{project['id']}",
+            json={"section_layout": {"hidden": ["docs"]}},
+            headers=member_auth_headers,
+        )
+        assert resp.status_code == 403
