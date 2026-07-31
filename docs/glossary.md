@@ -12,6 +12,7 @@ The naming system blends ecclesiastical, scientific-warehouse, and photographic-
 |  |  | Marginalia | `bookmarks` | Per-user bookmarks across releases / media items (`/admin/bookmarks`) |
 | **The Canon** | releases catalog | Releases | `catalog` | Release catalog list + edit (`/admin/catalog`) |
 |  |  | New Release | `catalog-new` | Create-release form (`/admin/catalog/new`) |
+| **The Darkroom** | pre-release workspace | Latents | `latents` | Private admin-only workspace for assembling pre-release works of any media type. Sits under The Canon because a latent is a release that hasn't happened yet. See [`plans/2026-05-15-latents.md`](plans/2026-05-15-latents.md). |
 | **The Larder** | media library | The Stacks | `search` | Main media search UI over Meilisearch indices `images` / `audio` / `video` / `emulsion` (`/admin/search`) |
 |  |  | Tribute | `upload` | User upload form. Routes uploads into the `emulsion` index (`/admin/search/upload`) |
 |  |  | Nomenclator | `nomenclator` | Tag administration: rename, merge, retire tags (`/admin/search/nomenclator`) |
@@ -21,7 +22,6 @@ The naming system blends ecclesiastical, scientific-warehouse, and photographic-
 | **The Altar** | workspace, jobs, bulk ops | Workspace | `workspace` | Ephemeral bag of media items selected for a bot job (`/admin/search/workspace`) |
 |  |  | Hecatomb | `hecatomb` | Bulk job-submit UI — runs an app against many random inputs at once (`/admin/hecatomb`). "Hecatomb" is the dispatch UI, not an app itself. |
 |  |  | The Queue | `jobs` | Job-queue browser + detail (`/admin/jobs`) |
-| **The Darkroom** | pre-release workspace | Latents | `latents` | Private admin-only workspace for assembling pre-release works of any media type. See [`plans/2026-05-15-latents.md`](plans/2026-05-15-latents.md). |
 | **The Atelier** | browser-side creative tools | Punctum | `punctum` | Multi-bot image atelier (`/admin/atelier/punctum`). See [`atelier.md`](atelier.md). |
 |  |  | Photism | `photism` | Audio → image spectral editor (`/admin/atelier/photism`) |
 |  |  | Litany | `litany` | Sample sequencer — voices fired from the sounds-bored index in step-pattern loops (`/admin/atelier/litany`). See [`plans/2026-05-29-sequencer.md`](plans/2026-05-29-sequencer.md). |

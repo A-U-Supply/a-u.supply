@@ -116,6 +116,24 @@ const { title, current } = Astro.props;
           </li>
         </ul>
 
+        <!-- Directly under The Canon on purpose: a latent is a release that
+             hasn't happened yet, so the two read as one arc. It used to sit
+             below The Altar, four sections down among the media-ops tools. -->
+        <div class="sidebar__section">
+          The Darkroom<span class="sidebar__section-hint"
+            >pre-release workspace</span
+          >
+        </div>
+        <ul class="sidebar__nav">
+          <li>
+            <a
+              href="/admin/latents"
+              aria-current={current === 'latents' ? 'page' : undefined}
+              >Latents</a
+            >
+          </li>
+        </ul>
+
         <div class="sidebar__section">
           The Larder<span class="sidebar__section-hint">media library</span>
         </div>
@@ -197,21 +215,6 @@ const { title, current } = Astro.props;
               href="/admin/jobs"
               aria-current={current === 'jobs' ? 'page' : undefined}
               >The Queue</a
-            >
-          </li>
-        </ul>
-
-        <div class="sidebar__section">
-          The Darkroom<span class="sidebar__section-hint"
-            >pre-release workspace</span
-          >
-        </div>
-        <ul class="sidebar__nav">
-          <li>
-            <a
-              href="/admin/latents"
-              aria-current={current === 'latents' ? 'page' : undefined}
-              >Latents</a
             >
           </li>
         </ul>
