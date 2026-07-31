@@ -412,6 +412,28 @@ def _format_job_batch_submitted(u: str, d: dict) -> dict:
     return {"text": text, "unfurl_links": False}
 
 
+def _format_upload_failed(u: str, d: dict) -> dict:
+    """Uploads that died in the browser.
+
+    One message per drained queue, not per file — the client batches, because
+    a dropped uplink fails everything behind it at once. Names are capped at
+    five so a 40-file batch doesn't paste a directory listing into the channel.
+    """
+    count = int(d.get("count") or 0)
+    names = [n for n in (d.get("names") or []) if n]
+    reason = (d.get("first_message") or "").strip()
+    head = f"⚠️ *{u}*'s upload failed" if count == 1 else f"⚠️ {count} of *{u}*'s uploads failed"
+    listed = ", ".join(f"`{n}`" for n in names)
+    if count > len(names):
+        listed += f" +{count - len(names)} more"
+    text = head
+    if listed:
+        text += f" — {listed}"
+    if reason:
+        text += f"\n_{reason}_"
+    return {"text": text, "unfurl_links": False}
+
+
 def _format_output_indexed(u: str, d: dict) -> dict:
     """Single-output index (or rescue from midden). Includes media preview link
     so Slack unfurls a thumbnail from the detail page's OG tags."""
@@ -660,6 +682,7 @@ _IMMEDIATE_FORMATTERS = {
     "job.batch_submitted": _format_job_batch_submitted,
     "app.registered": _format_app_registered,
     "app.updated": _format_app_updated,
+    "upload.failed": _format_upload_failed,
     "output.indexed": _format_output_indexed,
     "outputs.indexed_bulk": _format_outputs_indexed_bulk,
     "latent.created": _format_latent_created,

@@ -160,6 +160,8 @@ const ALLOWLIST = [
 const OVERLAY_ALLOWLIST = {
   'src/components/Player.svelte':
     'the persistent player bar, mounted by the layouts at document root',
+  'src/components/UploadDock.svelte':
+    'the persistent upload bar, mounted by Admin.astro at document root beside the player',
   'src/components/Pukebox.svelte':
     'owns its own page (/pukebox); no section wrapper to escape',
   'src/components/litany-exp/ViMode.svelte':

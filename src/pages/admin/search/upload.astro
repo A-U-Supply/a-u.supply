@@ -380,82 +380,43 @@ import Admin from '../../../layouts/Admin.astro';
       statusEl.style.display = 'none';
     });
 
-    // Upload
-    uploadBtn.addEventListener('click', async () => {
+    // Upload — hand the staged files to the persistent dock and get out of
+    // the way. This page used to run the transfers itself with a plain
+    // `fetch` in a serial loop: no progress, no cancel, and every file lost
+    // the moment you clicked another link. The dock has all three.
+    uploadBtn.addEventListener('click', () => {
       if (files.length === 0) return;
-      uploadBtn.disabled = true;
 
-      const tags = (document.getElementById('shared-tags') as HTMLInputElement)
-        .value;
-      const description = (
-        document.getElementById('shared-description') as HTMLTextAreaElement
-      ).value;
+      const tagsEl = document.getElementById('shared-tags') as HTMLInputElement;
+      const descEl = document.getElementById(
+        'shared-description',
+      ) as HTMLTextAreaElement;
 
-      let succeeded = 0;
-      let failed = 0;
+      document.dispatchEvent(
+        new CustomEvent('upload:start', {
+          detail: {
+            files: [...files],
+            destination: 'tribute',
+            tags: tagsEl.value,
+            description: descEl.value,
+          },
+        }),
+      );
 
-      for (let i = 0; i < files.length; i++) {
-        const statusSpan = document.getElementById(`status-${i}`);
-        if (statusSpan) {
-          statusSpan.textContent = 'Uploading...';
-          statusSpan.className =
-            'file-item__status file-item__status--uploading';
-        }
-
-        const formData = new FormData();
-        formData.append('file', files[i]);
-        if (tags) formData.append('tags', tags);
-        if (description) formData.append('description', description);
-
-        try {
-          const res = await fetch('/api/media/upload', {
-            method: 'POST',
-            credentials: 'include',
-            body: formData,
-          });
-          if (res.ok) {
-            succeeded++;
-            if (statusSpan) {
-              statusSpan.textContent = 'Done';
-              statusSpan.className =
-                'file-item__status file-item__status--done';
-            }
-          } else {
-            failed++;
-            const err = await res
-              .json()
-              .catch(() => ({ detail: 'Upload failed' }));
-            if (statusSpan) {
-              statusSpan.textContent = err.detail || 'Error';
-              statusSpan.className =
-                'file-item__status file-item__status--error';
-            }
-          }
-        } catch {
-          failed++;
-          if (statusSpan) {
-            statusSpan.textContent = 'Network error';
-            statusSpan.className = 'file-item__status file-item__status--error';
-          }
-        }
-      }
-
-      uploadBtn.disabled = false;
+      const n = files.length;
       statusEl.style.display = 'block';
-      statusEl.textContent = `Upload complete: ${succeeded} succeeded, ${failed} failed.`;
+      statusEl.textContent =
+        `${n} file${n === 1 ? '' : 's'} handed to the upload bar — ` +
+        `they keep going if you navigate away.`;
 
-      if (failed === 0) {
-        setTimeout(() => {
-          files = [];
-          renderFileList();
-          statusEl.style.display = 'none';
-          (document.getElementById('shared-tags') as HTMLInputElement).value =
-            '';
-          (
-            document.getElementById('shared-description') as HTMLTextAreaElement
-          ).value = '';
-        }, 2000);
-      }
+      // The staging list has done its job; the dock is the queue now.
+      files = [];
+      renderFileList();
+      tagsEl.value = '';
+      descEl.value = '';
+      setTimeout(() => {
+        statusEl.style.display = 'none';
+      }, 6000);
     });
   });
 </script>

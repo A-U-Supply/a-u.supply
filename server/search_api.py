@@ -163,6 +163,22 @@ class TagsRequest(BaseModel):
     tags: list[str] = Field(..., description="Tags to add. Normalized automatically (lowercased, trimmed). Duplicates are silently ignored.")
 
 
+class UploadFailure(BaseModel):
+    """One file that didn't make it."""
+    name: str = Field(..., description="The file's name, as the browser saw it.")
+    message: str = Field("", description="Why it failed — the server's detail, or a transport error like 'Network error'.")
+
+
+class UploadFailureReport(BaseModel):
+    """Client-reported upload failures, batched per queue.
+
+    The browser is the only party that knows about these: a dropped connection
+    or an aborted transfer never reaches the application at all, so the server
+    cannot notice them on its own.
+    """
+    failures: list[UploadFailure] = Field(..., description="Every file that failed in one drain of the upload queue.")
+
+
 class BatchTagsRequest(BaseModel):
     """Add tags to multiple media items at once."""
     media_ids: list[str] = Field(..., description="List of media item UUIDs to tag.")
@@ -1727,6 +1743,43 @@ async def upload_media(
 
     item = _get_media_item_or_404(db, item_id)
     return _media_item_response(item)
+
+
+@router.post("/media/upload/report-failure", status_code=204, tags=["Media Items"], summary="Report failed uploads to Slack")
+def report_upload_failure(
+    body: UploadFailureReport,
+    _auth=Depends(require_scope("write")),
+):
+    """Announce uploads that died in the browser.
+
+    A transfer can fail somewhere this process never sees — a dropped
+    connection, a proxy rejecting the body, the tab going away mid-flight — so
+    the client is the only witness. The upload dock calls this **once per
+    drained queue**, never per file: one flaky uplink fails everything queued
+    behind it, and a message per file would put a wall of red in the channel
+    for a single event. Cancels are filtered out client-side; they aren't
+    failures.
+
+    Fire-and-forget by design: reporting a failure must never itself surface as
+    one, so this returns 204 even if Slack is unreachable.
+    """
+    if not body.failures:
+        return None
+
+    user = _auth[0] if isinstance(_auth, tuple) else _auth
+    try:
+        from server.slack_notifier import notify_immediate
+
+        notify_immediate(
+            "upload.failed",
+            user,
+            count=len(body.failures),
+            names=[f.name for f in body.failures[:5]],
+            first_message=body.failures[0].message or "",
+        )
+    except Exception:
+        logger.exception("slack notify_immediate(upload failed) failed")
+    return None
 
 
 # ---------------------------------------------------------------------------

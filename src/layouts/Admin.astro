@@ -1,6 +1,7 @@
 ---
 import { ViewTransitions } from 'astro:transitions';
 import Player from '../components/Player.svelte';
+import UploadDock from '../components/UploadDock.svelte';
 
 interface Props {
   title: string;
@@ -310,6 +311,13 @@ const { title, current } = Astro.props;
         </div>
         <slot />
       </main>
+    </div>
+    <!-- Both persist across ViewTransitions. The dock rides above the player
+         via `--player-h`; see UploadDock.svelte. Without transition:persist
+         the island is destroyed on every navigation and in-flight uploads are
+         aborted — which is the bug this whole feature exists to fix. -->
+    <div class="upload-dock-slot" transition:persist="upload-dock">
+      <UploadDock client:only="svelte" />
     </div>
     <div class="player-slot" transition:persist="audio-player">
       <Player client:only="svelte" />
