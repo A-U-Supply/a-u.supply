@@ -547,6 +547,24 @@ async function uploadBundleParts(b: QueueBundle) {
   await Promise.all(workers);
 }
 
+/**
+ * Hand the server-side staging area back.
+ *
+ * Best-effort and idempotent-ish: called from the cancel path and from the
+ * start-then-cancel race, so it clears `bundleId` to stop a second attempt.
+ */
+async function releaseStaging(b: QueueBundle) {
+  const staged = b.bundleId;
+  if (!staged) return;
+  b.bundleId = undefined;
+  try {
+    await fetch(`/api/media/bundles/${encodeURIComponent(staged)}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+  } catch {}
+}
+
 async function startBundle(b: QueueBundle) {
   const d = b.dest;
   const res = await fetch('/api/media/bundles', {
@@ -617,9 +635,18 @@ async function runBundle(b: QueueBundle, fresh: boolean) {
       b.message = '';
       emit();
       const created = await startBundle(b);
-      if (b.cancelled) return;
+      // Record the id BEFORE the cancel check. The old order checked first and
+      // returned, so a cancel that landed while `startBundle` was in flight
+      // threw away the only handle to the staging area the server had just
+      // created — orphaning it on disk with nothing left to delete it by.
+      // Observed: cancel a bundle the moment it starts and the POST appears in
+      // the log with no matching DELETE, forever.
       b.bundleId = created.bundle_id;
       b.tool = created.tool || b.tool;
+      if (b.cancelled) {
+        void releaseStaging(b);
+        return;
+      }
       await uploadBundleParts(b);
     }
     if (b.cancelled) return;
@@ -854,10 +881,17 @@ export function retryAllFailed() {
 export function dismissItem(id: string) {
   const it = items.find((x) => x.id === id);
   if (!it) return;
-  if (it.status === 'uploading' || it.status === 'processing') {
+  if (it.status === 'uploading') {
     itemXhrs.get(id)?.abort();
     return; // the abort handler removes it
   }
+  // `processing` is deliberately NOT cancellable: every byte has already
+  // reached the server and it is hashing, indexing and attaching. Aborting
+  // drops our end of the response, not the work — the file lands regardless,
+  // and pretending otherwise would be a lie in the UI. The dock hides the ×
+  // for that window; this is the second half of the same rule, so a caller
+  // that reaches it another way can't cancel either.
+  if (it.status === 'processing') return;
   items = items.filter((x) => x !== it);
   emit();
 }
@@ -873,15 +907,7 @@ export async function dismissBundle(id: string) {
   for (const xhr of b.activeXhrs) xhr.abort();
   bundles = bundles.filter((x) => x !== b);
   emit();
-  if (wasRunning && b.bundleId) {
-    // Release the server-side staging area.
-    try {
-      await fetch(`/api/media/bundles/${encodeURIComponent(b.bundleId)}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-    } catch {}
-  }
+  if (wasRunning) await releaseStaging(b);
 }
 
 /** Clear everything that has finished, successfully or not. */

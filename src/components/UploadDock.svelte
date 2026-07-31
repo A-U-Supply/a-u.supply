@@ -290,15 +290,22 @@
                 onclick={() => retryItem(it.id)}>Retry</button
               >
             {/if}
-            <button
-              class="row__x"
-              type="button"
-              onclick={() => dismissItem(it.id)}
-              aria-label={it.status === 'uploading' ||
-              it.status === 'processing'
-                ? 'Cancel upload'
-                : 'Remove'}>×</button
-            >
+            <!-- No cancel once the bytes are gone. In `processing` the whole
+                 file has reached the server and it's hashing, indexing and
+                 attaching; aborting there only drops our end of the response,
+                 so the file lands anyway and the UI would be claiming a cancel
+                 that didn't happen. The old per-page uploader hid the × for
+                 the same window. -->
+            {#if it.status !== 'processing'}
+              <button
+                class="row__x"
+                type="button"
+                onclick={() => dismissItem(it.id)}
+                aria-label={it.status === 'uploading'
+                  ? 'Cancel upload'
+                  : 'Remove'}>×</button
+              >
+            {/if}
           </li>
         {/each}
       </ul>
@@ -429,12 +436,19 @@
     object-fit: cover;
     flex: none;
   }
+  /* A fixed COLUMN, not a 20px box. `fileKind()` returns words — "image",
+     "video", "file" — and at 20px they overflowed their own element and ran
+     straight into the filename ("filekick.wav"). Sized to the widest word so
+     the names line up; the bundle glyph (▣) just sits at the left of it. */
   .row__icon {
-    flex: none;
-    width: 20px;
-    text-align: center;
+    flex: 0 0 3.4em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     color: var(--color-muted);
     font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
   }
   .row__name {
     /* A flex item's default min-width is min-content, so a long filename
