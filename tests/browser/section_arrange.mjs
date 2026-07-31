@@ -312,7 +312,7 @@ try {
   check(
     'the map head is a header with an Arrange button',
     await ev(`!!document.querySelector('.map__head .map__title') &&
-              document.querySelector('.map__arrange')?.textContent.trim() === 'Arrange'`),
+              document.querySelector('.map__arrange')?.textContent.trim() === 'Arrange sections'`),
   );
   const names = await chipNames();
   check(
@@ -320,6 +320,37 @@ try {
     names.includes('Comments & markers'),
     names.join(', '),
   );
+
+  // The button is a filled ochre plate with a FIXED near-black ink, because
+  // --color-accent is light in both themes and the theme's own text colour
+  // would be 2.4:1 on it in dark. Measure rather than trust the swatch.
+  const btnContrast = (theme) => ev(`(() => {
+    document.documentElement.dataset.theme = ${JSON.stringify(theme)};
+    const el = document.querySelector('.map__arrange');
+    if (!el) return 0;
+    const cs = getComputedStyle(el);
+    const parse = (s) => (s.match(/\\d+/g) || []).slice(0, 3).map(Number);
+    const lum = (rgb) => {
+      const [r, g, b] = rgb.map((v) => {
+        const s = v / 255;
+        return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const a = lum(parse(cs.color));
+    const b = lum(parse(cs.backgroundColor));
+    const [hi, lo] = a >= b ? [a, b] : [b, a];
+    return Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100;
+  })()`);
+  for (const theme of ['light', 'dark']) {
+    const ratio = await btnContrast(theme);
+    check(
+      `the Arrange button clears AA in ${theme}`,
+      ratio >= 4.5,
+      `${ratio}:1`,
+    );
+  }
+  await ev(`document.documentElement.dataset.theme = 'light'`);
 
   // --- the dialog ----------------------------------------------------------
   check('Arrange opens a modal dialog', await openArrange());

@@ -171,7 +171,7 @@
       type="button"
       onclick={() => (arrangeOpen = true)}
     >
-      Arrange
+      Arrange sections
     </button>
   </div>
   <div class="map__chips">
@@ -243,19 +243,36 @@
     color: var(--color-muted);
     white-space: nowrap;
   }
+  /* A filled ochre plate, not another outlined chip. This is the only route
+     back to a section you've hidden — once its chip is gone there is nothing
+     else to click — so it has to read as the one control in the row rather
+     than the last item in a line of them.
+
+     Ochre is --color-accent, the house's "interactive" hue, and it is light in
+     BOTH themes: the ink is a fixed near-black, exactly as .sidebar__badge in
+     admin.css does it. Theme text would be #ececec on ochre in dark (2.4:1);
+     this way it measures 5.35:1 light and 7.33:1 dark. */
   .map__arrange {
     margin-left: auto;
     font-family: var(--font-mono);
     font-size: 0.66rem;
-    padding: 4px 10px;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    padding: 5px 12px;
     min-height: 32px;
-    background: var(--color-surface);
-    color: var(--color-text);
-    border: 1px solid var(--color-border);
+    background: var(--color-accent);
+    color: #1a1a1a;
+    border: 1px solid var(--color-fg);
+    box-shadow: var(--shadow-sm);
     cursor: pointer;
+    white-space: nowrap;
   }
   .map__arrange:hover {
-    border-color: var(--color-text);
+    box-shadow: var(--shadow-md);
+  }
+  .map__arrange:active {
+    box-shadow: none;
+    transform: translate(1px, 1px);
   }
   .map__arrange:focus-visible {
     outline: 2px solid var(--color-accent);
