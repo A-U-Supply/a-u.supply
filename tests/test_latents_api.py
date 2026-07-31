@@ -2146,3 +2146,193 @@ class TestShippedSlackMessage:
         assert "Bachelor Sessions" in text
         # Unlike a deletion, the latent is still there — link to it.
         assert "p1" in text
+
+
+def loose_items(client, auth_headers, project_id):
+    """Items attached to the latent but not to any slot.
+
+    `list_items()` above covers the per-slot case; this is the other half of
+    the same endpoint.
+    """
+    resp = client.get(
+        f"/api/projects/{project_id}/items",
+        params={"loose_only": True},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    return resp.json()["items"]
+
+
+def move_item(client, auth_headers, project_id, item_id, slot_id):
+    return client.patch(
+        f"/api/projects/{project_id}/items/{item_id}",
+        json={"slot_id": slot_id},
+        headers=auth_headers,
+    )
+
+
+@pytest.fixture
+def two_slots(client, auth_headers, project):
+    """A latent with two slots, the first holding three files."""
+    made = []
+    for _ in range(2):
+        resp = client.post(
+            f"/api/projects/{project['id']}/slots", json={}, headers=auth_headers
+        )
+        assert resp.status_code == 201
+        made.append(resp.json())
+    return made
+
+
+class TestMoveItemBetweenSlots:
+    """`PATCH /api/projects/{id}/items/{item_id}` — the endpoint behind
+    dragging a file from one slot card to another.
+
+    It has existed since Latents shipped with no caller and no coverage; the
+    drag UI is its first user, so these are the first tests it has ever had.
+    """
+
+    def furnish(self, client, auth_headers, db_session, project, slot, n=3):
+        items = []
+        for i in range(n):
+            media = make_media_item(db_session, filename=f"take-{i}.wav", media_type="audio")
+            items.append(
+                attach_item(client, auth_headers, project["id"], media.id, slot_id=slot["id"])
+            )
+        return items
+
+    def test_moves_to_the_other_slot(
+        self, client, auth_headers, db_session, project, two_slots
+    ):
+        src, dst = two_slots
+        items = self.furnish(client, auth_headers, db_session, project, src)
+        resp = move_item(client, auth_headers, project["id"], items[1]["id"], dst["id"])
+        assert resp.status_code == 200
+        assert resp.json()["slot_id"] == dst["id"]
+
+        assert [i["id"] for i in list_items(client, auth_headers, project["id"], src["id"])] == [
+            items[0]["id"],
+            items[2]["id"],
+        ]
+        assert [i["id"] for i in list_items(client, auth_headers, project["id"], dst["id"])] == [
+            items[1]["id"]
+        ]
+
+    def test_it_lands_at_the_end(
+        self, client, auth_headers, db_session, project, two_slots
+    ):
+        """It has no claim on a position in an order it was never part of."""
+        src, dst = two_slots
+        src_items = self.furnish(client, auth_headers, db_session, project, src, n=1)
+        dst_items = self.furnish(client, auth_headers, db_session, project, dst, n=2)
+        move_item(client, auth_headers, project["id"], src_items[0]["id"], dst["id"])
+        assert [i["id"] for i in list_items(client, auth_headers, project["id"], dst["id"])] == [
+            dst_items[0]["id"],
+            dst_items[1]["id"],
+            src_items[0]["id"],
+        ]
+
+    def test_null_detaches_to_loose(
+        self, client, auth_headers, db_session, project, two_slots
+    ):
+        src, _ = two_slots
+        items = self.furnish(client, auth_headers, db_session, project, src, n=1)
+        resp = move_item(client, auth_headers, project["id"], items[0]["id"], None)
+        assert resp.status_code == 200
+        assert resp.json()["slot_id"] is None
+        loose = loose_items(client, auth_headers, project["id"])
+        assert [i["id"] for i in loose] == [items[0]["id"]]
+
+    def test_the_other_slot_is_left_alone(
+        self, client, auth_headers, db_session, project, two_slots
+    ):
+        src, dst = two_slots
+        src_items = self.furnish(client, auth_headers, db_session, project, src, n=1)
+        dst_items = self.furnish(client, auth_headers, db_session, project, dst, n=3)
+        before = [i["position"] for i in list_items(client, auth_headers, project["id"], dst["id"])]
+        move_item(client, auth_headers, project["id"], src_items[0]["id"], dst["id"])
+        after = [
+            i["position"]
+            for i in list_items(client, auth_headers, project["id"], dst["id"])
+            if i["id"] in {x["id"] for x in dst_items}
+        ]
+        assert after == before, "existing rows must keep their order"
+
+    def test_the_old_slots_pin_is_cleared(
+        self, client, auth_headers, db_session, project, two_slots
+    ):
+        """A pin belongs to the SLOT, keyed (slot_id, media_type). Move the
+        pinned file away and the old card would otherwise keep showing a
+        thumbnail for something it no longer holds."""
+        src, dst = two_slots
+        media = make_media_item(db_session, filename="pinned.wav", media_type="audio")
+        item = attach_item(client, auth_headers, project["id"], media.id, slot_id=src["id"])
+        pin = client.put(
+            f"/api/projects/{project['id']}/slots/{src['id']}/pin",
+            json={"media_type": "audio", "media_item_id": media.id},
+            headers=auth_headers,
+        )
+        assert pin.status_code == 200
+        assert get_slot(client, auth_headers, project["id"], src["id"])["pinned"]["audio"] == media.id
+
+        move_item(client, auth_headers, project["id"], item["id"], dst["id"])
+        assert "audio" not in get_slot(client, auth_headers, project["id"], src["id"])["pinned"]
+
+    def test_the_pin_does_not_travel(
+        self, client, auth_headers, db_session, project, two_slots
+    ):
+        """Pinning is a choice about a slot. Inheriting it would silently
+        displace whatever the destination had already pinned."""
+        src, dst = two_slots
+        moved = make_media_item(db_session, filename="moved.wav", media_type="audio")
+        settled = make_media_item(db_session, filename="settled.wav", media_type="audio")
+        m_item = attach_item(client, auth_headers, project["id"], moved.id, slot_id=src["id"])
+        attach_item(client, auth_headers, project["id"], settled.id, slot_id=dst["id"])
+        for sid, mid in ((src["id"], moved.id), (dst["id"], settled.id)):
+            client.put(
+                f"/api/projects/{project['id']}/slots/{sid}/pin",
+                json={"media_type": "audio", "media_item_id": mid},
+                headers=auth_headers,
+            )
+        move_item(client, auth_headers, project["id"], m_item["id"], dst["id"])
+        assert get_slot(client, auth_headers, project["id"], dst["id"])["pinned"]["audio"] == settled.id
+
+    def test_a_no_op_move_keeps_the_pin(
+        self, client, auth_headers, db_session, project, two_slots
+    ):
+        """Dropping a file on the card it already lives in must change nothing
+        — the drag UI can produce this with a short, sloppy drag."""
+        src, _ = two_slots
+        media = make_media_item(db_session, filename="stays.wav", media_type="audio")
+        item = attach_item(client, auth_headers, project["id"], media.id, slot_id=src["id"])
+        client.put(
+            f"/api/projects/{project['id']}/slots/{src['id']}/pin",
+            json={"media_type": "audio", "media_item_id": media.id},
+            headers=auth_headers,
+        )
+        resp = move_item(client, auth_headers, project["id"], item["id"], src["id"])
+        assert resp.status_code == 200
+        assert get_slot(client, auth_headers, project["id"], src["id"])["pinned"]["audio"] == media.id
+
+    def test_unknown_item_is_404(self, client, auth_headers, project, two_slots):
+        assert move_item(
+            client, auth_headers, project["id"], "no-such-item", two_slots[1]["id"]
+        ).status_code == 404
+
+    def test_unknown_destination_slot_is_404(
+        self, client, auth_headers, db_session, project, two_slots
+    ):
+        src, _ = two_slots
+        items = self.furnish(client, auth_headers, db_session, project, src, n=1)
+        assert move_item(
+            client, auth_headers, project["id"], items[0]["id"], "no-such-slot"
+        ).status_code == 404
+
+    def test_requires_auth(self, client, db_session, project, two_slots, auth_headers):
+        src, dst = two_slots
+        items = self.furnish(client, auth_headers, db_session, project, src, n=1)
+        resp = client.patch(
+            f"/api/projects/{project['id']}/items/{items[0]['id']}",
+            json={"slot_id": dst["id"]},
+        )
+        assert resp.status_code in (401, 403)

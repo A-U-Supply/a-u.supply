@@ -1423,6 +1423,17 @@ def move_item(
         # Land at the end of wherever it's going — it has no claim on a
         # position in a group it was never ordered into.
         pi.position = _next_item_position(db, project_id, new_slot_id)
+        # A pin belongs to the SLOT, not to the file: `SlotPrimaryPin` is keyed
+        # (slot_id, media_type), so a pinned file that leaves would otherwise
+        # keep the old card showing a thumbnail for something it no longer
+        # holds. Deliberately not re-pinned at the destination — pinning is a
+        # choice about that slot, and inheriting it would silently displace
+        # whatever the destination had already pinned.
+        if old_slot_id:
+            db.query(SlotPrimaryPin).filter(
+                SlotPrimaryPin.slot_id == old_slot_id,
+                SlotPrimaryPin.media_item_id == pi.media_item_id,
+            ).delete(synchronize_session=False)
     pi.slot_id = new_slot_id
     if pi.is_primary and pi.media_item and pi.media_item.media_type == "image":
         for sid in {old_slot_id, new_slot_id} - {None}:

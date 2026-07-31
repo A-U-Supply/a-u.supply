@@ -668,6 +668,102 @@
     );
   }
 
+  /**
+   * The one Sortable group every slot's files belong to. Sharing a group name
+   * is what lets a row leave one card and arrive in another; without it each
+   * list only ever reorders itself.
+   */
+  const FILE_GROUP = 'latent-files';
+
+  /** The slot a file drag started from — that card refuses its own dropzone. */
+  let dragFromSlot = $state<string | null>(null);
+
+  /**
+   * A row arrived from another slot. Sortable has already transplanted the
+   * `<li>` into this list; take it straight back out and let `load()` rebuild
+   * from the server.
+   *
+   * Reconciling both slots by hand would mean replaying the server's own
+   * rules — the moved row lands at the END of its new group, the old slot's
+   * pin for that file is dropped, and both slots may need a new auto accent.
+   * A move is a rare, deliberate act; one refetch for a guaranteed-correct
+   * pair of cards is the right trade.
+   */
+  async function acceptDroppedFile(evt: any, toSlotId: string | null) {
+    const itemId = evt?.item?.dataset?.itemId;
+    // Remove first: Svelte doesn't own this node any more, so leaving it would
+    // survive the re-render as a duplicate row.
+    evt?.item?.remove();
+    if (!itemId) return;
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/items/${encodeURIComponent(itemId)}`,
+        {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slot_id: toSlotId }),
+        },
+      );
+      if (!res.ok) throw new Error(`Move failed (${res.status})`);
+    } catch (e: any) {
+      error = e?.message || 'Move failed';
+    }
+    await load();
+  }
+
+  /** Move a file to another slot without dragging it. */
+  async function moveFileToSlot(itemId: string, toSlotId: string | null) {
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/items/${encodeURIComponent(itemId)}`,
+        {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slot_id: toSlotId }),
+        },
+      );
+      if (!res.ok) throw new Error(`Move failed (${res.status})`);
+    } catch (e: any) {
+      error = e?.message || 'Move failed';
+    }
+    await load();
+  }
+
+  /**
+   * The `Move to slot ▸` entry for a row's More menu.
+   *
+   * Not a nicety: dragging is a desktop gesture. A phone shows one slot tab at
+   * a time with the cards collapsed, so there is nothing to drag between — the
+   * same reason RowMove already gives phones ↑/↓ arrows for reordering. It is
+   * also the only keyboard path, and the only way anyone discovers the feature
+   * exists, since a drag affordance announces itself to nobody.
+   *
+   * Omitted entirely when there is nowhere to go.
+   */
+  function moveActionsFor(slot: Slot, it: Item) {
+    const others = slots.filter((s) => s.id !== slot.id);
+    if (others.length === 0) return [];
+    return [
+      {
+        label: 'Move to slot',
+        title: 'Move this file to another slot',
+        children: others.map((s) => ({
+          // A slot's label is optional, so fall back to its position the way
+          // suggestedPath() does — an unnamed slot still has to be pickable.
+          label: s.label?.trim() || `Slot ${s.position + 1}`,
+          onClick: () => moveFileToSlot(it.id, s.id),
+        })),
+      },
+    ];
+  }
+
+  /** The card a drag originated in, read off the DOM at drop time. */
+  function slotIdOf(el: HTMLElement | null | undefined): string | undefined {
+    return (el?.closest?.('.slot') as HTMLElement | null)?.dataset?.slotId;
+  }
+
   /** Sortable over a slot's file rows. */
   function sortableFiles(node: HTMLElement, slotId: string) {
     const s = Sortable.create(node, {
@@ -675,7 +771,46 @@
       handle: '.file-row__drag',
       draggable: '.file-row', // never the expanded session-children row
       ghostClass: 'file-row--ghost',
-      onEnd: () => persistFileOrder(slotId, node),
+      group: { name: FILE_GROUP, pull: true, put: true },
+      onStart: () => {
+        dragFromSlot = slotId;
+      },
+      onAdd: (evt: any) => acceptDroppedFile(evt, slotId),
+      onEnd: (evt: any) => {
+        dragFromSlot = null;
+        // Only persist when the row stayed home. A cross-slot move is the
+        // destination's business, and the server puts it at the end anyway —
+        // sending this list's order too would be a second, pointless write.
+        if (evt.to === evt.from) persistFileOrder(slotId, node);
+      },
+    });
+    return { destroy: () => s.destroy() };
+  }
+
+  /**
+   * The card-wide drop target.
+   *
+   * A slot card renders COLLAPSED, and its file list only exists when the card
+   * is open, on the Files tab, and already holds something. So for most cards
+   * most of the time there is nothing for a shared Sortable group to drop
+   * into. This element always exists and covers the whole card, which makes
+   * every card a target in the state you actually find it in.
+   *
+   * It is inert (`display: none`) until a drag starts somewhere else, so it
+   * can never steal a plain reorder inside its own card. `put` refuses the
+   * source card a second time, from the DOM rather than from state, so a
+   * short sloppy drag can't "move" a file into the slot it already lives in.
+   */
+  function slotDropzone(node: HTMLElement, slotId: string) {
+    const s = Sortable.create(node, {
+      ...DRAG_OPTS,
+      sort: false,
+      group: {
+        name: FILE_GROUP,
+        pull: false,
+        put: (_to: any, from: any) => slotIdOf(from?.el) !== slotId,
+      },
+      onAdd: (evt: any) => acceptDroppedFile(evt, slotId),
     });
     return { destroy: () => s.destroy() };
   }
@@ -1395,6 +1530,8 @@
         class:slot--face-scrim={slotFaceTreatment(slot) === 'scrim'}
         class:slot--face-plate={slotFaceTreatment(slot) === 'plate'}
         class:slot--face-treat={slotFaceTreatment(slot) === 'treat'}
+        class:slot--droppable={dragFromSlot !== null &&
+          dragFromSlot !== slot.id}
         style={slotVars(slot) || undefined}
         data-slot-id={slot.id}
       >
@@ -1930,6 +2067,7 @@
                                 title: 'Rename this file',
                                 onClick: () => renameMediaItem(slot, it),
                               },
+                              ...moveActionsFor(slot, it),
                               {
                                 label: 'Download',
                                 href: `/api/media/${encodeURIComponent(it.media_item_id)}/file`,
@@ -2264,6 +2402,17 @@
             {/if}
           </div>
         {/if}
+
+        <!-- Always rendered so Sortable owns it from mount: a list created
+             mid-drag is not reliably picked up as a drop target. CSS decides
+             whether it is a target, not the markup. -->
+        <div
+          class="slot__dropzone"
+          use:slotDropzone={slot.id}
+          aria-hidden="true"
+        >
+          <span class="slot__dropzone-label">Drop to add to this slot</span>
+        </div>
       </li>
     {/each}
   </ul>
@@ -2313,6 +2462,52 @@
   .slot {
     border: 1px solid var(--color-border);
     background: var(--color-bg);
+    /* Anchors .slot__dropzone. Relative positioning with no z-index does NOT
+       make a stacking context, so this is not the landmine documented further
+       down — that one is a blanket `relative` + `z-index: 2` on every card
+       child, which would trap viewport-anchored descendants.
+       (Spelled out in prose on purpose: lint-design.mjs scans style blocks
+       without stripping comments, so writing the property name here would
+       report this rule as a hand-rolled overlay.) */
+    position: relative;
+  }
+
+  /* Cross-slot file drop target — see slotDropzone().
+     Inert by default: `display: none` keeps it out of Sortable's geometry AND
+     out of elementFromPoint, so it cannot steal a plain reorder inside its own
+     card. It only becomes a target while a drag is in flight from elsewhere. */
+  .slot__dropzone {
+    display: none;
+  }
+  .slot--droppable .slot__dropzone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    inset: 0;
+    border: 2px dashed var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  }
+  /* Sortable transplants the dragged row into whatever it is hovering, as a
+     live preview of the drop. On a COLLAPSED card that is a ~40px strip, and
+     the full file row landed across the card's own name — the target read as
+     broken at exactly the moment it needed to read as a target. The zone says
+     what it is in words; it doesn't need to rehearse the row. */
+  .slot__dropzone > :not(.slot__dropzone-label) {
+    display: none;
+  }
+  /* The label sits on its own opaque plate. A slot card can carry an arbitrary
+     photo face, so ink straight onto the card is the recurring Latents
+     contrast bug — a fixed colour that reads on one image is invisible on the
+     next. The plate makes the ground ours in every treatment. */
+  .slot__dropzone-label {
+    background: var(--color-bg);
+    color: var(--color-fg);
+    border: 1px solid var(--color-accent);
+    padding: 4px var(--space-sm);
+    font-size: var(--text-sm);
+    text-transform: uppercase;
+    letter-spacing: 1pt;
   }
   /* Slot card faces (2026-07-18-latent-faces). Everything rides the
      custom properties emitted (re-validated) by slotVars(); un-styled slots
