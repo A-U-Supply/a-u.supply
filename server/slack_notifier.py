@@ -516,6 +516,15 @@ def _format_latent_status_changed(u: str, d: dict) -> dict:
     return {"text": text, "unfurl_links": False}
 
 
+def _format_latent_shipped(u: str, d: dict) -> dict:
+    """The one status change that is an announcement. `abandoned`'s counterpart:
+    the work came out."""
+    pid = d.get("project_id") or ""
+    name = d.get("name") or "(untitled)"
+    text = f"🎞 *{u}* shipped *{name}* — it's out\n<{_latent_link(pid)}|open latent>"
+    return {"text": text, "unfurl_links": False}
+
+
 def _format_latent_abandoned(u: str, d: dict) -> dict:
     pid = d.get("project_id") or ""
     name = d.get("name") or "(untitled)"
@@ -655,6 +664,7 @@ _IMMEDIATE_FORMATTERS = {
     "outputs.indexed_bulk": _format_outputs_indexed_bulk,
     "latent.created": _format_latent_created,
     "latent.status_changed": _format_latent_status_changed,
+    "latent.shipped": _format_latent_shipped,
     "latent.abandoned": _format_latent_abandoned,
     "latent.deleted": _format_latent_deleted,
     "latent.thread_created": _format_latent_thread_created,
