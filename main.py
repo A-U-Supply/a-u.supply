@@ -157,6 +157,9 @@ for _col, _ddl in (
     ("hero_accent_auto",     "ALTER TABLE projects ADD COLUMN hero_accent_auto TEXT"),
     ("hero_accent_override", "ALTER TABLE projects ADD COLUMN hero_accent_override TEXT"),
     ("section_styles",       "ALTER TABLE projects ADD COLUMN section_styles TEXT"),
+    # Section arrangement (2026-07-31-latent-section-arrange). No backfill —
+    # NULL already reads as "default order, nothing hidden".
+    ("section_layout",       "ALTER TABLE projects ADD COLUMN section_layout TEXT"),
 ):
     if _col not in _project_cols:
         with engine.begin() as _conn:

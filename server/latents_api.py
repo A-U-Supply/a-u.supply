@@ -175,6 +175,7 @@ def _project_summary(p: Project) -> dict:
         "hero_accent_auto": p.hero_accent_auto,
         "hero_accent_override": p.hero_accent_override,
         "section_styles": _parse_metadata(p.section_styles),
+        "section_layout": _parse_metadata(p.section_layout),
         "lemmy_community_id": p.lemmy_community_id,
         "created_by": p.created_by,
         "created_at": p.created_at.isoformat() if p.created_at else None,
@@ -534,6 +535,12 @@ VALID_SLOT_BG_MODES = {"auto", "image", "solid", "none"}
 VALID_SECTION_BG_MODES = {"image", "solid", "none"}  # sections have no starred image
 VALID_SECTION_KEYS = {"repo", "links", "docs", "slots", "playlists", "slideshow", "loose", "threads"}
 
+# Sections the detail page can ARRANGE — a superset of the styleable ones.
+# Marginalia ("Latest comments & markers") is a real section on the page but
+# carries no colour of its own, so it can be moved and hidden without ever
+# being a valid section_styles key. Keep the two sets apart deliberately.
+VALID_LAYOUT_KEYS = VALID_SECTION_KEYS | {"marginalia"}
+
 
 def _merge_style_patch(
     db: Session,
@@ -612,6 +619,43 @@ def _merge_section_styles(db: Session, stored_raw: str | None, patch: dict) -> s
     return json.dumps(merged) if merged else None
 
 
+def _validate_section_layout(patch: dict) -> str | None:
+    """Validate a whole `{order, hidden}` layout object. Returns JSON or None.
+
+    Unlike section_styles this is a REPLACE, not a merge: both fields are short
+    lists the client always holds in full, and "what does a partial patch of an
+    order mean?" is the kind of question that only ever produces bugs. `{}`
+    clears the column back to the default arrangement.
+
+    `order` may name only SOME of the sections. The reader (client
+    `resolveLayout`) appends every key the stored order didn't mention, in
+    default page order, so a layout saved today keeps working when a new
+    section is added later — it simply arrives at the end, visible. Likewise a
+    key missing from `hidden` reads as shown, so a forgotten entry fails safe.
+    """
+    known = {"order", "hidden"}
+    unknown = set(patch) - known
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Unknown section_layout key '{sorted(unknown)[0]}'")
+    out: dict[str, list[str]] = {}
+    for field in ("order", "hidden"):
+        if field not in patch:
+            continue
+        value = patch[field]
+        if not isinstance(value, list):
+            raise HTTPException(status_code=400, detail=f"section_layout.{field} must be a list")
+        seen: list[str] = []
+        for key in value:
+            if not isinstance(key, str) or key not in VALID_LAYOUT_KEYS:
+                raise HTTPException(status_code=400, detail=f"Unknown section '{key}' in section_layout.{field}")
+            if key in seen:
+                raise HTTPException(status_code=400, detail=f"Duplicate section '{key}' in section_layout.{field}")
+            seen.append(key)
+        if seen:
+            out[field] = seen
+    return json.dumps(out) if out else None
+
+
 class CreateProjectBody(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     kind: str = Field("other")
@@ -628,6 +672,7 @@ class UpdateProjectBody(BaseModel):
     hero_style: str | None = None
     hero_accent_override: str | None = None  # "" resets to auto
     section_styles: dict | None = None       # partial merge; {} clears all; per-key "" deletes
+    section_layout: dict | None = None       # whole-object replace {order, hidden}; {} clears
 
 
 class CreateSlotBody(BaseModel):
@@ -1033,6 +1078,8 @@ def update_project(
             p.section_styles = None
         else:
             p.section_styles = _merge_section_styles(db, p.section_styles, body.section_styles)
+    if body.section_layout is not None:
+        p.section_layout = _validate_section_layout(body.section_layout)
     db.commit()
     db.refresh(p)
 

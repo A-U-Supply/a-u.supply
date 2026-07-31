@@ -135,6 +135,13 @@ import Admin from '../../../layouts/Admin.astro';
     padding-left: var(--space-sm);
     color: var(--sec-text, inherit);
   }
+  /* Hiding a section is the `hidden` attribute plus this rule. The UA
+     stylesheet would already do it, but only while nothing gives
+     .latent-section a display of its own — this makes it explicit so a future
+     `display: flex` here can't silently un-hide every hidden section. */
+  .latent-section[hidden] {
+    display: none;
+  }
   .latent-section[data-section='repo'] {
     --sec-accent: var(--latent-sec-repo);
   }
@@ -613,6 +620,7 @@ import Admin from '../../../layouts/Admin.astro';
     currentTheme,
     watchTheme,
   } from '../../../lib/latentStyles.ts';
+  import { LAYOUT_EVENT, resolveLayout } from '../../../lib/latentLayout.ts';
   import { thumbUrl } from '../../../lib/mediaThumb.ts';
   import LatentHero from '../../../components/LatentHero.svelte';
   import LatentSectionMap from '../../../components/LatentSectionMap.svelte';
@@ -631,6 +639,7 @@ import Admin from '../../../layouts/Admin.astro';
   let initialized = false;
   let styleListener: ((e: Event) => void) | null = null;
   let heroListener: ((e: Event) => void) | null = null;
+  let layoutListener: ((e: Event) => void) | null = null;
   let stopThemeWatch: (() => void) | null = null;
 
   function statusColor(s: string): string {
@@ -1183,6 +1192,32 @@ import Admin from '../../../layouts/Admin.astro';
     // viewer toggles it.
     stopThemeWatch = watchTheme(() => applySectionStyles(lastSectionStyles));
 
+    /*
+     * Section arrangement (2026-07-31-latent-section-arrange). `.islands` is a
+     * flex column, so the whole feature is `order` plus `hidden` — no moving
+     * nodes between parents, which means the islands never unmount and a
+     * hidden section keeps everything it had loaded. Un-hiding brings back the
+     * same component, not a fresh fetch.
+     */
+    const applySectionLayout = (layout: any) => {
+      const { order, hidden } = resolveLayout(layout);
+      order.forEach((key, i) => {
+        const el = islandsEl.querySelector<HTMLElement>(
+          `.latent-section[data-section="${key}"]`,
+        );
+        if (!el) return;
+        el.style.order = String(i);
+        el.hidden = hidden.has(key);
+      });
+    };
+    applySectionLayout(p.section_layout);
+    layoutListener = (e: Event) => {
+      const d = (e as CustomEvent).detail;
+      if (!d || d.projectId !== id) return;
+      applySectionLayout(d.layout);
+    };
+    window.addEventListener(LAYOUT_EVENT, layoutListener);
+
     // Header hero backdrop (phase 3b). Rebuilt whenever the hero changes —
     // LatentHero and the loose-files quick action both broadcast
     // `latent-hero-changed` with the fresh summary.
@@ -1223,6 +1258,7 @@ import Admin from '../../../layouts/Admin.astro';
         props: {
           projectId: id,
           sectionStyles: p.section_styles || {},
+          sectionLayout: p.section_layout || {},
           initialSlots: (p.slots || []).map((s: any) => ({
             id: s.id,
             label: s.label,
@@ -1346,6 +1382,10 @@ import Admin from '../../../layouts/Admin.astro';
     if (heroListener) {
       window.removeEventListener('latent-hero-changed', heroListener);
       heroListener = null;
+    }
+    if (layoutListener) {
+      window.removeEventListener(LAYOUT_EVENT, layoutListener);
+      layoutListener = null;
     }
     if (stopThemeWatch) {
       stopThemeWatch();
