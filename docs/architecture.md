@@ -103,10 +103,13 @@ Every admin page sits under `/admin/*` and is grouped into themed sections in th
 
 Notable groups:
 
+In sidebar order:
+
+- **The Darkroom** — Latents (private pre-release workspace). Sits directly
+  under The Canon: a latent is a release that hasn't happened yet.
 - **The Larder** — media library backed by Meilisearch
 - **The Winnowing** — failed extractions, slop bucket, midden (soft-deleted)
 - **The Altar** — workspace, Hecatomb (bulk dispatch), the job queue
-- **The Darkroom** — Latents (private pre-release workspace)
 - **The Atelier** — browser-side generative image tools ([`atelier.md`](atelier.md))
 
 ## Auth model

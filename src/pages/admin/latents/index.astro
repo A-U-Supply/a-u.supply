@@ -22,6 +22,7 @@ import Admin from '../../../layouts/Admin.astro';
         <button class="chip" data-status="forming">forming</button>
         <button class="chip" data-status="developing">developing</button>
         <button class="chip" data-status="fixing">fixing</button>
+        <button class="chip" data-status="shipped">shipped</button>
         <button class="chip" data-status="abandoned">abandoned</button>
       </div>
     </div>
@@ -435,7 +436,8 @@ import Admin from '../../../layouts/Admin.astro';
 
   // Status colors map to CSS vars so they flip in dark mode. The
   // `forming`/`abandoned` shades stay as the muted token; developing
-  // uses the accent (gold); fixing maps to the status-ok green.
+  // uses the accent (gold); fixing maps to the status-ok green; shipped
+  // is the blue. Keep this in step with the same map in detail.astro.
   function statusColor(s: string): string {
     return (
       (
@@ -443,6 +445,7 @@ import Admin from '../../../layouts/Admin.astro';
           forming: 'var(--color-muted)',
           developing: 'var(--color-accent)',
           fixing: 'var(--color-status-ok)',
+          shipped: 'var(--color-status-shipped)',
           abandoned: 'var(--color-muted)',
         } as Record<string, string>
       )[s] || 'var(--color-muted)'

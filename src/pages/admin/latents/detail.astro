@@ -640,6 +640,7 @@ import Admin from '../../../layouts/Admin.astro';
           forming: 'var(--color-muted)',
           developing: 'var(--color-accent)',
           fixing: 'var(--color-status-ok)',
+          shipped: 'var(--color-status-shipped)',
           abandoned: 'var(--color-muted)',
         } as Record<string, string>
       )[s] || 'var(--color-muted)'
@@ -868,7 +869,7 @@ import Admin from '../../../layouts/Admin.astro';
             .join('')}
         </select>
         <div class="status-row" id="status-row">
-          ${['forming', 'developing', 'fixing', 'abandoned']
+          ${['forming', 'developing', 'fixing', 'shipped', 'abandoned']
             .map((s) => {
               const c = statusColor(s);
               return `<button class="status-btn ${s === p.status ? 'active' : ''}" data-status="${s}" style="--c:${c}">${s}</button>`;

@@ -628,7 +628,7 @@ class Project(Base):
     slug = Column(String, unique=True, nullable=False, index=True)
     name = Column(String, nullable=False)
     kind = Column(String, nullable=False, default="other")  # album | video | zine | session | other
-    status = Column(String, nullable=False, default="forming")  # forming | developing | fixing | abandoned
+    status = Column(String, nullable=False, default="forming")  # forming | developing | fixing | shipped | abandoned
     # The index grid's manual house order — low sorts first, shared by every admin.
     # Seeded from created_at DESC, then curated by drag. Sparse and NEGATIVE values
     # are legal: creates prepend at min-1, and reorders renormalise to 0..N-1, so

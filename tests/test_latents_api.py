@@ -2046,3 +2046,103 @@ class TestLatentDeletedSlackMessage:
 
         text = _format_latent_deleted("b", {"name": "x", "item_count": 0})["text"]
         assert "stayed" not in text
+
+
+class TestShippedStatus:
+    """A fifth status for latents back-filled from work that already came out.
+
+    `status` is a free String column validated by a Python set, so the whole
+    feature is that set plus a colour — these tests pin the set, not a schema.
+    """
+
+    @pytest.fixture(autouse=True)
+    def mock_slack(self, monkeypatch):
+        calls = []
+
+        def fake_notify(event_type, user, **payload):
+            calls.append((event_type, payload))
+
+        import server.slack_notifier
+
+        monkeypatch.setattr(server.slack_notifier, "notify_immediate", fake_notify)
+        return calls
+
+    def test_accepts_shipped(self, client, auth_headers, project):
+        resp = patch_project(client, auth_headers, project["id"], {"status": "shipped"})
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "shipped"
+
+    def test_it_survives_a_reload(self, client, auth_headers, project):
+        set_status(client, auth_headers, project["id"], "shipped")
+        resp = client.get(f"/api/projects/{project['id']}", headers=auth_headers)
+        assert resp.json()["status"] == "shipped"
+
+    def test_the_index_can_filter_on_it(self, client, auth_headers, grid):
+        set_status(client, auth_headers, grid["B"], "shipped")
+        resp = client.get("/api/projects?status=shipped", headers=auth_headers)
+        assert [p["id"] for p in resp.json()["projects"]] == [grid["B"]]
+
+    def test_the_set_did_not_become_a_pass_through(self, client, auth_headers, project):
+        """Adding a value must not turn validation off — the guard that keeps
+        a typo in the frontend's status array from writing a status nothing
+        renders a colour for."""
+        resp = patch_project(client, auth_headers, project["id"], {"status": "shippped"})
+        assert resp.status_code == 400
+
+    def test_every_status_the_ui_offers_is_accepted(self, client, auth_headers, project):
+        """The buttons in detail.astro and the chips in index.astro are
+        hardcoded lists. This is the one place both ends are asserted equal."""
+        from server.latents_api import VALID_PROJECT_STATUSES
+
+        assert VALID_PROJECT_STATUSES == {
+            "forming",
+            "developing",
+            "fixing",
+            "shipped",
+            "abandoned",
+        }
+        for status in sorted(VALID_PROJECT_STATUSES):
+            assert (
+                patch_project(client, auth_headers, project["id"], {"status": status}).status_code
+                == 200
+            )
+
+    def test_announces_itself_in_slack(self, client, auth_headers, project, mock_slack):
+        """Shipping is news, not a `prior → next` diff — same treatment as
+        abandoning, which is its opposite."""
+        set_status(client, auth_headers, project["id"], "shipped")
+        shipped = [p for e, p in mock_slack if e == "latent.shipped"]
+        assert len(shipped) == 1
+        assert shipped[0]["name"] == "Test Latent"
+        assert shipped[0]["prior_status"] == "forming"
+        assert not [e for e, _ in mock_slack if e == "latent.status_changed"]
+
+    def test_other_statuses_still_use_the_generic_event(
+        self, client, auth_headers, project, mock_slack
+    ):
+        set_status(client, auth_headers, project["id"], "fixing")
+        assert [e for e, _ in mock_slack if e.startswith("latent.status")] == [
+            "latent.status_changed"
+        ]
+
+    def test_abandoning_is_unchanged(self, client, auth_headers, project, mock_slack):
+        set_status(client, auth_headers, project["id"], "abandoned")
+        assert [e for e, _ in mock_slack if e == "latent.abandoned"]
+
+    def test_shipping_twice_only_announces_once(self, client, auth_headers, project, mock_slack):
+        set_status(client, auth_headers, project["id"], "shipped")
+        set_status(client, auth_headers, project["id"], "shipped")
+        assert len([e for e, _ in mock_slack if e == "latent.shipped"]) == 1
+
+
+class TestShippedSlackMessage:
+    def test_it_reads_as_an_announcement(self):
+        from server.slack_notifier import _format_latent_shipped
+
+        text = _format_latent_shipped("brendan", {"name": "Bachelor Sessions", "project_id": "p1"})[
+            "text"
+        ]
+        assert "shipped" in text
+        assert "Bachelor Sessions" in text
+        # Unlike a deletion, the latent is still there — link to it.
+        assert "p1" in text

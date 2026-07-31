@@ -45,6 +45,13 @@
   --color-status-fail: #c4453a;
   --color-status-warn: #b8860b;
   --color-status-pending: var(--color-muted);
+  /* The latent `shipped` state — the terminal success counterpart to
+   * `abandoned`. Blue was David's pick; this one is saturated enough to read
+   * as blue rather than as grey-blue at pill size beside `forming`'s muted
+   * grey, which is why it isn't --latent-sec-repo. 6.29:1 on #fff,
+   * 8.31:1 on #111 — the button inverts when active, so that single ratio
+   * covers both the ink and the plate. */
+  --color-status-shipped: #1a5fb4;
 
   /* Overlay tint for badges/buttons floating on media (play arrow, type
    * chip, duration). Semi-opaque so the underlying image still reads.
@@ -143,6 +150,7 @@ html[data-theme='dark'] {
   --color-status-ok: #5ec25e;
   --color-status-fail: #f0746a;
   --color-status-warn: #e0a020;
+  --color-status-shipped: #78b0ee;
   /* Overlays stay dark so chrome anchored to media (which is usually
    * darker than the page) still reads. Tuned higher opacity than light
    * mode because the surrounding page is already dark. */

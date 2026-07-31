@@ -508,7 +508,13 @@ def _compute_hero_accent(mi: MediaItem) -> str | None:
 
 
 VALID_KINDS = {"album", "video", "zine", "session", "other"}
-VALID_PROJECT_STATUSES = {"forming", "developing", "fixing", "abandoned"}
+# `shipped` and `abandoned` are the two terminal states — the work came out, or
+# it didn't. `shipped` was added for back-filled latents (old sessions that
+# turned into albums), which the original forming→developing→fixing arc never
+# had a word for. Free string column, so adding a value needs no migration.
+VALID_PROJECT_STATUSES = {"forming", "developing", "fixing", "shipped", "abandoned"}
+# Statuses that announce themselves in Slack rather than as a generic move.
+_STATUS_EVENTS = {"shipped": "latent.shipped", "abandoned": "latent.abandoned"}
 VALID_SLOT_STATUSES = {"forming", "developing", "fixed"}
 VALID_PIN_TYPES = {"image", "audio", "video", "session"}
 VALID_HERO_STYLES = {"scrim", "plate", "treat"}
@@ -1033,7 +1039,9 @@ def update_project(
     if body.status is not None and body.status != prior_status:
         try:
             from server.slack_notifier import notify_immediate
-            event = "latent.abandoned" if body.status == "abandoned" else "latent.status_changed"
+            # The two terminal states read as news, not as a `prior → next`
+            # diff, so each gets its own message.
+            event = _STATUS_EVENTS.get(body.status, "latent.status_changed")
             notify_immediate(event, user, project_id=p.id, project_slug=p.slug, name=p.name, status=p.status, prior_status=prior_status)
         except Exception:
             logger.exception("slack notify_immediate(latent status) failed")
