@@ -33,6 +33,16 @@
     danger?: boolean;
     title?: string;
     onClick?: () => void;
+    /**
+     * Turns the entry into a disclosure that expands its children in place.
+     *
+     * Inline rather than a second floating panel, in both presentations: the
+     * desktop menu is already portaled and hand-anchored to the toggle, and a
+     * submenu would need its own anchoring, its own flip-when-near-the-edge
+     * decision and its own scroll invalidation. One list that grows is the
+     * same information with none of that.
+     */
+    children?: RowAction[];
   };
 
   let {
@@ -94,8 +104,12 @@
     );
   }
 
+  /** Label of the expanded disclosure, if any. Reset whenever the menu shuts. */
+  let expanded = $state<string | null>(null);
+
   function toggle() {
     open = !open;
+    expanded = null;
     if (open && !isPhone()) {
       place();
       // Measure again once the panel exists — the flip decision needs its
@@ -123,6 +137,51 @@
   });
 </script>
 
+<!-- One definition, used by both the phone panel and the floating one. They
+     rendered identical item loops before; a disclosure would have made that
+     two places to keep in step. -->
+{#snippet items(list: RowAction[], nested: boolean)}
+  {#each list as a (a.label)}
+    {#if a.children}
+      <button
+        class="row-actions__item row-actions__item--parent"
+        type="button"
+        title={a.title}
+        aria-expanded={expanded === a.label}
+        onclick={() => (expanded = expanded === a.label ? null : a.label)}
+        >{a.label}<span class="row-actions__caret"
+          >{expanded === a.label ? '▾' : '▸'}</span
+        ></button
+      >
+      {#if expanded === a.label}
+        {@render items(a.children, true)}
+      {/if}
+    {:else if a.href}
+      <a
+        class="row-actions__item"
+        class:row-actions__item--danger={a.danger}
+        class:row-actions__item--nested={nested}
+        href={a.href}
+        download={a.download}
+        title={a.title}
+        onclick={() => (open = false)}>{a.label}</a
+      >
+    {:else}
+      <button
+        class="row-actions__item"
+        class:row-actions__item--danger={a.danger}
+        class:row-actions__item--nested={nested}
+        type="button"
+        title={a.title}
+        onclick={() => {
+          open = false;
+          a.onClick?.();
+        }}>{a.label}</button
+      >
+    {/if}
+  {/each}
+{/snippet}
+
 <div class="row-actions">
   <button
     class="action-btn row-actions__toggle"
@@ -143,29 +202,7 @@
       {#if meta}
         <div class="row-actions__meta">{meta}</div>
       {/if}
-      {#each actions as a (a.label)}
-        {#if a.href}
-          <a
-            class="row-actions__item"
-            class:row-actions__item--danger={a.danger}
-            href={a.href}
-            download={a.download}
-            title={a.title}
-            onclick={() => (open = false)}>{a.label}</a
-          >
-        {:else}
-          <button
-            class="row-actions__item"
-            class:row-actions__item--danger={a.danger}
-            type="button"
-            title={a.title}
-            onclick={() => {
-              open = false;
-              a.onClick?.();
-            }}>{a.label}</button
-          >
-        {/if}
-      {/each}
+      {@render items(actions, false)}
     </div>
   {/if}
 </div>
@@ -189,29 +226,7 @@
     <div class="row-actions__meta row-actions__meta--name" title={label}>
       {label}
     </div>
-    {#each actions as a (a.label)}
-      {#if a.href}
-        <a
-          class="row-actions__item"
-          class:row-actions__item--danger={a.danger}
-          href={a.href}
-          download={a.download}
-          title={a.title}
-          onclick={() => (open = false)}>{a.label}</a
-        >
-      {:else}
-        <button
-          class="row-actions__item"
-          class:row-actions__item--danger={a.danger}
-          type="button"
-          title={a.title}
-          onclick={() => {
-            open = false;
-            a.onClick?.();
-          }}>{a.label}</button
-        >
-      {/if}
-    {/each}
+    {@render items(actions, false)}
   </div>
 {/if}
 
@@ -274,6 +289,25 @@
     cursor: pointer;
   }
   /* A floating menu is a pointer target, not a thumb target. */
+  /* Disclosure row: label left, caret hard right. */
+  .row-actions__item--parent {
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .row-actions__caret {
+    color: var(--color-muted);
+  }
+  /* Children read as belonging to the row above. The panel already scrolls
+     (overflow-y on the float variant), so an expanded list can't push the
+     menu past the viewport edge it was anchored inside. */
+  .row-actions__item--nested {
+    padding-left: 22px;
+    color: var(--color-muted);
+  }
+  .row-actions__item--nested:hover {
+    color: var(--color-fg);
+  }
+
   .row-actions__panel--float .row-actions__item {
     min-height: 30px;
   }
