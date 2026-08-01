@@ -20,6 +20,18 @@
  *  - **Slots can't leave their block.** The nested list is a separate Sortable
  *    with no shared group, so this is structural — but structure is exactly
  *    what a later refactor breaks by adding a `group` for convenience.
+ *  - **Slots travel WITH their section.** The other half of that, and the half
+ *    this suite originally missed: the only section it ever dragged was
+ *    `marginalia`, which has no nested block to leave behind. The block was a
+ *    sibling <li> of the Slots row, and Sortable moves `.arrange-row` and
+ *    nothing else, so dragging the section walked out from over its own slots.
+ *    It now lives inside the row; the check asserts parentage after a real
+ *    drag of the Slots row itself.
+ *  - **Getting out.** Escape comes free with `showModal()`; the × and the
+ *    backdrop click did not, and neither existed. The one that matters is the
+ *    negative — a drag released over the backdrop must NOT close the window,
+ *    which is why the handler asks where the gesture began rather than where
+ *    it ended.
  *  - **The phone.** The arrows are the mobile path and the keyboard path.
  *
  * Self-cleaning: creates its own latent, slots and document, removes them.
@@ -499,6 +511,120 @@ try {
       (await ev(`document.querySelectorAll('.arrange-row').length`)) === rowsBefore,
     strays ? `${strays} slot row(s) escaped the block` : '',
   );
+
+  // --- the slots block travels with its section ----------------------------
+  // Sortable moves `.arrange-row` and nothing else. The block used to be a
+  // sibling <li>, so dragging the Slots section walked out from over its own
+  // slots — and left that row's keyed fragment with non-contiguous start/end
+  // nodes, so re-reading the order afterwards couldn't repair it either. This
+  // suite never caught it: the only section it dragged was `marginalia`, which
+  // has nothing nested to leave behind.
+  const beforeSlotsDrag = await visualOrder();
+  const slotsSectionDragged = await dragOnto(
+    '.arrange-row[data-key="slots"] .arrange-row__drag',
+    '.arrange-row:first-of-type',
+  );
+  check('the Slots section drag starts and drops', slotsSectionDragged);
+  if (slotsSectionDragged) {
+    await sleep(1200);
+    // Guard against a vacuous pass: "still nested" proves nothing if the drag
+    // moved nothing.
+    check(
+      'dragging the Slots section reorders the page',
+      JSON.stringify(await visualOrder()) !== JSON.stringify(beforeSlotsDrag),
+      `${beforeSlotsDrag.join(',')} → ${(await visualOrder()).join(',')}`,
+    );
+    // Parentage, not existence — the block is still in the document either way,
+    // which is the trap the escape check above already had to be rewritten for.
+    const nesting = await ev(`(() => {
+      const list = document.querySelector('.arrange-slots__list');
+      if (!list) return 'no slots list at all';
+      const owner = list.closest('.arrange-row');
+      if (!owner) return 'slots list is not inside any section row';
+      return owner.dataset.key === 'slots' ? '' : 'parented to ' + owner.dataset.key;
+    })()`);
+    check(
+      'the slots stay nested under Slots after it moves',
+      nesting === '',
+      nesting,
+    );
+  }
+
+  // --- getting out of the dialog -------------------------------------------
+  const dialogOpen = () => ev(`document.querySelector('.arrange')?.open === true`);
+  // Top-left of the viewport: the plate is centred and at most 460px wide, so
+  // this is backdrop at any width this suite runs at.
+  const clickBackdrop = async () => {
+    for (const type of ['mousePressed', 'mouseReleased']) {
+      await send('Input.dispatchMouseEvent', {
+        type,
+        x: 5,
+        y: 5,
+        button: 'left',
+        clickCount: 1,
+        buttons: type === 'mousePressed' ? 1 : 0,
+      });
+    }
+    await sleep(300);
+  };
+
+  // The negative first, and it is the one that matters: a gesture that BEGAN
+  // inside the window must not close it when it happens to end on the backdrop.
+  // That is what a released drag looks like to a click handler, and closing the
+  // window out from under someone mid-arrange is the worst thing this could do.
+  //
+  // Press on a row's NAME, not its grip. Pressing a grip starts a Sortable drag,
+  // and with `Input.setInterceptDrags` on, an intercepted drag that is never
+  // dropped leaves Chrome mid-gesture: no mouseup, no click, and every later
+  // mouse event silently discarded. The first cut of this check did exactly
+  // that and passed without a single event reaching the handler — vacuous, and
+  // it took the backdrop check below down with it. The handler keys on where
+  // the POINTERDOWN landed, so any press inside the plate exercises it.
+  const insidePress = await box('.arrange-row:first-of-type .arrange-row__name');
+  check('there is a row to press inside the window', !!insidePress);
+  if (insidePress) {
+    await send('Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      x: insidePress.x,
+      y: insidePress.y,
+      button: 'left',
+      clickCount: 1,
+      buttons: 1,
+    });
+    await send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: 5,
+      y: 5,
+      button: 'left',
+      buttons: 1,
+    });
+    await send('Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      x: 5,
+      y: 5,
+      button: 'left',
+      clickCount: 1,
+      buttons: 0,
+    });
+    await sleep(400);
+    check(
+      'a gesture begun inside and released on the backdrop leaves it open',
+      await dialogOpen(),
+    );
+  }
+
+  await clickBackdrop();
+  check('clicking the backdrop closes the dialog', !(await dialogOpen()));
+
+  check('it reopens after a backdrop close', await openArrange());
+  check(
+    'the dialog has a labelled close button',
+    await ev(`!!document.querySelector('.arrange__close[aria-label="Close"]')`),
+  );
+  await ev(`document.querySelector('.arrange__close')?.click()`);
+  await sleep(300);
+  check('the × closes the dialog', !(await dialogOpen()));
+  await openArrange();
 
   // --- reordering a slot moves the real card -------------------------------
   const cardsBefore = await slotCardOrder();

@@ -13,7 +13,8 @@
 
   Slots live in their own nested list with its own Sortable and no shared
   group. That is what keeps a slot inside the slots block: structure, rather
-  than a rule that has to be re-checked on every drop. Slot rows reorder the
+  than a rule that has to be re-checked on every drop. The list sits INSIDE the
+  Slots row so that dragging the section carries its slots along. Slot rows reorder the
   real slots (the same endpoint the slot drag uses) and carry no visibility
   toggle — a section is page furniture, but a slot is content, and hiding one
   is how a take goes missing.
@@ -76,6 +77,45 @@
     if (open && !d.open) d.showModal();
     else if (!open && d.open) d.close();
   });
+
+  /* ----------------------------------------------------------------- close */
+
+  // Escape comes free with showModal(), and `onclose` syncs the parent either
+  // way. These two add the corner × and click-outside that every portaled
+  // overlay in the tree already has (LatentStylePanel, LinkRepoModal,
+  // MarginaliaBadge, PullFromIndex) but no native <dialog> here did.
+
+  /**
+   * A backdrop click reports the dialog itself as its target — but so does a
+   * click on the dialog's own padding, which is inside the plate and must not
+   * close it. Ask the pointer's position instead of trusting the target.
+   */
+  function outsidePlate(e: MouseEvent): boolean {
+    const d = dialogEl;
+    if (!d || e.target !== d) return false;
+    const r = d.getBoundingClientRect();
+    return (
+      e.clientX < r.left ||
+      e.clientX > r.right ||
+      e.clientY < r.top ||
+      e.clientY > r.bottom
+    );
+  }
+
+  // A drag released over the backdrop fires a click on the dialog, and closing
+  // the window out from under someone mid-arrange is the worst regression this
+  // could ship with. Requiring the gesture to BEGIN outside rules it out
+  // without a timer to tune: a drag always starts on a row.
+  let pressedOutside = false;
+
+  function onDialogPointerDown(e: PointerEvent) {
+    pressedOutside = outsidePlate(e);
+  }
+
+  function onDialogClick(e: MouseEvent) {
+    if (pressedOutside && outsidePlate(e)) dialogEl?.close();
+    pressedOutside = false;
+  }
 
   function slotSwatch(s: SlotChip): string {
     return `background:${safeHex(s.accent) || 'var(--color-muted)'}`;
@@ -240,8 +280,9 @@
     const s = Sortable.create(el, {
       ...DRAG_OPTS,
       handle: '.arrange-row__drag',
-      // Only the section rows move — the wrapper holding the nested slot list
-      // is not draggable, so the slots block can't be torn out as a unit.
+      // Only `.arrange-row` moves — and the slots block lives inside the Slots
+      // row, so it travels with it. It used to be a sibling <li>, which is how
+      // a dragged section left its slots behind.
       //
       // Note this does NOT keep slot rows out: `draggable` filters what a list
       // can ORIGINATE, not what can be put into it. Giving these two lists a
@@ -285,8 +326,22 @@
   }
 </script>
 
-<dialog class="arrange" bind:this={dialogEl} onclose={onClose}>
-  <h3 class="arrange__title">Arrange sections</h3>
+<dialog
+  class="arrange"
+  bind:this={dialogEl}
+  onclose={onClose}
+  onpointerdown={onDialogPointerDown}
+  onclick={onDialogClick}
+>
+  <div class="arrange__head">
+    <h3 class="arrange__title">Arrange sections</h3>
+    <button
+      class="action-btn arrange__close"
+      type="button"
+      aria-label="Close"
+      onclick={() => dialogEl?.close()}>×</button
+    >
+  </div>
   <p class="arrange__lede">
     Hiding a section only stops it showing on this page — everything in it stays
     saved, and comes back exactly as it was.
@@ -302,49 +357,56 @@
         class:arrange-row--off={hidden.has(key)}
         data-key={key}
       >
-        <RowMove
-          label={LAYOUT_LABELS[key]}
-          handleClass="arrange-row__drag"
-          alwaysArrows
-          upDisabled={i === 0}
-          downDisabled={i === order.length - 1}
-          onUp={() => nudge(i, -1)}
-          onDown={() => nudge(i, 1)}
-        />
-        <i class="arrange-row__swatch" style={swatchFor(key)}></i>
-        <span class="arrange-row__name">{LAYOUT_LABELS[key]}</span>
-        <label class="arrange-row__vis">
-          <input
-            type="checkbox"
-            checked={!hidden.has(key)}
-            onchange={() => toggle(key)}
+        <div class="arrange-row__head">
+          <RowMove
+            label={LAYOUT_LABELS[key]}
+            handleClass="arrange-row__drag"
+            alwaysArrows
+            upDisabled={i === 0}
+            downDisabled={i === order.length - 1}
+            onUp={() => nudge(i, -1)}
+            onDown={() => nudge(i, 1)}
           />
-          <span class="arrange-row__vis-text">
-            {hidden.has(key) ? 'Hidden' : 'Shown'}
-          </span>
-        </label>
+          <i class="arrange-row__swatch" style={swatchFor(key)}></i>
+          <span class="arrange-row__name">{LAYOUT_LABELS[key]}</span>
+          <label class="arrange-row__vis">
+            <input
+              type="checkbox"
+              checked={!hidden.has(key)}
+              onchange={() => toggle(key)}
+            />
+            <span class="arrange-row__vis-text">
+              {hidden.has(key) ? 'Hidden' : 'Shown'}
+            </span>
+          </label>
+        </div>
+        <!-- Inside the row, not beside it. Sortable moves `.arrange-row` and
+             nothing else, so as a sibling this block stayed put while its
+             section was dragged away — and it left the row's keyed fragment
+             with non-contiguous start/end nodes, which is why re-reading the
+             order afterwards couldn't repair it either. -->
+        {#if key === 'slots' && slotRows.length > 0}
+          <div class="arrange-slots">
+            <ul class="arrange-slots__list" use:sortableSlots>
+              {#each slotRows as s, j (s.id)}
+                <li class="arrange-slot-row" data-slot-id={s.id}>
+                  <RowMove
+                    label={s.label}
+                    handleClass="arrange-slot__drag"
+                    alwaysArrows
+                    upDisabled={j === 0}
+                    downDisabled={j === slotRows.length - 1}
+                    onUp={() => nudgeSlot(j, -1)}
+                    onDown={() => nudgeSlot(j, 1)}
+                  />
+                  <i class="arrange-row__swatch" style={slotSwatch(s)}></i>
+                  <span class="arrange-row__name">{s.label}</span>
+                </li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
       </li>
-      {#if key === 'slots' && slotRows.length > 0}
-        <li class="arrange-slots">
-          <ul class="arrange-slots__list" use:sortableSlots>
-            {#each slotRows as s, j (s.id)}
-              <li class="arrange-slot-row" data-slot-id={s.id}>
-                <RowMove
-                  label={s.label}
-                  handleClass="arrange-slot__drag"
-                  alwaysArrows
-                  upDisabled={j === 0}
-                  downDisabled={j === slotRows.length - 1}
-                  onUp={() => nudgeSlot(j, -1)}
-                  onDown={() => nudgeSlot(j, 1)}
-                />
-                <i class="arrange-row__swatch" style={slotSwatch(s)}></i>
-                <span class="arrange-row__name">{s.label}</span>
-              </li>
-            {/each}
-          </ul>
-        </li>
-      {/if}
     {/each}
   </ul>
 
@@ -377,11 +439,28 @@
   .arrange::backdrop {
     background: var(--color-overlay);
   }
-  .arrange__title {
+  .arrange__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-sm);
     margin: 0 0 var(--space-xs) 0;
+  }
+  .arrange__title {
+    margin: 0;
     font-size: var(--text-base);
     text-transform: uppercase;
     letter-spacing: 1pt;
+  }
+  .arrange__close {
+    flex: 0 0 auto;
+    /* The × glyph is small; give it the same 44px target every row here has
+       rather than leaving a corner control only a mouse can hit. */
+    min-width: 44px;
+    min-height: 44px;
+    margin-right: 0;
+    font-size: var(--text-base);
+    line-height: 1;
   }
   .arrange__lede {
     margin: 0 0 var(--space-sm) 0;
@@ -402,7 +481,15 @@
     flex-direction: column;
     gap: 4px;
   }
-  .arrange-row,
+  /* The row is a bare column so it can carry the slots block; the plate
+     (border, fill, 44px) belongs to its head, which is what still has to look
+     like a row. */
+  .arrange-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .arrange-row__head,
   .arrange-slot-row {
     display: flex;
     align-items: center;
@@ -413,9 +500,11 @@
     background: var(--color-surface);
   }
   /* Hidden rows keep their grip, so you can position something that isn't
-     currently showing. */
-  .arrange-row--off .arrange-row__name,
-  .arrange-row--off .arrange-row__swatch {
+     currently showing. Scoped to the head on purpose: slot rows reuse these
+     two class names, and now that they sit INSIDE the Slots row an unscoped
+     rule would dim every slot whenever the Slots section is switched off. */
+  .arrange-row--off > .arrange-row__head .arrange-row__name,
+  .arrange-row--off > .arrange-row__head .arrange-row__swatch {
     opacity: 0.45;
   }
   .arrange-row__swatch {
@@ -456,11 +545,9 @@
   /* The slots block reads as belonging to the Slots row above it — indented,
      and sharing its left edge with the section spine on the page. */
   .arrange-slots {
-    list-style: none;
     margin: 0 0 0 var(--space-md);
-    padding: 0;
     border-left: 2px solid var(--color-border);
-    padding-left: var(--space-xs);
+    padding: 0 0 0 var(--space-xs);
   }
   .arrange-slot-row {
     margin-top: 4px;
