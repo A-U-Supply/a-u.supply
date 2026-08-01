@@ -29,6 +29,17 @@ Also covered, each because it fails quietly:
   originate, not what can be put into it, so a shared group lets a slot land
   among the sections with the selector still in place. Measured, not reasoned
   — adding a group is exactly the convenience a later refactor reaches for.
+* **Slots travel WITH their section**, which is the same invariant from the
+  other side and the half this suite originally missed: the only section it
+  ever dragged was ``marginalia``, which has no nested block to leave behind.
+  The block was a sibling ``<li>`` of the Slots row and Sortable moves
+  ``.arrange-row`` and nothing else, so dragging the section walked out from
+  over its own slots. It now lives *inside* the row, and the check asserts
+  where the list is parented after a real drag of the Slots row.
+* **Getting out of the dialog.** Escape is free with ``showModal()``; the ×
+  and the backdrop click were not, and neither existed. The load-bearing one
+  is the negative — a drag released over the backdrop must *not* close the
+  window, which is why the handler asks where the gesture began.
 
 * **The phone.** The arrows are the mobile path and the keyboard path, and the
   rows have to stay 44px targets in a dialog that is mostly controls.

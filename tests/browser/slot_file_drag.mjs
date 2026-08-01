@@ -18,8 +18,15 @@
  *  - **The pin.** `SlotPrimaryPin` is keyed (slot_id, media_type), so a pinned
  *    file that leaves would otherwise strand a thumbnail on the old card for
  *    something it no longer holds.
- *  - **Persistence.** The move is a PATCH plus a reload of both cards; a
+ *  - **Persistence.** The move is a PATCH plus a refetch of both cards; a
  *    version that only reorders the DOM looks identical until you refresh.
+ *  - **The other direction, which is how this shipped broken.** A version that
+ *    only reaches the *server* also looks identical until you refresh, and the
+ *    first cut of this file could not see it: arrival in the destination was
+ *    asserted with `serverItems()` for the drag, and *only* that way for the
+ *    menu. The API was right the whole time the screen was wrong. Every move
+ *    check now asks the rendered card, before any `goto()` — a reload rebuilds
+ *    the DOM from the server and would pass regardless of what the move did.
  *  - **The menu path.** Dragging is desktop-only — a phone shows one collapsed
  *    tab at a time — so `Move to slot ▸` is the only route on a phone, the
  *    only keyboard route, and the only way anyone discovers this exists.
@@ -342,13 +349,66 @@ try {
     `${await serverItems(latentId, slotB.id)} item(s) in B`,
   );
 
+  // The destination card is what the person is looking at, and until this
+  // check existed nothing here asked it anything: arrival was confirmed against
+  // `serverItems`, i.e. the API, which was right the whole time the screen was
+  // wrong. `load()` refills only slots it has never loaded, so a move between
+  // two already-loaded cards left both stale until a refresh.
+  // Open B WITHOUT reloading — a `goto()` here rebuilds the DOM from the server
+  // and would pass no matter what the move did to it.
+  await ev(`document.querySelector('.slot[data-slot-id="${slotB.id}"] .slot__summary')?.click()`);
+  const landed = await waitFor(
+    `document.querySelectorAll('.slot[data-slot-id="${slotB.id}"] .file-row').length === 1`,
+    8000,
+  );
+  check(
+    'the row is ON SCREEN in slot B, with no reload',
+    landed,
+    `${await rowsIn(slotB.id)} row(s) rendered in B`,
+  );
+
+  // ...and again into a card that is ALREADY OPEN, which is the case the bug
+  // actually lived in and the one the check above cannot see. `load()` fills
+  // `itemsBySlot` for slots it has never loaded, so a drop onto a card nobody
+  // has opened repaints correctly by accident — measured: with the refetch
+  // removed, the check above still passes and only these go red. B is open now
+  // (the check above opened it), so both cards are loaded and stale state is
+  // the only thing that could show.
+  const bBefore = await rowsIn(slotB.id);
+  const aBefore = await rowsIn(slotA.id);
+  const secondDrag = await dragOnto(
+    `.slot[data-slot-id="${slotA.id}"] .file-row:first-child .file-row__drag`,
+    `.slot[data-slot-id="${slotB.id}"]`,
+  );
+  check('a second drag, into the OPEN card, started', secondDrag);
+  check(
+    'an already-open destination repaints too, with no reload',
+    await waitFor(
+      `document.querySelectorAll('.slot[data-slot-id="${slotB.id}"] .file-row').length === ${bBefore + 1}`,
+      8000,
+    ),
+    `B rendered ${bBefore} → ${await rowsIn(slotB.id)}`,
+  );
+  check(
+    'and the source card drops it, with no reload',
+    (await rowsIn(slotA.id)) === aBefore - 1,
+    `A rendered ${aBefore} → ${await rowsIn(slotA.id)}`,
+  );
+
   // --- 3. it stuck --------------------------------------------------------
+  // Relative to what the drags above actually left behind, not to literals —
+  // two files have moved A→B by now, and a check that hard-codes the tally is
+  // one someone has to re-derive every time a case is added above it.
+  const aOnServer = await serverItems(latentId, slotA.id);
+  const bOnServer = await serverItems(latentId, slotB.id);
   await goto(`${BASE}/admin/latents/detail?id=${latentId}`);
   await waitFor(`document.querySelectorAll('.slot').length === 2`);
   check(
     'the move survives a reload',
-    (await serverItems(latentId, slotB.id)) === 1 &&
-      (await serverItems(latentId, slotA.id)) === 2,
+    (await serverItems(latentId, slotB.id)) === bOnServer &&
+      (await serverItems(latentId, slotA.id)) === aOnServer &&
+      bOnServer === 2 &&
+      aOnServer === 1,
     `A=${await serverItems(latentId, slotA.id)} B=${await serverItems(latentId, slotB.id)}`,
   );
 
@@ -365,7 +425,7 @@ try {
   await ev(
     `document.querySelector('.slot[data-slot-id="${slotA.id}"] .slot__summary')?.click()`,
   );
-  await waitFor(`document.querySelectorAll('.slot[data-slot-id="${slotA.id}"] .file-row').length === 2`);
+  await waitFor(`document.querySelectorAll('.slot[data-slot-id="${slotA.id}"] .file-row').length === ${aOnServer}`);
   const pinnedBefore = await ev(
     `(async () => { const r = await fetch('/api/projects/${latentId}', {credentials:'include'});
        const j = await r.json();
@@ -393,11 +453,33 @@ try {
   // --- 5. the menu path ----------------------------------------------------
   await goto(`${BASE}/admin/latents/detail?id=${latentId}`);
   await waitFor(`document.querySelectorAll('.slot').length === 2`);
+  // Its own row, for the same reason the phone pass below gets one: every check
+  // above moves another file out of slot A, and a section that asserts against
+  // whatever survived passes standalone and fails once anything is added before
+  // it. That is how this section broke when the open-destination drag landed.
+  const menuFile = JSON.parse(
+    await ev(`(async () => {
+      const b = new Uint8Array(1500);
+      for (let i = 0; i < b.length; i++) b[i] = (Math.random()*256)|0;
+      const fd = new FormData();
+      fd.append('file', new File([b], '${PREFIX}-menu.wav', { type: 'audio/wav' }));
+      fd.append('project_id', ${JSON.stringify(latentId)});
+      fd.append('slot_id', ${JSON.stringify(slotA.id)});
+      const r = await fetch('/api/media/upload', { method:'POST', credentials:'include', body: fd });
+      const j = await r.json().catch(() => null);
+      return JSON.stringify(j && j.id);
+    })()`),
+  );
+  if (menuFile) mediaIds.push(menuFile);
+  check('a fresh file for the menu pass', !!menuFile);
+  await goto(`${BASE}/admin/latents/detail?id=${latentId}`);
+  await waitFor(`document.querySelectorAll('.slot').length === 2`);
   await ev(
     `document.querySelector('.slot[data-slot-id="${slotA.id}"] .slot__summary')?.click()`,
   );
   await waitFor(`!!document.querySelector('.slot[data-slot-id="${slotA.id}"] .file-row')`);
   const beforeMenu = await serverItems(latentId, slotB.id);
+  const renderedABefore = await rowsIn(slotA.id);
 
   await ev(
     `document.querySelector('.slot[data-slot-id="${slotA.id}"] .file-row .row-actions__toggle')?.click()`,
@@ -423,6 +505,26 @@ try {
     'picking a slot from the menu moves the file',
     (await serverItems(latentId, slotB.id)) === beforeMenu + 1,
     `B went ${beforeMenu} → ${await serverItems(latentId, slotB.id)}`,
+  );
+
+  // This path does no DOM surgery at all — unlike the drag, which at least rips
+  // the dragged node out — so before these two it could, and did, leave the row
+  // sitting in the source card looking untouched, with the check above green
+  // because the API had done its job. Both halves, on screen, before any reload.
+  check(
+    'the row LEAVES slot A on screen, with no reload',
+    (await rowsIn(slotA.id)) === renderedABefore - 1,
+    `A rendered ${renderedABefore} → ${await rowsIn(slotA.id)}`,
+  );
+  await ev(`document.querySelector('.slot[data-slot-id="${slotB.id}"] .slot__summary')?.click()`);
+  const menuLanded = await waitFor(
+    `document.querySelectorAll('.slot[data-slot-id="${slotB.id}"] .file-row').length === ${beforeMenu + 1}`,
+    8000,
+  );
+  check(
+    'and ARRIVES in slot B on screen, with no reload',
+    menuLanded,
+    `${await rowsIn(slotB.id)} row(s) rendered in B, expected ${beforeMenu + 1}`,
   );
 
   // --- 6. the menu on a PHONE ---------------------------------------------

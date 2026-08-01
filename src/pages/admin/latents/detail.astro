@@ -292,8 +292,16 @@ import Admin from '../../../layouts/Admin.astro';
     font-family: var(--font-mono);
     font-size: var(--text-sm);
   }
+  /* Five statuses live here (…shipped, abandoned), and .header-controls-row
+     wraps its ITEMS — this row is one indivisible item to it. Without a wrap of
+     its own the row's minimum width is all five buttons unbroken, so it ran off
+     the right edge of a phone: `shipped` clipped, `abandoned` unreachable
+     entirely. Wrapping is the correctness half and survives a sixth status; the
+     media query below is what usually keeps it on one line anyway. */
   :global(.latent-header .status-row) {
     display: flex;
+    flex-wrap: wrap;
+    min-width: 0;
     gap: 4px;
   }
   :global(.latent-header .status-btn) {
@@ -310,6 +318,21 @@ import Admin from '../../../layouts/Admin.astro';
   :global(.latent-header .status-btn.active) {
     background: var(--c, var(--color-muted));
     color: var(--color-bg);
+  }
+  /* Condense rather than wrap where we can: five chips fit one line on a
+     typical phone once the generous tracking and side padding come down.
+     Geometry only — these buttons' colours were settled when the fifth status
+     landed and are deliberately untouched here. (Don't write that PR's number
+     with a hash: the design lint reads it as a hex colour.) */
+  @media (max-width: 640px) {
+    :global(.latent-header .status-row) {
+      gap: 3px;
+    }
+    :global(.latent-header .status-btn) {
+      padding: 2px 5px;
+      font-size: 0.62rem;
+      letter-spacing: 0.4pt;
+    }
   }
   :global(.latent-header .summary) {
     color: var(--color-muted);
