@@ -25,6 +25,11 @@ Also covered, each because it fails quietly:
   something it no longer holds.
 * **Persistence.** A version that only reorders the DOM looks identical until
   you reload.
+* **Arrival, on screen.** So does a version that only reaches the *server* —
+  and that is how the feature shipped broken. The first cut of this suite
+  confirmed the destination with ``serverItems()`` for the drag path and only
+  that way for the menu path, so it asserted the API where the rendered card
+  was the product. Every move check now asks the DOM before any navigation.
 * **The menu path, at both widths.** Dragging is a desktop gesture — a phone
   shows one collapsed tab at a time — so ``Move to slot ▸`` is the only route
   on a phone, the only keyboard route, and the only way anyone discovers the

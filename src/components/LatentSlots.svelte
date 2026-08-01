@@ -679,8 +679,24 @@
   let dragFromSlot = $state<string | null>(null);
 
   /**
+   * Re-read the file rows for named slots.
+   *
+   * `load()` is NOT enough on its own. It fills `itemsBySlot` only for slots it
+   * has never loaded (`!itemsBySlot[s.id]`), which is right for first paint and
+   * wrong for a move: both cards involved are already loaded — the source
+   * because you just acted on a row in it, the destination because it is on
+   * screen — so the guard skips both and neither list re-renders. `load()` does
+   * refresh `slots`, which is why the card's item COUNT would update while its
+   * rows stayed stale until a refresh.
+   */
+  async function reloadItemsFor(...slotIds: (string | null | undefined)[]) {
+    const ids = [...new Set(slotIds.filter(Boolean) as string[])];
+    await Promise.all(ids.map((id) => loadItems(id)));
+  }
+
+  /**
    * A row arrived from another slot. Sortable has already transplanted the
-   * `<li>` into this list; take it straight back out and let `load()` rebuild
+   * `<li>` into this list; take it straight back out and refetch both cards
    * from the server.
    *
    * Reconciling both slots by hand would mean replaying the server's own
@@ -691,6 +707,10 @@
    */
   async function acceptDroppedFile(evt: any, toSlotId: string | null) {
     const itemId = evt?.item?.dataset?.itemId;
+    // Read the origin off the list the row came FROM, before the node is
+    // detached — `reloadItemsFor` needs it and `evt.item` won't answer once
+    // it's out of the tree.
+    const fromSlotId = slotIdOf(evt?.from);
     // Remove first: Svelte doesn't own this node any more, so leaving it would
     // survive the re-render as a duplicate row.
     evt?.item?.remove();
@@ -710,10 +730,21 @@
       error = e?.message || 'Move failed';
     }
     await load();
+    await reloadItemsFor(fromSlotId, toSlotId);
   }
 
-  /** Move a file to another slot without dragging it. */
-  async function moveFileToSlot(itemId: string, toSlotId: string | null) {
+  /**
+   * Move a file to another slot without dragging it.
+   *
+   * `fromSlotId` is not decoration: this path does no DOM surgery at all, so
+   * without refetching the source card the row simply sits there looking
+   * unmoved.
+   */
+  async function moveFileToSlot(
+    itemId: string,
+    toSlotId: string | null,
+    fromSlotId: string | null,
+  ) {
     try {
       const res = await fetch(
         `/api/projects/${encodeURIComponent(projectId)}/items/${encodeURIComponent(itemId)}`,
@@ -729,6 +760,7 @@
       error = e?.message || 'Move failed';
     }
     await load();
+    await reloadItemsFor(fromSlotId, toSlotId);
   }
 
   /**
@@ -753,7 +785,7 @@
           // A slot's label is optional, so fall back to its position the way
           // suggestedPath() does — an unnamed slot still has to be pickable.
           label: s.label?.trim() || `Slot ${s.position + 1}`,
-          onClick: () => moveFileToSlot(it.id, s.id),
+          onClick: () => moveFileToSlot(it.id, s.id, slot.id),
         })),
       },
     ];
