@@ -35,6 +35,7 @@
     fileKind,
     type Destination,
   } from '../lib/uploadQueue';
+  import { rootPx } from '../lib/documentState.ts';
 
   let items = $state(snapshot().items);
   let bundles = $state(snapshot().bundles);
@@ -90,17 +91,20 @@
    * `--player-h`. Nothing needs it yet; it exists so the next thing that has to
    * clear the dock measures it instead of hardcoding a guess — which is exactly
    * the bug `--player-h` was introduced to end.
+   *
+   * Through `documentState` because this island persists across navigation and
+   * the root's inline style does not — see that module's header.
    */
+  const dockH = rootPx('--upload-dock-h', () => dockEl?.offsetHeight);
+
   function measure() {
-    const h = dockEl?.offsetHeight;
-    if (!h) return;
-    document.documentElement.style.setProperty('--upload-dock-h', `${h}px`);
+    dockH.publish();
   }
 
   $effect(() => {
     dockObserver?.disconnect();
     if (!dockEl) {
-      document.documentElement.style.removeProperty('--upload-dock-h');
+      dockH.clear();
       return;
     }
     measure();
@@ -165,7 +169,7 @@
       document.removeEventListener('upload:start', startHandler);
     if (beforeUnload) window.removeEventListener('beforeunload', beforeUnload);
     dockObserver?.disconnect();
-    document.documentElement.style.removeProperty('--upload-dock-h');
+    dockH.clear();
   });
 </script>
 

@@ -123,6 +123,20 @@ See [`player.md`](player.md) for the full `player:queue` payload shape.
 - **Style via `.brutalist-control`** for anything clickable. Component-specific styling in a scoped Svelte `<style>` block.
 - **bits-ui first for new primitives** that need accessibility (dropdowns, popovers, dialogs). Roll your own only if bits-ui doesn't have it.
 - **Reorderable lists go through `createSortable()`** (`src/lib/dragOptions.ts`), never `Sortable.create` directly. `scripts/lint-design.mjs` enforces it.
+- **Anything published onto `<html>` or `<body>` goes through `documentState.ts`** (`src/lib/`), never `documentElement.style.setProperty` or `document.body.classList` directly. Also lint-enforced.
+
+### What a ClientRouter navigation destroys
+
+A view-transition navigation is not a repaint of the same document. Astro's swap:
+
+- **`swapRootAttributes()` removes _every_ attribute from `<html>`** and copies the incoming document's over. Only `data-astro-transition` and `data-astro-transition-fallback` survive — an inline `style` with your custom properties in it does not.
+- **`swapBodyElement()` replaces `<body>` outright**, so its classes go with it.
+
+An island marked `transition:persist` sails through both. Its effects don't re-run, and a `ResizeObserver` on it never fires — the element never changed size, only the document around it did. **So a persistent island's published state is erased and nothing puts it back.**
+
+Measured at 390px on 2026-08-02: `--player-h` is `165px` with a track playing; one navigation later it is gone, and the comment window (`bottom: var(--player-h, 72px)`) sits **93px behind the player bar**. Reported from a phone that night. The same wipe silently reverts #592 for video — the PiP slides back under the transport — and drops `body.player-active`, so the page's bottom padding stops clearing the bar.
+
+`src/lib/documentState.ts` owns both writes and re-applies them on `astro:after-swap`. Values are **re-measured, not remembered**: the point of `--player-h` is that a measurement can't drift out of sync with the layout, and restoring a stored number would hand that back. `tests/test_player_across_nav_browser.py` navigates with the player up and asserts the comment window still clears the bar.
 
 ### Drag-to-reorder, and why it has one entry point
 
