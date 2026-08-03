@@ -15,6 +15,8 @@
  *   - `--bits-*` custom properties the installed bits-ui doesn't emit
  *   - Hand-built `/thumbnail?size=` URLs outside src/lib/mediaThumb.ts
  *   - Raw `Sortable.create()` outside src/lib/dragOptions.ts (see below)
+ *   - Writes to `<html>`'s inline style or `<body>`'s classList outside
+ *     src/lib/documentState.ts (see below)
  *
  * What it ignores:
  *   - The Atelier — Punctum, Photism, Bullethole, Spectralize live on
@@ -265,6 +267,30 @@ const SORTABLE_ALLOWLIST = {
   'src/pages/admin/latents/index.astro':
     "the latent grid is built by the page's own script, not a Svelte {#each} — it keeps its own pre-drag snapshot and restores from that",
 };
+
+// A component writing straight onto <html> or <body>. The rule, and the bug
+// that bought it:
+//
+//   Astro's ClientRouter REPLACES both on every navigation —
+//   `swapRootAttributes()` strips every attribute off <html> (only
+//   `data-astro-transition*` survive, so an inline custom property does not),
+//   and `swapBodyElement()` swaps <body> and its classes. An island marked
+//   `transition:persist` survives that: no effect re-runs, and a
+//   ResizeObserver on it never fires, because the element never changed size —
+//   only the document around it did. So what it published about itself is
+//   gone, and nothing puts it back.
+//
+//   Measured at 390px on 2026-08-02: `--player-h` is 165px, one navigation
+//   later it is gone, and the comment window — `bottom: var(--player-h, 72px)`
+//   — sits 93px behind the player bar. Reported from a phone that night.
+//
+// So publish through `src/lib/documentState.ts`, which re-applies after every
+// swap. `body.style.overflow` is NOT covered: a modal's scroll lock is set and
+// released inside one page, and a navigation ends it anyway.
+const DOC_STATE_RE =
+  /document(?:Element)?\s*\.\s*style\s*\.\s*(?:set|remove)Property\s*\(|document\s*\.\s*body\s*\.\s*classList\s*\./;
+/** The one module allowed to write them — everything else imports from here. */
+const DOC_STATE_OWNER = 'src/lib/documentState.ts';
 
 const HEX_RE = /#([0-9a-fA-F]{3,8})\b/;
 const RGB_RE = /\b(?:rgba?|hsla?)\(/;
@@ -542,6 +568,32 @@ async function lintSortable(filePath) {
   return findings;
 }
 
+/**
+ * The `<html>` / `<body>` ownership pass, over components and src/lib only —
+ * a layout's own inline script re-runs on `astro:after-swap` already and is
+ * where the re-application is supposed to live. See the constant above.
+ */
+async function lintDocumentState(filePath) {
+  const rel = relative(ROOT, filePath);
+  if (rel === DOC_STATE_OWNER) return [];
+  const raw = await readFile(filePath, 'utf8');
+  const text = stripComments(raw);
+  const lines = text.split('\n');
+  const findings = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(DOC_STATE_RE);
+    if (!m) continue;
+    findings.push({
+      file: rel,
+      line: i + 1,
+      kind: 'doc-state',
+      match: m[0],
+      source: raw.split('\n')[i].trim(),
+    });
+  }
+  return findings;
+}
+
 async function lintBitsVars(filePath, known) {
   const rel = relative(ROOT, filePath);
   const raw = await readFile(filePath, 'utf8');
@@ -598,6 +650,7 @@ async function main() {
     );
     allFindings.push(...(await lintThumbUrl(f)));
     allFindings.push(...(await lintSortable(f)));
+    allFindings.push(...(await lintDocumentState(f)));
   }
 
   // ...and over src/lib, where the viewer's URL plumbing lives. Without this
@@ -607,6 +660,7 @@ async function main() {
   for (const f of libFiles) {
     allFindings.push(...(await lintThumbUrl(f)));
     allFindings.push(...(await lintSortable(f)));
+    allFindings.push(...(await lintDocumentState(f)));
   }
 
   // ...and over the global stylesheets, which are where two of the three
@@ -678,6 +732,15 @@ async function main() {
             `hangs with "Page Unresponsive". See the header comment for why.`,
         );
       }
+      if (allFindings.some((f) => f.kind === 'doc-state')) {
+        console.error(
+          `\nPublish to <html> / <body> through src/lib/documentState.ts. A ` +
+            `ClientRouter navigation strips every attribute off <html> and ` +
+            `replaces <body>, while a transition:persist island survives both ` +
+            `— so the value is gone with no effect re-run and no ` +
+            `ResizeObserver callback to restore it. See the header comment.`,
+        );
+      }
       if (allFindings.some((f) => f.kind === 'bits-var')) {
         console.error(
           `\nThat --bits-* custom property is not one the installed bits-ui ` +
@@ -696,6 +759,7 @@ async function main() {
               'bits-var',
               'thumb-url',
               'sortable',
+              'doc-state',
             ].includes(f.kind),
         )
       ) {

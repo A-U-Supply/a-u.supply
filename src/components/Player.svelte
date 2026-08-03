@@ -14,6 +14,7 @@
     excerpt,
   } from './marginalia.ts';
   import { CHROME_IDLE_MS } from '../lib/image-viewer.ts';
+  import { rootPx, bodyClass } from '../lib/documentState.ts';
 
   let queue = $state([]);
   let currentIndex = $state(-1);
@@ -321,10 +322,19 @@
     }, CHROME_IDLE_MS);
   }
 
+  /**
+   * The bar's height, published for everything that floats above it.
+   *
+   * Through `documentState` rather than straight onto `<html>`: this island is
+   * `transition:persist`, and a ClientRouter navigation wipes the root's
+   * inline style out from under it. See that module's header — a phone found
+   * it as a comment window sitting behind the player.
+   */
+  const playerH = rootPx('--player-h', () => playerEl?.offsetHeight);
+  const playerActiveClass = bodyClass('player-active');
+
   function measurePlayer() {
-    const h = playerEl?.offsetHeight;
-    if (!h) return;
-    document.documentElement.style.setProperty('--player-h', `${h}px`);
+    playerH.publish();
   }
 
   function onSeek(e) {
@@ -816,11 +826,7 @@
   });
 
   $effect(() => {
-    if (visible) {
-      document.body.classList.add('player-active');
-    } else {
-      document.body.classList.remove('player-active');
-    }
+    playerActiveClass.set(visible);
   });
 
   $effect(() => {
@@ -971,8 +977,8 @@
     if (liveTimer) clearTimeout(liveTimer);
     if (chromeTimer) clearTimeout(chromeTimer);
     playerObserver?.disconnect();
-    document.documentElement.style.removeProperty('--player-h');
-    document.body.classList.remove('player-active');
+    playerH.clear();
+    playerActiveClass.clear();
   });
 
   // Start the countdown when the video surface appears, so the chrome fades
@@ -988,7 +994,7 @@
   $effect(() => {
     playerObserver?.disconnect();
     if (!playerEl) {
-      document.documentElement.style.removeProperty('--player-h');
+      playerH.clear();
       return;
     }
     measurePlayer();
