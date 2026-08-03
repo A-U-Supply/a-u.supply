@@ -106,13 +106,13 @@ All under `src/components/`. Each is mounted directly from `.astro` pages as an 
 
 Pages and components talk to each other through DOM custom events on `document`. This is how the Player gets queued from anywhere and how Latents components signal back to host pages.
 
-| Event                  | Detail                            | Who fires                                      | Who listens                     |
-| ---------------------- | --------------------------------- | ---------------------------------------------- | ------------------------------- |
-| `player:queue`         | `{ tracks: Track[], startIndex, start_time? }` | Any page or component                          | `Player.svelte`                 |
-| `player:seek`          | `{ seconds }`                     | Marginalia components (item already playing)   | `Player.svelte`                 |
-| `player:time-request`  | `{}`                              | Marginalia composers                           | `Player.svelte` → re-fires `player:time` synchronously |
-| `latent:slots-changed` | `{}`                              | `LatentRepoStrip.svelte` after a slot mutation | Host page reloads its slot data |
-| `index-change`         | `{ value }`                       | `IndexFilter.svelte`                           | Whatever page hosts the filter  |
+| Event                  | Detail                                         | Who fires                                      | Who listens                                            |
+| ---------------------- | ---------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------ |
+| `player:queue`         | `{ tracks: Track[], startIndex, start_time? }` | Any page or component                          | `Player.svelte`                                        |
+| `player:seek`          | `{ seconds }`                                  | Marginalia components (item already playing)   | `Player.svelte`                                        |
+| `player:time-request`  | `{}`                                           | Marginalia composers                           | `Player.svelte` → re-fires `player:time` synchronously |
+| `latent:slots-changed` | `{}`                                           | `LatentRepoStrip.svelte` after a slot mutation | Host page reloads its slot data                        |
+| `index-change`         | `{ value }`                                    | `IndexFilter.svelte`                           | Whatever page hosts the filter                         |
 
 See [`player.md`](player.md) for the full `player:queue` payload shape.
 
@@ -122,6 +122,17 @@ See [`player.md`](player.md) for the full `player:queue` payload shape.
 - **All API calls go through the FastAPI layer**, not Meilisearch / Lemmy / Slack directly. The browser must never see those URLs.
 - **Style via `.brutalist-control`** for anything clickable. Component-specific styling in a scoped Svelte `<style>` block.
 - **bits-ui first for new primitives** that need accessibility (dropdowns, popovers, dialogs). Roll your own only if bits-ui doesn't have it.
+- **Reorderable lists go through `createSortable()`** (`src/lib/dragOptions.ts`), never `Sortable.create` directly. `scripts/lint-design.mjs` enforces it.
+
+### Drag-to-reorder, and why it has one entry point
+
+SortableJS rearranges the DOM as you drag. Every reorderable list here is a Svelte keyed `{#each}`, and **Svelte tracks each item as a _range_ of nodes, not one node** — a row followed by an `{#if}` block is `<li>` … anchor comment. Sortable moves the `<li>` alone, so the range breaks: the row now sits ahead of the comment that is supposed to end it.
+
+On the next update Svelte's `move()` (`svelte/internal/client/dom/blocks/each.js`) walks forward from the row looking for that end node, never reaches it, and cycles the nodes in front of its destination for ever. **The tab locks up** — Chrome's "Page Unresponsive" dialog, reported 2026-08-02 after two drags inside one slot. Short of hanging, the same divergence renders an order nobody asked for: the row you dropped on lands where the row you dragged came from.
+
+Nothing catches this short of a browser. Nothing throws, nothing logs, and the API is right the whole time — every reorder reached the server correctly, including the ones the screen got wrong.
+
+So `createSortable()` takes the order the drop produced, puts the DOM back exactly as Svelte left it, and hands that order to `onDrop`. **Assigning state is what moves the row**, which puts a drag on the same path as the ↑/↓ buttons beside it. `tests/test_slot_reorder_freeze_browser.py` drives two real drags and asserts the page still answers and the screen matches the server.
 
 ## Astro partials (shared admin chrome)
 

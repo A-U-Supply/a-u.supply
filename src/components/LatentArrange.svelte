@@ -20,9 +20,8 @@
   is how a take goes missing.
 -->
 <script lang="ts">
-  import Sortable from 'sortablejs';
   import RowMove from './RowMove.svelte';
-  import { DRAG_OPTS } from '../lib/dragOptions.ts';
+  import { DRAG_OPTS, createSortable } from '../lib/dragOptions.ts';
   import { safeHex } from '../lib/latentStyles.ts';
   import {
     LAYOUT_EVENT,
@@ -277,7 +276,7 @@
   /* ------------------------------------------------------------------ drag */
 
   function sortableSections(el: HTMLElement) {
-    const s = Sortable.create(el, {
+    const s = createSortable(el, {
       ...DRAG_OPTS,
       handle: '.arrange-row__drag',
       // Only `.arrange-row` moves — and the slots block lives inside the Slots
@@ -290,14 +289,11 @@
       // (measured — the browser suite's escape check goes red). The absence of
       // a shared group is the only thing holding that line.
       draggable: '.arrange-row',
-      onEnd: () => {
-        const keys = Array.from(
-          el.querySelectorAll<HTMLElement>('.arrange-row[data-key]'),
-        )
-          .map((n) => n.dataset.key as LayoutKey)
-          .filter(Boolean);
+      rows: '.arrange-row[data-key]',
+      id: 'key',
+      onDrop: (keys: string[]) => {
         if (keys.length !== order.length) return;
-        order = keys;
+        order = keys as LayoutKey[];
         commit();
       },
     });
@@ -305,16 +301,13 @@
   }
 
   function sortableSlots(el: HTMLElement) {
-    const s = Sortable.create(el, {
+    const s = createSortable(el, {
       ...DRAG_OPTS,
       handle: '.arrange-slot__drag',
       draggable: '.arrange-slot-row',
-      onEnd: () => {
-        const ids = Array.from(
-          el.querySelectorAll<HTMLElement>('.arrange-slot-row[data-slot-id]'),
-        )
-          .map((n) => n.dataset.slotId!)
-          .filter(Boolean);
+      rows: '.arrange-slot-row[data-slot-id]',
+      id: 'slotId',
+      onDrop: (ids: string[]) => {
         if (ids.length !== slotRows.length) return;
         slotRows = ids
           .map((id) => slotRows.find((s2) => s2.id === id)!)

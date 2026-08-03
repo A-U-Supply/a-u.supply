@@ -9,12 +9,11 @@
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Sortable from 'sortablejs';
   import LatentStyleButton from './LatentStyleButton.svelte';
   import { queueMedia } from '../lib/playerQueue.ts';
   import { portal } from '../lib/portal.ts';
   import RowMove from './RowMove.svelte';
-  import { DRAG_OPTS } from '../lib/dragOptions.ts';
+  import { DRAG_OPTS, createSortable } from '../lib/dragOptions.ts';
   import { isPhone } from '../lib/viewport.svelte.ts';
   import {
     readSectionOpen,
@@ -227,16 +226,9 @@
     await sendOrder(tracks.map((t) => t.playlist_item_id));
   }
 
-  async function persistOrder(list: HTMLElement) {
+  /** A drag dropped the tracks in this order; state is what moves the rows. */
+  async function persistOrder(order: string[]) {
     if (!selected) return;
-    const order = Array.from(
-      list.querySelectorAll<HTMLElement>('.track-row[data-row-id]'),
-    )
-      .map((el) => el.dataset.rowId!)
-      .filter(Boolean);
-    if (!order.length) return;
-    // Match state to the DOM Sortable just rearranged so the keyed each block
-    // doesn't fight the drop while the request is in flight.
     const byId = new Map(selected.tracks.map((t) => [t.playlist_item_id, t]));
     merge({
       ...selected,
@@ -343,12 +335,14 @@
   }
 
   function sortableTracks(node: HTMLElement) {
-    const s = Sortable.create(node, {
+    const s = createSortable(node, {
       ...DRAG_OPTS,
       handle: '.track-row__drag',
       draggable: '.track-row',
       ghostClass: 'track-row--ghost',
-      onEnd: () => persistOrder(node),
+      rows: '.track-row[data-row-id]',
+      id: 'rowId',
+      onDrop: (order: string[]) => void persistOrder(order),
     });
     return { destroy: () => s.destroy() };
   }

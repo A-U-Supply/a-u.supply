@@ -21,7 +21,7 @@
   } from './marginalia.ts';
   import { fileExt } from '../lib/fileExt.ts';
   import { hasThumb, thumbAttrs, thumbUrl } from '../lib/mediaThumb.ts';
-  import { DRAG_OPTS } from '../lib/dragOptions.ts';
+  import { DRAG_OPTS, createSortable } from '../lib/dragOptions.ts';
   import { isPhone } from '../lib/viewport.svelte.ts';
   import { queueMedia } from '../lib/playerQueue.ts';
   import {
@@ -397,17 +397,6 @@
     ).length;
   }
 
-  /** Read the DOM order Sortable just produced, from a given row selector. */
-  function domOrder(
-    list: HTMLElement,
-    selector: string,
-    attr: string,
-  ): string[] {
-    return Array.from(list.querySelectorAll<HTMLElement>(selector))
-      .map((el) => el.dataset[attr])
-      .filter((v): v is string => !!v);
-  }
-
   /** Send a file order. Shared by the drag handles and the arrow buttons. */
   async function postFileOrder(slotId: string, order: string[]) {
     if (!order.length) return;
@@ -430,17 +419,18 @@
     }
   }
 
-  async function persistFileOrder(slotId: string, list: HTMLElement) {
-    const order = domOrder(list, '.file-row[data-item-id]', 'itemId');
-    if (!order.length) return;
-    // Match state to the DOM Sortable already rearranged, so the keyed each
-    // block doesn't fight the drop while the request is in flight.
+  /**
+   * A drag dropped the file rows in this order. Move them in state — that, not
+   * the drag, is what puts the rows where they landed (see `createSortable`) —
+   * then tell the server.
+   */
+  function applyFileOrder(slotId: string, order: string[]) {
     const byId = new Map((itemsBySlot[slotId] || []).map((i) => [i.id, i]));
     itemsBySlot = {
       ...itemsBySlot,
       [slotId]: order.map((id) => byId.get(id)!).filter(Boolean),
     };
-    await postFileOrder(slotId, order);
+    void postFileOrder(slotId, order);
   }
 
   async function loadPlaylist(slotId: string) {
@@ -569,9 +559,8 @@
     }
   }
 
-  async function persistSlideshowOrder(slotId: string, list: HTMLElement) {
-    const order = domOrder(list, '.slide-row[data-media-id]', 'mediaId');
-    if (!order.length) return;
+  /** A drag dropped this slot's slides in this order. */
+  function applySlideOrder(slotId: string, order: string[]) {
     const current = slideshowBySlot[slotId];
     if (current) {
       const byMedia = new Map(
@@ -585,7 +574,7 @@
         },
       };
     }
-    await putSlideshowOrder(slotId, order);
+    void putSlideshowOrder(slotId, order);
   }
 
   /** Open the viewer over the slot's slideshow, in its saved order. */
@@ -637,9 +626,8 @@
     }
   }
 
-  async function persistPlaylistOrder(slotId: string, list: HTMLElement) {
-    const order = domOrder(list, '.track-row[data-media-id]', 'mediaId');
-    if (!order.length) return;
+  /** A drag dropped this slot's tracks in this order. */
+  function applyTrackOrder(slotId: string, order: string[]) {
     const current = playlistBySlot[slotId];
     if (current) {
       const byMedia = new Map(current.tracks.map((t) => [t.media_item_id, t]));
@@ -651,7 +639,7 @@
         },
       };
     }
-    await putPlaylistOrder(slotId, order);
+    void putPlaylistOrder(slotId, order);
   }
 
   function playPlaylist(slotId: string, startIndex = 0) {
@@ -696,8 +684,10 @@
 
   /**
    * A row arrived from another slot. Sortable has already transplanted the
-   * `<li>` into this list; take it straight back out and refetch both cards
-   * from the server.
+   * `<li>` into this list, and the list it came from puts it back the moment
+   * the drag ends (`createSortable`) — so this only has to move the item on
+   * the server and refetch both cards. The row sits in its old slot for the
+   * width of that round trip, which is the truth until the PATCH lands.
    *
    * Reconciling both slots by hand would mean replaying the server's own
    * rules — the moved row lands at the END of its new group, the old slot's
@@ -711,9 +701,6 @@
     // detached — `reloadItemsFor` needs it and `evt.item` won't answer once
     // it's out of the tree.
     const fromSlotId = slotIdOf(evt?.from);
-    // Remove first: Svelte doesn't own this node any more, so leaving it would
-    // survive the re-render as a duplicate row.
-    evt?.item?.remove();
     if (!itemId) return;
     try {
       const res = await fetch(
@@ -798,22 +785,24 @@
 
   /** Sortable over a slot's file rows. */
   function sortableFiles(node: HTMLElement, slotId: string) {
-    const s = Sortable.create(node, {
+    const s = createSortable(node, {
       ...DRAG_OPTS,
       handle: '.file-row__drag',
       draggable: '.file-row', // never the expanded session-children row
       ghostClass: 'file-row--ghost',
       group: { name: FILE_GROUP, pull: true, put: true },
+      rows: '.file-row[data-item-id]',
+      id: 'itemId',
       onStart: () => {
         dragFromSlot = slotId;
       },
-      onAdd: (evt: any) => acceptDroppedFile(evt, slotId),
-      onEnd: (evt: any) => {
+      onArrive: (evt: any) => acceptDroppedFile(evt, slotId),
+      // `onDrop` only fires when the row stayed home. A cross-slot move is the
+      // destination's business, and the server puts it at the end anyway —
+      // sending this list's order too would be a second, pointless write.
+      onDrop: (order: string[]) => applyFileOrder(slotId, order),
+      onFinish: () => {
         dragFromSlot = null;
-        // Only persist when the row stayed home. A cross-slot move is the
-        // destination's business, and the server puts it at the end anyway —
-        // sending this list's order too would be a second, pointless write.
-        if (evt.to === evt.from) persistFileOrder(slotId, node);
       },
     });
     return { destroy: () => s.destroy() };
@@ -834,7 +823,7 @@
    * short sloppy drag can't "move" a file into the slot it already lives in.
    */
   function slotDropzone(node: HTMLElement, slotId: string) {
-    const s = Sortable.create(node, {
+    const s = createSortable(node, {
       ...DRAG_OPTS,
       sort: false,
       group: {
@@ -842,31 +831,35 @@
         pull: false,
         put: (_to: any, from: any) => slotIdOf(from?.el) !== slotId,
       },
-      onAdd: (evt: any) => acceptDroppedFile(evt, slotId),
+      onArrive: (evt: any) => acceptDroppedFile(evt, slotId),
     });
     return { destroy: () => s.destroy() };
   }
 
   /** Sortable over a slot's slideshow rows. */
   function sortableSlides(node: HTMLElement, slotId: string) {
-    const s = Sortable.create(node, {
+    const s = createSortable(node, {
       ...DRAG_OPTS,
       handle: '.slide-row__drag',
       draggable: '.slide-row',
       ghostClass: 'slide-row--ghost',
-      onEnd: () => persistSlideshowOrder(slotId, node),
+      rows: '.slide-row[data-media-id]',
+      id: 'mediaId',
+      onDrop: (order: string[]) => applySlideOrder(slotId, order),
     });
     return { destroy: () => s.destroy() };
   }
 
   /** Sortable over a slot's playlist rows. */
   function sortableTracks(node: HTMLElement, slotId: string) {
-    const s = Sortable.create(node, {
+    const s = createSortable(node, {
       ...DRAG_OPTS,
       handle: '.track-row__drag',
       draggable: '.track-row',
       ghostClass: 'track-row--ghost',
-      onEnd: () => persistPlaylistOrder(slotId, node),
+      rows: '.track-row[data-media-id]',
+      id: 'mediaId',
+      onDrop: (order: string[]) => applyTrackOrder(slotId, order),
     });
     return { destroy: () => s.destroy() };
   }
@@ -1517,18 +1510,17 @@
     // to avoid stacking handlers on hot-reload.
     if (!slotListEl) return;
     sortable?.destroy();
-    sortable = Sortable.create(slotListEl, {
+    sortable = createSortable(slotListEl, {
       ...DRAG_OPTS,
       handle: '.slot__drag',
       ghostClass: 'slot--ghost',
-      onEnd: () => {
-        if (!slotListEl) return;
-        const ids = Array.from(
-          slotListEl.querySelectorAll<HTMLLIElement>('.slot[data-slot-id]'),
-        )
-          .map((el) => el.dataset.slotId!)
+      rows: '.slot[data-slot-id]',
+      id: 'slotId',
+      onDrop: (order: string[]) => {
+        slots = order
+          .map((id) => slots.find((s) => s.id === id)!)
           .filter(Boolean);
-        if (ids.length) persistOrder(ids);
+        void persistOrder(order);
       },
     });
   });
