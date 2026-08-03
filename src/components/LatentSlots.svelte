@@ -1260,15 +1260,20 @@
 
   async function clearSlotItems(slot: Slot) {
     const count = slot.item_count ?? 0;
+    // Says what it does now: the files are detached, not deleted. The old
+    // wording promised "Emulsion-only uploads are permanently deleted" — a
+    // deletion the endpoint never actually performed (it 500'd instead), and
+    // one we chose not to switch on. Deleting stays a per-file act through
+    // the row menu.
     if (
       !confirm(
-        `Clear all ${count} file${count === 1 ? '' : 's'} from "${slot.label}"?\n\nAny Emulsion-only uploads on this slot are permanently deleted from the index. Files shared with other slots/projects are just detached.\n\nCannot be undone.`,
+        `Clear all ${count} file${count === 1 ? '' : 's'} from "${slot.label}"?\n\nThe files stay in Emulsion — this only empties the slot. To delete a file for good, use "Delete permanently" on its row.`,
       )
     )
       return;
     try {
       const res = await fetch(
-        `/api/projects/${encodeURIComponent(projectId)}/slots/${encodeURIComponent(slot.id)}/items?purge=true`,
+        `/api/projects/${encodeURIComponent(projectId)}/slots/${encodeURIComponent(slot.id)}/items`,
         { method: 'DELETE', credentials: 'include' },
       );
       if (!res.ok) throw new Error(`Failed (${res.status})`);

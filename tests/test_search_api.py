@@ -356,6 +356,96 @@ class TestDeleteMedia:
         resp = client.delete("/api/media/fake-id", headers=auth_headers)
         assert resp.status_code == 404
 
+    def test_delete_removes_a_session_bundle_directory(
+        self, client, auth_headers, db_session, tmp_media_dir
+    ):
+        """A DAW session is a DIRECTORY, and deleting one used to 500.
+
+        `.logicx` / `.als` packages are folders, and `file_path` points at the
+        folder itself — so the `Path.unlink()` every delete path used raised
+        `IsADirectoryError` on Linux and `PermissionError` on macOS. Reported
+        2026-08-03 as a 500 on the one media type this app exists to hold.
+        """
+        from server.models import MediaItem
+
+        item = make_media_item(
+            db_session,
+            filename="take.logicx",
+            file_path="session/2026-08/abcdef12_take.logicx",
+            media_type="session",
+            mime_type="application/octet-stream",
+        )
+        bundle = os.path.join(tmp_media_dir, item.file_path)
+        os.makedirs(os.path.join(bundle, "Alternatives"), exist_ok=True)
+        with open(os.path.join(bundle, "Alternatives", "project.data"), "wb") as f:
+            f.write(b"session data")
+
+        resp = client.delete(f"/api/media/{item.id}", headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+        assert db_session.query(MediaItem).filter(MediaItem.id == item.id).first() is None
+        assert not os.path.exists(bundle), "the bundle is still on disk"
+
+    def test_delete_removes_every_thumbnail_size(
+        self, client, auth_headers, db_session, tmp_media_dir
+    ):
+        """`_sm` and `_lg` are siblings of `_thumb.webp`, and were being left behind.
+
+        Every delete path removed the 400px default only, so the 128px and
+        1600px renders outlived the image they belonged to.
+        """
+        item = make_media_item(db_session)
+        file_path = os.path.join(tmp_media_dir, item.file_path)
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "wb") as f:
+            f.write(b"data")
+        stem = os.path.splitext(file_path)[0]
+        thumbs = [f"{stem}_thumb.webp", f"{stem}_thumb_sm.webp", f"{stem}_thumb_lg.webp"]
+        for t in thumbs:
+            with open(t, "wb") as f:
+                f.write(b"thumb")
+
+        resp = client.delete(f"/api/media/{item.id}", headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+        left = [t for t in thumbs if os.path.exists(t)]
+        assert not left, f"orphaned thumbnails: {[os.path.basename(t) for t in left]}"
+
+    def test_bulk_delete_removes_a_session_bundle(
+        self, client, auth_headers, db_session, tmp_media_dir
+    ):
+        """The bulk path had the same unlink, and fails mid-loop when it raises.
+
+        Worse than the single delete: the items before it in the list are
+        already deleted, so the caller gets a 500 for a partly-finished job.
+        """
+        from server.models import MediaItem
+
+        plain = make_media_item(db_session)
+        plain_path = os.path.join(tmp_media_dir, plain.file_path)
+        os.makedirs(os.path.dirname(plain_path), exist_ok=True)
+        with open(plain_path, "wb") as f:
+            f.write(b"data")
+
+        session_item = make_media_item(
+            db_session,
+            filename="mix.logicx",
+            file_path="session/2026-08/beefcafe_mix.logicx",
+            media_type="session",
+        )
+        bundle = os.path.join(tmp_media_dir, session_item.file_path)
+        os.makedirs(bundle, exist_ok=True)
+        with open(os.path.join(bundle, "displayState.plist"), "wb") as f:
+            f.write(b"plist")
+
+        resp = client.post(
+            "/api/media/batch/delete",
+            json={"media_ids": [plain.id, session_item.id]},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert sorted(resp.json()["deleted"]) == sorted([plain.id, session_item.id])
+        assert not os.path.exists(bundle)
+        assert db_session.query(MediaItem).filter(MediaItem.id == session_item.id).first() is None
+
 
 class TestTagCRUD:
     """Tests for tag add/remove/batch endpoints."""

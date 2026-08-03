@@ -1533,58 +1533,39 @@ def set_item_primary(
     return out
 
 
-@router.delete("/{project_id}/slots/{slot_id}/items", summary="Detach every item from a slot (optionally purge Emulsion-only uploads)")
+@router.delete("/{project_id}/slots/{slot_id}/items", summary="Detach every item from a slot")
 def clear_slot_items(
     project_id: str,
     slot_id: str,
-    purge: bool = Query(False, description="If true, also delete media items that live only in Emulsion and aren't attached anywhere else."),
     user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    """Empty a slot. **The files themselves stay in Emulsion.**
+
+    This used to take a `purge=true` and delete "Emulsion-only" uploads
+    outright — but it never once did: the check read `mi.source_id`, which
+    `MediaItem` does not have, so every call with items in the slot raised
+    `AttributeError` and 500'd from the day it shipped (#302, 2026-05-17).
+    The transaction rolled back with it, so the button detached nothing
+    either.
+
+    Rather than switch on file deletion that has never actually run, clearing
+    a slot now only detaches. Deleting a file is still one deliberate act at a
+    time, through the row menu's "Delete permanently" — which is where an
+    irreversible thing belongs. The `purge` parameter is gone; a caller still
+    passing it is simply ignored.
+    """
     _project_or_404(db, project_id)
     cleared_slot = _slot_or_404(db, project_id, slot_id)
-    pis = db.query(ProjectItem).options(joinedload(ProjectItem.media_item)).filter(
+    pis = db.query(ProjectItem).filter(
         ProjectItem.project_id == project_id,
         ProjectItem.slot_id == slot_id,
     ).all()
-    detached_ids: list[str] = []
-    purged_media: list[tuple[str, str, str | None]] = []  # (id, media_type, file_path) for post-commit cleanup
     for pi in pis:
-        mi = pi.media_item
         db.delete(pi)
-        detached_ids.append(pi.id)
-        if purge and mi is not None:
-            # Only nuke media items that won't be referenced from anywhere
-            # else after this detach (other slots/projects), and which live
-            # in the private Emulsion index. Public scrape items stay put.
-            other = db.query(ProjectItem).filter(
-                ProjectItem.media_item_id == mi.id,
-                ProjectItem.id != pi.id,
-            ).count()
-            is_emulsion_only = (mi.output_index is None) and (mi.source_id is None)
-            if other == 0 and is_emulsion_only:
-                purged_media.append((mi.id, mi.media_type, mi.file_path))
-                db.delete(mi)
     cleared_slot.accent_auto = None  # no items remain, so no starred image
     db.commit()
-    # Disk + Meili cleanup for purged items.
-    if purged_media:
-        from server.search_api import _get_search_media_dir
-        media_root = _get_search_media_dir()
-        for mi_id, media_type, file_path in purged_media:
-            if file_path:
-                p = media_root / file_path
-                if p.exists():
-                    p.unlink()
-                thumb = p.with_name(p.stem + "_thumb.webp")
-                if thumb.exists():
-                    thumb.unlink()
-            try:
-                from server.search_client import delete_media_item as meili_delete
-                meili_delete(mi_id, media_type)
-            except Exception:
-                logger.exception("meili delete failed for %s", mi_id)
-    return {"detached": len(detached_ids), "purged": len(purged_media)}
+    return {"detached": len(pis)}
 
 
 @router.delete("/{project_id}/items/{item_id}", status_code=204, summary="Detach a media item")
