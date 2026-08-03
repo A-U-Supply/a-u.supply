@@ -14,6 +14,7 @@
  *   - `max-height` in `vh` instead of `dvh` (see below)
  *   - `--bits-*` custom properties the installed bits-ui doesn't emit
  *   - Hand-built `/thumbnail?size=` URLs outside src/lib/mediaThumb.ts
+ *   - Raw `Sortable.create()` outside src/lib/dragOptions.ts (see below)
  *
  * What it ignores:
  *   - The Atelier — Punctum, Photism, Bullethole, Spectralize live on
@@ -235,6 +236,34 @@ const THUMB_OWNER = 'src/lib/mediaThumb.ts';
 const THUMB_ALLOWLIST = {
   'src/pages/admin/hecatomb.astro':
     "its inline <script> can't import — see the filterTranslator note in the file, which is inlined for the same reason",
+};
+
+// A Sortable built by hand. The rule, and the bug that bought it:
+//
+//   Sortable rearranges the DOM as you drag. Every list it is used on here is
+//   a Svelte keyed `{#each}`, and Svelte tracks each item as a RANGE of nodes
+//   — a row followed by an `{#if}` is `<li>` … anchor comment. Sortable moves
+//   the `<li>` alone, breaking the range, and the next update walks forward
+//   from the row looking for an end node that now sits behind it. It never
+//   arrives, and cycles the nodes in front of its destination for ever: the
+//   tab dies with Chrome's "Page Unresponsive" (reported 2026-08-02, two
+//   drags inside one slot). Short of hanging, the same divergence renders an
+//   order nobody asked for.
+//
+// So Sortable's DOM changes are never allowed to outlive the drop.
+// `createSortable()` undoes them and hands the order to state, which is what
+// actually moves the row. A raw `Sortable.create` is a list that will
+// eventually hang the page, and it looks completely fine until it does.
+const SORTABLE_RAW_RE = /\bSortable\s*\.\s*create\s*\(/;
+/** The one module allowed to call it — everything else imports from here. */
+const SORTABLE_OWNER = 'src/lib/dragOptions.ts';
+/**
+ * Lists no framework renders, where Sortable's DOM change IS the state. Keep
+ * this short: an entry here is a place the next copy-paste can start from.
+ */
+const SORTABLE_ALLOWLIST = {
+  'src/pages/admin/latents/index.astro':
+    "the latent grid is built by the page's own script, not a Svelte {#each} — it keeps its own pre-drag snapshot and restores from that",
 };
 
 const HEX_RE = /#([0-9a-fA-F]{3,8})\b/;
@@ -489,6 +518,30 @@ async function lintThumbUrl(filePath) {
   return findings;
 }
 
+/**
+ * The Sortable-ownership pass. Whole file — these calls live in `<script>`,
+ * not in markup. See the constant above for the rule.
+ */
+async function lintSortable(filePath) {
+  const rel = relative(ROOT, filePath);
+  if (rel === SORTABLE_OWNER || SORTABLE_ALLOWLIST[rel]) return [];
+  const raw = await readFile(filePath, 'utf8');
+  const text = stripComments(raw);
+  const lines = text.split('\n');
+  const findings = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!SORTABLE_RAW_RE.test(lines[i])) continue;
+    findings.push({
+      file: rel,
+      line: i + 1,
+      kind: 'sortable',
+      match: 'Sortable.create(',
+      source: raw.split('\n')[i].trim(),
+    });
+  }
+  return findings;
+}
+
 async function lintBitsVars(filePath, known) {
   const rel = relative(ROOT, filePath);
   const raw = await readFile(filePath, 'utf8');
@@ -530,6 +583,7 @@ async function main() {
     allFindings.push(...findings);
     allFindings.push(...(await lintZScale(f, { styleBlocksOnly: true })));
     allFindings.push(...(await lintThumbUrl(f)));
+    allFindings.push(...(await lintSortable(f)));
   }
 
   // Overlay discipline runs over the components tree, which the colour pass
@@ -543,6 +597,7 @@ async function main() {
       ...(await lintViewportUnits(f, { styleBlocksOnly: true })),
     );
     allFindings.push(...(await lintThumbUrl(f)));
+    allFindings.push(...(await lintSortable(f)));
   }
 
   // ...and over src/lib, where the viewer's URL plumbing lives. Without this
@@ -551,6 +606,7 @@ async function main() {
   await walk(join(ROOT, 'src/lib'), ['.ts'], libFiles);
   for (const f of libFiles) {
     allFindings.push(...(await lintThumbUrl(f)));
+    allFindings.push(...(await lintSortable(f)));
   }
 
   // ...and over the global stylesheets, which are where two of the three
@@ -613,6 +669,15 @@ async function main() {
             `the header comment for why.`,
         );
       }
+      if (allFindings.some((f) => f.kind === 'sortable')) {
+        console.error(
+          `\nBuild reorderable lists with createSortable() from ` +
+            `src/lib/dragOptions.ts. A raw Sortable.create leaves its DOM ` +
+            `changes in place, and every one of these lists is a Svelte keyed ` +
+            `{#each} that then walks a broken node range for ever — the tab ` +
+            `hangs with "Page Unresponsive". See the header comment for why.`,
+        );
+      }
       if (allFindings.some((f) => f.kind === 'bits-var')) {
         console.error(
           `\nThat --bits-* custom property is not one the installed bits-ui ` +
@@ -624,9 +689,14 @@ async function main() {
       if (
         allFindings.some(
           (f) =>
-            !['overlay', 'zscale', 'dvh', 'bits-var', 'thumb-url'].includes(
-              f.kind,
-            ),
+            ![
+              'overlay',
+              'zscale',
+              'dvh',
+              'bits-var',
+              'thumb-url',
+              'sortable',
+            ].includes(f.kind),
         )
       ) {
         console.error(
