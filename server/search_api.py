@@ -8,6 +8,7 @@ import logging
 import mimetypes
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import uuid
@@ -48,6 +49,42 @@ router = APIRouter(prefix="/api")
 
 def _get_search_media_dir() -> Path:
     return Path(os.environ.get("SEARCH_MEDIA_DIR", "/app/search-data"))
+
+
+# Every thumbnail an item can have. `_thumb.webp` is the 400px default; the
+# 128px `_sm` and 1600px `_lg` siblings are written beside it (see the size
+# table in server/extraction.py). All three deletion paths used to remove only
+# the first, so `_sm` and `_lg` were left on disk for ever.
+_THUMB_SUFFIXES = ("_thumb.webp", "_thumb_sm.webp", "_thumb_lg.webp")
+
+
+def remove_media_files(file_path: str | None) -> None:
+    """Delete a media item's bytes from disk: one file, or a whole bundle.
+
+    **A DAW session is not a file.** `.logicx`, `.als` and their kin are
+    package *directories*, and `media_items.file_path` points at the directory
+    itself — so `Path.unlink()` on one raises `IsADirectoryError` on Linux and
+    `PermissionError` on macOS. Every caller here used to call exactly that,
+    which meant deleting a session returned a 500 (reported 2026-08-03), and in
+    the Latents purge path it did so *after* the DB rows were committed —
+    leaving the row gone, the bundle on disk, and an error on screen.
+
+    Sessions are the media type this application exists to hold, so the
+    directory case is the one worth naming rather than a defensive `try`.
+
+    Missing paths are not an error: the point is that the bytes are gone.
+    """
+    if not file_path:
+        return
+    path = _get_search_media_dir() / file_path
+    if path.is_dir():
+        shutil.rmtree(path)
+    elif path.exists():
+        path.unlink()
+    for suffix in _THUMB_SUFFIXES:
+        thumb = path.with_name(path.stem + suffix)
+        if thumb.is_file():
+            thumb.unlink()
 
 
 def content_disposition(disposition: str, filename: str) -> str:
@@ -1873,12 +1910,7 @@ def batch_delete(
             if item.sources and getattr(item.sources[0], "source_type", None)
             else None
         )
-        file_path = _get_search_media_dir() / item.file_path
-        if file_path.exists():
-            file_path.unlink()
-        thumb = file_path.with_name(file_path.stem + "_thumb.webp")
-        if thumb.exists():
-            thumb.unlink()
+        remove_media_files(item.file_path)
 
         db.delete(item)
         meili_delete(media_id, media_type, source_type=source_type)
@@ -2652,14 +2684,8 @@ def delete_media(
 
     media_type = item.media_type
 
-    # Remove file from disk
-    file_path = _get_search_media_dir() / item.file_path
-    if file_path.exists():
-        file_path.unlink()
-    # Remove thumbnail if it exists
-    thumb = file_path.with_name(file_path.stem + "_thumb.webp")
-    if thumb.exists():
-        thumb.unlink()
+    # File, bundle directory, and every thumbnail size — see remove_media_files.
+    remove_media_files(item.file_path)
 
     # Explicit project_items cleanup. The FK is ON DELETE CASCADE, but for
     # databases provisioned before PRAGMA foreign_keys=ON shipped, the

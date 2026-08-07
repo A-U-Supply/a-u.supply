@@ -702,6 +702,73 @@ class TestSlotAccentAuto:
         assert resp.status_code == 200
         assert get_slot(client, auth_headers, project["id"], slot["id"])["accent_auto"] is None
 
+    def test_clear_slot_detaches_and_keeps_the_files(
+        self, client, auth_headers, db_session, project, slot, tmp_media_dir
+    ):
+        """Clearing a slot empties it. It does NOT delete anything.
+
+        The endpoint used to accept `purge=true` and claim to delete
+        "Emulsion-only" uploads, but the check read `mi.source_id` — not a
+        column on `MediaItem` — so every call with items in the slot raised
+        `AttributeError` and 500'd from the day it shipped (#302). The rollback
+        meant nothing was detached either. Rather than switch on file deletion
+        that had never run, clearing is detach-only; deleting is one file at a
+        time through the row menu.
+
+        A session bundle is the fixture on purpose: it is a *directory* on
+        disk, which is what broke the delete paths this test's siblings cover.
+        """
+        import os
+
+        from server.models import MediaItem, ProjectItem
+
+        item = make_media_item(
+            db_session,
+            filename="session.logicx",
+            file_path="session/2026-08/cafebabe_session.logicx",
+            media_type="session",
+        )
+        bundle = os.path.join(tmp_media_dir, item.file_path)
+        os.makedirs(bundle, exist_ok=True)
+        with open(os.path.join(bundle, "project.data"), "wb") as f:
+            f.write(b"session data")
+        attach_item(client, auth_headers, project["id"], item.id, slot["id"])
+
+        resp = client.delete(
+            f"/api/projects/{project['id']}/slots/{slot['id']}/items",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["detached"] == 1
+        assert (
+            db_session.query(ProjectItem)
+            .filter(ProjectItem.slot_id == slot["id"])
+            .count()
+            == 0
+        ), "the slot should be empty"
+        assert (
+            db_session.query(MediaItem).filter(MediaItem.id == item.id).first()
+            is not None
+        ), "the file must stay in Emulsion"
+        assert os.path.exists(bundle), "the bundle must stay on disk"
+
+    def test_clear_slot_ignores_a_stale_purge_parameter(
+        self, client, auth_headers, db_session, project, slot
+    ):
+        """An old caller sending `?purge=true` must not 500 — or delete."""
+        from server.models import MediaItem
+
+        item = make_media_item(db_session)
+        attach_item(client, auth_headers, project["id"], item.id, slot["id"])
+
+        resp = client.delete(
+            f"/api/projects/{project['id']}/slots/{slot['id']}/items?purge=true",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["detached"] == 1
+        assert db_session.query(MediaItem).filter(MediaItem.id == item.id).first() is not None
+
     def test_two_starred_latest_added_wins(self, client, auth_headers, db_session, project, slot):
         from server.models import ProjectItem, _utcnow
 
