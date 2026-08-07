@@ -658,6 +658,28 @@ import Admin from '../../../layouts/Admin.astro';
   import Threads from '../../../components/Threads.svelte';
   import MarginaliaRecent from '../../../components/MarginaliaRecent.svelte';
 
+  /*
+   * Only the NEWEST copy of this script may run the page.
+   *
+   * This script ships as a content-hashed chunk. A tab that has already
+   * opened a latent holds chunk H1 — evaluated, with an astro:page-load
+   * listener and its own `mounted` / `initialized`. Deploy H2 under that open
+   * tab, click a latent, and ClientRouter swaps in HTML pointing at H2, which
+   * the browser evaluates as a SECOND module instance with a SECOND listener.
+   * Both then mount a full set of islands, and neither teardown can see the
+   * other's components — `unmount()` is keyed by a WeakMap private to each
+   * copy of Svelte — so every section renders twice. The header is the one
+   * part that doesn't double, because it is rebuilt with innerHTML rather
+   * than mounted. A hard refresh loads only H2, which is why refreshing
+   * cured it.
+   *
+   * The counter lives on `window`, the only thing the two instances share.
+   * Later instance wins; earlier ones stand down.
+   */
+  const epoch = ((window as any).__latentDetailEpoch =
+    ((window as any).__latentDetailEpoch || 0) + 1);
+  const superseded = () => (window as any).__latentDetailEpoch !== epoch;
+
   let mounted: any[] = [];
   let initialized = false;
   let styleListener: ((e: Event) => void) | null = null;
@@ -838,18 +860,28 @@ import Admin from '../../../layouts/Admin.astro';
   }
 
   async function init() {
-    if (initialized) return;
+    if (initialized || superseded()) return;
     const headerEl = document.getElementById('header');
     const islandsEl = document.getElementById('islands');
     if (!headerEl || !islandsEl) return;
 
     const user = await (window as any).__authReady;
-    if (!user) return;
+    if (!user || superseded()) return;
     if (initialized) return;
+    // Claim the page BEFORE the slug lookup, not after. Every await below is
+    // a window in which the other init() — this module both calls init()
+    // directly and listens for astro:page-load, and on a client-side nav both
+    // fire — can walk past the guard and mount a second time. Whether it did
+    // came down to whether /api/me or /api/projects/by-slug answered first.
+    // The set is released on the one path where nothing was claimed.
+    initialized = true;
 
     const id = await resolveProjectId(headerEl);
-    if (!id) return;
-    initialized = true;
+    if (!id) {
+      initialized = false;
+      return;
+    }
+    if (superseded()) return;
 
     let res: Response;
     try {
@@ -866,6 +898,7 @@ import Admin from '../../../layouts/Admin.astro';
       return;
     }
     const p = await res.json();
+    if (superseded()) return;
 
     // If we resolved by id (query-string entry) and the project has a slug,
     // upgrade the URL to the pretty form so bookmarks + share links work.
@@ -1118,6 +1151,19 @@ import Admin from '../../../layouts/Admin.astro';
       } catch {}
     }
     mounted = [];
+    // `mounted` accounts for this instance's components. Nothing accounts for
+    // an older instance's: it may have mounted before this chunk finished
+    // downloading, and its components cannot be unmounted from here. Emptying
+    // the targets is the half of the fix that doesn't depend on who ran
+    // first. Orphaned effects keep running until the page unloads — a leak,
+    // but a bounded one, and the alternative is rendering the page twice.
+    for (const target of [
+      document.getElementById('map-island'),
+      document.getElementById('style-panel-island'),
+      ...Array.from(islandsEl.querySelectorAll<HTMLElement>('.latent-section')),
+    ]) {
+      target?.replaceChildren();
+    }
 
     // Hero accent carry — the accent is server-validated #rrggbb, and the
     // LatentHero island keeps it fresh as the hero/override changes.
