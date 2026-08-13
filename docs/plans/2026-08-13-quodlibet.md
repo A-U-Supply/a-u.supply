@@ -69,6 +69,21 @@ drops capture latency from 10 ms to 2.9 ms.
 **7. Chrome/Edge only.** Safari and Firefox support no audio in `getDisplayMedia`. See
 "Degradation" below.
 
+**8. Opening the deck tab hides the mixer, and you cannot capture from a hidden
+document.** `window.open(url, name)` with no feature string opens a real tab (verified:
+identical size *and* identical screen position, so it is the same window) — but the new
+tab takes focus, which sets `document.hidden` on the mixer, and `getDisplayMedia` then
+throws `InvalidStateError: Invalid state`. **Order of operations is load-bearing:** the
+deck tab must exist *and* the mixer must be foreground again before capture. The
+intended fix is the deck calling `window.opener.focus()` on load so one click does
+open → hand focus back → capture. That specific call is unverified (see open questions).
+
+**9. A backgrounded, occluded deck tab feeds the capture fine.** Measured within one
+run against a foreground control on the same statistic: background −69.3 dB after a
+20 s hold vs foreground −67.0 dB, a **2.4 dB** difference — ordinary programme
+variation. `deck.document.hidden` stayed `false` throughout, which suggests being
+captured keeps a tab rendering and exempt from throttling.
+
 ## Decisions taken (do not re-litigate)
 
 | Decision | Choice |
@@ -172,6 +187,30 @@ ignore it. (A `<video>` fed from `stream.getVideoTracks()[0]` is the obvious v2
 preview, but it would also make the deck tab's rendering state start to matter, which
 right now it does not.)
 
+### Loading a slot
+
+Every empty slot shows a **URL field**, always visible, always labelled — paste a link,
+press enter. A filled slot swaps the field for title, thumbnail and controls, with an
+explicit way to replace it. Two accelerators on top: **drop a URL onto a slot** (the
+browser hands us the string for free), and **paste with nothing focused** fills the
+first empty slot. The Library picker (`PullFromIndex.svelte`) is the second entry
+point on the same card.
+
+`src/lib/quodlibet/parseYouTube.ts` — accept every shape a link arrives in:
+`watch?v=`, `youtu.be/`, `/shorts/`, `/embed/`, `/live/`, with arbitrary extra params.
+**Honour the `t=` timestamp** as the slot's start offset; pasting a link that already
+points at the drop is exactly what you want in a mixer. A playlist URL takes the single
+video and ignores the list.
+
+**Title and thumbnail need no API key and no backend:**
+`https://img.youtube.com/vi/<id>/mqdefault.jpg` for the image, and
+`https://www.youtube.com/oembed?url=…&format=json` (CORS-enabled, unauthenticated) for
+the title. Do not add a YouTube Data API key for this.
+
+The wrinkle: the field is in the mixer tab, the player is in the deck tab. Same origin,
+so loading is a direct call — but the deck must exist, so the *first* paste is what
+opens it (a keypress is valid user activation), subject to constraint 8's ordering.
+
 ### Beat grids
 
 `{ bpm, anchor, source: 'auto' | 'tap' }`, cached by YouTube video ID in
@@ -243,7 +282,17 @@ one production condition the spikes have not yet reproduced.
 3. **Standing tape latency.** How far behind live should the tape sit? Too little and
    scrub has no rope; too much and it drags noticeably. Wants tuning by ear, not by
    argument.
-4. **Audio-only is a narrowing of the original brief.** The source TikTok was four
+4. **Embedding-disabled videos.** Rights holders routinely disable embedding on music
+   videos, and the IFrame API reports this only as `onError` 101/150 *after* the load
+   attempt. For a YouTube **music** mixer this could be a frequent, load-bearing
+   failure rather than an edge case — there is no way to know before trying, and no
+   workaround. At minimum a slot must say so plainly rather than sitting blank. Worth
+   sanity-checking against a handful of tracks Brendan would actually mix before
+   building far.
+5. **`window.opener.focus()`** — the intended one-click fix for constraint 8. Unverified;
+   Chrome restricts programmatic focus, and if it is refused the flow becomes "open the
+   deck, click back to the mixer yourself, then connect."
+6. **Audio-only is a narrowing of the original brief.** The source TikTok was four
    *videos* playing at once, and Brendan's framing was visual. Tube's *"at least at
    first"* defers the picture rather than dropping it, and v2 has a clear route back
    (render the captured video track). Worth Brendan confirming he is happy for v1 to
