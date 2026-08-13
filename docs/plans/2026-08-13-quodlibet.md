@@ -47,11 +47,19 @@ the *current* tab returned it at −22 dB against a silent floor. `restrictOwnAu
 true` is accepted by Chrome and reported back as applied, and changes nothing
 (−25.7 dB). **`preferCurrentTab` is unusable.**
 
-**5. The popup topology works.** Videos in a same-origin `window.open()` popup,
-captured from the mixer tab: hears the popup at −64 dB broadband against a −150 dB
-floor, and our own tone moves the reading by **−0.6 dB** — nothing. Distinct
-`deviceId` surfaces (`web-contents-media-stream://7:8` vs `7:1`) confirm separate
-capture targets.
+**5. A second browsing context works, and is the only thing that does.** Players in a
+same-origin `window.open()` context, captured from the mixer tab: hears it at −64 dB
+broadband against a −150 dB floor, and our own tone moves the reading by **−0.6 dB** —
+nothing. Distinct `deviceId` surfaces (`web-contents-media-stream://7:8` vs `7:1`)
+confirm separate capture targets.
+
+Three single-window escapes were measured and **all three failed** — do not retry them:
+
+| Route | Result |
+|---|---|
+| **Self-subtraction** (we authored the signal, so subtract it) | **−2.0 dB** cancellation, against the ≈−25 dB that would be useful. The loop delay drifts **1027 samples in 25 s** (≈0.09% clock skew) and there is an async sample-rate conversion in the path (48 kHz capture vs 44.1 kHz context), so it is not linear or time-invariant. Re-estimating from scratch still only reached −4.5 dB. A *stale* estimate scores **+1.4 dB** — subtracting with a slightly wrong delay adds energy. |
+| **`setSinkId`** | No escape. With the sink set to `{type:'none'}` — play to no device at all — the tone read **−25.69 dB before and −25.69 dB after**. Tab capture taps the web-contents graph *upstream of the output device*, so no sink trick can work. |
+| **Chrome's `echoCancellation`** | Applied and confirmed in settings; our tone still returned at −25.9 dB. Chrome does not treat a tab's own `AudioContext` output as an echo reference. Also pushes latency 2.9 ms → 10 ms. |
 
 **6. Chrome's default capture is voice-tuned and unusable for music.** It hands you a
 **mono** stream with `echoCancellation`, `noiseSuppression` and `autoGainControl` all
@@ -66,8 +74,10 @@ drops capture latency from 10 ms to 2.9 ms.
 | Decision | Choice |
 |---|---|
 | Server-side BPM (yt-dlp + offline beat tracking) | **No.** Brendan: *"way too heavy handed for such a thing."* `yt-dlp` already being a dep (`server/slack_scraper.py:259`) is not a reason to revisit |
-| `preferCurrentTab` / single-window | **No.** Measured to feed back; `restrictOwnAudio` does not save it |
-| Where the videos live | **A same-origin popup window**, captured from the mixer tab. Architecture, not a convenience |
+| `preferCurrentTab` / single-window | **No.** Measured to feed back; `restrictOwnAudio`, self-subtraction, `setSinkId` and Chrome's EC all fail to save it |
+| Where the players live | **A same-origin background tab** — `window.open(url, name)` with *no* feature string. Architecture, not a convenience. A tab rather than a floating window, per Tube |
+| Video | **Audio only in v1.** Tube: *"I would personally keep it audio only, at least at first."* The captured video track is requested (the API demands one) and never rendered |
+| Punch-in tape (record and output never overlap, to dodge the loop in one window) | **Rejected.** It would forbid continuous master-bus FX. Tube: *"continuous master-bus effects like looping, delays, etc, are essential to this IMO"* |
 | Per-slot pan / EQ / sidechain ducking | **Impossible.** The capture is the sum. Per-channel is volume/mute/solo/speed/seek; everything else is master-bus. Do not propose these later as if cheap |
 | Speed control | Eight fixed positions, always visible per slot, **labelled in BPM** rather than multipliers |
 | BPM acquisition | **Live analysis of the capture**, armed per slot, auto-soloing. Tap survives only as the downbeat marker |
@@ -80,17 +90,23 @@ drops capture latency from 10 ms to 2.9 ms.
 ### The signal chain
 
 ```
- popup window                          mixer tab
+ background tab                        mixer tab
  ┌──────────────────┐
  │ YT1 ─[vol]─┐     │                 ┌─ analyser → BPM
  │ YT2 ─[vol]─┤     │   capture       │
  │ YT3 ─[vol]─┼─ tab audio ──────── TAPE ──── master FX ──▸ out
  │ YT4 ─[vol]─┘     │  (local playback  (60s buffer,
  └──────────────────┘   suppressed)     varispeed, loop)
+   never looked at,
+   never rendered
 ```
 
-Faders act *before* the capture point, so riding a channel and hitting a tape gesture
-compose correctly — channels feeding a tape machine, which is the OP-1 layout.
+The deck tab is pure infrastructure: audio-only means nothing in it is ever displayed,
+so it can sit backgrounded and occluded for the whole session. Chrome does not
+throttle a tab that is playing audio, and suspended compositing costs us nothing when
+we never render the picture. Faders act *before* the capture point, so riding a
+channel and hitting a tape gesture compose correctly — channels feeding a tape
+machine, which is the OP-1 layout.
 
 ### Free vs costly gestures
 
@@ -115,13 +131,13 @@ time are exact and marked as true locks. The limitation becomes the matching aid
 
 ```
 src/pages/admin/atelier/quodlibet.astro        route (Admin layout + island)
-src/pages/admin/atelier/quodlibet-videos.astro popup — bare, NO Admin layout,
+src/pages/admin/atelier/quodlibet-deck.astro   the deck tab — bare, NO Admin layout,
                                                stable <title> (the capture picker
                                                and the test flag select by title)
 src/components/Quodlibet.svelte                the island
 src/components/quodlibet/                      SlotCard, TapeDeck, TrickKeys,
                                                ScrubWheel, SoundPath
-src/lib/quodlibet/videoWindow.ts               popup lifecycle + player handles
+src/lib/quodlibet/deckTab.ts                   deck tab lifecycle + player handles
 src/lib/quodlibet/slots.ts                     SlotPlayer iface (YouTube | library)
 src/lib/quodlibet/rates.ts                     8 steps, BPM labelling, drift maths
 src/lib/quodlibet/capture.ts                   getDisplayMedia + constraint block
@@ -150,8 +166,11 @@ navigator.mediaDevices.getDisplayMedia({
 });
 ```
 
-`stream.getVideoTracks()[0]` goes into a `<video>` in the mixer tab as the live
-preview, so putting the videos in another window costs nothing visually.
+The API demands a video track, so we request one and **never render it** — v1 is audio
+only. Stopping the video track outright risks tearing down the capture, so keep it and
+ignore it. (A `<video>` fed from `stream.getVideoTracks()[0]` is the obvious v2
+preview, but it would also make the deck tab's rendering state start to matter, which
+right now it does not.)
 
 ### Beat grids
 
@@ -185,14 +204,15 @@ algorithm.
 
 ## Degradation
 
-The page opens with four videos, working faders, working speed and working phase sync
-— complete and useful, no permission, any browser. The tape panel is **visible but
-dark**, with the Sound Path diagram (OP-1 §9.2) showing which link is broken and one
-labelled button to fix it. **Never prompt for capture on load.** Safari and Firefox
-therefore degrade to a competent four-video mixer rather than a broken page.
+The page opens with four loadable slots, working faders, working speed and working
+phase sync — complete and useful, no permission, any browser. The tape panel is
+**visible but dark**, with the Sound Path diagram (OP-1 §9.2) showing which link is
+broken and one labelled button to fix it. **Never prompt for capture on load.** Safari
+and Firefox therefore degrade to a competent four-source mixer rather than a broken
+page.
 
 Sound Path must distinguish three failure states, because they have different fixes:
-video window closed · tab audio not shared · wrong surface picked (no audio track).
+deck tab closed · tab audio not shared · wrong surface picked (no audio track).
 
 The **help key** (OP-1 §11.1 — *"hold down the Help Key and pressing any key you get
 the Key name and function of that specific key"*) covers the eight cryptic trick keys
@@ -202,12 +222,14 @@ without cluttering them.
 
 `tests/test_quodlibet_browser.py` + `tests/browser/quodlibet.mjs`, following the house
 two-file CDP pattern (`slot_reorder_freeze` is the model). Chrome flags proven in the
-spike: `--auto-select-tab-capture-source-by-title=<popup title>` for the popup, and
+spike: `--auto-select-tab-capture-source-by-title=<deck title>` for the deck tab, and
 `--auto-accept-this-tab-capture` for the current-tab case.
 
 Cover: the eight rate positions apply and report back; the BPM button solos and
-restores the prior mute state; **break leaves video position untouched** (the whole
-drift argument); loop in/out survive a rate change; M1/M2 blend interpolates.
+restores the prior mute state; **break leaves playhead position untouched** (the whole
+drift argument); loop in/out survive a rate change; M1/M2 blend interpolates; and the
+deck tab keeps feeding the capture **while backgrounded and occluded**, which is the
+one production condition the spikes have not yet reproduced.
 
 ## Open questions
 
@@ -215,9 +237,14 @@ drift argument); loop in/out survive a rate change; M1/M2 blend interpolates.
    a real worklet *file* (`?url` import vs a `public/` asset) is unproven, and this is
    the classic works-in-dev-breaks-in-build trap. There is **no existing worklet
    anywhere in `src/`** — this would be the first. Settle it before Step 5.
-2. **Popup lifecycle.** Blocked by the popup blocker, or closed mid-session. Needs a
-   real gesture to open and a visible recovery path; is silent auto-reopen right, or
+2. **Deck tab lifecycle.** Blocked by the popup blocker, or closed mid-session. Needs
+   a real gesture to open and a visible recovery path; is silent auto-reopen right, or
    should it wait to be asked?
 3. **Standing tape latency.** How far behind live should the tape sit? Too little and
-   scrub has no rope; too much and the picture leads the sound noticeably. Wants
-   tuning by ear, not by argument.
+   scrub has no rope; too much and it drags noticeably. Wants tuning by ear, not by
+   argument.
+4. **Audio-only is a narrowing of the original brief.** The source TikTok was four
+   *videos* playing at once, and Brendan's framing was visual. Tube's *"at least at
+   first"* defers the picture rather than dropping it, and v2 has a clear route back
+   (render the captured video track). Worth Brendan confirming he is happy for v1 to
+   be an instrument you listen to rather than watch.
