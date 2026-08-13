@@ -69,14 +69,18 @@ drops capture latency from 10 ms to 2.9 ms.
 **7. Chrome/Edge only.** Safari and Firefox support no audio in `getDisplayMedia`. See
 "Degradation" below.
 
-**8. Opening the deck tab hides the mixer, and you cannot capture from a hidden
-document.** `window.open(url, name)` with no feature string opens a real tab (verified:
-identical size *and* identical screen position, so it is the same window) — but the new
-tab takes focus, which sets `document.hidden` on the mixer, and `getDisplayMedia` then
-throws `InvalidStateError: Invalid state`. **Order of operations is load-bearing:** the
-deck tab must exist *and* the mixer must be foreground again before capture. The
-intended fix is the deck calling `window.opener.focus()` on load so one click does
-open → hand focus back → capture. That specific call is unverified (see open questions).
+**8. You cannot capture from a hidden document — which is why the deck opens the
+mixer, not the other way round.** `window.open(url, name)` with no feature string opens
+a real tab (verified: identical size *and* identical screen position, so it is the same
+window), and the new tab takes focus. When the mixer opened the deck, that set
+`document.hidden` on the mixer and `getDisplayMedia` threw `InvalidStateError: Invalid
+state`.
+
+**Inverting the relationship dissolves this rather than working around it.** The deck
+is the primary page; it opens the mixer; the mixer therefore *gains* focus at exactly
+the moment it needs to capture. No `window.opener.focus()`, no fallback ritual. It also
+leaves the tabs in precisely the configuration verified in constraint 9 — deck
+backgrounded, mixer in front.
 
 **9. A backgrounded, occluded deck tab feeds the capture fine.** Measured within one
 run against a foreground control on the same statistic: background −69.3 dB after a
@@ -90,7 +94,9 @@ captured keeps a tab rendering and exempt from throttling.
 |---|---|
 | Server-side BPM (yt-dlp + offline beat tracking) | **No.** Brendan: *"way too heavy handed for such a thing."* `yt-dlp` already being a dep (`server/slack_scraper.py:259`) is not a reason to revisit |
 | `preferCurrentTab` / single-window | **No.** Measured to feed back; `restrictOwnAudio`, self-subtraction, `setSinkId` and Chrome's EC all fail to save it |
-| Where the players live | **A same-origin background tab** — `window.open(url, name)` with *no* feature string. Architecture, not a convenience. A tab rather than a floating window, per Tube |
+| Which tab is primary | **The deck.** `/admin/atelier/quodlibet` is the deck; it opens the mixer as a second tab. Brendan's call, and it removes constraint 8 entirely rather than mitigating it. Decks feed a mixer — the `window.open` relationship now matches the signal flow |
+| Where the players live | **The deck tab**, same origin, backgrounded once the mixer is up — `window.open(url, name)` with *no* feature string. A tab rather than a floating window, per Tube |
+| Where links are pasted | **The deck owns loading**, and each mixer channel carries a compact URL field too. Same parser, same call, one function on two surfaces — switching tabs to swap a track mid-set would not survive first contact |
 | Video | **Audio only in v1.** Tube: *"I would personally keep it audio only, at least at first."* The captured video track is requested (the API demands one) and never rendered |
 | Punch-in tape (record and output never overlap, to dodge the loop in one window) | **Rejected.** It would forbid continuous master-bus FX. Tube: *"continuous master-bus effects like looping, delays, etc, are essential to this IMO"* |
 | Per-slot pan / EQ / sidechain ducking | **Impossible.** The capture is the sum. Per-channel is volume/mute/solo/speed/seek; everything else is master-bus. Do not propose these later as if cheap |
@@ -105,23 +111,25 @@ captured keeps a tab rendering and exempt from throttling.
 ### The signal chain
 
 ```
- background tab                        mixer tab
+ DECK tab (primary)                    MIXER tab (opened by the deck)
  ┌──────────────────┐
  │ YT1 ─[vol]─┐     │                 ┌─ analyser → BPM
  │ YT2 ─[vol]─┤     │   capture       │
  │ YT3 ─[vol]─┼─ tab audio ──────── TAPE ──── master FX ──▸ out
  │ YT4 ─[vol]─┘     │  (local playback  (60s buffer,
  └──────────────────┘   suppressed)     varispeed, loop)
-   never looked at,
-   never rendered
+   paste links here;
+   backgrounded once
+   the mixer is up
 ```
 
-The deck tab is pure infrastructure: audio-only means nothing in it is ever displayed,
-so it can sit backgrounded and occluded for the whole session. Chrome does not
-throttle a tab that is playing audio, and suspended compositing costs us nothing when
-we never render the picture. Faders act *before* the capture point, so riding a
-channel and hitting a tape gesture compose correctly — channels feeding a tape
-machine, which is the OP-1 layout.
+You land on the deck, load four links, and open the mixer — which takes focus at
+exactly the moment it needs to capture (constraint 8). From then on the deck sits
+backgrounded and occluded, which is measured as costing nothing (constraint 9);
+audio-only means nothing in it needs rendering anyway.
+
+Faders act *before* the capture point, so riding a channel and hitting a tape gesture
+compose correctly — channels feeding a tape machine, which is the OP-1 layout.
 
 ### Free vs costly gestures
 
@@ -145,14 +153,19 @@ time are exact and marked as true locks. The limitation becomes the matching aid
 ## Surface
 
 ```
-src/pages/admin/atelier/quodlibet.astro        route (Admin layout + island)
-src/pages/admin/atelier/quodlibet-deck.astro   the deck tab — bare, NO Admin layout,
-                                               stable <title> (the capture picker
-                                               and the test flag select by title)
-src/components/Quodlibet.svelte                the island
+src/pages/admin/atelier/quodlibet.astro        THE DECK — primary, Admin layout,
+                                               sidebar entry, stable <title> (the
+                                               capture picker and the test flag
+                                               select the deck by title)
+src/pages/admin/atelier/quodlibet/mixer.astro  THE MIXER — opened by the deck as a
+                                               second tab. Bare, no sidebar: it is a
+                                               performance surface. Needs its own
+                                               auth gate (Admin.astro normally does it)
+src/components/QuodlibetDeck.svelte            four slots + URL entry + players
+src/components/QuodlibetMixer.svelte           faders, tape, trick keys, sound path
 src/components/quodlibet/                      SlotCard, TapeDeck, TrickKeys,
                                                ScrubWheel, SoundPath
-src/lib/quodlibet/deckTab.ts                   deck tab lifecycle + player handles
+src/lib/quodlibet/mixerTab.ts                  mixer tab lifecycle; deck→mixer handles
 src/lib/quodlibet/slots.ts                     SlotPlayer iface (YouTube | library)
 src/lib/quodlibet/rates.ts                     8 steps, BPM labelling, drift maths
 src/lib/quodlibet/capture.ts                   getDisplayMedia + constraint block
@@ -207,9 +220,10 @@ video and ignores the list.
 `https://www.youtube.com/oembed?url=…&format=json` (CORS-enabled, unauthenticated) for
 the title. Do not add a YouTube Data API key for this.
 
-The wrinkle: the field is in the mixer tab, the player is in the deck tab. Same origin,
-so loading is a direct call — but the deck must exist, so the *first* paste is what
-opens it (a keypress is valid user activation), subject to constraint 8's ordering.
+Loading happens where the players are, so there is no cross-tab step at all for the
+primary path. The mixer's compact per-channel field writes into the deck's players by
+direct property access (same origin), so swapping a track mid-set never means leaving
+the mixer.
 
 ### Beat grids
 
@@ -243,15 +257,19 @@ algorithm.
 
 ## Degradation
 
-The page opens with four loadable slots, working faders, working speed and working
-phase sync — complete and useful, no permission, any browser. The tape panel is
-**visible but dark**, with the Sound Path diagram (OP-1 §9.2) showing which link is
-broken and one labelled button to fix it. **Never prompt for capture on load.** Safari
-and Firefox therefore degrade to a competent four-source mixer rather than a broken
-page.
+The deck/mixer split gives this for free, and it is the strongest argument for the
+inversion. **The deck is a complete, useful thing on its own** — paste four links, they
+play together, per-slot volume, mute, solo and speed all work, phase sync works. No
+permission, no capture, any browser. So `/admin/atelier/quodlibet` in the sidebar lands
+you somewhere that works rather than somewhere that nags for a permission before
+showing you anything.
 
-Sound Path must distinguish three failure states, because they have different fixes:
-deck tab closed · tab audio not shared · wrong surface picked (no audio track).
+The **mixer** is the Chrome-only part, because the tape is what needs the capture. It
+carries the Sound Path diagram (OP-1 §9.2) and **never prompts on load** — connecting
+is a deliberate, labelled click, which also supplies its own user activation.
+
+Sound Path must distinguish: deck tab closed · tab audio not shared · wrong surface
+picked (no audio track) · browser cannot capture audio at all (Safari/Firefox).
 
 The **help key** (OP-1 §11.1 — *"hold down the Help Key and pressing any key you get
 the Key name and function of that specific key"*) covers the eight cryptic trick keys
@@ -289,10 +307,15 @@ one production condition the spikes have not yet reproduced.
    workaround. At minimum a slot must say so plainly rather than sitting blank. Worth
    sanity-checking against a handful of tracks Brendan would actually mix before
    building far.
-5. **`window.opener.focus()`** — the intended one-click fix for constraint 8. Unverified;
-   Chrome restricts programmatic focus, and if it is refused the flow becomes "open the
-   deck, click back to the mixer yourself, then connect."
-6. **Audio-only is a narrowing of the original brief.** The source TikTok was four
+5. **User activation in a freshly-opened tab.** A new tab may not carry transient user
+   activation, so the mixer might not be able to call `getDisplayMedia` the instant it
+   loads. Almost certainly moot — connecting is a deliberate click that supplies its
+   own activation — but it is the same class of assumption that has already been wrong
+   twice here, so verify rather than assert.
+6. **Orphaning.** The deck is now the parent. Close the deck and the mixer loses its
+   source *and* its opener; it can open a fresh deck and become the parent itself, but
+   the relationship inverts. Worth deciding whether that is automatic or offered.
+7. **Audio-only is a narrowing of the original brief.** The source TikTok was four
    *videos* playing at once, and Brendan's framing was visual. Tube's *"at least at
    first"* defers the picture rather than dropping it, and v2 has a clear route back
    (render the captured video track). Worth Brendan confirming he is happy for v1 to
