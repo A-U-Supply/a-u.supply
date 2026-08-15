@@ -15,7 +15,7 @@
 import Admin from '../../layouts/Admin.astro';
 import BrutalCard from '../../components/BrutalCard.astro';
 
-const VERSION = '0.0.4';
+const VERSION = '0.0.5';
 const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
 ---
 
@@ -325,6 +325,12 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
       <li>
         <strong>The tape adds a quarter second of delay</strong> once engaged. Inaudible
         by itself, visible against picture.
+      </li>
+      <li>
+        <strong>A stopped tape is silent.</strong> Pressing <em>stop</em> mutes the
+        tape output rather than holding the last moment of sound — the same as a real
+        transport. The sources keep playing underneath, which is what lets break,
+        loop and stutter rejoin them.
       </li>
       <li>
         <strong>Closing or reloading the mixer ends the mix.</strong> The audio lives
