@@ -1,0 +1,291 @@
+---
+/*
+ * Download page + manual for the YouTube Mixer Chrome extension.
+ *
+ * The extension's source lives in its own repo, not here. The served zip is a
+ * committed build artifact — to publish a new version:
+ *
+ *   cd <youtube-mixer repo>
+ *   git archive --format=zip --prefix=youtube-mixer/ \
+ *     -o <this repo>/public/downloads/youtube-mixer-<version>.zip HEAD
+ *
+ * Use `git archive` rather than zipping the folder: it takes tracked files only,
+ * which is what keeps the extension's signing key (.extension-key.pem, gitignored
+ * there) out of a public download. Then bump VERSION below.
+ */
+import Admin from '../../layouts/Admin.astro';
+import BrutalCard from '../../components/BrutalCard.astro';
+
+const VERSION = '0.0.1';
+const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
+---
+
+<Admin title="YouTube Mixer" current="youtube-mixer">
+  <h1>YouTube Mixer</h1>
+
+  <p class="ym-lede">
+    A Chrome extension that turns any number of browser tabs into mixer
+    channels. Each tab gets a level, pan, mute and solo; YouTube tabs also get
+    continuous playback speed, pitch control, seeking and transport. Everything
+    sums into a tape machine you can loop, reverse, scrub and stutter in real
+    time.
+  </p>
+
+  <BrutalCard title={`Download — v${VERSION}`} class="ym-download">
+    <a class="btn-primary ym-download__btn" href={ZIP} download>
+      youtube-mixer-{VERSION}.zip
+    </a>
+    <p class="ym-download__note">
+      Chrome or Edge only. It is not on the Web Store, so it installs unpacked —
+      four steps, below.
+    </p>
+  </BrutalCard>
+
+  <BrutalCard title="Install">
+    <ol class="ym-steps">
+      <li>
+        Download the zip above and unzip it somewhere you will not delete.
+      </li>
+      <li>
+        Open <code>chrome://extensions</code> and turn on <strong
+          >Developer mode</strong
+        > (top right).
+      </li>
+      <li>
+        Click <strong>Load unpacked</strong> and choose the unzipped
+        <code>youtube-mixer</code> folder.
+      </li>
+      <li>
+        The mixer panel opens in a new tab straight away. Pin the extension to
+        your toolbar — you will need its button.
+      </li>
+    </ol>
+    <p class="ym-note">
+      Chrome will warn that developer-mode extensions can be a risk, and may
+      re-warn on each restart. That is expected for anything not installed from
+      the Web Store.
+    </p>
+  </BrutalCard>
+
+  <BrutalCard title="Adding a tab to the mix">
+    <p>
+      Play something in a tab, then <strong
+        >click the YouTube Mixer toolbar button while that tab is in front</strong
+      >. It becomes a channel.
+    </p>
+    <p class="ym-note">
+      The toolbar click is not optional and not a design choice — Chrome only
+      grants audio capture to an extension you have explicitly invoked on that
+      exact tab. The panel has a <code>capture</code> button too, but it will be refused
+      for tabs you have not invoked on. One click per tab, once per session.
+    </p>
+    <p>
+      A captured tab's own sound is muted and routed through the mixer instead,
+      so you hear the mix rather than both. Any audible tab works — YouTube,
+      Bandcamp, SoundCloud, a livestream.
+    </p>
+  </BrutalCard>
+
+  <BrutalCard title="Decks">
+    <dl class="ym-defs">
+      <dt>level</dt>
+      <dd>
+        Channel fader, 0 to 1.5 so you can push past unity. Works on any
+        captured tab.
+      </dd>
+
+      <dt>pan</dt>
+      <dd>
+        Hard left through centre to hard right. <em>centre</em> resets it.
+      </dd>
+
+      <dt>mute / solo</dt>
+      <dd>
+        Solo is exclusive — clicking one clears the others. <strong
+          >Shift-click</strong
+        > to solo several at once. Solo ducks everything else without touching their
+        faders, so releasing it puts your levels back exactly as they were.
+      </dd>
+
+      <dt>rate</dt>
+      <dd>
+        Continuous playback speed, 0.25× to 2.5×, at whatever precision you drag
+        to — 1.037 is a real setting. <em>1.0</em> snaps back.
+        <strong>YouTube tabs only.</strong>
+      </dd>
+
+      <dt>keep pitch</dt>
+      <dd>
+        On, speed changes without pitch (time-stretch). Off, pitch rides with
+        speed — proper varispeed, the way tape behaves.
+      </dd>
+
+      <dt>pos / play / pause</dt>
+      <dd>Scrub and transport for the underlying video. YouTube tabs only.</dd>
+    </dl>
+    <p class="ym-note">
+      Rate, position and transport come from a script running inside the YouTube
+      page, which is why they are YouTube-only. On other tabs those rows are
+      visibly disabled rather than hidden.
+    </p>
+  </BrutalCard>
+
+  <BrutalCard title="Tape">
+    <p>
+      The tape is always recording the mix — a rolling 60 seconds. Nothing you
+      do to it affects what the tabs are playing, so the sources keep running
+      underneath whatever you are doing.
+    </p>
+    <dl class="ym-defs">
+      <dt>thru / tape</dt>
+      <dd>
+        <strong>thru</strong> passes audio straight out with no delay while still
+        filling the buffer. <strong>tape</strong> plays from the tape head, which
+        sits a quarter second behind live so there is something to scrub back into.
+      </dd>
+
+      <dt>speed</dt>
+      <dd>
+        −2× to +2×, continuous. Negative is reverse. Zero is a dead stop.
+        Sustained speeds above 1 will catch up to live and stick there — you
+        cannot play faster than the tab is recording.
+      </dd>
+
+      <dt>reverse / stop / 1.0</dt>
+      <dd>Shortcuts for −1, 0 and normal speed.</dd>
+
+      <dt>rew / ff</dt>
+      <dd>
+        Hold to shuttle at 4×. Release and it resumes normal speed
+        <em>where it landed</em>, like a real transport. <em>to live</em> jumps back
+        to the present.
+      </dd>
+
+      <dt>stutter</dt>
+      <dd>
+        Hold to loop the last 60, 125, 250 or 500 ms. Release and it snaps back
+        to live, so a stutter is something you come back from. It also restores
+        any loop you already had set.
+      </dd>
+
+      <dt>loop</dt>
+      <dd>
+        Latching. Grabs the last 1, 2, 4 or 8 seconds and repeats it until you
+        press <em>off</em>.
+      </dd>
+
+      <dt>cubic</dt>
+      <dd>
+        Interpolation quality for off-speed playback. Linear by default; cubic
+        is smoother and costs a little more. The difference is subtle and most
+        obvious at odd speeds.
+      </dd>
+    </dl>
+    <p class="ym-note">
+      The status line under the controls reports the mode, how far behind live
+      the tape head is, and how much of the 60-second buffer is filled.
+    </p>
+  </BrutalCard>
+
+  <BrutalCard title="Known limits">
+    <ul class="ym-limits">
+      <li>
+        <strong>Chrome and Edge only.</strong> Safari and Firefox cannot capture tab
+        audio at all.
+      </li>
+      <li>
+        <strong>One toolbar click per tab</strong>, every session. Chrome's
+        rule, not ours.
+      </li>
+      <li>
+        <strong>A YouTube ad hijacks the deck.</strong> Pre-rolls swap in their own
+        player, so rate and seek would act on the advert. The deck labels this
+        <em>ad playing</em> — wait it out.
+      </li>
+      <li>
+        <strong>The tape adds a quarter second of delay</strong> once engaged. Inaudible
+        by itself, visible against picture.
+      </li>
+      <li>
+        <strong>Closing a captured tab drops its channel.</strong> Re-add it with
+        the toolbar button.
+      </li>
+    </ul>
+  </BrutalCard>
+</Admin>
+
+<style>
+  .ym-lede {
+    max-width: 62ch;
+    color: var(--color-muted);
+    line-height: 1.6;
+    margin-bottom: var(--space-md);
+  }
+
+  .ym-download__btn {
+    display: inline-block;
+    text-decoration: none;
+    font-family: var(--font-mono);
+  }
+
+  .ym-download__note,
+  .ym-note {
+    color: var(--color-muted);
+    max-width: 66ch;
+    line-height: 1.6;
+  }
+
+  .ym-download__note {
+    margin: var(--space-sm) 0 0;
+  }
+
+  .ym-note {
+    margin-top: var(--space-sm);
+    border-left: 2px solid var(--color-border);
+    padding-left: var(--space-sm);
+  }
+
+  .ym-steps {
+    margin: 0;
+    padding-left: 1.4em;
+    line-height: 1.8;
+    max-width: 66ch;
+  }
+
+  .ym-limits {
+    margin: 0;
+    padding-left: 1.2em;
+    line-height: 1.8;
+    max-width: 66ch;
+  }
+
+  .ym-defs {
+    margin: 0;
+    max-width: 68ch;
+  }
+
+  .ym-defs dt {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    margin-top: var(--space-sm);
+    color: var(--color-fg);
+  }
+
+  .ym-defs dt:first-child {
+    margin-top: 0;
+  }
+
+  .ym-defs dd {
+    margin: 0.2em 0 0;
+    padding-left: 0;
+    color: var(--color-muted);
+    line-height: 1.6;
+  }
+
+  code {
+    font-family: var(--font-mono);
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    padding: 0 0.3em;
+  }
+</style>
