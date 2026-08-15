@@ -15,7 +15,7 @@
 import Admin from '../../layouts/Admin.astro';
 import BrutalCard from '../../components/BrutalCard.astro';
 
-const VERSION = '0.0.3';
+const VERSION = '0.0.4';
 const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
 ---
 
@@ -27,7 +27,8 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
     channels. Each tab gets a level, pan, mute and solo; YouTube tabs also get
     continuous playback speed, pitch control, seeking and transport. Everything
     sums into a tape machine you can loop, reverse, scrub and stutter in real
-    time, and any of it can be driven from a MIDI controller.
+    time, and any of it can be driven from a MIDI controller. A video mode turns
+    the whole thing into a performance layout that fits a single stream frame.
   </p>
 
   <BrutalCard title={`Download — v${VERSION}`} class="ym-download">
@@ -100,6 +101,12 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
         Top right of the mixer. Flip it on and hovering anything — any slider,
         button or heading — explains what it does. Flip it off when you no
         longer need it. It remembers which way you left it.
+      </dd>
+
+      <dt>video switch</dt>
+      <dd>
+        Next to help. Swaps between the control layout and the performance
+        layout. It remembers which one you left it in.
       </dd>
 
       <dt>getting the mixer back</dt>
@@ -219,6 +226,52 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
     </p>
   </BrutalCard>
 
+  <BrutalCard title="Video mode">
+    <p>
+      The <strong>video</strong> switch at the top right swaps the mixer for a performance
+      layout: every channel becomes a video tile showing that tab's picture, with
+      its controls laid over the bottom edge. Same channels, same tape, same MIDI
+      bindings underneath — only the presentation changes, and switching back and
+      forth disturbs nothing.
+    </p>
+    <p class="ym-note">
+      Four 16:9 tiles in a 2×2 are themselves 16:9, so the grid fits a stream
+      frame exactly. That only works if the controls sit <em>on</em> the video rather
+      than beside it, which is why each tile's fader is a thin bar along the bottom
+      that doubles as its own meter.
+    </p>
+    <dl class="ym-defs">
+      <dt>the tiles</dt>
+      <dd>
+        Cropped to the player, so you get the video and not the sidebar,
+        comments and page furniture. Because it is the real tab rather than an
+        embed, the real end screen and its suggested videos show up too.
+      </dd>
+
+      <dt>audio-only channels</dt>
+      <dd>
+        A tab with no video — Bandcamp, a podcast — gets a waveform drawn from
+        its own audio rather than a blank tile.
+      </dd>
+
+      <dt>fullscreen</dt>
+      <dd>
+        Fills the screen, so a capture picks up the grid and no browser chrome.
+      </dd>
+
+      <dt>clean</dt>
+      <dd>
+        Hides the overlays for a moment and shows pure footage. The controls
+        keep working, they are just not drawn.
+      </dd>
+    </dl>
+    <p class="ym-note">
+      The controls deliberately do <em>not</em> fade out after a few seconds the way
+      video players usually do. On a performance stream the faders moving are half
+      the point of watching.
+    </p>
+  </BrutalCard>
+
   <BrutalCard title="MIDI">
     <p>
       Faders, knobs and pads can drive the mixer. Press <strong
@@ -272,6 +325,12 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
       <li>
         <strong>The tape adds a quarter second of delay</strong> once engaged. Inaudible
         by itself, visible against picture.
+      </li>
+      <li>
+        <strong>Closing or reloading the mixer ends the mix.</strong> The audio lives
+        in the mixer tab, so shutting it stops the captures and every tab goes back
+        to playing normally by itself. Changed in 0.0.4 — it used to keep running
+        invisibly in the background.
       </li>
       <li>
         <strong>MIDI needs permission every fresh profile.</strong> Chrome has asked
