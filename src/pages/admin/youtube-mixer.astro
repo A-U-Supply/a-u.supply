@@ -5,18 +5,17 @@
  * The extension's source lives in its own repo, not here. The served zip is a
  * committed build artifact — to publish a new version:
  *
- *   cd <youtube-mixer repo>
- *   git archive --format=zip --prefix=youtube-mixer/ \
- *     -o <this repo>/public/downloads/youtube-mixer-<version>.zip HEAD
+ *   <youtube-mixer repo>/pack.sh <this repo>/public/downloads
  *
- * Use `git archive` rather than zipping the folder: it takes tracked files only,
- * which is what keeps the extension's signing key (.extension-key.pem, gitignored
- * there) out of a public download. Then bump VERSION below.
+ * Use the script, not a hand-rolled zip. It builds with `git archive` (tracked
+ * files only, which is what keeps the extension's signing key out of a public
+ * download), refuses to run against the wrong repo, and verifies the result. Then
+ * bump VERSION below and delete the previous zip.
  */
 import Admin from '../../layouts/Admin.astro';
 import BrutalCard from '../../components/BrutalCard.astro';
 
-const VERSION = '0.0.2';
+const VERSION = '0.0.3';
 const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
 ---
 
@@ -28,7 +27,7 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
     channels. Each tab gets a level, pan, mute and solo; YouTube tabs also get
     continuous playback speed, pitch control, seeking and transport. Everything
     sums into a tape machine you can loop, reverse, scrub and stutter in real
-    time.
+    time, and any of it can be driven from a MIDI controller.
   </p>
 
   <BrutalCard title={`Download — v${VERSION}`} class="ym-download">
@@ -220,6 +219,41 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
     </p>
   </BrutalCard>
 
+  <BrutalCard title="MIDI">
+    <p>
+      Faders, knobs and pads can drive the mixer. Press <strong
+        >enable MIDI</strong
+      >
+      once — Chrome asks permission for all MIDI access, and remembers your answer.
+    </p>
+    <ol class="ym-steps">
+      <li>Turn on <strong>learn</strong>.</li>
+      <li>
+        Click the control you want to bind — a level, a pan, a rate, mute or
+        solo. While learn is on, clicking arms a control instead of moving it.
+      </li>
+      <li>
+        Move the fader or press the pad you want to drive it with. That's the
+        binding made.
+      </li>
+      <li>Turn <strong>learn</strong> back off and play.</li>
+    </ol>
+    <p class="ym-note">
+      Bindings are saved against <strong>channel position</strong>, not against
+      the tab. Fader 1 drives channel 1 today and tomorrow, and if you remove
+      the top channel the one below it moves up into that fader. Binding against
+      a tab would not survive a restart, because Chrome renumbers tabs every
+      session.
+    </p>
+    <p>
+      Knobs and faders map across their full range. Pads and buttons fire once
+      on press, so holding one doesn't retrigger. Your mappings are listed under
+      the MIDI section with an <em>×</em> to forget any of them, and they survive
+      closing the browser — they are shown even before you enable MIDI, so a restart
+      doesn't look like they were lost.
+    </p>
+  </BrutalCard>
+
   <BrutalCard title="Known limits">
     <ul class="ym-limits">
       <li>
@@ -238,6 +272,11 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
       <li>
         <strong>The tape adds a quarter second of delay</strong> once engaged. Inaudible
         by itself, visible against picture.
+      </li>
+      <li>
+        <strong>MIDI needs permission every fresh profile.</strong> Chrome has asked
+        for all MIDI access since version 124, not just for devices that can be reflashed.
+        One prompt, once.
       </li>
       <li>
         <strong>Closing a captured tab drops its channel.</strong> Re-add it with
