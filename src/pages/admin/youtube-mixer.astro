@@ -16,7 +16,7 @@
 import Admin from '../../layouts/Admin.astro';
 import BrutalCard from '../../components/BrutalCard.astro';
 
-const VERSION = '0.0.1';
+const VERSION = '0.0.2';
 const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
 ---
 
@@ -56,8 +56,9 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
         <code>youtube-mixer</code> folder.
       </li>
       <li>
-        The mixer panel opens in a new tab straight away. Pin the extension to
-        your toolbar — you will need its button.
+        <strong>Pin the extension to your toolbar.</strong> Click the puzzle-piece
+        icon in Chrome's toolbar and pin YouTube Mixer. Nothing works without that
+        button — see below.
       </li>
     </ol>
     <p class="ym-note">
@@ -67,26 +68,57 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
     </p>
   </BrutalCard>
 
-  <BrutalCard title="Adding a tab to the mix">
-    <p>
+  <BrutalCard title="Adding a tab — the one thing you have to know">
+    <p class="ym-lead-step">
       Play something in a tab, then <strong
-        >click the YouTube Mixer toolbar button while that tab is in front</strong
-      >. It becomes a channel.
+        >click the YouTube Mixer button in your toolbar while that tab is in
+        front</strong
+      >. That tab becomes a channel and the mixer opens.
+    </p>
+    <p>
+      <strong>This is the only way to add a tab.</strong> Chrome will only let an
+      extension capture audio from a tab you have explicitly invoked it on, so there
+      is no button inside the mixer that can do it for you. One click per tab, once
+      per browser session.
     </p>
     <p class="ym-note">
-      The toolbar click is not optional and not a design choice — Chrome only
-      grants audio capture to an extension you have explicitly invoked on that
-      exact tab. The panel has a <code>capture</code> button too, but it will be refused
-      for tabs you have not invoked on. One click per tab, once per session.
+      If you skip this step the mixer stays empty. It will tell you so rather
+      than showing you controls that cannot work — every channel listed in the
+      mixer is a live capture, so if you can see it, its controls work.
     </p>
     <p>
       A captured tab's own sound is muted and routed through the mixer instead,
       so you hear the mix rather than both. Any audible tab works — YouTube,
-      Bandcamp, SoundCloud, a livestream.
+      Bandcamp, SoundCloud, a livestream. Clicking the button again on another
+      tab adds it alongside; the mixer is never opened twice.
     </p>
   </BrutalCard>
 
-  <BrutalCard title="Decks">
+  <BrutalCard title="Finding your way around">
+    <dl class="ym-defs">
+      <dt>help switch</dt>
+      <dd>
+        Top right of the mixer. Flip it on and hovering anything — any slider,
+        button or heading — explains what it does. Flip it off when you no
+        longer need it. It remembers which way you left it.
+      </dd>
+
+      <dt>getting the mixer back</dt>
+      <dd>
+        Click the toolbar button on any tab. If the mixer is already open it
+        comes to the front rather than opening a second copy.
+      </dd>
+
+      <dt>× on a channel</dt>
+      <dd>
+        Removes that tab from the mixer and stops capturing it. Pausing a video
+        does <em>not</em> remove it — a paused channel stays put and reads
+        <em>paused</em> until you play it again.
+      </dd>
+    </dl>
+  </BrutalCard>
+
+  <BrutalCard title="Channels">
     <dl class="ym-defs">
       <dt>level</dt>
       <dd>
@@ -125,8 +157,9 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
     </dl>
     <p class="ym-note">
       Rate, position and transport come from a script running inside the YouTube
-      page, which is why they are YouTube-only. On other tabs those rows are
-      visibly disabled rather than hidden.
+      page, which is why they are YouTube-only. On a non-YouTube channel those
+      rows are visibly disabled rather than hidden — level, pan, mute and solo
+      still work on anything.
     </p>
   </BrutalCard>
 
@@ -208,7 +241,7 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
       </li>
       <li>
         <strong>Closing a captured tab drops its channel.</strong> Re-add it with
-        the toolbar button.
+        the toolbar button. Pausing does not — a paused channel stays in the mixer.
       </li>
     </ul>
   </BrutalCard>
@@ -220,6 +253,13 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
     color: var(--color-muted);
     line-height: 1.6;
     margin-bottom: var(--space-md);
+  }
+
+  .ym-lead-step {
+    font-size: var(--text-lg);
+    line-height: 1.5;
+    margin: 0 0 var(--space-sm);
+    max-width: 60ch;
   }
 
   .ym-download__btn {
