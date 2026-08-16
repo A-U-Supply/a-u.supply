@@ -15,7 +15,7 @@
 import Admin from '../../layouts/Admin.astro';
 import BrutalCard from '../../components/BrutalCard.astro';
 
-const VERSION = '0.0.5';
+const VERSION = '0.0.6';
 const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
 ---
 
@@ -235,10 +235,11 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
       forth disturbs nothing.
     </p>
     <p class="ym-note">
-      Four 16:9 tiles in a 2×2 are themselves 16:9, so the grid fits a stream
-      frame exactly. That only works if the controls sit <em>on</em> the video rather
-      than beside it, which is why each tile's fader is a thin bar along the bottom
-      that doubles as its own meter.
+      A 2×2 grid on a 16:9 screen gives cells that are 2:1 — wider than the 16:9
+      picture inside them — so every tile has spare width down its sides that
+      the video could never use. That is where the controls go: a tall fader
+      either side rather than a thin strip along the bottom, because side pixels
+      are nearly free while bottom pixels cost the video both height and width.
     </p>
     <dl class="ym-defs">
       <dt>the tiles</dt>
@@ -246,6 +247,26 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
         Cropped to the player, so you get the video and not the sidebar,
         comments and page furniture. Because it is the real tab rather than an
         embed, the real end screen and its suggested videos show up too.
+      </dd>
+
+      <dt>level and speed</dt>
+      <dd>
+        The two faders down the left of each tile, running its full height for
+        maximum throw. Speed is vertical for the same reason a turntable's pitch
+        fader is: it puts both things you ride under one hand.
+      </dd>
+
+      <dt>meter, buttons, pan</dt>
+      <dd>
+        Down the right: the channel's live level, then mute, solo, keep-pitch
+        and remove, with pan across the foot of the column.
+      </dd>
+
+      <dt>title bar</dt>
+      <dd>
+        Along the bottom of each tile, with the video's progress drawn behind
+        the title. <strong>Drag it to seek.</strong> The title is outlined so it stays
+        readable over the fill.
       </dd>
 
       <dt>audio-only channels</dt>
@@ -264,11 +285,46 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
         Hides the overlays for a moment and shows pure footage. The controls
         keep working, they are just not drawn.
       </dd>
+
+      <dt>HQ</dt>
+      <dd>
+        Video quality. See below — leave it off unless you need the detail.
+      </dd>
     </dl>
     <p class="ym-note">
       The controls deliberately do <em>not</em> fade out after a few seconds the way
       video players usually do. On a performance stream the faders moving are half
       the point of watching.
+    </p>
+  </BrutalCard>
+
+  <BrutalCard title="Video quality">
+    <p>
+      Four videos at once is real work for a laptop, and it is being paid twice:
+      each tab is decoding YouTube at whatever quality it chose, and the mixer
+      is then capturing that tab's picture on top. <strong>HQ</strong>, next to
+      <em>clean</em>, moves both halves together.
+    </p>
+    <dl class="ym-defs">
+      <dt>off (default)</dt>
+      <dd>
+        Capture runs at 426×240, 15fps, and each YouTube tab is asked to play at
+        its lowest quality. Fine for monitoring and for anything the audience is
+        going to see re-encoded anyway.
+      </dd>
+
+      <dt>on</dt>
+      <dd>
+        Capture at 960×540, 30fps, and the tabs go back to choosing their own
+        quality. Use it when you are actually streaming or want to look closely
+        at something.
+      </dd>
+    </dl>
+    <p class="ym-note">
+      Switching does not interrupt anything — no channel drops out and no audio
+      gaps. Setting the tabs' own quality reaches into YouTube's player, so on a
+      page that has changed shape underneath us it may quietly do nothing; the
+      capture side always applies.
     </p>
   </BrutalCard>
 
