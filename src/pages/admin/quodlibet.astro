@@ -15,7 +15,7 @@
 import Admin from '../../layouts/Admin.astro';
 import BrutalCard from '../../components/BrutalCard.astro';
 
-const VERSION = '0.0.7';
+const VERSION = '0.0.8';
 const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
 ---
 
@@ -72,6 +72,13 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
       in <code>chrome://extensions</code> before loading this one — they share an
       extension ID, so Chrome will refuse to load the second while the first is still
       there. Your MIDI mappings survive; they are stored by Chrome, not in the folder.
+    </p>
+    <p class="ym-note">
+      <strong>Reload your YouTube tabs after upgrading</strong>, not just the
+      extension. Chrome does not re-inject the part of the extension that runs
+      inside a page into tabs that were already open, so an already-open tab
+      keeps running the old version until you reload it — which in v0.0.8 means
+      the video tiles will still be cropped the old way.
     </p>
   </BrutalCard>
 
@@ -212,6 +219,20 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
         >
         <em>1.0</em> means "play forwards at normal speed from wherever the head currently
         is" — which after a reverse is somewhere in the past.
+        <br />
+        Whichever one matches the current speed <strong>lights up</strong>, so
+        you can always see which way the transport is running. Move the speed
+        slider to something in between and none of them light — the slider has
+        it.
+      </dd>
+
+      <dt>reverse, again</dt>
+      <dd>
+        <strong>reverse</strong> latches, so clicking it a second time releases it
+        and returns you to normal forward speed. It deliberately leaves the head where
+        it is: reverse changed the speed, so releasing it changes the speed back and
+        nothing else. You are still in the past — <em>to live</em> is what brings
+        you back, and it stays amber until you press it.
       </dd>
 
       <dt>to live</dt>
@@ -266,9 +287,15 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
       the buffer.
     </p>
     <p>
-      Pressing <em>1.0</em> afterwards does not undo that. At normal speed the tape
-      head advances at exactly the speed the recording does, so the gap is held open
-      indefinitely. Only four things close it: <strong>to live</strong>
+      Since v0.0.8 the button lights up while it is running, and clicking it
+      again releases it — but that only returns the <em>speed</em> to normal. The
+      head stays where it walked to.
+    </p>
+    <p>
+      Pressing <em>1.0</em> afterwards does not undo that either. At normal speed
+      the tape head advances at exactly the speed the recording does, so the gap is
+      held open indefinitely. Only four things close it: <strong>to live</strong
+      >
       and <strong>thru</strong> (instantly), releasing a <strong>stutter</strong
       >, or a speed above 1 — and that last one only claws back
       <em>speed minus one</em> seconds per second, so 1.5× needs eight seconds to
