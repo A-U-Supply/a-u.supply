@@ -1,11 +1,11 @@
 ---
 /*
- * Download page + manual for the YouTube Mixer Chrome extension.
+ * Download page + manual for the Quodlibet Chrome extension.
  *
  * The extension's source lives in its own repo, not here. The served zip is a
  * committed build artifact — to publish a new version:
  *
- *   <youtube-mixer repo>/pack.sh <this repo>/public/downloads
+ *   <quodlibet repo>/pack.sh <this repo>/public/downloads
  *
  * Use the script, not a hand-rolled zip. It builds with `git archive` (tracked
  * files only, which is what keeps the extension's signing key out of a public
@@ -15,12 +15,12 @@
 import Admin from '../../layouts/Admin.astro';
 import BrutalCard from '../../components/BrutalCard.astro';
 
-const VERSION = '0.0.6';
-const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
+const VERSION = '0.0.7';
+const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
 ---
 
-<Admin title="YouTube Mixer" current="youtube-mixer">
-  <h1>YouTube Mixer</h1>
+<Admin title="Quodlibet" current="quodlibet">
+  <h1>Quodlibet</h1>
 
   <p class="ym-lede">
     A Chrome extension that turns any number of browser tabs into mixer
@@ -33,7 +33,7 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
 
   <BrutalCard title={`Download — v${VERSION}`} class="ym-download">
     <a class="btn-primary ym-download__btn" href={ZIP} download>
-      youtube-mixer-{VERSION}.zip
+      quodlibet-{VERSION}.zip
     </a>
     <p class="ym-download__note">
       Chrome or Edge only. It is not on the Web Store, so it installs unpacked —
@@ -53,12 +53,12 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
       </li>
       <li>
         Click <strong>Load unpacked</strong> and choose the unzipped
-        <code>youtube-mixer</code> folder.
+        <code>quodlibet</code> folder.
       </li>
       <li>
         <strong>Pin the extension to your toolbar.</strong> Click the puzzle-piece
-        icon in Chrome's toolbar and pin YouTube Mixer. Nothing works without that
-        button — see below.
+        icon in Chrome's toolbar and pin Quodlibet. Nothing works without that button
+        — see below.
       </li>
     </ol>
     <p class="ym-note">
@@ -66,13 +66,19 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
       re-warn on each restart. That is expected for anything not installed from
       the Web Store.
     </p>
+    <p class="ym-note">
+      <strong>Upgrading from an earlier version?</strong> This one was called YouTube
+      Mixer and unzipped to a <code>youtube-mixer</code> folder. Remove that entry
+      in <code>chrome://extensions</code> before loading this one — they share an
+      extension ID, so Chrome will refuse to load the second while the first is still
+      there. Your MIDI mappings survive; they are stored by Chrome, not in the folder.
+    </p>
   </BrutalCard>
 
   <BrutalCard title="Adding a tab — the one thing you have to know">
     <p class="ym-lead-step">
       Play something in a tab, then <strong
-        >click the YouTube Mixer button in your toolbar while that tab is in
-        front</strong
+        >click the Quodlibet button in your toolbar while that tab is in front</strong
       >. That tab becomes a channel and the mixer opens.
     </p>
     <p>
@@ -107,6 +113,15 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
       <dd>
         Next to help. Swaps between the control layout and the performance
         layout. It remembers which one you left it in.
+      </dd>
+
+      <dt>which version you are running</dt>
+      <dd>
+        Next to the name in the top left. It is read from the extension itself
+        rather than written into the page, so it is always the build actually
+        loaded — worth checking if something here does not match what you see,
+        since Chrome keeps running an unpacked extension from the folder you
+        loaded it from.
       </dd>
 
       <dt>getting the mixer back</dt>
@@ -191,13 +206,24 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
       </dd>
 
       <dt>reverse / stop / 1.0</dt>
-      <dd>Shortcuts for −1, 0 and normal speed.</dd>
+      <dd>
+        Shortcuts for −1, 0 and normal speed. <strong
+          >These set the speed, not the position.</strong
+        >
+        <em>1.0</em> means "play forwards at normal speed from wherever the head currently
+        is" — which after a reverse is somewhere in the past.
+      </dd>
+
+      <dt>to live</dt>
+      <dd>
+        Jumps the head back to the present. This is how you undo a reverse — see
+        below, it is the single most confusing thing about the tape.
+      </dd>
 
       <dt>rew / ff</dt>
       <dd>
         Hold to shuttle at 4×. Release and it resumes normal speed
-        <em>where it landed</em>, like a real transport. <em>to live</em> jumps back
-        to the present.
+        <em>where it landed</em>, like a real transport.
       </dd>
 
       <dt>stutter</dt>
@@ -223,6 +249,48 @@ const ZIP = `/downloads/youtube-mixer-${VERSION}.zip`;
     <p class="ym-note">
       The status line under the controls reports the mode, how far behind live
       the tape head is, and how much of the 60-second buffer is filled.
+    </p>
+  </BrutalCard>
+
+  <BrutalCard title="Behind live — read this before you use reverse">
+    <p class="ym-lead-step">
+      Reverse leaves you in the past, and normal speed never brings you back.
+      <strong>to live</strong> does.
+    </p>
+    <p>
+      <strong>reverse</strong> latches. While it is running the gap between the tape
+      head and the present opens at <strong
+        >two seconds for every second you hold it</strong
+      > — the head walks backwards while the tabs keep recording forwards. Ten seconds
+      of reverse puts you twenty seconds in the past, up to the 60-second limit of
+      the buffer.
+    </p>
+    <p>
+      Pressing <em>1.0</em> afterwards does not undo that. At normal speed the tape
+      head advances at exactly the speed the recording does, so the gap is held open
+      indefinitely. Only four things close it: <strong>to live</strong>
+      and <strong>thru</strong> (instantly), releasing a <strong>stutter</strong
+      >, or a speed above 1 — and that last one only claws back
+      <em>speed minus one</em> seconds per second, so 1.5× needs eight seconds to
+      recover a four-second gap.
+    </p>
+    <p class="ym-note">
+      <strong>Why this matters more than it sounds.</strong> Nothing about the sound
+      tells you it is happening. You hear the mix as it was, and every change you
+      make from then on — a fader, a speed, a mute — is recorded immediately but does
+      not become audible until seconds later. In video mode it is worse: the picture
+      stays live while the audio sits in the past, so they drift apart and stay there.
+    </p>
+    <p>
+      So the mixer says so. Once you are more than half a second behind,
+      <strong>to live</strong> turns amber and pulses, and the status line turns amber
+      with it. Both go back to normal the moment you are level with the present.
+    </p>
+    <p class="ym-note">
+      This is deliberate rather than a limitation. Playing forwards at normal
+      speed from ten seconds ago is a real move — it is how you play back
+      something you just caught — so the tape does not silently yank you to the
+      present just because you asked for normal speed.
     </p>
   </BrutalCard>
 
