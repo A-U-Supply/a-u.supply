@@ -986,6 +986,43 @@ body.player-active .admin-main {
   letter-spacing: 1pt;
   min-width: 0;
 }
+/* Collapsible card: the head is a <summary>, so the section opens and closes with
+   no JS and is operable from the keyboard for free. The caret is the same idiom as
+   `.disclosure` above — that primitive is a small muted reveal for file chrome, and
+   a page section's heading has to still read as a heading when it is shut. */
+.brutal-card--collapsible > .brutal-card__head {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.brutal-card--collapsible > .brutal-card__head::-webkit-details-marker {
+  display: none;
+}
+.brutal-card--collapsible > .brutal-card__head h2::before,
+.brutal-card--collapsible > .brutal-card__head h3::before {
+  content: '▸';
+  display: inline-block;
+  width: 1em;
+  margin-right: 4px;
+  transition: transform 0.15s;
+}
+.brutal-card--collapsible[open] > .brutal-card__head h2::before,
+.brutal-card--collapsible[open] > .brutal-card__head h3::before {
+  transform: rotate(90deg);
+}
+/* A closed card is all head and no body, so the head's bottom rule would read as a
+   stray line under it. */
+.brutal-card--collapsible:not([open]) > .brutal-card__head {
+  border-bottom: none;
+}
+.brutal-card--collapsible > .brutal-card__head:hover {
+  background: var(--color-surface);
+}
+.brutal-card--collapsible > .brutal-card__head:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
 .brutal-card__head-meta {
   font-size: 0.65rem;
   color: var(--color-muted);

@@ -15,7 +15,7 @@
 import Admin from '../../layouts/Admin.astro';
 import BrutalCard from '../../components/BrutalCard.astro';
 
-const VERSION = '0.0.8';
+const VERSION = '0.0.9';
 const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
 ---
 
@@ -24,14 +24,15 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
 
   <p class="ym-lede">
     A Chrome extension that turns any number of browser tabs into mixer
-    channels. Each tab gets a level, pan, mute and solo; YouTube tabs also get
-    continuous playback speed, pitch control, seeking and transport. Everything
-    sums into a tape machine you can loop, reverse, scrub and stutter in real
-    time, and any of it can be driven from a MIDI controller. A video mode turns
-    the whole thing into a performance layout that fits a single stream frame.
+    channels. Every tab gets a level, pan, mute and solo — <strong>and, since
+    0.0.9, continuous playback speed, pitch control, seeking and transport on
+    any site</strong>, not just YouTube. Everything sums into a tape machine you
+    can loop, reverse, scrub and stutter in real time, driven by mouse, MIDI
+    controller or keyboard. A video mode turns the whole thing into a
+    performance layout that fits a single stream frame.
   </p>
 
-  <BrutalCard title={`Download — v${VERSION}`} class="ym-download">
+  <BrutalCard title={`Download — v${VERSION}`} class="ym-download" collapsible open>
     <a class="btn-primary ym-download__btn" href={ZIP} download>
       quodlibet-{VERSION}.zip
     </a>
@@ -41,7 +42,7 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     </p>
   </BrutalCard>
 
-  <BrutalCard title="Install">
+  <BrutalCard title="Install" collapsible open>
     <ol class="ym-steps">
       <li>
         Download the zip above and unzip it somewhere you will not delete.
@@ -67,22 +68,25 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
       the Web Store.
     </p>
     <p class="ym-note">
-      <strong>Upgrading from an earlier version?</strong> This one was called YouTube
-      Mixer and unzipped to a <code>youtube-mixer</code> folder. Remove that entry
-      in <code>chrome://extensions</code> before loading this one — they share an
-      extension ID, so Chrome will refuse to load the second while the first is still
-      there. Your MIDI mappings survive; they are stored by Chrome, not in the folder.
+      <strong>Upgrading?</strong> <strong>Remove the old entry in
+      <code>chrome://extensions</code> first.</strong> Every build shares one
+      extension ID, so Chrome refuses to load a second folder claiming it while
+      the first is still listed. That includes the oldest builds, which were
+      called <em>YouTube Mixer</em> and unzipped to a <code>youtube-mixer</code>
+      folder. Your MIDI mappings and any keys you have rebound survive — Chrome
+      stores those, not the folder.
     </p>
     <p class="ym-note">
-      <strong>Reload your YouTube tabs after upgrading</strong>, not just the
-      extension. Chrome does not re-inject the part of the extension that runs
-      inside a page into tabs that were already open, so an already-open tab
-      keeps running the old version until you reload it — which in v0.0.8 means
-      the video tiles will still be cropped the old way.
+      <strong>Then reload the tabs you were playing</strong>, not just the
+      extension. Chrome does not put the extension's page-side script into tabs
+      that were already open, so an already-open tab keeps running the version it
+      was given until you reload it — and in 0.0.9 that is the part that reaches
+      SoundCloud, Netflix and the rest. Reload the tab, then click the toolbar
+      button on it again.
     </p>
   </BrutalCard>
 
-  <BrutalCard title="Adding a tab — the one thing you have to know">
+  <BrutalCard title="Adding a tab — the one thing you have to know" collapsible>
     <p class="ym-lead-step">
       Play something in a tab, then <strong
         >click the Quodlibet button in your toolbar while that tab is in front</strong
@@ -101,13 +105,23 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     </p>
     <p>
       A captured tab's own sound is muted and routed through the mixer instead,
-      so you hear the mix rather than both. Any audible tab works — YouTube,
-      Bandcamp, SoundCloud, a livestream. Clicking the button again on another
-      tab adds it alongside; the mixer is never opened twice.
+      so you hear the mix rather than both. <strong>Any audible tab works</strong>
+      — YouTube, SoundCloud, Bandcamp, Netflix, Crunchyroll, a livestream.
+      Clicking the button again on another tab adds it alongside; the mixer is
+      never opened twice.
+    </p>
+    <p class="ym-note">
+      <strong>Browsing that tab somewhere else costs you its controls.</strong>
+      Chrome grants access per <em>page</em>, not per tab, so navigating to a
+      different site takes the extension's reach with it — the audio keeps
+      flowing and level, pan, mute and solo carry on, but speed, scrub and
+      transport go grey and say so. Click the toolbar button again to get them
+      back. Picking the next episode on Netflix does this; so does letting it
+      auto-play one.
     </p>
   </BrutalCard>
 
-  <BrutalCard title="Finding your way around">
+  <BrutalCard title="Finding your way around" collapsible>
     <dl class="ym-defs">
       <dt>help switch</dt>
       <dd>
@@ -146,7 +160,7 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     </dl>
   </BrutalCard>
 
-  <BrutalCard title="Channels">
+  <BrutalCard title="Channels" collapsible>
     <dl class="ym-defs">
       <dt>level</dt>
       <dd>
@@ -170,8 +184,9 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
       <dt>rate</dt>
       <dd>
         Continuous playback speed, 0.25× to 2.5×, at whatever precision you drag
-        to — 1.037 is a real setting. <em>1.0</em> snaps back.
-        <strong>YouTube tabs only.</strong>
+        to — <em>1.037 is a real setting</em>, not rounded to a preset.
+        <em>1.0</em> snaps back. Works on <strong>any site with a player in
+        it</strong> since 0.0.9.
       </dd>
 
       <dt>keep pitch</dt>
@@ -181,17 +196,63 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
       </dd>
 
       <dt>pos / play / pause</dt>
-      <dd>Scrub and transport for the underlying video. YouTube tabs only.</dd>
+      <dd>
+        Scrub and transport for whatever the tab is playing.
+        <strong>Netflix and Crunchyroll cannot be scrubbed</strong> — see below.
+      </dd>
+
+      <dt>probe</dt>
+      <dd>
+        Bottom right of a channel. Copies a short report of what that tab
+        actually contains — which player it has and where, and what the
+        extension can and cannot reach. <strong>If a site does not work, press
+        this and send the result.</strong> It is the difference between a fix
+        and a guess: every site fixed in 0.0.9 was diagnosed from one of these.
+      </dd>
     </dl>
-    <p class="ym-note">
-      Rate, position and transport come from a script running inside the YouTube
-      page, which is why they are YouTube-only. On a non-YouTube channel those
-      rows are visibly disabled rather than hidden — level, pan, mute and solo
-      still work on anything.
+
+    <p>
+      Rate, position, pitch and transport come from a small script the extension
+      puts inside the page when you click the toolbar button. Level, pan, mute
+      and solo never touch the page at all — they run on the captured audio, so
+      they work on anything, always.
     </p>
+
+    <h3 class="ym-subhead">When those rows go grey</h3>
+    <dl class="ym-defs">
+      <dt><em>no page control — click the toolbar button on this tab</em></dt>
+      <dd>
+        The script is not in that tab. Almost always because the tab
+        <strong>navigated to a different site</strong> since you added it —
+        Chrome grants access per page, not per tab, so browsing away takes it
+        with you. Click the toolbar button again and the row comes back. The
+        mixer tries to repair this by itself first and only says so when Chrome
+        refuses.
+      </dd>
+
+      <dt><em>no scrub — protected</em></dt>
+      <dd>
+        A DRM stream: <strong>Netflix, Crunchyroll</strong> and anything else
+        that decrypts as it plays. Those players manage their own buffer, and a
+        seek written underneath one is indistinguishable from corruption —
+        Netflix answers with its <em>Pardon the interruption</em> error page and
+        the only way out is reloading the tab. So the scrubber refuses rather
+        than breaking your stream. <strong>Speed, pitch and transport still
+        work</strong>; they are things the player does, not places it is asked
+        to be.
+      </dd>
+
+      <dt><em>nothing here to drive</em></dt>
+      <dd>
+        The script is in the page and found no player it can reach — a site
+        built on raw Web Audio, or one whose player sits inside an embedded
+        frame. Level, pan, mute and solo still work. Press <strong>probe</strong>
+        and send it; the report says which of those it is.
+      </dd>
+    </dl>
   </BrutalCard>
 
-  <BrutalCard title="Tape">
+  <BrutalCard title="Tape" collapsible>
     <p>
       The tape is always recording the mix — a rolling 60 seconds. Nothing you
       do to it affects what the tabs are playing, so the sources keep running
@@ -273,7 +334,7 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     </p>
   </BrutalCard>
 
-  <BrutalCard title="Behind live — read this before you use reverse">
+  <BrutalCard title="Behind live — read this before you use reverse" collapsible>
     <p class="ym-lead-step">
       Reverse leaves you in the past, and normal speed never brings you back.
       <strong>to live</strong> does.
@@ -321,7 +382,7 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     </p>
   </BrutalCard>
 
-  <BrutalCard title="Video mode">
+  <BrutalCard title="Video mode" collapsible>
     <p>
       The <strong>video</strong> switch at the top right swaps the mixer for a performance
       layout: every channel becomes a video tile showing that tab's picture, with
@@ -393,7 +454,7 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     </p>
   </BrutalCard>
 
-  <BrutalCard title="Video quality">
+  <BrutalCard title="Video quality" collapsible>
     <p>
       Four videos at once is real work for a laptop, and it is being paid twice:
       each tab is decoding YouTube at whatever quality it chose, and the mixer
@@ -423,7 +484,7 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     </p>
   </BrutalCard>
 
-  <BrutalCard title="MIDI">
+  <BrutalCard title="MIDI" collapsible>
     <p>
       Faders, knobs and pads can drive the mixer. Press <strong
         >enable MIDI</strong
@@ -458,7 +519,118 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     </p>
   </BrutalCard>
 
-  <BrutalCard title="Known limits">
+  <BrutalCard title="Keyboard" collapsible>
+    <p class="ym-lead-step">
+      Press <strong><code>?</code></strong> in the mixer. That list is the
+      manual for this section — it is generated from the bindings themselves, so
+      it cannot fall out of date the way a printed one does.
+    </p>
+
+    <p class="ym-note">
+      <strong>Nobody has performed with this yet.</strong> It passes its tests —
+      64 of them — but no one has had it under their hands during a set, and the
+      defaults for the Quodlibet-specific keys are considered guesses rather than
+      decisions. Move anything that sits wrong (see <em>rebinding</em> below) and
+      say what you changed; there is an open question about the grammar on
+      <strong>issue #3</strong> in the extension repo.
+    </p>
+
+    <p>
+      The grammar is <a href="https://github.com/doo-nothing/los">los</a>'s,
+      because Tube asked for it by name and because it is a real grammar rather
+      than a list of shortcuts: <strong>navigate along the layout, adjust across
+      it</strong>; a number typed first repeats what follows (<code>3j</code> moves three);
+      the shifted form of an adjust key is a bigger step.
+    </p>
+
+    <h3 class="ym-subhead">The one idea to hold on to</h3>
+    <p>
+      <strong>The tape is the last strip.</strong> <code>h</code> and
+      <code>l</code> walk left and right through your channels and then onto the
+      tape, exactly the way los's own mixer walks onto MASTER. So the tape's
+      speed, loop and interpolation sit under the same keys as a channel's level
+      and pan, and there is no separate mode to be in without realising.
+    </p>
+
+    <dl class="ym-defs">
+      <dt>h · l</dt>
+      <dd>Previous / next strip — the channels, then the tape, wrapping around.</dd>
+
+      <dt>j · k</dt>
+      <dd>
+        Next / previous <em>param</em> within the selected strip. A channel has
+        level, pan, speed, position; the tape has speed, loop, interpolation.
+      </dd>
+
+      <dt>K · J <span class="ym-alt">(or = and -)</span></dt>
+      <dd>Raise / lower it by 1%. <code>3K</code> does it three times.</dd>
+
+      <dt>+ · _</dt>
+      <dd>The coarse version, 5%.</dd>
+
+      <dt>0</dt>
+      <dd>Reset that param — level to 1.00, pan to centre, speed to 1.000.</dd>
+
+      <dt>gg · G · gt2</dt>
+      <dd>First channel · the tape · go to channel 2.</dd>
+
+      <dt>space</dt>
+      <dd>
+        Play or pause the selected channel. On the tape strip it switches
+        <em>thru</em> and <em>tape</em> instead.
+      </dd>
+
+      <dt>m · s · v</dt>
+      <dd>
+        Mute · solo · pitch mode. On the tape strip, <code>v</code> is reverse
+        and <code>s</code> stops the head.
+      </dd>
+
+      <dt>[ · ]</dt>
+      <dd>
+        Seek back / forward five seconds. <strong>Held</strong> on the tape
+        strip they shuttle at 4× and let go where they land, like a real
+        transport.
+      </dd>
+
+      <dt>q · w · e · r</dt>
+      <dd>
+        <strong>Held</strong> on the tape strip: stutter the last 60, 125, 250
+        or 500 milliseconds. Release and it snaps back.
+      </dd>
+
+      <dt>dd</dt>
+      <dd>Remove the selected channel from the mixer. Two presses, deliberately.</dd>
+    </dl>
+
+    <p class="ym-note">
+      A strip below the tape says what is selected — <em>keys channel 1 · level
+      1.000</em> — and the selected channel is outlined in both layouts, so the
+      keyboard is never acting somewhere you cannot see.
+      <strong>Typing into a control does not move anything</strong>: click a
+      fader and the keys leave it alone until you click away.
+    </p>
+
+    <h3 class="ym-subhead">Rebinding</h3>
+    <p>
+      Every key can be moved, the same way MIDI already works. Press
+      <code>?</code>, turn on <strong>learn</strong>, click the line you want,
+      then press the key. <strong>reset all</strong> puts everything back. Your
+      changes are saved beside your MIDI mappings and survive a restart, and the
+      list shows moved keys in accent so an edited keyboard reads at a glance.
+    </p>
+    <p>
+      Taking a key that is already in use <strong>unbinds whatever had it</strong>
+      rather than leaving two actions fighting over one press — the displaced
+      line reads <em>unbound</em> until you give it something. A few keys refuse
+      to move and say why: digits belong to counts, and <code>gg</code>,
+      <code>gt#</code>, <code>dd</code>, <code>Esc</code> and <code>?</code>
+      itself stay put, since rebinding the way back into the list is a way to
+      lose it.
+    </p>
+  </BrutalCard>
+
+  <BrutalCard title="Known limits" collapsible>
     <ul class="ym-limits">
       <li>
         <strong>Chrome and Edge only.</strong> Safari and Firefox cannot capture tab
@@ -469,9 +641,37 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
         rule, not ours.
       </li>
       <li>
+        <strong>Protected streams cannot be scrubbed.</strong> Netflix,
+        Crunchyroll and anything else using DRM manage their own buffer, and a
+        seek written underneath one takes the page down — Netflix throws its
+        <em>Pardon the interruption</em> page and wants a reload. The scrubber
+        refuses instead and says <em>no scrub — protected</em>. Speed, pitch and
+        transport are unaffected.
+      </li>
+      <li>
+        <strong>A player inside an embedded frame is out of reach.</strong> A
+        Bandcamp or YouTube player dropped into someone else's page sits in a
+        frame the extension cannot enter, so that channel captures audio but
+        offers no transport. Bandcamp, SoundCloud, Netflix, Crunchyroll and
+        Bandcamp Daily on their own sites are all fine — it is embeds
+        specifically. Press <strong>probe</strong> on one and send it if this
+        matters to you; it is measured, not fixed.
+      </li>
+      <li>
+        <strong>Browsing a captured tab to a different site drops its
+        controls</strong> until you click the toolbar button again. Chrome grants
+        access per page. The mixer repairs this by itself where Chrome permits
+        and tells you when it cannot.
+      </li>
+      <li>
         <strong>A YouTube ad hijacks the deck.</strong> Pre-rolls swap in their own
         player, so rate and seek would act on the advert. The deck labels this
         <em>ad playing</em> — wait it out.
+      </li>
+      <li>
+        <strong>Netflix channels are called "Netflix".</strong> Its watch pages
+        carry no episode name anywhere the extension can read, so the tile cannot
+        name what is playing. Crunchyroll and the rest name themselves properly.
       </li>
       <li>
         <strong>The tape adds a quarter second of delay</strong> once engaged. Inaudible
@@ -488,6 +688,11 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
         in the mixer tab, so shutting it stops the captures and every tab goes back
         to playing normally by itself. Changed in 0.0.4 — it used to keep running
         invisibly in the background.
+      </li>
+      <li>
+        <strong>The keyboard is untried in performance.</strong> It passes its
+        tests; nobody has played a set with it. Treat the Quodlibet-specific keys
+        as provisional and move what does not fit.
       </li>
       <li>
         <strong>MIDI needs permission every fresh profile.</strong> Chrome has asked
@@ -540,11 +745,22 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     padding-left: var(--space-sm);
   }
 
+  /* Numbered, explicitly: something upstream sets list-style: none on lists in
+     here, and an install list whose steps have lost their numbers is a list of
+     four sentences you have to work out the order of. */
   .ym-steps {
     margin: 0;
     padding-left: 1.4em;
     line-height: 1.8;
     max-width: 66ch;
+    list-style: decimal;
+  }
+  .ym-steps li {
+    padding-left: 0.2em;
+  }
+
+  .ym-limits > li {
+    list-style: square;
   }
 
   .ym-limits {
@@ -552,6 +768,25 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     padding-left: 1.2em;
     line-height: 1.8;
     max-width: 66ch;
+  }
+
+  /* A heading inside a section, for the pages long enough to need one — the
+     section head is now a toggle, so it cannot also serve as a signpost within. */
+  /* The "or =" in a keyboard row: present but not competing with the key itself. */
+  .ym-alt {
+    font-family: var(--font-sans);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--color-muted);
+  }
+
+  .ym-subhead {
+    margin: var(--space-md) 0 var(--space-xs);
+    font-size: var(--text-sm);
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    color: var(--color-muted);
   }
 
   .ym-defs {
