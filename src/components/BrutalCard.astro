@@ -10,13 +10,23 @@
  *   - meta    — small uppercase muted text in the header (e.g. counts)
  *
  * Props:
- *   - title     — required when the header is shown
- *   - level     — h-tag level for the title (2 by default; use 3 inside sections)
- *   - hideHead  — render only the body (when the card carries a different chrome)
- *   - inverted  — paint the header bar fg-on-bg-inverted (selection states)
- *   - flush     — body has no padding (the slot owns spacing)
- *   - id        — passed to the wrapper div
- *   - class     — extra class names appended to the wrapper
+ *   - title       — required when the header is shown
+ *   - level       — h-tag level for the title (2 by default; use 3 inside sections)
+ *   - hideHead    — render only the body (when the card carries a different chrome)
+ *   - inverted    — paint the header bar fg-on-bg-inverted (selection states)
+ *   - flush       — body has no padding (the slot owns spacing)
+ *   - collapsible — the head becomes a toggle: renders <details>/<summary> instead
+ *                   of divs, so the section opens and closes with no JS and is
+ *                   operable from the keyboard for free. For long reference pages
+ *                   where a reader wants one section, not a wall of them.
+ *   - open        — a collapsible card starts open (default: closed)
+ *   - id          — passed to the wrapper
+ *   - class       — extra class names appended to the wrapper
+ *
+ * `collapsible` deliberately reuses this card's own chrome rather than the
+ * `.disclosure` primitive in admin.css: that one is a small muted reveal for file
+ * chrome, sized and coloured for a footnote. A page section needs its heading to
+ * still read as a heading when closed.
  */
 interface Props {
   title?: string;
@@ -24,6 +34,8 @@ interface Props {
   hideHead?: boolean;
   inverted?: boolean;
   flush?: boolean;
+  collapsible?: boolean;
+  open?: boolean;
   id?: string;
   class?: string;
 }
@@ -33,11 +45,19 @@ const {
   hideHead = false,
   inverted = false,
   flush = false,
+  collapsible = false,
+  open = false,
   id,
   class: className,
 } = Astro.props;
 const HeadingTag = `h${level}` as 'h2' | 'h3';
-const wrapperClass = ['brutal-card', className].filter(Boolean).join(' ');
+const wrapperClass = [
+  'brutal-card',
+  collapsible ? 'brutal-card--collapsible' : null,
+  className,
+]
+  .filter(Boolean)
+  .join(' ');
 const headClass = [
   'brutal-card__head',
   inverted ? 'brutal-card__head--inverted' : null,
@@ -54,10 +74,10 @@ const hasMeta = Astro.slots.has('meta');
 const hasAction = Astro.slots.has('action');
 ---
 
-<div class={wrapperClass} id={id}>
-  {
-    !hideHead && (title || hasMeta || hasAction) && (
-      <div class={headClass}>
+{
+  collapsible ? (
+    <details class={wrapperClass} id={id} open={open}>
+      <summary class={headClass}>
         {title && <HeadingTag>{title}</HeadingTag>}
         {hasMeta && (
           <span class="brutal-card__head-meta">
@@ -65,10 +85,27 @@ const hasAction = Astro.slots.has('action');
           </span>
         )}
         {hasAction && <slot name="action" />}
+      </summary>
+      <div class={bodyClass}>
+        <slot />
       </div>
-    )
-  }
-  <div class={bodyClass}>
-    <slot />
-  </div>
-</div>
+    </details>
+  ) : (
+    <div class={wrapperClass} id={id}>
+      {!hideHead && (title || hasMeta || hasAction) && (
+        <div class={headClass}>
+          {title && <HeadingTag>{title}</HeadingTag>}
+          {hasMeta && (
+            <span class="brutal-card__head-meta">
+              <slot name="meta" />
+            </span>
+          )}
+          {hasAction && <slot name="action" />}
+        </div>
+      )}
+      <div class={bodyClass}>
+        <slot />
+      </div>
+    </div>
+  )
+}
