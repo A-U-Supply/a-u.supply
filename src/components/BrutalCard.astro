@@ -55,7 +55,9 @@ const wrapperClass = [
   'brutal-card',
   collapsible ? 'brutal-card--collapsible' : null,
   className,
-].filter(Boolean).join(' ');
+]
+  .filter(Boolean)
+  .join(' ');
 const headClass = [
   'brutal-card__head',
   inverted ? 'brutal-card__head--inverted' : null,
