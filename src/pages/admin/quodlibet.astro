@@ -15,7 +15,7 @@
 import Admin from '../../layouts/Admin.astro';
 import BrutalCard from '../../components/BrutalCard.astro';
 
-const VERSION = '0.0.9';
+const VERSION = '0.0.10';
 const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
 ---
 
@@ -30,7 +30,10 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     >, not just YouTube. Everything sums into a tape machine you can loop,
     reverse, scrub and stutter in real time, driven by mouse, MIDI controller or
     keyboard. A video mode turns the whole thing into a performance layout that
-    fits a single stream frame.
+    fits a single stream frame. <strong
+      >New in 0.0.10: record the finished mix to a file, and write a mix down so
+      you can find it again.</strong
+    >
   </p>
 
   <BrutalCard
@@ -500,6 +503,138 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     </p>
   </BrutalCard>
 
+  <BrutalCard title="Saving a mix" collapsible>
+    <p class="ym-lead-step">
+      A mix is four tabs, each at some moment, blended at some levels, through a
+      tape at some speed. Close the window and there is no way back to it — you
+      cannot bookmark <em>these four, at those moments</em>. That is what
+      <strong>snapshot</strong> is for.
+    </p>
+
+    <p>
+      Press <strong>snapshot</strong> in the Mix section (or <code>y</code>, or
+      the button beside the tape in video mode). Chrome asks where to put the
+      file. Inside it you get <strong>both halves at once</strong>: the top is a
+      readable list you can open in any text editor, or glance at with Quick
+      Look; below a marker line sits the data <strong>restore</strong> reads back.
+    </p>
+
+    <pre
+      class="ym-sample">quodlibet mix — Aug 19, 2026 4:12 PM
+
+1. Lavender Country — Cryin&#39; These Cocksucking Tears
+   https://lavendercountry.bandcamp.com/track/…
+   at 2:41 of 4:02 · lvl 0.82 · L20
+
+2. Blade Runner Blues
+   https://youtube.com/watch?v=…
+   at 30:41 · lvl 0.55 · centre · MUTED
+
+tape: thru · 1.00x forward · cubic
+quodlibet 0.0.10
+
+── quodlibet data, do not edit below ──
+&#123;"app":"quodlibet","snapshot":1,…&#125;</pre>
+
+    <p>
+      <strong>Notes you type above the list survive a reload</strong>, so a
+      snapshot is a reasonable place to write down what you were going for.
+    </p>
+
+    <h3 class="ym-subhead">Restoring one</h3>
+    <p>
+      <strong>restore…</strong> opens a file picker. Quodlibet reopens those tabs
+      and, as each one is captured, puts its level, pan, mute, solo, speed and position
+      back on.
+    </p>
+    <p class="ym-note">
+      <strong>It cannot capture them for you.</strong> Chrome only allows a capture
+      from a real click on the toolbar button, one tab at a time, so a restore is
+      half-automatic by design: Quodlibet opens the tabs, you click the button on
+      each, and the channel snaps into place as it arrives. A
+      <strong>waiting list</strong> names the ones still owed, and survives closing
+      the mixer — four tabs is four trips to the toolbar.
+    </p>
+    <p>
+      A YouTube link gets its timestamp written in, so the tab lands near the
+      right moment before it is even captured. No other site is guessed at:
+      every one spells that differently and a wrong guess is worse than none.
+    </p>
+  </BrutalCard>
+
+  <BrutalCard title="Recording" collapsible>
+    <p class="ym-lead-step">
+      <strong>● record</strong> in the Mix section, <code>R</code> on the keyboard,
+      or the button beside the tape in video mode. Press it again to stop, and the
+      take lands in your downloads.
+    </p>
+
+    <p>
+      It records <strong>after the tape</strong> — so a reverse pass, a stutter, a
+      speed ride are all baked into the file. The recording is the performance, not
+      the ingredients.
+    </p>
+
+    <p>
+      Starting and stopping is <strong>inaudible</strong>. The recorder is a
+      second tap hung off the output, never in the path of it, so you can hit
+      record in the middle of something good without a click or a gap.
+    </p>
+
+    <p class="ym-note">
+      <strong>The button pulses red while it runs</strong>, in both layouts, and
+      the line beneath it counts the minutes and the megabytes. That is
+      deliberate: a take you have forgotten you are making is the way this
+      feature goes wrong.
+    </p>
+
+    <p>
+      <strong>WebM/Opus, with no length limit.</strong> Those two facts are the same
+      fact — Chrome encodes as it goes, so an hour costs no more memory than a minute.
+      It plays in any browser and in VLC; <strong
+        >Logic wants it converted first</strong
+      >. If that conversion becomes the annoying part, say so and a WAV option
+      can be added — it would buy the drag-and-drop in exchange for a hard
+      twenty-minute ceiling.
+    </p>
+  </BrutalCard>
+
+  <BrutalCard title="Casting to a TV" collapsible>
+    <p class="ym-lead-step">
+      The mix comes out of <strong>the mixer tab itself</strong>. So casting
+      that one tab sends the sound and the video grid together, while the
+      captured tabs play on in the background, unheard directly.
+    </p>
+
+    <ol class="ym-steps">
+      <li>Press <strong>set up for casting</strong> in the Cast section.</li>
+      <li>
+        Open Chrome&#39;s <strong>⋮</strong> menu →
+        <strong>Cast, save and share</strong> → <strong>Cast</strong>.
+      </li>
+      <li>
+        Pick your device, then set <strong>Sources</strong> to
+        <strong>Cast tab</strong>.
+      </li>
+    </ol>
+
+    <p>
+      <strong>set up for casting</strong> does the part that is Quodlibet&#39;s: switches
+      to the video grid, turns high quality on, hides the overlays and goes fullscreen
+      — the state actually worth mirroring.
+    </p>
+
+    <p class="ym-note">
+      <strong>Chrome does the casting, not the extension</strong>, and that is
+      not a shortcut taken. An extension is not allowed to start a cast: there
+      is no API for it, and the two web APIs that come close both refuse a live
+      audio stream. So the last three steps are yours and there is no button
+      that can do them.
+      <strong>None of this has been tried against real hardware.</strong> If the menu
+      does not behave as described, that is worth reporting rather than working around.
+    </p>
+  </BrutalCard>
+
   <BrutalCard title="MIDI" collapsible>
     <p>
       Faders, knobs and pads can drive the mixer. Press <strong
@@ -622,6 +757,15 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
       <dd>
         Remove the selected channel from the mixer. Two presses, deliberately.
       </dd>
+
+      <dt>y</dt>
+      <dd>
+        Snapshot the mix — vi&#39;s <em>yank</em>, and a snapshot is a yank.
+        Works from any strip.
+      </dd>
+
+      <dt>R</dt>
+      <dd>Start or stop recording. Also from any strip.</dd>
     </dl>
 
     <p class="ym-note">
@@ -727,6 +871,21 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
         <strong>Closing a captured tab drops its channel.</strong> Re-add it with
         the toolbar button. Pausing does not — a paused channel stays in the mixer.
       </li>
+      <li>
+        <strong>Restoring a snapshot cannot capture the tabs for you.</strong> It
+        reopens them and puts every setting back as each one arrives, but the toolbar
+        click is Chrome&#39;s rule and there is no way around it. The waiting list
+        tells you which are still owed.
+      </li>
+      <li>
+        <strong>Recordings are WebM, so Logic wants a conversion.</strong> That is
+        the price of having no length limit — see <em>Recording</em>.
+      </li>
+      <li>
+        <strong>Casting is Chrome&#39;s, and untested here.</strong> An extension
+        cannot start a cast, so the Cast section prepares the panel and hands you
+        to the browser&#39;s menu. Nobody has yet pointed it at a real device.
+      </li>
     </ul>
   </BrutalCard>
 </Admin>
@@ -803,6 +962,20 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     text-transform: none;
     letter-spacing: 0;
     color: var(--color-muted);
+  }
+
+  /* The snapshot sample is a file's contents, so it must not reflow: a wrapped
+     URL reads as two links. It scrolls inside itself instead of widening the page. */
+  .ym-sample {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    padding: var(--space-sm);
+    margin: var(--space-sm) 0;
+    overflow-x: auto;
+    white-space: pre;
   }
 
   .ym-subhead {
