@@ -15,7 +15,7 @@
 import Admin from '../../layouts/Admin.astro';
 import BrutalCard from '../../components/BrutalCard.astro';
 
-const VERSION = '0.0.10';
+const VERSION = '0.0.11';
 const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
 ---
 
@@ -31,8 +31,8 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     reverse, scrub and stutter in real time, driven by mouse, MIDI controller or
     keyboard. A video mode turns the whole thing into a performance layout that
     fits a single stream frame. <strong
-      >New in 0.0.10: record the finished mix to a file, and write a mix down so
-      you can find it again.</strong
+      >New since 0.0.10: record the finished mix to a file, and write a mix down
+      so you can find it again.</strong
     >
   </p>
 
@@ -47,11 +47,32 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     </a>
     <p class="ym-download__note">
       Chrome or Edge only. It is not on the Web Store, so it installs unpacked —
-      four steps, below.
+      four steps under <strong>Install</strong>.
+    </p>
+    <p class="ym-note">
+      <strong>Upgrading?</strong>
+      <strong
+        >Remove the old entry in
+        <code>chrome://extensions</code> first.</strong
+      > Every build shares one extension ID, so Chrome refuses to load a second folder
+      claiming it while the first is still listed. That includes the oldest builds,
+      which were called <em>YouTube Mixer</em> and unzipped to a <code
+        >youtube-mixer</code
+      >
+      folder. Your MIDI mappings and any keys you have rebound survive — Chrome stores
+      those, not the folder.
+    </p>
+    <p class="ym-note">
+      <strong>Then reload the tabs you were playing</strong>, not just the
+      extension. Chrome does not put the extension's page-side script into tabs
+      that were already open, so an already-open tab keeps running the version
+      it was given until you reload it — and in 0.0.9 that is the part that
+      reaches SoundCloud, Netflix and the rest. Reload the tab, then click the
+      toolbar button on it again.
     </p>
   </BrutalCard>
 
-  <BrutalCard title="Install" collapsible open>
+  <BrutalCard title="Install" collapsible>
     <ol class="ym-steps">
       <li>
         Download the zip above and unzip it somewhere you will not delete.
@@ -75,27 +96,6 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
       Chrome will warn that developer-mode extensions can be a risk, and may
       re-warn on each restart. That is expected for anything not installed from
       the Web Store.
-    </p>
-    <p class="ym-note">
-      <strong>Upgrading?</strong>
-      <strong
-        >Remove the old entry in
-        <code>chrome://extensions</code> first.</strong
-      > Every build shares one extension ID, so Chrome refuses to load a second folder
-      claiming it while the first is still listed. That includes the oldest builds,
-      which were called <em>YouTube Mixer</em> and unzipped to a <code
-        >youtube-mixer</code
-      >
-      folder. Your MIDI mappings and any keys you have rebound survive — Chrome stores
-      those, not the folder.
-    </p>
-    <p class="ym-note">
-      <strong>Then reload the tabs you were playing</strong>, not just the
-      extension. Chrome does not put the extension's page-side script into tabs
-      that were already open, so an already-open tab keeps running the version
-      it was given until you reload it — and in 0.0.9 that is the part that
-      reaches SoundCloud, Netflix and the rest. Reload the tab, then click the
-      toolbar button on it again.
     </p>
   </BrutalCard>
 
@@ -531,7 +531,7 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
    at 30:41 · lvl 0.55 · centre · MUTED
 
 tape: thru · 1.00x forward · cubic
-quodlibet 0.0.10
+quodlibet 0.0.11
 
 ── quodlibet data, do not edit below ──
 &#123;"app":"quodlibet","snapshot":1,…&#125;</pre>
@@ -543,9 +543,16 @@ quodlibet 0.0.10
 
     <h3 class="ym-subhead">Restoring one</h3>
     <p>
-      <strong>restore…</strong> opens a file picker. Quodlibet reopens those tabs
-      and, as each one is captured, puts its level, pan, mute, solo, speed and position
-      back on.
+      <strong>restore…</strong> sits directly beside <strong>snapshot</strong>,
+      in this same Mix section. It opens a file picker. Quodlibet reopens those
+      tabs and, as each one is captured, puts its level, pan, mute, solo, speed
+      and position back on.
+    </p>
+    <p>
+      There is a <strong>restore…</strong> beside the tape in video mode too, but
+      pressing it <strong>drops you back into this layout first</strong> — a restore
+      is not a performance action. It reopens tabs and then needs you at the toolbar,
+      and the waiting list that tracks that lives here.
     </p>
     <p class="ym-note">
       <strong>It cannot capture them for you.</strong> Chrome only allows a capture
