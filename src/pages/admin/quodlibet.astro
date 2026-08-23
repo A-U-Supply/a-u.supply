@@ -15,7 +15,7 @@
 import Admin from '../../layouts/Admin.astro';
 import BrutalCard from '../../components/BrutalCard.astro';
 
-const VERSION = '0.0.11';
+const VERSION = '0.0.14';
 const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
 ---
 
@@ -31,8 +31,8 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     reverse, scrub and stutter in real time, driven by mouse, MIDI controller or
     keyboard. A video mode turns the whole thing into a performance layout that
     fits a single stream frame. <strong
-      >New since 0.0.10: record the finished mix to a file, and write a mix down
-      so you can find it again.</strong
+      >Record the finished mix to a lossless file of any length, and write a mix
+      down so you can find it again.</strong
     >
   </p>
 
@@ -138,6 +138,21 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
 
   <BrutalCard title="Finding your way around" collapsible>
     <dl class="ym-defs">
+      <dt>manual</dt>
+      <dd>
+        Top right, just left of the help switch. Opens this manual <em
+          >inside the extension</em
+        >, in its own window — so it is the manual for the build you are
+        actually running, it works with no network, and it does not depend on
+        reaching this site at all. There is a button at the foot of it to save
+        it as a PDF.
+        <strong
+          >The copy you are reading now describes the version this page is
+          hosting</strong
+        >; the one in the extension always describes itself, which is the one to
+        trust if the two ever disagree.
+      </dd>
+
       <dt>help switch</dt>
       <dd>
         Top right of the mixer. Flip it on and hovering anything — any slider,
@@ -266,6 +281,57 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
         and send it; the report says which of those it is.
       </dd>
     </dl>
+  </BrutalCard>
+
+  <BrutalCard title="The master" collapsible>
+    <p class="ym-lead-step">
+      The narrow strip down the left of the tape box: the <strong
+        >output level, left and right</strong
+      >, with the fader that sets it between them.
+    </p>
+
+    <p>
+      Everything sums here before it reaches the tape, so this is the level the
+      tape plays and the level a recording captures. Drag the fader to move the
+      whole mix without touching the balance you built between the channels;
+      <strong>double-click it to return to unity</strong>.
+    </p>
+
+    <h3 class="ym-subhead">What the colours mean</h3>
+    <dl class="ym-defs">
+      <dt>green</dt>
+      <dd>Room to spare.</dd>
+      <dt>amber</dt>
+      <dd>Within 6 dB of the ceiling. Nothing is wrong yet; you are close.</dd>
+      <dt>red</dt>
+      <dd>
+        At the ceiling. Anything above it is flattened rather than made louder,
+        and that flattening is permanent in a recording. Red is held for a
+        moment on purpose — clipping is over in a millisecond, and a warning you
+        cannot see is not a warning.
+      </dd>
+    </dl>
+
+    <p class="ym-note">
+      <strong>The channel meters are coloured the same way</strong>, which is
+      how you find the culprit: the master tells you the mix is too hot, the
+      channels tell you which one is doing it. Pulling the master down fixes the
+      sum, but if one channel is far enough over on its own, only its own fader
+      will rescue it.
+    </p>
+
+    <p class="ym-note">
+      The bar&#39;s <em>height</em> and its <em>colour</em> measure different things,
+      and that is deliberate. The height is an average — what you balance by. The
+      colour is the highest single sample — what runs out of headroom. A signal can
+      look comfortably short of the top and still be clipping, which is exactly what
+      the meters used to hide.
+    </p>
+
+    <p class="ym-note">
+      The master travels in a snapshot along with everything else, and comes
+      back the moment the file is loaded — it needs nothing captured first.
+    </p>
   </BrutalCard>
 
   <BrutalCard title="Tape" collapsible>
@@ -572,8 +638,8 @@ quodlibet 0.0.11
   <BrutalCard title="Recording" collapsible>
     <p class="ym-lead-step">
       <strong>● record</strong> in the Mix section, <code>R</code> on the keyboard,
-      or the button beside the tape in video mode. Press it again to stop, and the
-      take lands in your downloads.
+      or the button beside the tape in video mode. Press it again to stop, and
+      <em>then</em> you are asked where to put the file.
     </p>
 
     <p>
@@ -589,20 +655,63 @@ quodlibet 0.0.11
     </p>
 
     <p class="ym-note">
+      <strong>Nothing interrupts you while it runs.</strong> The take is written straight
+      to private storage on disk as it goes, so there is no dialog until you stop
+      — being asked where to save is a fine thing after a performance and the wrong
+      thing during one.
+    </p>
+
+    <p class="ym-note">
       <strong>The button pulses red while it runs</strong>, in both layouts, and
       the line beneath it counts the minutes and the megabytes. That is
       deliberate: a take you have forgotten you are making is the way this
       feature goes wrong.
     </p>
 
+    <h3 class="ym-subhead">Two formats</h3>
+    <dl class="ym-defs">
+      <dt>lossless WAV</dt>
+      <dd>
+        The default. Uncompressed 16-bit stereo at whatever rate your machine
+        records at — nothing is thrown away, and it opens in Logic or GarageBand
+        with no conversion step. The line under the format buttons tells you
+        what a minute actually costs on <em>your</em> machine; at 44.1 kHz it is about
+        10 MB.
+      </dd>
+      <dt>small Opus</dt>
+      <dd>
+        About an eighth the size — an hour comes in under 90 MB, and it sounds
+        very good. The catch is the container: it is a <code>.webm</code>, so
+        Logic wants it converted before it will take it. Worth choosing when you
+        know it will be a long session.
+      </dd>
+    </dl>
+
+    <p class="ym-note">
+      <strong>Neither has a length limit.</strong> Both are written to disk as they
+      record rather than held in memory, so an hour costs no more memory than a minute.
+      WAV used to be impossible for exactly that reason; it is not any more.
+    </p>
+
+    <h3 class="ym-subhead">If you cancel the save dialog</h3>
     <p>
-      <strong>WebM/Opus, with no length limit.</strong> Those two facts are the same
-      fact — Chrome encodes as it goes, so an hour costs no more memory than a minute.
-      It plays in any browser and in VLC; <strong
-        >Logic wants it converted first</strong
-      >. If that conversion becomes the annoying part, say so and a WAV option
-      can be added — it would buy the drag-and-drop in exchange for a hard
-      twenty-minute ceiling.
+      <strong>The take is not lost.</strong> It is already a complete file — the dialog
+      only decides where to copy it — so cancelling keeps it and a
+      <strong>save take…</strong> button appears to place it later. The same thing
+      rescues a take from a mixer that was reloaded or crashed while recording, which
+      older versions simply lost. The button is hidden when there is nothing waiting,
+      so if you can see it, something is owed to you.
+    </p>
+
+    <h3 class="ym-subhead">Clipping</h3>
+    <p>
+      Sixteen-bit audio has a hard ceiling that the mixer&#39;s own signal path
+      does not, and channels sum, so a mix can run out of headroom without any
+      single channel looking wrong. The take counts every sample it had to
+      flatten and says so when it saves. If it does, pull the <strong
+        >master</strong
+      > down — see
+      <em>The master</em>.
     </p>
   </BrutalCard>
 
@@ -885,8 +994,9 @@ quodlibet 0.0.11
         tells you which are still owed.
       </li>
       <li>
-        <strong>Recordings are WebM, so Logic wants a conversion.</strong> That is
-        the price of having no length limit — see <em>Recording</em>.
+        <strong>Opus recordings are WebM, so Logic wants a conversion.</strong> WAV
+        is the default and needs none — this only applies if you choose the small
+        format. See <em>Recording</em>.
       </li>
       <li>
         <strong>Casting is Chrome&#39;s, and untested here.</strong> An extension
