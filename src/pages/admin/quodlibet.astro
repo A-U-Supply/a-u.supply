@@ -15,7 +15,7 @@
 import Admin from '../../layouts/Admin.astro';
 import BrutalCard from '../../components/BrutalCard.astro';
 
-const VERSION = '0.0.28';
+const VERSION = '0.0.29';
 const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
 ---
 
@@ -33,7 +33,10 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     fits a single stream frame. <strong
       >Record the finished mix to a lossless file of any length, and write a mix
       down so you can find it again.</strong
-    >
+    > Every source draws its own waveform on the tape&#39;s timeline, so you can read
+    down the column and see what each one was contributing at the moment you are hearing
+    — and where a tab will say what it has buffered, the shape to the right of the
+    play head is sound it has downloaded and not played yet.
   </p>
 
   <BrutalCard
@@ -460,10 +463,19 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
 
     <p>
       A capture can only ever hand back audio you have already heard — that is
-      what a capture is. But a tab streaming from YouTube has been given twenty
-      or thirty seconds of audio before it is due, sitting in the page waiting
-      its turn, and that is a real future rather than a guess at one. Quodlibet
-      reads it where it is and draws it in place.
+      what a capture is. But a tab streaming from YouTube has been given a good
+      deal of audio before it is due, sitting in the page waiting its turn, and
+      that is a real future rather than a guess at one. Quodlibet reads it where
+      it is and draws it in place.
+    </p>
+
+    <p class="ym-note">
+      <strong>How far ahead varies more than you would expect.</strong> Four tabs
+      measured together sat 110 to 120 seconds ahead of their play heads and stayed
+      there; other videos have been seen with twenty or thirty. It makes less difference
+      than it sounds, because the window only has room for a few seconds of it either
+      way — but it is worth knowing that an empty right-hand side is not the same
+      as a tab that has buffered nothing.
     </p>
 
     <p>
