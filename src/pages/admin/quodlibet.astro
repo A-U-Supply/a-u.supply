@@ -15,7 +15,7 @@
 import Admin from '../../layouts/Admin.astro';
 import BrutalCard from '../../components/BrutalCard.astro';
 
-const VERSION = '0.0.14';
+const VERSION = '0.0.28';
 const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
 ---
 
@@ -416,6 +416,195 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     </p>
   </BrutalCard>
 
+  <BrutalCard title="Each channel's waveform" collapsible>
+    <p class="ym-lead-step">
+      Every channel has a strip of its own — under its name in the control
+      layout, laid over the foot of its picture in video mode.
+    </p>
+
+    <p>
+      <strong>They are on the tape&#39;s timeline, not their own.</strong> All of
+      them share the tape&#39;s window and its play head, so the white lines all line
+      up and you can read straight down the column: <em>this</em> is what each source
+      was contributing at the moment you are hearing. Scrub the tape back and the
+      strips go back with it.
+    </p>
+    <p class="ym-note">
+      Which is why they are not simply "the last ten seconds of this channel".
+      That reading looks tidier — the strips are always full — but the moment
+      the tape falls behind live it would be showing you a different instant
+      from the one you are listening to, in a picture that invites you to
+      compare them.
+    </p>
+
+    <p>
+      They show what a channel is contributing <strong
+        >after its fader and before its pan</strong
+      >, the same place its meter reads, so moving the pan does not change the
+      shape of its waveform.
+    </p>
+
+    <p class="ym-note">
+      Clicking a channel&#39;s picture pauses it. <strong
+        >Clicking its waveform does not</strong
+      > — the strip sits outside the part of the tile that responds to a click, so
+      nothing you do to it can pause the source by accident.
+    </p>
+  </BrutalCard>
+
+  <BrutalCard title="What a source is about to play" collapsible>
+    <p class="ym-lead-step">
+      On a channel strip, the dim shape to the <strong>right</strong> of the play
+      head is sound the tab has already downloaded and has not played yet.
+    </p>
+
+    <p>
+      A capture can only ever hand back audio you have already heard — that is
+      what a capture is. But a tab streaming from YouTube has been given twenty
+      or thirty seconds of audio before it is due, sitting in the page waiting
+      its turn, and that is a real future rather than a guess at one. Quodlibet
+      reads it where it is and draws it in place.
+    </p>
+
+    <p>
+      <strong>It arms itself when you add the tab.</strong> There is nothing to switch
+      on. It happens at the same moment Quodlibet sets that tab&#39;s video quality,
+      and the small interruption you may notice there is the same one — it is not
+      paying for this twice.
+    </p>
+
+    <p class="ym-note">
+      <strong>It is drawn dimmer than the rest for a reason.</strong> What you are
+      looking at is what the tab <em>downloaded</em>, not what came out of the
+      mixer, so the fader, the pan and the mute have not touched it. A picture
+      that made the two look identical would be claiming more than it knows.
+    </p>
+
+    <p>
+      <strong>How much room there is depends on the tape.</strong> The window holds
+      four seconds to the right of the play head. Sitting at live, all four are available.
+      Fall two seconds behind and the first two of them are the tape&#39;s own recording
+      — sound already captured, waiting for the head to reach it — so the downloaded
+      shape starts at the live edge and gets whatever is left. Far enough behind and
+      there is no room for it at all.
+    </p>
+
+    <p class="ym-note">
+      <strong>Not every tab has one.</strong> This only works for tabs that stream
+      in the way YouTube does. A plain audio file, a tab that will not say what it
+      is buffering, and anything protected by DRM will show nothing to the right of
+      the head — and an empty right-hand side is the honest answer, not a fault.
+    </p>
+  </BrutalCard>
+
+  <BrutalCard title="The tape's waveform" collapsible>
+    <p class="ym-lead-step">
+      The strip across the top of the tape box is the tape itself, going past.
+      Ten seconds behind the play head and four seconds ahead of it.
+    </p>
+
+    <p>
+      <strong>The white line is the play head and it never moves.</strong> The tape
+      slides past it, the way it would on a machine. Everything to its left has been
+      played; everything to its right has not.
+    </p>
+
+    <h4>Why there is space ahead of it</h4>
+    <p>
+      Because sometimes there is something to put there. The tabs keep recording
+      forwards whether or not the tape head is keeping up, so the moment you
+      fall behind live — after a reverse pass, a stutter, a scrub — the seconds
+      between the head and the present are <em>already on the tape</em>. That is
+      a real future and it is drawn. The faint <strong>live</strong> mark shows where
+      recording has actually got to, so the gap between the head and that mark is
+      how far behind you are: a distance you can see rather than a number you have
+      to read.
+    </p>
+    <p class="ym-note">
+      At live there is nothing ahead of the head and that side is empty. That is
+      the right answer, not a fault — an empty right-hand side is the plainest
+      way of saying you are in the present.
+    </p>
+
+    <h4>The coloured lines, and what they are for</h4>
+    <p>
+      The <strong>1s / 2s / 4s / 8s</strong> loop buttons grab the last few seconds
+      — they reach <em>backwards</em> from the moment you press. Which makes choosing
+      the start of a loop a matter of remembering where you were four seconds ago.
+    </p>
+    <p>
+      So each button has a colour, and a line of that colour on the waveform
+      marks
+      <strong>exactly where that button&#39;s loop would begin</strong>. Watch a
+      phrase travel towards the pink line, press <strong>8s</strong> as it arrives,
+      and the loop starts on it. The lines stay put; the tape moves through them.
+    </p>
+
+    <h4>Tapping a loop in and out</h4>
+    <p>
+      One button, <strong>in&nbsp;|&nbsp;out</strong>, and it walks through
+      three states.
+    </p>
+    <dl class="ym-defs">
+      <dt>press once — <em>in</em> lights</dt>
+      <dd>
+        The start is marked at the play head and <strong
+          >nothing changes about what you are hearing</strong
+        >. That is the point: you can listen on, watch the marked region grow on
+        the waveform with the seconds counting up beside it, and press again
+        later than you meant to without having committed to anything.
+      </dd>
+      <dt>press again — <em>out</em> lights too</dt>
+      <dd>
+        The loop closes at the play head and starts repeating. The whole button
+        is lit, and <strong>the tape engages if it was not already</strong> — in
+        <em>thru</em> the sound goes straight past the tape, so a loop there would
+        be lit and completely inaudible.
+      </dd>
+      <dt>press a third time</dt>
+      <dd>
+        The loop is dropped and a new start is marked straight away, so loops
+        chain without a trip to <strong>off</strong> in between. <strong
+          >off</strong
+        > clears it from any of the three.
+      </dd>
+    </dl>
+    <p class="ym-note">
+      <code>i</code> on the keyboard walks the same three states, because reaching
+      for a mouse mid-performance is the thing this is trying to avoid.
+    </p>
+    <p class="ym-note">
+      <strong>A tapped loop keeps for as long as you like.</strong> It is copied out
+      of the tape when you close it, rather than left in the part that carries on
+      recording — so it stays the thing you captured instead of slowly turning into
+      the present. <strong>off</strong> drops the copy and carries on from where the
+      tape is, because the tape never stopped recording underneath.
+    </p>
+
+    <h4>While a loop is running</h4>
+    <p class="ym-note">
+      <strong>Whichever control started the loop is the one that lights.</strong
+      > A four-second loop lights the <strong>4s</strong> button; a tapped loop lights
+      <strong>in&nbsp;|&nbsp;out</strong> — even if it happens to be four seconds
+      long. A lit button always means <em>this</em> is what is driving what you hear.
+    </p>
+    <p>
+      Everything outside the loop is <strong>dimmed</strong>, so the part being
+      repeated is the lit part of the picture. If the loop is longer than the
+      twelve or so seconds on screen, or has scrolled off the back, a <strong
+        >◀ loop</strong
+      > mark appears at the edge rather than the loop simply looking as though it
+      is not there.
+    </p>
+
+    <p class="ym-note">
+      The waveform costs nothing to keep: the tape already held sixty seconds of
+      audio, and this is a summary of it. Sixty seconds are kept even though
+      about fourteen are shown, which is what will let the view move further
+      back later.
+    </p>
+  </BrutalCard>
+
   <BrutalCard
     title="Behind live — read this before you use reverse"
     collapsible
@@ -540,6 +729,22 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
   </BrutalCard>
 
   <BrutalCard title="Video quality" collapsible>
+    <p class="ym-lead-step">
+      <strong>The button says which it is</strong> — <code>HQ ON</code> or <code
+        >HQ OFF</code
+      > — not just what it is called. The setting is remembered across sessions, so
+      a panel can inherit it from weeks ago and be doing that work with nothing on
+      screen to distinguish it from one that is not. A lit button is a convention;
+      the word is a fact.
+    </p>
+
+    <p class="ym-note">
+      <strong>Every tab is told, including ones added later.</strong> Low tells each
+      tab to decode at its lowest quality as well as capturing it small — and until
+      0.0.21 a tab captured part-way through a session was never told, so it went
+      on decoding at whatever quality it had chosen while being captured at 426×240.
+      Four of those is most of what the machine was doing.
+    </p>
     <p>
       Four videos at once is real work for a laptop, and it is being paid twice:
       each tab is decoding YouTube at whatever quality it chose, and the mixer
