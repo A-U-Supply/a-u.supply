@@ -15,13 +15,8 @@
 import Admin from '../../layouts/Admin.astro';
 import BrutalCard from '../../components/BrutalCard.astro';
 
-const VERSION = '0.0.29';
-// STILL THE OLD FILENAME, ON PURPOSE. 0.0.29 was built and published as Quodlibet; the
-// rename lands in the next release. Pointing this at a halo-halo-tab-0.0.29.zip that has
-// never existed would 404, and quietly renaming the button while the download still
-// installs an extension called Quodlibet would be worse — it would look like a mistake in
-// the file rather than a rename in progress. The page says so instead.
-const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
+const VERSION = '0.0.30';
+const ZIP = `/downloads/halo-halo-tab-${VERSION}.zip`;
 ---
 
 <Admin title="halo-halo tab" current="halo-halo-tab">
@@ -51,19 +46,11 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     open
   >
     <a class="btn-primary ym-download__btn" href={ZIP} download>
-      quodlibet-{VERSION}.zip
+      halo-halo-tab-{VERSION}.zip
     </a>
     <p class="ym-download__note">
       Chrome or Edge only. It is not on the Web Store, so it installs unpacked —
       four steps under <strong>Install</strong>.
-    </p>
-    <p class="ym-note">
-      <strong>This download is still called Quodlibet.</strong> That is the name 0.0.29
-      was built under, and it is what the zip and the entry in <code
-        >chrome://extensions</code
-      > will say. The rename to halo-halo tab arrives with the next release; nothing
-      about the extension changes with it, and because every build shares one ID it
-      will upgrade in place rather than appear beside the old one.
     </p>
     <p class="ym-note">
       <strong>Upgrading?</strong>
