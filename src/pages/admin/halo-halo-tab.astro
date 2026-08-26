@@ -1,11 +1,11 @@
 ---
 /*
- * Download page + manual for the Quodlibet Chrome extension.
+ * Download page + manual for the halo-halo tab Chrome extension.
  *
  * The extension's source lives in its own repo, not here. The served zip is a
  * committed build artifact — to publish a new version:
  *
- *   <quodlibet repo>/pack.sh <this repo>/public/downloads
+ *   <halo-halo tab repo>/pack.sh <this repo>/public/downloads
  *
  * Use the script, not a hand-rolled zip. It builds with `git archive` (tracked
  * files only, which is what keeps the extension's signing key out of a public
@@ -15,12 +15,12 @@
 import Admin from '../../layouts/Admin.astro';
 import BrutalCard from '../../components/BrutalCard.astro';
 
-const VERSION = '0.0.29';
-const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
+const VERSION = '0.0.30';
+const ZIP = `/downloads/halo-halo-tab-${VERSION}.zip`;
 ---
 
-<Admin title="Quodlibet" current="quodlibet">
-  <h1>Quodlibet</h1>
+<Admin title="halo-halo tab" current="halo-halo-tab">
+  <h1>halo-halo tab</h1>
 
   <p class="ym-lede">
     A Chrome extension that turns any number of browser tabs into mixer
@@ -46,7 +46,7 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     open
   >
     <a class="btn-primary ym-download__btn" href={ZIP} download>
-      quodlibet-{VERSION}.zip
+      halo-halo-tab-{VERSION}.zip
     </a>
     <p class="ym-download__note">
       Chrome or Edge only. It is not on the Web Store, so it installs unpacked —
@@ -58,12 +58,12 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
         >Remove the old entry in
         <code>chrome://extensions</code> first.</strong
       > Every build shares one extension ID, so Chrome refuses to load a second folder
-      claiming it while the first is still listed. That includes the oldest builds,
-      which were called <em>YouTube Mixer</em> and unzipped to a <code
+      claiming it while the first is still listed. That includes every former name:
+      builds called <em>Quodlibet</em>, unzipping to a <code>quodlibet</code> folder,
+      and the oldest ones called <em>YouTube Mixer</em>, unzipping to <code
         >youtube-mixer</code
-      >
-      folder. Your MIDI mappings and any keys you have rebound survive — Chrome stores
-      those, not the folder.
+      >. Your MIDI mappings and any keys you have rebound survive — Chrome
+      stores those, not the folder.
     </p>
     <p class="ym-note">
       <strong>Then reload the tabs you were playing</strong>, not just the
@@ -87,12 +87,12 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
       </li>
       <li>
         Click <strong>Load unpacked</strong> and choose the unzipped
-        <code>quodlibet</code> folder.
+        <code>halo-halo tab</code> folder.
       </li>
       <li>
         <strong>Pin the extension to your toolbar.</strong> Click the puzzle-piece
-        icon in Chrome's toolbar and pin Quodlibet. Nothing works without that button
-        — see below.
+        icon in Chrome's toolbar and pin halo-halo tab. Nothing works without that
+        button — see below.
       </li>
     </ol>
     <p class="ym-note">
@@ -105,7 +105,8 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
   <BrutalCard title="Adding a tab — the one thing you have to know" collapsible>
     <p class="ym-lead-step">
       Play something in a tab, then <strong
-        >click the Quodlibet button in your toolbar while that tab is in front</strong
+        >click the halo-halo tab button in your toolbar while that tab is in
+        front</strong
       >. That tab becomes a channel and the mixer opens.
     </p>
     <p>
@@ -465,8 +466,8 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
       A capture can only ever hand back audio you have already heard — that is
       what a capture is. But a tab streaming from YouTube has been given a good
       deal of audio before it is due, sitting in the page waiting its turn, and
-      that is a real future rather than a guess at one. Quodlibet reads it where
-      it is and draws it in place.
+      that is a real future rather than a guess at one. halo-halo tab reads it
+      where it is and draws it in place.
     </p>
 
     <p class="ym-note">
@@ -480,7 +481,7 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
 
     <p>
       <strong>It arms itself when you add the tab.</strong> There is nothing to switch
-      on. It happens at the same moment Quodlibet sets that tab&#39;s video quality,
+      on. It happens at the same moment halo-halo tab sets that tab&#39;s video quality,
       and the small interruption you may notice there is the same one — it is not
       paying for this twice.
     </p>
@@ -803,7 +804,7 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
     </p>
 
     <pre
-      class="ym-sample">quodlibet mix — Aug 19, 2026 4:12 PM
+      class="ym-sample">halo-halo tab mix — Aug 19, 2026 4:12 PM
 
 1. Lavender Country — Cryin&#39; These Cocksucking Tears
    https://lavendercountry.bandcamp.com/track/…
@@ -814,10 +815,10 @@ const ZIP = `/downloads/quodlibet-${VERSION}.zip`;
    at 30:41 · lvl 0.55 · centre · MUTED
 
 tape: thru · 1.00x forward · cubic
-quodlibet 0.0.11
+halo-halo tab 0.0.11
 
-── quodlibet data, do not edit below ──
-&#123;"app":"quodlibet","snapshot":1,…&#125;</pre>
+── halo-halo tab data, do not edit below ──
+&#123;"app":"halo-halo tab","snapshot":1,…&#125;</pre>
 
     <p>
       <strong>Notes you type above the list survive a reload</strong>, so a
@@ -827,9 +828,9 @@ quodlibet 0.0.11
     <h3 class="ym-subhead">Restoring one</h3>
     <p>
       <strong>restore…</strong> sits directly beside <strong>snapshot</strong>,
-      in this same Mix section. It opens a file picker. Quodlibet reopens those
-      tabs and, as each one is captured, puts its level, pan, mute, solo, speed
-      and position back on.
+      in this same Mix section. It opens a file picker. halo-halo tab reopens
+      those tabs and, as each one is captured, puts its level, pan, mute, solo,
+      speed and position back on.
     </p>
     <p>
       There is a <strong>restore…</strong> beside the tape in video mode too, but
@@ -840,8 +841,8 @@ quodlibet 0.0.11
     <p class="ym-note">
       <strong>It cannot capture them for you.</strong> Chrome only allows a capture
       from a real click on the toolbar button, one tab at a time, so a restore is
-      half-automatic by design: Quodlibet opens the tabs, you click the button on
-      each, and the channel snaps into place as it arrives. A
+      half-automatic by design: halo-halo tab opens the tabs, you click the button
+      on each, and the channel snaps into place as it arrives. A
       <strong>waiting list</strong> names the ones still owed, and survives closing
       the mixer — four tabs is four trips to the toolbar.
     </p>
@@ -952,9 +953,9 @@ quodlibet 0.0.11
     </ol>
 
     <p>
-      <strong>set up for casting</strong> does the part that is Quodlibet&#39;s: switches
-      to the video grid, turns high quality on, hides the overlays and goes fullscreen
-      — the state actually worth mirroring.
+      <strong>set up for casting</strong> does the part that is halo-halo tab&#39;s:
+      switches to the video grid, turns high quality on, hides the overlays and goes
+      fullscreen — the state actually worth mirroring.
     </p>
 
     <p class="ym-note">
@@ -1013,7 +1014,7 @@ quodlibet 0.0.11
     <p class="ym-note">
       <strong>Nobody has performed with this yet.</strong> It passes its tests — 64
       of them — but no one has had it under their hands during a set, and the defaults
-      for the Quodlibet-specific keys are considered guesses rather than decisions.
+      for the halo-halo tab-specific keys are considered guesses rather than decisions.
       Move anything that sits wrong (see <em>rebinding</em> below) and say what you
       changed; there is an open question about the grammar on
       <strong>issue #3</strong> in the extension repo.
@@ -1192,8 +1193,8 @@ quodlibet 0.0.11
       </li>
       <li>
         <strong>The keyboard is untried in performance.</strong> It passes its tests;
-        nobody has played a set with it. Treat the Quodlibet-specific keys as provisional
-        and move what does not fit.
+        nobody has played a set with it. Treat the halo-halo tab-specific keys as
+        provisional and move what does not fit.
       </li>
       <li>
         <strong>MIDI needs permission every fresh profile.</strong> Chrome has asked
