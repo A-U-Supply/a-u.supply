@@ -15,7 +15,7 @@
 import Admin from '../../layouts/Admin.astro';
 import BrutalCard from '../../components/BrutalCard.astro';
 
-const VERSION = '0.0.30';
+const VERSION = '0.0.31';
 const ZIP = `/downloads/halo-halo-tab-${VERSION}.zip`;
 ---
 
@@ -335,6 +335,62 @@ const ZIP = `/downloads/halo-halo-tab-${VERSION}.zip`;
     <p class="ym-note">
       The master travels in a snapshot along with everything else, and comes
       back the moment the file is loaded — it needs nothing captured first.
+    </p>
+  </BrutalCard>
+
+  <BrutalCard title="Play, pause and roll" collapsible>
+    <p class="ym-lead-step">
+      Three buttons above the channels — and on the bottom bar in video mode,
+      where a performance actually is. They act on <em>everything</em> at once.
+    </p>
+
+    <dl class="ym-defs">
+      <dt>play all · pause all <span class="ym-alt">(or P)</span></dt>
+      <dd>
+        Every channel together, <strong
+          >and the tape&#39;s head with them</strong
+        >, so pausing is a real stop rather than a minute of tape still rolling.
+        Each tab keeps its own position: this is a transport, not a sync, so
+        anything beat-locked before a pause will not be after one. In <em
+          >thru</em
+        > it leaves the tape alone — there is nothing being played back to stop, and
+        engaging the tape to stop it would be a mode change you did not ask for.
+      </dd>
+
+      <dt>roll <span class="ym-alt">(or !)</span></dt>
+      <dd>
+        A whole mix in one press: a loop off the tape at a random musical
+        length, a random tape speed forwards or backwards, and a fresh balance
+        of level, pan and dropped channels. Press it again for another.
+      </dd>
+
+      <dt>undo roll <span class="ym-alt">(or u)</span></dt>
+      <dd>
+        The controls back where they were, and the loop dropped. One roll back,
+        not several.
+      </dd>
+    </dl>
+
+    <p class="ym-note">
+      <strong
+        >Everything the roll picks is written into the controls you can see</strong
+      >, which is the whole point of it. You are not accepting or rejecting a
+      black box — you keep the part that worked and turn the rest by hand, the
+      same as if you had set it yourself.
+    </p>
+
+    <p class="ym-note">
+      Undo cannot give a loop&#39;s <em>audio</em> back. Re-arming the same length
+      takes a fresh copy of whatever is on the tape now, and by then the tape has
+      moved on.
+    </p>
+
+    <p class="ym-note">
+      <strong>A stopped tape is still recording.</strong> It has to be — otherwise
+      <em>off</em> would have nothing to return to — so while everything is paused
+      it is writing silence over the last minute, and a pause long enough to lap the
+      buffer takes the whole minute with it. Past a few seconds the tape says so in
+      amber rather than letting you find out afterwards.
     </p>
   </BrutalCard>
 
@@ -1006,18 +1062,31 @@ halo-halo tab 0.0.11
 
   <BrutalCard title="Keyboard" collapsible>
     <p class="ym-lead-step">
-      Press <strong><code>?</code></strong> in the mixer. That list is the manual
-      for this section — it is generated from the bindings themselves, so it cannot
-      fall out of date the way a printed one does.
+      Press <strong><code>?</code></strong> in the mixer, or click <strong
+        >keys</strong
+      > in the top bar. That list is the manual for this section — it is generated
+      from the bindings themselves, so it cannot fall out of date the way a printed
+      one does.
     </p>
 
     <p class="ym-note">
-      <strong>Nobody has performed with this yet.</strong> It passes its tests — 64
+      <strong>Nobody has performed with this yet.</strong> It passes its tests — 81
       of them — but no one has had it under their hands during a set, and the defaults
       for the halo-halo tab-specific keys are considered guesses rather than decisions.
       Move anything that sits wrong (see <em>rebinding</em> below) and say what you
       changed; there is an open question about the grammar on
       <strong>issue #3</strong> in the extension repo.
+    </p>
+
+    <p class="ym-note">
+      <strong
+        >If you tried <code>?</code> on 0.0.21 through 0.0.30 and nothing happened,
+        that was a bug, not you.</strong
+      > The list opened and video mode hid it, so it rendered nowhere — and because
+      rebinding lives inside that same list, every key was movable and none of it
+      was reachable from the layout most people start in. Fixed in 0.0.31, along with
+      the <strong>keys</strong> button, which is there because a feature you can only
+      reach by a key nobody has told you about is not reachable.
     </p>
 
     <p>
@@ -1083,8 +1152,24 @@ halo-halo tab 0.0.11
 
       <dt>q · w · e · r</dt>
       <dd>
-        <strong>Held</strong> on the tape strip: stutter the last 60, 125, 250 or
-        500 milliseconds. Release and it snaps back.
+        <strong>Held</strong>: stutter the last 60, 125, 250 or 500
+        milliseconds. Release and it snaps back. <strong>From any strip</strong> —
+        stutter acts on the master and there is nothing else it could mean from a
+        channel, so it does not wait for you to walk onto the tape. Until 0.0.31 it
+        did, and silently.
+      </dd>
+
+      <dt>P</dt>
+      <dd>
+        Play or pause <em>every</em> channel at once — and the tape with them, so
+        it is a real full stop rather than a minute of tape still running. From any
+        strip. There are buttons for it beside the channels, and on the bottom bar
+        in video mode.
+      </dd>
+
+      <dt>! · u</dt>
+      <dd>
+        Roll the mix · put it back. See <em>Play, pause and roll</em>.
       </dd>
 
       <dt>dd</dt>
@@ -1107,8 +1192,10 @@ halo-halo tab 0.0.11
         >keys channel 1 · level 1.000</em
       > — and the selected channel is outlined in both layouts, so the keyboard is
       never acting somewhere you cannot see.
-      <strong>Typing into a control does not move anything</strong>: click a
-      fader and the keys leave it alone until you click away.
+      <strong>Clicking a fader does not switch the keyboard off.</strong> Before 0.0.31
+      it did — the guard that stops typing from moving a fader counted the faders
+      themselves, so the first thing anybody does killed every key until they clicked
+      somewhere else. Only real text entry pauses the keys now.
     </p>
 
     <h3 class="ym-subhead">Rebinding</h3>
