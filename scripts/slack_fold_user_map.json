@@ -1,0 +1,7 @@
+{
+  "_comment": "Slack display name -> fold (Lemmy) username. Used by scripts/slack_to_lemmy.py to emit creator_id reassignment SQL. Keys must match the Slack display name post --rename. Add new band members here as they show up.",
+  "David": "number4",
+  "MCA": "sitcur",
+  "brendan": "bdo",
+  "tube": "tube"
+}

@@ -35,3 +35,7 @@ data/*.db-shm
 data/search-media/
 data/media/
 .env
+
+# scripts/slack_to_lemmy.py per-run artifacts (SQL emitted to cwd)
+slack-to-lemmy-reassign-*.sql
+diagnose-post-*.sql
