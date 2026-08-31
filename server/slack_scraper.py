@@ -555,6 +555,7 @@ def _ingest_file(
         media_item = existing
         if output_index and not media_item.output_index:
             media_item.output_index = output_index
+            db.flush()
         status = "duplicate"
     else:
         # New file — move to permanent storage
