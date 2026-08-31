@@ -860,6 +860,9 @@ return Astro.redirect(dest.pathname + dest.search, 301);
               fd.append('file', blob, filename);
               fd.append('tags', 'bullethole,atelier');
               fd.append('output_index', 'outputs');
+              // Non-manual source_type so the output routes to the public media
+              // index (not Emulsion) and stays searchable in the Outputs tab.
+              fd.append('source_type', 'atelier_output');
               const meta = atelierMeta();
               if (meta) fd.append('description', meta);
               const res = await fetch('/api/media/upload', {
