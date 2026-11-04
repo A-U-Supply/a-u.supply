@@ -1,0 +1,69 @@
+name: Uptime watchdog
+
+# Checks a-u.supply every 10 minutes. If it's down: captures diagnostics
+# (shown in the run log), restarts the app, and falls back to a rebuild.
+# The run is marked failed whenever the site was found down, so GitHub
+# emails a notification even when the auto-restart fixes it.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: watchdog
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Health check
+        id: health
+        run: |
+          for i in 1 2 3; do
+            if curl -fsS -m 20 https://a-u.supply/ | grep -q "A-U.SUPPLY"; then
+              echo "up=true" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            sleep 20
+          done
+          echo "up=false" >> "$GITHUB_OUTPUT"
+
+      - name: Set up SSH
+        if: steps.health.outputs.up == 'false'
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DOKKU_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H 204.168.201.89 >> ~/.ssh/known_hosts
+          printf 'Host dokku\n  HostName 204.168.201.89\n  User dokku\n  IdentityFile ~/.ssh/id_ed25519\n' >> ~/.ssh/config
+
+      - name: Capture diagnostics
+        if: steps.health.outputs.up == 'false'
+        run: |
+          for c in "ps:report au-supply" "resource:report au-supply" "storage:report au-supply" \
+                   "logs:failed au-supply" "logs au-supply -p web -n 300" "logs au-supply -p worker -n 150" \
+                   "nginx:error-logs au-supply"; do
+            echo "::group::$c"; ssh dokku $c 2>&1 | tail -400 || true; echo "::endgroup::"
+          done
+
+      - name: Restart
+        if: steps.health.outputs.up == 'false'
+        run: |
+          ssh dokku ps:set au-supply restart-policy always || true
+          ssh dokku ps:restart au-supply
+          sleep 30
+          if curl -fsS -m 20 https://a-u.supply/ | grep -q "A-U.SUPPLY"; then
+            echo "Recovered after restart"; exit 0
+          fi
+          echo "Restart didn't help; rebuilding"
+          ssh dokku cleanup || true
+          ssh dokku ps:rebuild au-supply
+          sleep 30
+          curl -fsS -m 20 https://a-u.supply/ | grep -q "A-U.SUPPLY" && echo "Recovered after rebuild"
+
+      - name: Flag the outage
+        if: steps.health.outputs.up == 'false'
+        run: |
+          echo "::error::a-u.supply was down — see 'Capture diagnostics' for the cause"
+          exit 1

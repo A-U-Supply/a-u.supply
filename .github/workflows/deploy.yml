@@ -25,5 +25,8 @@ jobs:
       - name: Deploy via git push
         run: git push dokku@204.168.201.89:au-supply master:main --force
 
+      - name: Always restart crashed processes
+        run: ssh dokku ps:set au-supply restart-policy always || true
+
       - name: Fix nginx routing
         run: ssh dokku ps:restart au-supply
