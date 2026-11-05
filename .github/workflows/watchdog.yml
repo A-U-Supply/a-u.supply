@@ -51,17 +51,24 @@ jobs:
 
       - name: Repair
         if: steps.health.outputs.up == 'false'
+        shell: bash {0}
         run: |
           up() { sleep 20; curl -fsS -m 20 https://a-u.supply/ | grep -q "A-U.SUPPLY"; }
 
           ssh dokku ps:set au-supply restart-policy always || true
 
+          # nginx may be stopped (a stopped nginx also makes ps:restart abort
+          # on its reload step), so validate + start it before anything else.
+          echo "::group::0. validate + start nginx"
+          ssh dokku nginx:validate-config 2>&1 || true
+          ssh dokku nginx:start 2>&1 || true
+          echo "::endgroup::"
+          if up; then echo "Recovered after nginx start"; exit 0; fi
+
           echo "::group::1. restart app"
-          ssh dokku ps:restart au-supply
+          ssh dokku ps:restart au-supply 2>&1 || true
           echo "::endgroup::"
           if up; then echo "Recovered after app restart"; exit 0; fi
-          # nginx may already be stopped (e.g. a previous run): start it first
-          ssh dokku nginx:start 2>&1 || true
 
           # App passes its own healthcheck but nginx still 502s: regenerate
           # the vhost from live container IPs and fully restart nginx.
