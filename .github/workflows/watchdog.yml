@@ -41,26 +41,42 @@ jobs:
       - name: Capture diagnostics
         if: steps.health.outputs.up == 'false'
         run: |
-          for c in "ps:report au-supply" "resource:report au-supply" "storage:report au-supply" \
-                   "logs:failed au-supply" "logs au-supply -p web -n 300" "logs au-supply -p worker -n 150" \
+          for c in "ps:report au-supply" "ps:inspect au-supply" "network:report au-supply" \
+                   "proxy:report au-supply" "ports:report au-supply" "nginx:report au-supply" \
+                   "nginx:show-config au-supply" "resource:report au-supply" \
+                   "logs:failed au-supply" "logs au-supply -p web -n 150" "logs au-supply -p worker -n 50" \
                    "nginx:error-logs au-supply"; do
             echo "::group::$c"; ssh dokku $c 2>&1 | tail -400 || true; echo "::endgroup::"
           done
 
-      - name: Restart
+      - name: Repair
         if: steps.health.outputs.up == 'false'
         run: |
+          up() { sleep 20; curl -fsS -m 20 https://a-u.supply/ | grep -q "A-U.SUPPLY"; }
+
           ssh dokku ps:set au-supply restart-policy always || true
+
+          echo "::group::1. restart app"
           ssh dokku ps:restart au-supply
-          sleep 30
-          if curl -fsS -m 20 https://a-u.supply/ | grep -q "A-U.SUPPLY"; then
-            echo "Recovered after restart"; exit 0
-          fi
-          echo "Restart didn't help; rebuilding"
-          ssh dokku cleanup || true
-          ssh dokku ps:rebuild au-supply
-          sleep 30
-          curl -fsS -m 20 https://a-u.supply/ | grep -q "A-U.SUPPLY" && echo "Recovered after rebuild"
+          echo "::endgroup::"
+          if up; then echo "Recovered after app restart"; exit 0; fi
+
+          # App passes its own healthcheck but nginx still 502s: regenerate
+          # the vhost from live container IPs and fully restart nginx.
+          echo "::group::2. rebuild proxy config + restart nginx"
+          ssh dokku proxy:build-config au-supply || true
+          ssh dokku nginx:show-config au-supply | grep -nE "upstream|server [0-9]" || true
+          ssh dokku ps:inspect au-supply | grep -E '"IPAddress"|"Name"' || true
+          ssh dokku nginx:stop || true
+          ssh dokku nginx:start || true
+          echo "::endgroup::"
+          if up; then echo "Recovered after nginx restart"; exit 0; fi
+
+          echo "::group::3. post-repair nginx errors"
+          ssh dokku nginx:error-logs au-supply 2>&1 | tail -30 || true
+          echo "::endgroup::"
+          echo "::error::Still down after app + nginx restart; likely needs host-level fix (systemctl restart docker / reboot)"
+          exit 1
 
       - name: Flag the outage
         if: steps.health.outputs.up == 'false'
