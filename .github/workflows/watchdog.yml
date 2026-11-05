@@ -60,6 +60,8 @@ jobs:
           ssh dokku ps:restart au-supply
           echo "::endgroup::"
           if up; then echo "Recovered after app restart"; exit 0; fi
+          # nginx may already be stopped (e.g. a previous run): start it first
+          ssh dokku nginx:start 2>&1 || true
 
           # App passes its own healthcheck but nginx still 502s: regenerate
           # the vhost from live container IPs and fully restart nginx.
@@ -67,9 +69,18 @@ jobs:
           ssh dokku proxy:build-config au-supply || true
           ssh dokku nginx:show-config au-supply | grep -nE "upstream|server [0-9]" || true
           ssh dokku ps:inspect au-supply | grep -E '"IPAddress"|"Name"' || true
+          echo "--- validate nginx config"
+          ssh dokku nginx:validate-config 2>&1 || true
           ssh dokku nginx:stop || true
-          ssh dokku nginx:start || true
           echo "::endgroup::"
+          # Never leave nginx stopped: retry start while old workers release :443
+          for i in 1 2 3 4 5; do
+            echo "--- nginx:start attempt $i"
+            ssh dokku nginx:start 2>&1 && break
+            sleep 10
+          done
+          echo "--- validate after start"
+          ssh dokku nginx:validate-config 2>&1 || true
           if up; then echo "Recovered after nginx restart"; exit 0; fi
 
           echo "::group::3. post-repair nginx errors"
